@@ -1,8 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Search, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
-import { toast } from 'sonner';
+import React, { useState, useEffect, useMemo } from 'react';
+// 'supabase' ve 'toast' importlarınızın doğru yapılandırıldığını varsayıyoruz.
+// Örnek olarak, bunları import ediyorum:
+// import { supabase } from '../lib/supabase';
+// import { toast } from 'sonner';
 
+// --- Mock Supabase & Toast (Gerçek kodunuzda bunları kaldırın) ---
+const supabase = {
+  from: (tableName) => ({
+    select: (query) => ({
+      or: () => ({
+        order: () => Promise.resolve({ data: [], error: null }),
+      }),
+      order: () => Promise.resolve({ data: [], error: null }),
+      update: () => Promise.resolve({ error: null }),
+      insert: () => Promise.resolve({ error: null }),
+      delete: () => Promise.resolve({ error: null }),
+      eq: () => Promise.resolve({ error: null }),
+    }),
+  }),
+};
+const toast = {
+  success: (message) => console.log(`SUCCESS: ${message}`),
+  error: (message) => console.error(`ERROR: ${message}`),
+};
+// --- Mock Supabase & Toast Sonu ---
+
+import { Search, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+
+// Arayüz (Interface) tanımlamaları
 interface Customer {
   id: string;
   kisa_isim: string;
@@ -40,22 +65,39 @@ const MONTH_NAMES = [
   'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
   'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
 ];
+const ALL_MONTHS = MONTH_NAMES.map((name, index) => ({ id: index + 1, name }));
 
-const AdminMonthlyVisitSchedule: React.FC = () => {
+const AdminMonthlyVisitSchedule = () => {
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [editingSchedule, setEditingSchedule] = useState<VisitSchedule | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  const [formData, setFormData] = useState({
+  // Modal durumları
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showBulkAddModal, setShowBulkAddModal] = useState(false);
+
+  // Form verileri
+  const [editingSchedule, setEditingSchedule] = useState<VisitSchedule | null>(null);
+  
+  // Tekil düzenleme formu için
+  const [editFormData, setEditFormData] = useState({
     type: 'customer' as 'customer' | 'branch',
     customer_id: '',
     branch_id: '',
     month: 1,
+    visits_required: 1,
+    year: new Date().getFullYear(),
+    notes: ''
+  });
+
+  // Toplu ekleme formu için
+  const [bulkFormData, setBulkFormData] = useState({
+    selectedCustomer: '',
+    selectedBranches: [] as string[],
+    selectedMonths: [] as number[],
     visits_required: 1,
     year: new Date().getFullYear(),
     notes: ''
@@ -104,54 +146,76 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
       setSchedules(schedulesRes.data || []);
       setCustomers(customersRes.data || []);
       setBranches(branchesRes.data || []);
-    } catch (err: any) {
-      toast.error('Veriler yüklenirken hata: ' + err.message);
+    } catch (err) {
+      toast.error('Veriler yüklenirken hata: ' + (err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // --- TEKİL DÜZENLEME İŞLEVLERİ ---
+
+  const handleEditClick = (schedule: VisitSchedule) => {
+    setEditingSchedule(schedule);
+    setEditFormData({
+      type: schedule.customer_id ? 'customer' : 'branch',
+      customer_id: schedule.customer_id || '',
+      branch_id: schedule.branch_id || '',
+      month: schedule.month,
+      visits_required: schedule.visits_required,
+      year: schedule.year || new Date().getFullYear(),
+      notes: schedule.notes || ''
+    });
+    setShowEditModal(true);
+  };
+
+  const resetEditForm = () => {
+    setEditingSchedule(null);
+    setEditFormData({
+      type: 'customer',
+      customer_id: '',
+      branch_id: '',
+      month: 1,
+      visits_required: 1,
+      year: new Date().getFullYear(),
+      notes: ''
+    });
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingSchedule) return;
 
     try {
       const payload = {
-        customer_id: formData.type === 'customer' ? formData.customer_id : null,
-        branch_id: formData.type === 'branch' ? formData.branch_id : null,
-        month: formData.month,
-        visits_required: formData.visits_required,
-        year: formData.year,
-        notes: formData.notes || null
+        customer_id: editFormData.type === 'customer' ? editFormData.customer_id : null,
+        branch_id: editFormData.type === 'branch' ? editFormData.branch_id : null,
+        month: editFormData.month,
+        visits_required: editFormData.visits_required,
+        year: editFormData.year,
+        notes: editFormData.notes || null
       };
 
-      if (editingSchedule) {
-        const { error } = await supabase
-          .from('monthly_visit_schedules')
-          .update(payload)
-          .eq('id', editingSchedule.id);
+      const { error } = await supabase
+        .from('monthly_visit_schedules')
+        .update(payload)
+        .eq('id', editingSchedule.id);
 
-        if (error) throw error;
-        toast.success('Plan güncellendi');
-      } else {
-        const { error } = await supabase
-          .from('monthly_visit_schedules')
-          .insert([payload]);
-
-        if (error) throw error;
-        toast.success('Plan eklendi');
-      }
-
-      setShowModal(false);
-      setEditingSchedule(null);
-      resetForm();
+      if (error) throw error;
+      toast.success('Plan güncellendi');
+      
+      setShowEditModal(false);
+      resetEditForm();
       fetchData();
+
     } catch (err: any) {
-      toast.error('İşlem başarısız: ' + err.message);
+      toast.error('Güncelleme başarısız: ' + err.message);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Bu planı silmek istediğinizden emin misiniz?')) return;
+    // Gerçek uygulamada confirm() yerine özel bir modal kullanın
+    if (!window.confirm('Bu planı silmek istediğinizden emin misiniz?')) return;
 
     try {
       const { error } = await supabase
@@ -167,32 +231,71 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
     }
   };
 
-  const handleEdit = (schedule: VisitSchedule) => {
-    setEditingSchedule(schedule);
-    setFormData({
-      type: schedule.customer_id ? 'customer' : 'branch',
-      customer_id: schedule.customer_id || '',
-      branch_id: schedule.branch_id || '',
-      month: schedule.month,
-      visits_required: schedule.visits_required,
-      year: schedule.year || new Date().getFullYear(),
-      notes: schedule.notes || ''
-    });
-    setShowModal(true);
+
+  // --- TOPLU EKLEME İŞLEVLERİ ---
+
+  const handleBulkAddClick = () => {
+    resetBulkForm();
+    setShowBulkAddModal(true);
   };
 
-  const resetForm = () => {
-    setFormData({
-      type: 'customer',
-      customer_id: '',
-      branch_id: '',
-      month: 1,
+  const resetBulkForm = () => {
+    setBulkFormData({
+      selectedCustomer: '',
+      selectedBranches: [],
+      selectedMonths: [],
       visits_required: 1,
       year: new Date().getFullYear(),
       notes: ''
     });
   };
 
+  const handleBulkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const { selectedBranches, selectedMonths, visits_required, year, notes } = bulkFormData;
+
+    if (selectedBranches.length === 0 || selectedMonths.length === 0) {
+      toast.error('Lütfen en az bir şube ve bir ay seçin.');
+      return;
+    }
+
+    try {
+      const payloads = selectedBranches.flatMap(branchId =>
+        selectedMonths.map(month => ({
+          customer_id: null, // Sadece şube bazlı ekliyoruz
+          branch_id: branchId,
+          month: month,
+          visits_required: visits_required,
+          year: year,
+          notes: notes || null
+        }))
+      );
+
+      const { error } = await supabase
+        .from('monthly_visit_schedules')
+        .insert(payloads);
+
+      if (error) throw error;
+      toast.success(`${payloads.length} adet yeni plan eklendi`);
+
+      setShowBulkAddModal(false);
+      resetBulkForm();
+      fetchData();
+
+    } catch (err: any) {
+      toast.error('Toplu ekleme başarısız: ' + err.message);
+    }
+  };
+
+  // Toplu ekleme formu için filtrelenmiş şubeler
+  const filteredBranchesForBulkAdd = useMemo(() => {
+    if (!bulkFormData.selectedCustomer) return [];
+    return branches.filter(b => b.customer_id === bulkFormData.selectedCustomer);
+  }, [branches, bulkFormData.selectedCustomer]);
+
+
+  // Ana tablo için filtrelenmiş veriler
   const filteredSchedules = schedules.filter(schedule => {
     const searchLower = searchTerm.toLowerCase();
     if (schedule.customer) {
@@ -207,70 +310,56 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
     return false;
   });
 
-  if (loading) return <div>Yükleniyor...</div>;
+  if (loading) return <div className="p-4">Yükleniyor...</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <h1 className="text-2xl font-bold">Aylık Ziyaret Planları</h1>
         <button
-          onClick={() => {
-            resetForm();
-            setEditingSchedule(null);
-            setShowModal(true);
-          }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          onClick={handleBulkAddClick}
+          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus size={20} />
-          Yeni Plan Ekle
+          Yeni Toplu Plan Ekle
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4 space-y-4">
-        <div className="flex gap-4">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Müşteri veya Şube Ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded"
-            />
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
-          </div>
-          <div>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="px-4 py-2 border rounded"
-            >
-              {[2024, 2025, 2026, 2027].map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </div>
+      {/* Filtreleme Çubuğu */}
+      <div className="bg-white rounded-lg shadow p-4 space-y-4 md:space-y-0 md:flex md:gap-4">
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            placeholder="Müşteri veya Şube Ara..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+        </div>
+        <div>
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="w-full md:w-auto px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {[2024, 2025, 2026, 2027].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* Ana Tablo */}
+      <div className="bg-white rounded-lg shadow overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Müşteri/Şube
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                Ay
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                Ziyaret Sayısı
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                Yıl
-              </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                İşlemler
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Müşteri/Şube</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ay</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ziyaret Sayısı</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Yıl</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">İşlemler</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -308,14 +397,16 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
                   <td className="px-6 py-4 text-center">
                     <div className="flex justify-center gap-2">
                       <button
-                        onClick={() => handleEdit(schedule)}
+                        onClick={() => handleEditClick(schedule)}
                         className="text-blue-600 hover:text-blue-900"
+                        title="Düzenle"
                       >
                         <Edit2 size={18} />
                       </button>
                       <button
                         onClick={() => handleDelete(schedule.id)}
                         className="text-red-600 hover:text-red-900"
+                        title="Sil"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -328,32 +419,31 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
         </table>
       </div>
 
-      {showModal && (
+      {/* --- TEKİL DÜZENLEME MODALI --- */}
+      {showEditModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">
-                {editingSchedule ? 'Planı Düzenle' : 'Yeni Plan Ekle'}
-              </h2>
+              <h2 className="text-xl font-bold">Planı Düzenle</h2>
               <button
                 onClick={() => {
-                  setShowModal(false);
-                  setEditingSchedule(null);
-                  resetForm();
+                  setShowEditModal(false);
+                  resetEditForm();
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
                 <X size={24} />
               </button>
             </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* Orijinal formunuz (düzenleme için) */}
+            <form onSubmit={handleEditSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Tür</label>
                 <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'customer' | 'branch' })}
-                  className="w-full p-2 border rounded"
+                  value={editFormData.type}
+                  onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value as 'customer' | 'branch' })}
+                  className="w-full p-2 border rounded-lg"
                   required
                 >
                   <option value="customer">Müşteri</option>
@@ -361,13 +451,13 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
                 </select>
               </div>
 
-              {formData.type === 'customer' ? (
+              {editFormData.type === 'customer' ? (
                 <div>
                   <label className="block text-sm font-medium mb-1">Müşteri</label>
                   <select
-                    value={formData.customer_id}
-                    onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                    className="w-full p-2 border rounded"
+                    value={editFormData.customer_id}
+                    onChange={(e) => setEditFormData({ ...editFormData, customer_id: e.target.value })}
+                    className="w-full p-2 border rounded-lg"
                     required
                   >
                     <option value="">Seçiniz</option>
@@ -382,9 +472,9 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium mb-1">Şube</label>
                   <select
-                    value={formData.branch_id}
-                    onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
-                    className="w-full p-2 border rounded"
+                    value={editFormData.branch_id}
+                    onChange={(e) => setEditFormData({ ...editFormData, branch_id: e.target.value })}
+                    className="w-full p-2 border rounded-lg"
                     required
                   >
                     <option value="">Seçiniz</option>
@@ -397,13 +487,13 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Ay</label>
                   <select
-                    value={formData.month}
-                    onChange={(e) => setFormData({ ...formData, month: Number(e.target.value) })}
-                    className="w-full p-2 border rounded"
+                    value={editFormData.month}
+                    onChange={(e) => setEditFormData({ ...editFormData, month: Number(e.target.value) })}
+                    className="w-full p-2 border rounded-lg"
                     required
                   >
                     {MONTH_NAMES.map((name, index) => (
@@ -417,9 +507,9 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
                   <input
                     type="number"
                     min="0"
-                    value={formData.visits_required}
-                    onChange={(e) => setFormData({ ...formData, visits_required: Number(e.target.value) })}
-                    className="w-full p-2 border rounded"
+                    value={editFormData.visits_required}
+                    onChange={(e) => setEditFormData({ ...editFormData, visits_required: Number(e.target.value) })}
+                    className="w-full p-2 border rounded-lg"
                     required
                   />
                 </div>
@@ -428,11 +518,10 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
                   <label className="block text-sm font-medium mb-1">Yıl</label>
                   <input
                     type="number"
-                    min="2024"
-                    max="2030"
-                    value={formData.year}
-                    onChange={(e) => setFormData({ ...formData, year: Number(e.target.value) })}
-                    className="w-full p-2 border rounded"
+                    min="2024" max="2030"
+                    value={editFormData.year}
+                    onChange={(e) => setEditFormData({ ...editFormData, year: Number(e.target.value) })}
+                    className="w-full p-2 border rounded-lg"
                     required
                   />
                 </div>
@@ -441,9 +530,9 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium mb-1">Notlar</label>
                 <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full p-2 border rounded"
+                  value={editFormData.notes}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                  className="w-full p-2 border rounded-lg"
                   rows={3}
                 />
               </div>
@@ -452,17 +541,16 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowModal(false);
-                    setEditingSchedule(null);
-                    resetForm();
+                    setShowEditModal(false);
+                    resetEditForm();
                   }}
-                  className="px-4 py-2 border rounded hover:bg-gray-50"
+                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
                 >
                   İptal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
                 >
                   <Save size={18} />
                   Kaydet
@@ -472,7 +560,231 @@ const AdminMonthlyVisitSchedule: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* --- YENİ TOPLU EKLEME MODALI --- */}
+      {showBulkAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4 flex-shrink-0">
+              <h2 className="text-xl font-bold">Yeni Toplu Plan Ekle</h2>
+              <button
+                onClick={() => setShowBulkAddModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleBulkSubmit} className="space-y-4 overflow-y-auto flex-grow">
+              {/* 1. Adım: Müşteri Seçimi */}
+              <div>
+                <label className="block text-sm font-medium mb-1">1. Müşteri Seçin</label>
+                <select
+                  value={bulkFormData.selectedCustomer}
+                  onChange={(e) => setBulkFormData({ 
+                    ...bulkFormData, 
+                    selectedCustomer: e.target.value,
+                    selectedBranches: [] // Müşteri değiştiğinde şube seçimini sıfırla
+                  })}
+                  className="w-full p-2 border rounded-lg"
+                  required
+                >
+                  <option value="">Müşteri Seçiniz...</option>
+                  {customers.map(customer => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.kisa_isim}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Adım: Şube Seçimi */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">
+                  2. Şubeleri Seçin
+                  {bulkFormData.selectedCustomer && ` (${filteredBranchesForBulkAdd.length} şube bulundu)`}
+                </label>
+                <div className="border rounded-lg p-2 max-h-48 overflow-y-auto space-y-1">
+                  {filteredBranchesForBulkAdd.length > 0 && (
+                    <CheckboxToggleAll
+                      options={filteredBranchesForBulkAdd}
+                      selected={bulkFormData.selectedBranches}
+                      onChange={(selected) => setBulkFormData({...bulkFormData, selectedBranches: selected})}
+                      labelKey="sube_adi"
+                    />
+                  )}
+                  {filteredBranchesForBulkAdd.map(branch => (
+                    <Checkbox
+                      key={branch.id}
+                      id={`branch-${branch.id}`}
+                      label={branch.sube_adi}
+                      checked={bulkFormData.selectedBranches.includes(branch.id)}
+                      onChange={(checked) => {
+                        setBulkFormData(prev => ({
+                          ...prev,
+                          selectedBranches: checked
+                            ? [...prev.selectedBranches, branch.id]
+                            : prev.selectedBranches.filter(id => id !== branch.id)
+                        }))
+                      }}
+                    />
+                  ))}
+                  {!bulkFormData.selectedCustomer && (
+                    <p className="text-sm text-gray-500 p-2">Lütfen önce bir müşteri seçin.</p>
+                  )}
+                  {bulkFormData.selectedCustomer && filteredBranchesForBulkAdd.length === 0 && (
+                     <p className="text-sm text-gray-500 p-2">Bu müşteriye ait şube bulunamadı.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Adım: Ay Seçimi */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">3. Ayları Seçin</label>
+                 <div className="border rounded-lg p-2 max-h-48 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-1">
+                   <CheckboxToggleAll
+                      options={ALL_MONTHS}
+                      selected={bulkFormData.selectedMonths}
+                      onChange={(selected) => setBulkFormData({...bulkFormData, selectedMonths: selected.map(Number)})}
+                      labelKey="name"
+                    />
+                   {ALL_MONTHS.map(month => (
+                     <Checkbox
+                        key={month.id}
+                        id={`month-${month.id}`}
+                        label={month.name}
+                        checked={bulkFormData.selectedMonths.includes(month.id)}
+                        onChange={(checked) => {
+                          setBulkFormData(prev => ({
+                            ...prev,
+                            selectedMonths: checked
+                              ? [...prev.selectedMonths, month.id]
+                              : prev.selectedMonths.filter(id => id !== month.id)
+                          }))
+                        }}
+                     />
+                   ))}
+                 </div>
+              </div>
+              
+              {/* 4. Adım: Ziyaret Sayısı, Yıl ve Notlar */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">4. Ziyaret Sayısı</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={bulkFormData.visits_required}
+                    onChange={(e) => setBulkFormData({ ...bulkFormData, visits_required: Number(e.target.value) })}
+                    className="w-full p-2 border rounded-lg"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">5. Yıl</label>
+                  <input
+                    type="number"
+                    min="2024" max="2030"
+                    value={bulkFormData.year}
+                    onChange={(e) => setBulkFormData({ ...bulkFormData, year: Number(e.target.value) })}
+                    className="w-full p-2 border rounded-lg"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">6. Notlar (Tümüne uygulanır)</label>
+                <textarea
+                  value={bulkFormData.notes}
+                  onChange={(e) => setBulkFormData({ ...bulkFormData, notes: e.target.value })}
+                  className="w-full p-2 border rounded-lg"
+                  rows={2}
+                />
+              </div>
+
+              {/* Form Butonları */}
+              <div className="flex justify-end gap-2 pt-4 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkAddModal(false)}
+                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <Save size={18} />
+                  Toplu Ekle
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
+  );
+};
+
+// --- YARDIMCI BİLEŞENLER (Checkbox) ---
+
+interface CheckboxProps {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+const Checkbox: React.FC<CheckboxProps> = ({ id, label, checked, onChange }) => (
+  <label
+    htmlFor={id}
+    className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer"
+  >
+    <input
+      id={id}
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+    />
+    <span className="text-sm select-none">{label}</span>
+  </label>
+);
+
+interface CheckboxToggleAllProps {
+  options: { id: string | number; [key: string]: any }[];
+  selected: (string | number)[];
+  onChange: (selected: (string | number)[]) => void;
+  labelKey: string;
+}
+
+const CheckboxToggleAll: React.FC<CheckboxToggleAllProps> = ({ options, selected, onChange, labelKey }) => {
+  const allSelected = options.length > 0 && options.length === selected.length;
+  
+  const handleToggle = () => {
+    if (allSelected) {
+      onChange([]); // Hepsini kaldır
+    } else {
+      onChange(options.map(opt => opt.id)); // Hepsini seç
+    }
+  };
+  
+  return (
+    <label
+      className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer font-medium text-blue-600 border-b border-gray-200"
+    >
+      <input
+        type="checkbox"
+        checked={allSelected}
+        onChange={handleToggle}
+        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+      />
+      <span className="text-sm select-none">
+        {allSelected ? 'Tümünü Kaldır' : 'Tümünü Seç'}
+      </span>
+    </label>
   );
 };
 
