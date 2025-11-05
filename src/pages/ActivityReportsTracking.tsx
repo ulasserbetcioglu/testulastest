@@ -1,96 +1,186 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
+// import { supabase } from '../lib/supabase'; // Gerçek import
+// import { toast } from 'sonner'; // Gerçek import
 import { Search, Download, RefreshCw, FileText, CheckCircle, X, AlertTriangle, User, ChevronLeft, ChevronRight, Loader2, BookOpen, PlusCircle, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import AddVisitForReportModal from '../components/Visits/AddVisitForReportModal'; // ✅ YENİ: Modal bileşeni import edildi
-import { format } from 'date-fns'; // format fonksiyonu eklendi
-import { tr } from 'date-fns/locale'; // Türkçe lokalizasyon eklendi
+// import AddVisitForReportModal from '../components/Visits/AddVisitForReportModal'; // Gerçek import
 
 // --- ARAYÜZLER (INTERFACES) ---
-interface Operator {
-  id: string;
-  name: string;
-}
+// TypeScript arayüzleri, .jsx dosyasında hataya neden olduğu için kaldırıldı.
+// Veri yapısı kod içinde dolaylı olarak yönetilmektedir.
 
-interface Visit {
-  id: string;
-  report_number: string;
-  visit_date: string;
-  customer: { kisa_isim: string; };
-  branch?: { sube_adi: string; } | null;
-  operator?: { name: string; } | null;
-}
+// --- Mock Supabase & Toast (Önizleme için) ---
+// Gerçek kodunuzda bu bölümü kaldırın ve kendi import'larınızı kullanın.
+const toast = {
+  success: (message) => console.log(`SUCCESS: ${message}`),
+  error: (message) => console.error(`ERROR: ${message}`),
+  info: (message) => console.info(`INFO: ${message}`),
+  warning: (message) => console.warn(`WARNING: ${message}`),
+};
 
-interface ReportStatus {
-  reportNumber: string;
-  status: 'entered' | 'missing';
-  visitId?: string;
-  visitDate?: string;
-  customerName?: string;
-  branchName?: string;
-  operatorName?: string;
-  paidMaterials?: { product: { name: string }, quantity: number }[];
-  isDuplicate?: boolean; // ✅ YENİ: Duplicate durumu için
-}
+const mockOperators = [
+  { id: 'op-1', name: 'Operatör Alpha' },
+  { id: 'op-2', name: 'Operatör Beta' },
+];
 
-interface BookletRange {
-    operatorName: string;
-    minReport: string;
-    maxReport: string;
-    count: number;
-}
+const mockVisits = [
+  { id: 'v-1', report_number: '000101', visit_date: '2025-10-20T10:00:00Z', customer: { kisa_isim: 'A Müşterisi' }, branch: { sube_adi: 'Merkez Şube' }, operator: { name: 'Operatör Alpha' }, operator_id: 'op-1' },
+  { id: 'v-2', report_number: '000103', visit_date: '2025-10-21T11:00:00Z', customer: { kisa_isim: 'B Müşterisi' }, branch: null, operator: { name: 'Operatör Beta' }, operator_id: 'op-2' },
+  { id: 'v-3', report_number: '000104', visit_date: '2025-10-22T12:00:00Z', customer: { kisa_isim: 'A Müşterisi' }, branch: { sube_adi: 'Depo Şube' }, operator: { name: 'Operatör Alpha' }, operator_id: 'op-1' },
+];
 
-// ✅ YENİ: Duplicate rapor bilgisi için interface
-interface DuplicateReport {
-  reportNumber: string;
-  visits: {
-    id: string;
-    visitDate: string;
-    customerName: string;
-    branchName?: string;
-    operatorName: string;
-  }[];
-}
+const mockPaidMaterials = {
+  'v-1': [{ product: { name: 'Ürün A' }, quantity: 2 }],
+  'v-3': [{ product: { name: 'Ürün B' }, quantity: 5 }],
+};
 
-// Türkçe ay isimleri (gruplama için)
-const allMonths = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+const supabase = {
+  auth: {
+    getUser: async () => ({
+      data: { user: { id: 'user-id-admin', email: 'admin@ilaclamatik.com' } },
+      // data: { user: { id: 'user-id-op', email: 'operator@ilaclamatik.com' } }, // Admin olmayan senaryo
+    }),
+  },
+  from: (tableName) => ({
+    select: (selectString) => ({
+      eq: (col, val) => ({
+        single: async () => {
+          // Operatör auth_id sorgusu
+          if (tableName === 'operators' && col === 'auth_id') {
+            return { data: { id: 'op-1' }, error: null }; // Admin olmayan kullanıcı için
+          }
+          return { data: null, error: new Error('Mock single eq error') };
+        },
+      }),
+      order: (col) => ({
+        // Operatör listesi sorgusu
+        then: async () => ({ data: mockOperators, error: null }), // .order().then() mock
+        [Symbol.asyncIterator]: async function* () { // Normal .order() mock
+           yield { data: mockOperators, error: null };
+        },
+        // Promise mock for await
+        then: (onFulfilled) => Promise.resolve({ data: mockOperators, error: null }).then(onFulfilled),
+      }),
+      not: (col, op, val) => ({
+        // Cilt özeti sorgusu
+        not: (col2, op2, val2) => ({
+          [Symbol.asyncIterator]: async function* () {
+             yield { data: mockVisits.filter(v => v.report_number && v.operator), error: null };
+          },
+          then: (onFulfilled) => Promise.resolve({ data: mockVisits.filter(v => v.report_number && v.operator), error: null }).then(onFulfilled),
+        }),
+        // Duplicate check sorgusu
+         [Symbol.asyncIterator]: async function* () {
+             yield { data: mockVisits, error: null };
+          },
+          then: (onFulfilled) => Promise.resolve({ data: mockVisits, error: null }).then(onFulfilled),
+      }),
+      in: (col, values) => ({
+        // Ana 'visits' sorgusu (handleSearch)
+        gte: (col, val) => ({
+           lte: (col, val) => ({
+             [Symbol.asyncIterator]: async function* () {
+                yield { data: mockVisits.filter(v => values.includes(v.report_number)), error: null };
+             },
+             then: (onFulfilled) => Promise.resolve({ data: mockVisits.filter(v => values.includes(v.report_number)), error: null }).then(onFulfilled),
+           })
+        }),
+        // 'paid_material_sales' sorgusu
+        [Symbol.asyncIterator]: async function* () {
+            if (tableName === 'paid_material_sales') {
+                const salesData = Object.keys(mockPaidMaterials)
+                  .filter(visitId => values.includes(visitId))
+                  .map(visitId => ({ visit_id: visitId, items: mockPaidMaterials[visitId] }));
+                yield { data: salesData, error: null };
+            } else if (tableName === 'visits' && col === 'report_number') {
+                 // Duplicate check sorgusu (handleSearch içi)
+                const counts = mockVisits
+                  .filter(v => values.includes(v.report_number))
+                  .map(v => ({ report_number: v.report_number }));
+                yield { data: counts, error: null };
+            }
+             else {
+                yield { data: mockVisits.filter(v => values.includes(v.report_number)), error: null };
+            }
+        },
+        then: (onFulfilled) => {
+            if (tableName === 'paid_material_sales') {
+                const salesData = Object.keys(mockPaidMaterials)
+                  .filter(visitId => values.includes(visitId))
+                  .map(visitId => ({ visit_id: visitId, items: mockPaidMaterials[visitId] }));
+                return Promise.resolve({ data: salesData, error: null }).then(onFulfilled);
+            } else if (tableName === 'visits' && col === 'report_number') {
+                // Duplicate check sorgusu (handleSearch içi)
+                const counts = mockVisits
+                  .filter(v => values.includes(v.report_number))
+                  .map(v => ({ report_number: v.report_number }));
+                return Promise.resolve({ data: counts, error: null }).then(onFulfilled);
+            }
+            return Promise.resolve({ data: mockVisits.filter(v => values.includes(v.report_number)), error: null }).then(onFulfilled);
+        }
+      }),
+      // Fallback for .select()
+      [Symbol.asyncIterator]: async function* () {
+         if (tableName === 'operators') yield { data: mockOperators, error: null };
+         else yield { data: [], error: null };
+      },
+      then: (onFulfilled) => {
+         if (tableName === 'operators') return Promise.resolve({ data: mockOperators, error: null }).then(onFulfilled);
+         return Promise.resolve({ data: [], error: null }).then(onFulfilled);
+      }
+    }),
+  }),
+};
+
+// Mock Modal Component
+const AddVisitForReportModal = ({ isOpen, onClose, onSave, initialData }) => {
+  if (!isOpen) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', padding: '20px', borderRadius: '8px', maxWidth: '500px', width: '100%' }}>
+        <h2>Ziyaret Ekle (Mock)</h2>
+        <p>Rapor No: {initialData?.reportNumber}</p>
+        <p>Operatör ID: {initialData?.operatorId}</p>
+        <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button onClick={onClose} style={{ padding: '8px 12px', border: '1px solid #ccc', borderRadius: '4px' }}>Kapat</button>
+          <button onClick={onSave} style={{ padding: '8px 12px', background: 'blue', color: 'white', border: 'none', borderRadius: '4px' }}>Kaydet (Mock)</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+// --- Mock Bitişi ---
 
 
 // --- BİLEŞEN (COMPONENT) ---
-const ActivityReportsTracking: React.FC = () => {
+const ActivityReportsTracking = () => {
   // --- STATE YÖNETİMİ ---
-  const [bookletStart, setBookletStart] = useState<string>('');
-  const [bookletEnd, setBookletEnd] = useState<string>('');
-  const [bookletRangeSize, setBookletRangeSize] = useState<number>(50); // ✅ YENİ: Rapor aralığı boyutu
-  const [reportStatuses, setReportStatuses] = useState<ReportStatus[]>([]);
+  const [bookletStart, setBookletStart] = useState('');
+  const [bookletEnd, setBookletEnd] = useState('');
+  const [bookletRangeSize, setBookletRangeSize] = useState(50);
+  const [reportStatuses, setReportStatuses] = useState([]);
   
-  const [operators, setOperators] = useState<Operator[]>([]);
-  const [selectedOperator, setSelectedOperator] = useState<string>('');
+  const [operators, setOperators] = useState([]);
+  const [selectedOperator, setSelectedOperator] = useState('');
   
   const [isAdmin, setIsAdmin] = useState(false);
-  const [userOperatorId, setUserOperatorId] = useState<string | null>(null);
+  const [userOperatorId, setUserOperatorId] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [showMissingOnly, setShowMissingOnly] = useState(false);
 
   const [showBookletSummary, setShowBookletSummary] = useState(false);
-  const [bookletRanges, setBookletRanges] = useState<BookletRange[]>([]);
+  const [bookletRanges, setBookletRanges] = useState([]);
   const [loadingSummary, setLoadingSummary] = useState(false);
   
-  // ✅ YENİ: Modal için state'ler
   const [showAddVisitModal, setShowAddVisitModal] = useState(false);
-  const [modalInitialData, setModalInitialData] = useState<{ reportNumber: string; operatorId: string; } | null>(null);
+  const [modalInitialData, setModalInitialData] = useState(null);
 
-  // ✅ YENİ: Duplicate detection için state'ler
-  const [duplicateReports, setDuplicateReports] = useState<DuplicateReport[]>([]);
+  const [duplicateReports, setDuplicateReports] = useState([]);
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
-
-  // ✅ YENİ: Ay seçimi için state
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   const navigate = useNavigate();
 
@@ -111,7 +201,7 @@ const ActivityReportsTracking: React.FC = () => {
           if (operatorError) throw operatorError;
           setUserOperatorId(operatorData.id);
         }
-      } catch (err: any) {
+      } catch (err) {
         toast.error(`Yetki kontrolü başarısız: ${err.message}`);
       } finally {
         setLoading(false);
@@ -123,16 +213,16 @@ const ActivityReportsTracking: React.FC = () => {
   useEffect(() => {
     if (bookletStart && /^\d+$/.test(bookletStart)) {
         const startNum = parseInt(bookletStart, 10);
-        const endNum = startNum + bookletRangeSize - 1; // ✅ GÜNCELLENDİ: bookletRangeSize kullanılıyor
+        const endNum = startNum + bookletRangeSize - 1;
         setBookletEnd(endNum.toString().padStart(bookletStart.length, '0'));
+    } else {
+        setBookletEnd(''); // Başlangıç geçerli değilse bitişi temizle
     }
-  }, [bookletStart, bookletRangeSize]); // ✅ GÜNCELLENDİ: bookletRangeSize bağımlılıklara eklendi
+  }, [bookletStart, bookletRangeSize]);
 
-  // ✅ YENİ: Duplicate kontrol fonksiyonu
   const checkForDuplicates = async () => {
     setCheckingDuplicates(true);
     try {
-      // Tüm ziyaretlerdeki rapor numaralarını çek
       const { data: allVisits, error } = await supabase
         .from('visits')
         .select(`
@@ -147,7 +237,6 @@ const ActivityReportsTracking: React.FC = () => {
 
       if (error) throw error;
 
-      // Rapor numaralarına göre grupla
       const reportGroups = (allVisits || []).reduce((acc, visit) => {
         const reportNum = visit.report_number;
         if (!acc[reportNum]) {
@@ -161,9 +250,8 @@ const ActivityReportsTracking: React.FC = () => {
           operatorName: visit.operator?.name || 'Bilinmeyen'
         });
         return acc;
-      }, {} as Record<string, any[]>);
+      }, {});
 
-      // Sadece birden fazla ziyareti olan rapor numaralarını filtrele
       const duplicates = Object.entries(reportGroups)
         .filter(([_, visits]) => visits.length > 1)
         .map(([reportNumber, visits]) => ({
@@ -180,7 +268,7 @@ const ActivityReportsTracking: React.FC = () => {
       } else {
         toast.success('Tekrarlanan rapor numarası bulunamadı.');
       }
-    } catch (err: any) {
+    } catch (err) {
       toast.error(`Duplicate kontrol sırasında hata: ${err.message}`);
     } finally {
       setCheckingDuplicates(false);
@@ -191,6 +279,13 @@ const ActivityReportsTracking: React.FC = () => {
   const handleSearch = async () => {
     setSearching(true);
     try {
+      const isBookletRangeSearch = bookletStart && /^\d+$/.test(bookletStart) && bookletEnd && /^\d+$/.test(bookletEnd);
+      if (!isBookletRangeSearch) {
+        toast.error('Lütfen geçerli bir cilt aralığı girin. Aylık arama kaldırılmıştır.');
+        setSearching(false);
+        return;
+      }
+
       let query = supabase.from('visits').select(`id, report_number, visit_date, customer:customer_id(kisa_isim), branch:branch_id(sube_adi), operator:operator_id(name)`);
       
       const operatorToFilter = isAdmin ? selectedOperator : userOperatorId;
@@ -198,40 +293,27 @@ const ActivityReportsTracking: React.FC = () => {
         query = query.eq('operator_id', operatorToFilter);
       }
 
-      let currentExpectedNumbers: string[] = [];
-      let currentVisitMap = new Map<string, Visit>();
+      let currentExpectedNumbers = [];
+      let currentVisitMap = new Map();
       let currentSalesMap = new Map();
-      let currentReportCounts = new Map<string, number>();
-      let statuses: ReportStatus[] = [];
+      let currentReportCounts = new Map();
+      let statuses = [];
 
-      // Her zaman ay filtresini uygula
-      const [year, month] = selectedMonth.split('-').map(Number);
-      const startDate = new Date(year, month - 1, 1).toISOString();
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
-      query = query.gte('visit_date', startDate).lte('visit_date', endDate);
-
-      // Cilt aralığı araması yapılıp yapılmadığını belirle
-      const isBookletRangeSearch = bookletStart && /^\d+$/.test(bookletStart) && bookletEnd && /^\d+$/.test(bookletEnd);
-
-      if (isBookletRangeSearch) {
-        const startNum = parseInt(bookletStart, 10);
-        const endNum = parseInt(bookletEnd, 10);
-        if (startNum >= endNum) {
-          toast.error('Başlangıç numarası bitişten küçük olmalıdır.');
-          setSearching(false);
-          return;
-        }
-        currentExpectedNumbers = Array.from({ length: endNum - startNum + 1 }, (_, i) => (startNum + i).toString().padStart(bookletStart.length, '0'));
-        query = query.in('report_number', currentExpectedNumbers); // Rapor numarası filtresini ekle
-      } else {
-        query = query.not('report_number', 'is', null); // Sadece rapor numarası olan ziyaretleri getir
+      const startNum = parseInt(bookletStart, 10);
+      const endNum = parseInt(bookletEnd, 10);
+      if (startNum >= endNum) {
+        toast.error('Başlangıç numarası bitişten küçük olmalıdır.');
+        setSearching(false);
+        return;
       }
+      currentExpectedNumbers = Array.from({ length: endNum - startNum + 1 }, (_, i) => (startNum + i).toString().padStart(bookletStart.length, '0'));
+      query = query.in('report_number', currentExpectedNumbers); // Rapor numarası filtresini ekle
 
       const { data, error } = await query;
       if (error) throw error;
 
       // Çekilen verilerden visitMap ve salesMap'i doldur
-      currentVisitMap = new Map((data || []).map(visit => [visit.report_number, visit as Visit]));
+      currentVisitMap = new Map((data || []).map(visit => [visit.report_number, visit]));
       const visitIds = (data || []).map(v => v.id);
       if (visitIds.length > 0) {
           const { data: salesData, error: salesError } = await supabase
@@ -255,61 +337,39 @@ const ActivityReportsTracking: React.FC = () => {
       currentReportCounts = new Map((duplicateCheckData || []).reduce((acc, visit) => {
         acc.set(visit.report_number, (acc.get(visit.report_number) || 0) + 1);
         return acc;
-      }, new Map<string, number>()));
+      }, new Map()));
 
-      if (isBookletRangeSearch) {
-        // Eğer cilt aralığı araması yapılıyorsa, o aralıktaki eksik numaraları tespit et
-        statuses = currentExpectedNumbers.map(num => {
-          const visit = currentVisitMap.get(num);
-          const isDuplicate = (currentReportCounts.get(num) || 0) > 1;
-          return visit
-            ? { 
-                reportNumber: num, 
-                status: 'entered', 
-                visitId: visit.id, 
-                visitDate: visit.visit_date, 
-                customerName: visit.customer?.kisa_isim, 
-                branchName: visit.branch?.sube_adi, 
-                operatorName: visit.operator?.name, 
-                paidMaterials: currentSalesMap.get(visit.id) || [],
-                isDuplicate
-              }
-            : { reportNumber: num, status: 'missing' };
-        });
-      } else {
-        // Eğer cilt aralığı araması yapılmıyorsa, çekilen tüm raporlar 'girilmiş' kabul edilir
-        statuses = (data || []).map(visit => {
-          const isDuplicate = (currentReportCounts.get(visit.report_number) || 0) > 1;
-          return {
-            reportNumber: visit.report_number,
-            status: 'entered', // Belirli bir cilt aralığı kontrol edilmediği için her zaman 'girilmiş'
-            visitId: visit.id,
-            visitDate: visit.visit_date,
-            customerName: visit.customer?.kisa_isim,
-            branchName: visit.branch?.sube_adi,
-            operatorName: visit.operator?.name,
-            paidMaterials: currentSalesMap.get(visit.id) || [],
-            isDuplicate
-          };
-        });
-      }
-
+      statuses = currentExpectedNumbers.map(num => {
+        const visit = currentVisitMap.get(num);
+        const isDuplicate = (currentReportCounts.get(num) || 0) > 1;
+        return visit
+          ? { 
+              reportNumber: num, 
+              status: 'entered', 
+              visitId: visit.id, 
+              visitDate: visit.visit_date, 
+              customerName: visit.customer?.kisa_isim, 
+              branchName: visit.branch?.sube_adi, 
+              operatorName: visit.operator?.name, 
+              paidMaterials: currentSalesMap.get(visit.id) || [],
+              isDuplicate
+            }
+          : { reportNumber: num, status: 'missing' };
+      });
+      
       setReportStatuses(statuses);
       const enteredCount = statuses.filter(s => s.status === 'entered').length;
-      const missingCount = statuses.filter(s => s.status === 'missing').length; // Sadece isBookletRangeSearch true ise anlamlı
+      const missingCount = statuses.filter(s => s.status === 'missing').length;
       const duplicateCount = statuses.filter(s => s.isDuplicate).length;
       
-      let message = `${enteredCount} rapor girilmiş.`;
-      if (isBookletRangeSearch) {
-          message += ` ${missingCount} rapor eksik.`;
-      }
+      let message = `${enteredCount} rapor girilmiş. ${missingCount} rapor eksik.`;
       if (duplicateCount > 0) {
-          message += ` ${duplicateCount} rapor numarası tekrarlanıyor!`;
-          toast.warning(message);
+        message += ` ${duplicateCount} rapor numarası tekrarlanıyor!`;
+        toast.warning(message);
       } else {
-          toast.success(message);
+        toast.success(message);
       }
-    } catch (err: any) {
+    } catch (err) {
       toast.error(`Arama sırasında hata: ${err.message}`);
     } finally {
       setSearching(false);
@@ -341,7 +401,7 @@ const ActivityReportsTracking: React.FC = () => {
             if (reportNum > acc[operatorName].max) acc[operatorName].max = reportNum;
             acc[operatorName].count++;
             return acc;
-        }, {} as Record<string, { min: number; max: number; count: number }>);
+        }, {});
 
         const summaryArray = Object.entries(ranges).map(([name, data]) => ({
             operatorName: name,
@@ -351,7 +411,7 @@ const ActivityReportsTracking: React.FC = () => {
         })).sort((a, b) => a.operatorName.localeCompare(b.operatorName));
 
         setBookletRanges(summaryArray);
-    } catch (err: any) {
+    } catch (err) {
         toast.error("Özet verisi çekilirken hata oluştu.");
     } finally {
         setLoadingSummary(false);
@@ -365,7 +425,7 @@ const ActivityReportsTracking: React.FC = () => {
       const data = filteredReportStatuses.map(report => ({
         'Rapor No': report.reportNumber,
         'Durum': report.status === 'entered' ? 'Girilmiş' : 'Eksik',
-        'Tekrarlı': report.isDuplicate ? 'EVET' : 'Hayır', // ✅ YENİ: Excel'e duplicate durumu eklendi
+        'Tekrarlı': report.isDuplicate ? 'EVET' : 'Hayır',
         'Müşteri': report.customerName || '-',
         'Şube': report.branchName || '-',
         'Operatör': report.operatorName || '-',
@@ -378,25 +438,24 @@ const ActivityReportsTracking: React.FC = () => {
       XLSX.utils.book_append_sheet(wb, ws, 'Rapor Durumları');
       XLSX.writeFile(wb, `Rapor_Takibi_${bookletStart}-${bookletEnd}.xlsx`);
       toast.success('Excel dosyası başarıyla indirildi.');
-    } catch (err: any) {
+    } catch (err) {
       toast.error('Excel dosyası oluşturulurken bir hata oluştu.');
     }
   };
 
-  const handleBookletNavigation = (direction: 'prev' | 'next') => {
+  const handleBookletNavigation = (direction) => {
     if (!bookletStart || !/^\d+$/.test(bookletStart)) {
         return toast.info("Lütfen önce geçerli bir başlangıç numarası girin.");
     }
     const currentStart = parseInt(bookletStart, 10);
-    const newStart = direction === 'next' ? currentStart + bookletRangeSize : currentStart - bookletRangeSize; // ✅ GÜNCELLENDİ: bookletRangeSize kullanılıyor
+    const newStart = direction === 'next' ? currentStart + bookletRangeSize : currentStart - bookletRangeSize;
     
     if (newStart < 0) return;
 
     setBookletStart(newStart.toString().padStart(bookletStart.length, '0'));
   };
 
-  // ✅ DEĞİŞİKLİK: Bu fonksiyon artık navigate yerine modalı açıyor.
-  const handleAddVisitClick = (reportNumber: string) => {
+  const handleAddVisitClick = (reportNumber) => {
     const operatorId = isAdmin ? selectedOperator : userOperatorId;
     if (!operatorId) {
         toast.error("Ziyaret eklemek için bir operatör seçili olmalıdır.");
@@ -408,50 +467,14 @@ const ActivityReportsTracking: React.FC = () => {
 
   const filteredReportStatuses = showMissingOnly ? reportStatuses.filter(report => report.status === 'missing') : reportStatuses;
   const enteredCount = reportStatuses.filter(s => s.status === 'entered').length;
-  const missingCount = reportStatuses.filter(s => s.status === 'missing').length; // ✅ GÜNCELLENDİ: Missing count'u doğru hesapla
-  const duplicateCount = reportStatuses.filter(s => s.isDuplicate).length; // ✅ YENİ: Duplicate sayısı
+  const missingCount = reportStatuses.filter(s => s.status === 'missing').length;
+  const duplicateCount = reportStatuses.filter(s => s.isDuplicate).length;
 
-  // ✅ YENİ: Raporları aya göre gruplayan useMemo
-  const groupedReports = useMemo(() => {
-    // Determine if we are in a booklet range search mode based on the data structure
-    // If any report has status 'missing', it implies a booklet range search was performed.
-    const isBookletSearchActive = filteredReportStatuses.some(report => report.status === 'missing');
-
-    if (isBookletSearchActive) {
-        // For booklet searches, sort all reports (entered and missing) by reportNumber
-        const sortedReports = [...filteredReportStatuses].sort((a, b) => {
-            return parseInt(a.reportNumber, 10) - parseInt(b.reportNumber, 10);
-        });
-        // Return as a single group, or group by month if visitDate is available for entered ones
-        // For simplicity, let's return as a single group for now, as user wants "sırayla"
-        return [{ monthYear: 'Tüm Raporlar', reports: sortedReports }];
-    } else {
-        // For non-booklet searches (monthly view), group by visitDate
-        const groups: Record<string, ReportStatus[]> = {};
-
-        filteredReportStatuses.forEach(report => {
-            // Only 'entered' reports will have visitDate in this mode
-            if (report.status === 'entered' && report.visitDate) {
-                const date = new Date(report.visitDate);
-                const monthYearKey = format(date, 'MMMM yyyy', { locale: tr });
-                if (!groups[monthYearKey]) {
-                    groups[monthYearKey] = [];
-                }
-                groups[monthYearKey].push(report);
-            }
-        });
-
-        const sortedMonthKeys = Object.keys(groups).sort((a, b) => {
-            const dateA = new Date(a.split(' ')[1], allMonths.indexOf(a.split(' ')[0]), 1);
-            const dateB = new Date(b.split(' ')[1], allMonths.indexOf(b.split(' ')[0]), 1);
-            return dateA.getTime() - dateB.getTime();
-        });
-
-        return sortedMonthKeys.map(key => ({
-            monthYear: key,
-            reports: groups[key].sort((a, b) => new Date(a.visitDate!).getTime() - new Date(b.visitDate!).getTime())
-        }));
-    }
+  const sortedReports = useMemo(() => {
+    // Raporları her zaman reportNumber'a göre sırala
+    return [...filteredReportStatuses].sort((a, b) => {
+        return parseInt(a.reportNumber, 10) - parseInt(b.reportNumber, 10);
+    });
   }, [filteredReportStatuses]);
 
 
@@ -462,7 +485,6 @@ const ActivityReportsTracking: React.FC = () => {
       <header className="flex flex-wrap justify-between items-center gap-4 mb-8">
         <h1 className="text-4xl font-bold text-gray-800">Rapor Takibi</h1>
         <div className="flex gap-2">
-            {/* ✅ YENİ: Duplicate kontrol butonu */}
             <button 
               onClick={checkForDuplicates} 
               disabled={checkingDuplicates}
@@ -494,7 +516,6 @@ const ActivityReportsTracking: React.FC = () => {
                 <button onClick={() => handleBookletNavigation('next')} className="p-2 border rounded-md hover:bg-gray-100 disabled:opacity-50" disabled={searching}><ChevronRight size={20}/></button>
             </div>
           </div>
-          {/* ✅ YENİ: Rapor aralığı boyutu inputu */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Aralık Boyutu</label>
             <input type="number" value={bookletRangeSize} onChange={(e) => setBookletRangeSize(parseInt(e.target.value) || 1)} min="1" className="w-full p-2 border rounded-md text-center" />
@@ -510,12 +531,7 @@ const ActivityReportsTracking: React.FC = () => {
           )}
         </div>
         <div className="mt-6 flex justify-end">
-            {/* ✅ YENİ: Ay seçimi inputu */}
-            <div className="mr-4">
-                <label className="block text-sm font-medium text-gray-600 mb-1">Ay Seçimi</label>
-                <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-full p-2 border rounded-md" />
-            </div>
-          <button onClick={handleSearch} className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors" disabled={searching || (!bookletStart && !selectedMonth)}>
+          <button onClick={handleSearch} className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors" disabled={searching || !bookletStart}>
             {searching ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
             {searching ? 'Aranıyor...' : 'Raporları Tara'}
           </button>
@@ -528,7 +544,6 @@ const ActivityReportsTracking: React.FC = () => {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-sm font-medium text-green-700"><CheckCircle className="w-5 h-5"/> Girilmiş: {enteredCount}</div>
               <div className="flex items-center gap-2 text-sm font-medium text-red-700"><X className="w-5 h-5"/> Eksik: {missingCount}</div>
-              {/* ✅ YENİ: Duplicate sayısı göstergesi */}
               {duplicateCount > 0 && (
                 <div className="flex items-center gap-2 text-sm font-medium text-orange-700">
                   <AlertTriangle className="w-5 h-5"/> Tekrarlı: {duplicateCount}
@@ -553,79 +568,69 @@ const ActivityReportsTracking: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {groupedReports.length === 0 ? ( // ✅ GÜNCELLENDİ: groupedReports kontrolü
+                {sortedReports.length === 0 ? (
                     <tr>
                         <td colSpan={6} className="p-4 text-center text-gray-500">
-                            {searchTerm ? 'Arama kriterine uygun rapor bulunamadı.' : 'Görüntülenecek rapor bulunamadı.'}
+                            Arama kriterine uygun rapor bulunamadı.
                         </td>
                     </tr>
                 ) : (
-                    groupedReports.map(group => ( // ✅ GÜNCELLENDİ: Gruplara göre render
-                        <React.Fragment key={group.monthYear}>
-                            <tr className="bg-gray-100">
-                                <td colSpan={6} className="p-2 text-left text-sm font-semibold text-gray-700">
-                                    {group.monthYear}
-                                </td>
-                            </tr>
-                            {group.reports.map(report => (
-                                <tr key={report.reportNumber} className={`${report.status === 'missing' ? 'bg-red-50' : ''} ${report.isDuplicate ? 'bg-orange-50 border-l-4 border-orange-400' : ''}`}>
-                                    <td className="p-4 whitespace-nowrap">
-                                    <div className="flex items-center">
-                                        <FileText className="w-4 h-4 text-gray-400 mr-2" />
-                                        <span className="font-mono text-sm">{report.reportNumber}</span>
-                                        {/* ✅ YENİ: Duplicate uyarı ikonu */}
-                                        {report.isDuplicate && (
-                                        <AlertTriangle className="w-4 h-4 text-orange-500 ml-2" title="Bu rapor numarası tekrarlanıyor!" />
-                                        )}
+                    sortedReports.map(report => (
+                        <tr key={report.reportNumber} className={`${report.status === 'missing' ? 'bg-red-50' : ''} ${report.isDuplicate ? 'bg-orange-50 border-l-4 border-orange-400' : ''}`}>
+                            <td className="p-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                                <FileText className="w-4 h-4 text-gray-400 mr-2" />
+                                <span className="font-mono text-sm">{report.reportNumber}</span>
+                                {report.isDuplicate && (
+                                <AlertTriangle className="w-4 h-4 text-orange-500 ml-2" title="Bu rapor numarası tekrarlanıyor!" />
+                                )}
+                            </div>
+                            </td>
+                            <td className="p-4 whitespace-nowrap text-center">
+                            <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${
+                                report.isDuplicate 
+                                ? 'bg-orange-100 text-orange-800' 
+                                : report.status === 'entered' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-red-100 text-red-800'
+                            }`}>
+                                {report.isDuplicate ? 'Tekrarlı' : report.status === 'entered' ? 'Girilmiş' : 'Eksik'}
+                            </span>
+                            </td>
+                            <td className="p-4 whitespace-nowrap text-sm text-gray-800">
+                            {report.customerName ? (
+                                <div>
+                                <div className="font-semibold">{report.customerName}</div>
+                                <div className="text-gray-500">{report.branchName}</div>
+                                {report.paidMaterials && report.paidMaterials.length > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200">
+                                        {report.paidMaterials.map((item, index) => (
+                                            <p key={index} className="text-xs text-indigo-700">
+                                                - {item.quantity} x {item.product.name}
+                                            </p>
+                                        ))}
                                     </div>
-                                    </td>
-                                    <td className="p-4 whitespace-nowrap text-center">
-                                    <span className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${
-                                        report.isDuplicate 
-                                        ? 'bg-orange-100 text-orange-800' 
-                                        : report.status === 'entered' 
-                                            ? 'bg-green-100 text-green-800' 
-                                            : 'bg-red-100 text-red-800'
-                                    }`}>
-                                        {report.isDuplicate ? 'Tekrarlı' : report.status === 'entered' ? 'Girilmiş' : 'Eksik'}
-                                    </span>
-                                    </td>
-                                    <td className="p-4 whitespace-nowrap text-sm text-gray-800">
-                                    {report.customerName ? (
-                                        <div>
-                                        <div className="font-semibold">{report.customerName}</div>
-                                        <div className="text-gray-500">{report.branchName}</div>
-                                        {report.paidMaterials && report.paidMaterials.length > 0 && (
-                                            <div className="mt-2 pt-2 border-t border-gray-200">
-                                                {report.paidMaterials.map((item, index) => (
-                                                    <p key={index} className="text-xs text-indigo-700">
-                                                        - {item.quantity} x {item.product.name}
-                                                    </p>
-                                                ))}
-                                            </div>
-                                        )}
-                                        </div>
-                                    ) : '-'}
-                                    </td>
-                                    <td className="p-4 whitespace-nowrap text-sm text-gray-500"><div className="flex items-center">{report.operatorName ? <><User className="w-4 h-4 mr-2" /> {report.operatorName}</> : '-'}</div></td>
-                                    <td className="p-4 whitespace-nowrap text-sm text-gray-500">{report.visitDate ? new Date(report.visitDate).toLocaleDateString('tr-TR') : '-'}</td>
-                                    <td className="p-4 whitespace-nowrap text-right">
-                                        {isAdmin && report.status === 'missing' && (
-                                            <button
-                                                onClick={() => handleAddVisitClick(report.reportNumber)}
-                                                disabled={!selectedOperator}
-                                                title={!selectedOperator ? "Eksik ziyaret eklemek için lütfen operatör filtresinden bir operatör seçin." : "Bu rapor numarası için yeni ziyaret ekle"}
-                                                className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                                                    selectedOperator ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                }`}
-                                            >
-                                                <PlusCircle size={14}/> Ziyaret Ekle
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </React.Fragment>
+                                )}
+                                </div>
+                            ) : '-'}
+                            </td>
+                            <td className="p-4 whitespace-nowrap text-sm text-gray-500"><div className="flex items-center">{report.operatorName ? <><User className="w-4 h-4 mr-2" /> {report.operatorName}</> : '-'}</div></td>
+                            <td className="p-4 whitespace-nowrap text-sm text-gray-500">{report.visitDate ? new Date(report.visitDate).toLocaleDateString('tr-TR') : '-'}</td>
+                            <td className="p-4 whitespace-nowrap text-right">
+                                {isAdmin && report.status === 'missing' && (
+                                    <button
+                                        onClick={() => handleAddVisitClick(report.reportNumber)}
+                                        disabled={!selectedOperator}
+                                        title={!selectedOperator ? "Eksik ziyaret eklemek için lütfen operatör filtresinden bir operatör seçin." : "Bu rapor numarası için yeni ziyaret ekle"}
+                                        className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                                            selectedOperator ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        <PlusCircle size={14}/> Ziyaret Ekle
+                                    </button>
+                                )}
+                            </td>
+                        </tr>
                     ))
                 )}
               </tbody>
@@ -634,7 +639,7 @@ const ActivityReportsTracking: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ YENİ: Modal bileşeni render ediliyor */}
+      {/* Modal bileşeni render ediliyor */}
       {showAddVisitModal && modalInitialData && (
         <AddVisitForReportModal
             isOpen={showAddVisitModal}
@@ -647,7 +652,7 @@ const ActivityReportsTracking: React.FC = () => {
         />
       )}
 
-      {/* ✅ YENİ: Duplicate Raporlar Modalı */}
+      {/* Duplicate Raporlar Modalı */}
       {showDuplicatesModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" onClick={() => setShowDuplicatesModal(false)}>
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
