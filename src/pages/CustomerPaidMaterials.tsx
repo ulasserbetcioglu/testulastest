@@ -105,7 +105,7 @@ const CustomerPaidMaterials: React.FC = () => {
           ),
           items:paid_material_sale_items (
             id,
-            product:product_id (name),
+            product:product_id!paid_material_sale_items_product_id_fkey (name),
             quantity,
             unit_price,
             total_price

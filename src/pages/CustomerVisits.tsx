@@ -139,7 +139,7 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
                             quantity,
                             unit_price,
                             total_price,
-                            product:product_id(name)
+                            product:product_id!paid_material_sale_items_product_id_fkey(name)
                         `)
                         .in('sale_id', saleIds);
 
