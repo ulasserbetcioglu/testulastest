@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../Auth/AuthProvider';
-import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp, Grid } from 'lucide-react';
+import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
 
@@ -49,7 +49,6 @@ const CustomerLayout: React.FC = () => {
 
   const navItems = [
     { path: '/customer', icon: <Home size={20} />, name: 'Ana Sayfa' },
-    { path: '/customer/modules', icon: <Grid size={20} />, name: 'Modüller' },
     { path: '/customer/ziyaretler', icon: <FileText size={20} />, name: 'Ziyaretler' },
     { path: '/customer/takvim', icon: <Calendar size={20} />, name: 'Takvim' },
     { path: '/customer/dof', icon: <AlertCircle size={20} />, name: 'DÖF' },

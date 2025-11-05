@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
 import { useNavigate } from 'react-router-dom';
-import { Search, Download, Calendar, CheckCircle, Clock, X, User, Building, FileText, Loader2, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Download, Calendar, CheckCircle, Clock, X, User, Building, FileText, Loader2, Info, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -20,8 +20,26 @@ interface Visit {
   operator: { name: string } | null;
 }
 
+interface VisitDetail {
+  id: string;
+  visit_date: string;
+  status: string;
+  visit_type: string;
+  report_number: string | null;
+  notes: string | null;
+  branch: { sube_adi: string } | null;
+  operator: { name: string } | null;
+  paid_materials: Array<{
+    id: string;
+    material_name: string;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+  }>;
+}
+
 // --- YARDIMCI BİLEŞENLER ---
-const VisitCard: React.FC<{ visit: Visit }> = ({ visit }) => {
+const VisitCard: React.FC<{ visit: Visit; onViewDetails: (visitId: string) => void }> = ({ visit, onViewDetails }) => {
     const statusConfig = {
         planned: { icon: Clock, color: 'border-yellow-500 bg-yellow-50', textColor: 'text-yellow-700', text: 'Planlandı' },
         completed: { icon: CheckCircle, color: 'border-green-500 bg-green-50', textColor: 'text-green-700', text: 'Tamamlandı' },
@@ -62,6 +80,163 @@ const VisitCard: React.FC<{ visit: Visit }> = ({ visit }) => {
                      <p className="text-sm text-gray-600 mt-1 bg-gray-50 p-2 rounded-md">{visit.notes}</p>
                 </div>
             )}
+            <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
+                <button
+                    onClick={() => onViewDetails(visit.id)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-semibold"
+                >
+                    <Eye size={16} /> Detaylı İncele
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// Modal for viewing visit details
+const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ visitId, onClose }) => {
+    const [visitDetail, setVisitDetail] = useState<VisitDetail | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchVisitDetail = async () => {
+            try {
+                setLoading(true);
+                const { data: visitData, error: visitError } = await supabase
+                    .from('visits')
+                    .select(`
+                        id,
+                        visit_date,
+                        status,
+                        visit_type,
+                        report_number,
+                        notes,
+                        branch:branch_id(sube_adi),
+                        operator:operator_id(name)
+                    `)
+                    .eq('id', visitId)
+                    .single();
+
+                if (visitError) throw visitError;
+
+                const { data: materialsData, error: materialsError } = await supabase
+                    .from('paid_material_sales')
+                    .select('id, material_name, quantity, unit_price, total_price')
+                    .eq('visit_id', visitId);
+
+                if (materialsError) throw materialsError;
+
+                setVisitDetail({
+                    ...visitData,
+                    paid_materials: materialsData || []
+                });
+            } catch (err: any) {
+                toast.error(`Detaylar yüklenirken hata: ${err.message}`);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchVisitDetail();
+    }, [visitId]);
+
+    if (loading) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl p-8 max-w-2xl w-full">
+                    <div className="flex items-center justify-center">
+                        <Loader2 className="animate-spin" size={32} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!visitDetail) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">Ziyaret Detayları</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                        <X size={24} />
+                    </button>
+                </div>
+
+                <div className="space-y-6">
+                    {/* Basic Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-xs text-gray-500 font-semibold mb-1">ŞUBE</p>
+                            <p className="text-lg font-semibold">{visitDetail.branch?.sube_adi || 'Genel Merkez'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-xs text-gray-500 font-semibold mb-1">TARİH</p>
+                            <p className="text-lg font-semibold">{format(new Date(visitDetail.visit_date), 'dd MMMM yyyy, HH:mm', { locale: tr })}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-xs text-gray-500 font-semibold mb-1">OPERATÖR</p>
+                            <p className="text-lg font-semibold">{visitDetail.operator?.name || 'Atanmadı'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-xs text-gray-500 font-semibold mb-1">ZİYARET TÜRÜ</p>
+                            <p className="text-lg font-semibold">{visitDetail.visit_type || 'Belirtilmemiş'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-xs text-gray-500 font-semibold mb-1">RAPOR NO</p>
+                            <p className="text-lg font-semibold font-mono">{visitDetail.report_number || '-'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-xs text-gray-500 font-semibold mb-1">DURUM</p>
+                            <p className="text-lg font-semibold capitalize">{visitDetail.status === 'completed' ? 'Tamamlandı' : visitDetail.status === 'planned' ? 'Planlandı' : 'İptal Edildi'}</p>
+                        </div>
+                    </div>
+
+                    {/* Notes */}
+                    {visitDetail.notes && (
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-xs text-gray-500 font-semibold mb-2">NOTLAR</p>
+                            <p className="text-sm text-gray-700">{visitDetail.notes}</p>
+                        </div>
+                    )}
+
+                    {/* Paid Materials */}
+                    <div className="border-t pt-6">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Kullanılan Ücretli Malzemeler</h3>
+                        {visitDetail.paid_materials.length > 0 ? (
+                            <div className="space-y-3">
+                                {visitDetail.paid_materials.map((material) => (
+                                    <div key={material.id} className="bg-green-50 p-4 rounded-lg border border-green-200">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-semibold text-gray-800">{material.material_name}</p>
+                                                <p className="text-sm text-gray-600 mt-1">
+                                                    <span className="font-semibold">Adet:</span> {material.quantity} |
+                                                    <span className="font-semibold ml-2">Birim Fiyat:</span> {material.unit_price.toFixed(2)} ₺
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs text-gray-500">Toplam</p>
+                                                <p className="text-lg font-bold text-green-600">{material.total_price.toFixed(2)} ₺</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="bg-gray-800 p-4 rounded-lg text-white flex justify-between items-center">
+                                    <p className="font-semibold">GENEL TOPLAM</p>
+                                    <p className="text-2xl font-bold">
+                                        {visitDetail.paid_materials.reduce((sum, m) => sum + m.total_price, 0).toFixed(2)} ₺
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 bg-gray-50 rounded-lg">
+                                <p className="text-gray-500">Bu ziyarette ücretli malzeme kullanılmamış</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
@@ -93,6 +268,7 @@ const CustomerVisits: React.FC = () => {
     const [visits, setVisits] = useState<Visit[]>([]);
     const [loading, setLoading] = useState(true);
     const [customerId, setCustomerId] = useState<string | null>(null);
+    const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
     const [filters, setFilters] = useState({
         searchTerm: '',
         status: '',
@@ -242,8 +418,13 @@ const CustomerVisits: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {visits.map(visit => <VisitCard key={visit.id} visit={visit} />)}
+                    {visits.map(visit => <VisitCard key={visit.id} visit={visit} onViewDetails={setSelectedVisitId} />)}
                 </div>
+            )}
+
+            {/* Visit Detail Modal */}
+            {selectedVisitId && (
+                <VisitDetailModal visitId={selectedVisitId} onClose={() => setSelectedVisitId(null)} />
             )}
 
             {/* Sayfalama Kontrolleri */}
