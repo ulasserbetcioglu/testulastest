@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { useNavigate } from 'react-router-dom';
 import { Search, Download, Calendar, CheckCircle, Clock, X, User, Building, FileText, Loader2, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -107,11 +108,9 @@ const CustomerVisits: React.FC = () => {
     useEffect(() => {
         const fetchCustomerId = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) throw new Error('Oturum bulunamadı.');
-                const { data, error } = await supabase.from('customers').select('id').eq('auth_id', user.id).single();
-                if (error) throw error;
-                setCustomerId(data.id);
+                const id = await localAuth.getCurrentCustomerId();
+                if (!id) throw new Error('Oturum bulunamadı.');
+                setCustomerId(id);
             } catch (err: any) {
                 toast.error(`Kimlik doğrulama hatası: ${err.message}`);
                 setLoading(false);

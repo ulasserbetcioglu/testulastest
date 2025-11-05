@@ -97,5 +97,41 @@ export const localAuth = {
   isCustomerOrBranch(): boolean {
     const session = this.getSession();
     return session !== null && (session.type === 'customer' || session.type === 'branch');
+  },
+
+  async getCurrentCustomerId(): Promise<string | null> {
+    const localSession = this.getSession();
+    if (localSession && localSession.type === 'customer') {
+      return localSession.id;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: customerData } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    return customerData?.id || null;
+  },
+
+  async getCurrentBranchId(): Promise<string | null> {
+    const localSession = this.getSession();
+    if (localSession && localSession.type === 'branch') {
+      return localSession.id;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: branchData } = await supabase
+      .from('branches')
+      .select('id')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    return branchData?.id || null;
   }
 };

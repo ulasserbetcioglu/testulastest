@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, FileText, AlertTriangle, CheckCircle, X, User, Building, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { format, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -119,17 +120,30 @@ const CustomerDashboard: React.FC = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
+        // Check for local session first (for customer/branch login)
+        const localSession = localAuth.getSession();
+        let customerId: string;
+        let customerName: string;
 
-        const { data: customerData, error: customerError } = await supabase
-          .from('customers')
-          .select('id, kisa_isim')
-          .eq('auth_id', user.id)
-          .single();
+        if (localSession && localSession.type === 'customer') {
+          // Use local session data
+          customerId = localSession.id;
+          customerName = localSession.name;
+        } else {
+          // Fall back to Supabase auth (for admin/operator)
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
 
-        if (customerError || !customerData) throw new Error('Müşteri bilgileri alınamadı.');
-        const customerId = customerData.id;
+          const { data: customerData, error: customerError } = await supabase
+            .from('customers')
+            .select('id, kisa_isim')
+            .eq('auth_id', user.id)
+            .single();
+
+          if (customerError || !customerData) throw new Error('Müşteri bilgileri alınamadı.');
+          customerId = customerData.id;
+          customerName = customerData.kisa_isim;
+        }
 
         const today = new Date().toISOString();
         
@@ -150,7 +164,7 @@ const CustomerDashboard: React.FC = () => {
         if (firstError) throw firstError;
 
         setData({
-          customerName: customerData.kisa_isim,
+          customerName: customerName,
           upcomingVisits: upcomingVisitsRes.data || [],
           recentVisits: recentVisitsRes.data || [],
           openActions: openActionsRes.data || [],

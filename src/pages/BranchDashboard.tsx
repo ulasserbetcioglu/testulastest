@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Users, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import StatCard from '../components/Dashboard/StatCard';
 
 const BranchDashboard: React.FC = () => {
@@ -20,21 +21,32 @@ const BranchDashboard: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Kullanıcı bulunamadı');
+      // Check for local session first (for branch login)
+      const localSession = localAuth.getSession();
+      let branchId: string;
 
-      const { data: branchData } = await supabase
-        .from('branches')
-        .select('id')
-        .eq('auth_id', user.id)
-        .single();
+      if (localSession && localSession.type === 'branch') {
+        // Use local session data
+        branchId = localSession.id;
+      } else {
+        // Fall back to Supabase auth
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Kullanıcı bulunamadı');
 
-      if (!branchData) throw new Error('Şube bulunamadı');
+        const { data: branchData } = await supabase
+          .from('branches')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+
+        if (!branchData) throw new Error('Şube bulunamadı');
+        branchId = branchData.id;
+      }
 
       const { data: visits, error: visitsError } = await supabase
         .from('visits')
         .select('status')
-        .eq('branch_id', branchData.id);
+        .eq('branch_id', branchId);
 
       if (visitsError) throw visitsError;
 
@@ -44,7 +56,7 @@ const BranchDashboard: React.FC = () => {
       const { data: operators, error: operatorsError } = await supabase
         .from('operators')
         .select('id')
-        .eq('branch_id', branchData.id);
+        .eq('branch_id', branchId);
 
       if (operatorsError) throw operatorsError;
 
