@@ -6,18 +6,57 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 // --- Mock Supabase & Toast (Gerçek kodunuzda bunları kaldırın) ---
 const supabase = {
-  from: (tableName) => ({
-    select: (query) => ({
-      or: () => ({
-        order: () => Promise.resolve({ data: [], error: null }),
-      }),
-      order: () => Promise.resolve({ data: [], error: null }),
-      update: () => Promise.resolve({ error: null }),
-      insert: () => Promise.resolve({ error: null }),
-      delete: () => Promise.resolve({ error: null }),
-      eq: () => Promise.resolve({ error: null }),
-    }),
-  }),
+  from: (tableName) => {
+    // Mock data
+    const mockCustomers = [
+      { id: 'cust_1', kisa_isim: 'Büyük Market A.Ş.' },
+      { id: 'cust_2', kisa_isim: 'Restoran Zinciri' },
+      { id: 'cust_3', kisa_isim: 'Otel Grubu' },
+    ];
+    const mockBranches = [
+      { id: 'br_1', sube_adi: 'Merkez Şube', customer_id: 'cust_1', customer: { kisa_isim: 'Büyük Market A.Ş.' } },
+      { id: 'br_2', sube_adi: 'Kadıköy Şube', customer_id: 'cust_1', customer: { kisa_isim: 'Büyük Market A.Ş.' } },
+      { id: 'br_3', sube_adi: 'Taksim Restoran', customer_id: 'cust_2', customer: { kisa_isim: 'Restoran Zinciri' } },
+    ];
+    const mockSchedules = [
+      { id: 'sch_1', customer_id: null, branch_id: 'br_1', month: 1, visits_required: 2, year: new Date().getFullYear(), notes: 'Açılış denetimi', branch: { sube_adi: 'Merkez Şube', customer: { kisa_isim: 'Büyük Market A.Ş.' } } },
+      { id: 'sch_2', customer_id: null, branch_id: 'br_3', month: 1, visits_required: 1, year: new Date().getFullYear(), notes: null, branch: { sube_adi: 'Taksim Restoran', customer: { kisa_isim: 'Restoran Zinciri' } } },
+    ];
+    
+    // Return specific data based on table name
+    if (tableName === 'customers') {
+      return {
+        select: () => ({
+          order: () => Promise.resolve({ data: mockCustomers, error: null })
+        })
+      };
+    }
+    if (tableName === 'branches') {
+      return {
+        select: () => ({
+          order: () => Promise.resolve({ data: mockBranches, error: null })
+        })
+      };
+    }
+    if (tableName === 'monthly_visit_schedules') {
+      return {
+        select: () => ({
+          or: () => ({
+            order: () => Promise.resolve({ data: mockSchedules, error: null })
+          }),
+          update: () => Promise.resolve({ error: null }),
+          insert: () => Promise.resolve({ error: null }),
+          delete: () => Promise.resolve({ error: null }),
+          eq: () => Promise.resolve({ error: null }),
+        })
+      };
+    }
+    // Fallback
+    return {
+      select: () => ({ or: () => ({ order: () => Promise.resolve({ data: [], error: null }) }), order: () => Promise.resolve({ data: [], error: null }) }),
+      update: () => Promise.resolve({ error: null }), insert: () => Promise.resolve({ error: null }), delete: () => Promise.resolve({ error: null }), eq: () => Promise.resolve({ error: null }),
+    };
+  }
 };
 const toast = {
   success: (message) => console.log(`SUCCESS: ${message}`),
