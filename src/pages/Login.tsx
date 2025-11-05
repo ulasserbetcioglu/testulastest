@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -8,16 +9,22 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loginType, setLoginType] = useState<'admin' | 'customer' | 'branch'>('admin');
 
   useEffect(() => {
-    // Check if user is already logged in
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
         navigate('/');
+        return;
+      }
+
+      const localSession = localAuth.getSession();
+      if (localSession) {
+        navigate('/');
       }
     };
-    
+
     checkSession();
   }, [navigate]);
 
@@ -27,24 +34,42 @@ const Login: React.FC = () => {
     setError(null);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        switch (error.message) {
-          case 'Invalid login credentials':
-            throw new Error('E-posta veya parola hatalı');
-          case 'Email not confirmed':
-            throw new Error('E-posta adresi doğrulanmamış');
-          default:
-            throw error;
+      if (loginType === 'customer') {
+        const { session, error } = await localAuth.signInCustomer(email, password);
+        if (error) {
+          throw new Error(error);
         }
-      }
+        if (session) {
+          window.location.href = '/customer/dashboard';
+        }
+      } else if (loginType === 'branch') {
+        const { session, error } = await localAuth.signInBranch(email, password);
+        if (error) {
+          throw new Error(error);
+        }
+        if (session) {
+          window.location.href = '/branch/dashboard';
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (data.session) {
-        navigate('/');
+        if (error) {
+          switch (error.message) {
+            case 'Invalid login credentials':
+              throw new Error('E-posta veya parola hatalı');
+            case 'Email not confirmed':
+              throw new Error('E-posta adresi doğrulanmamış');
+            default:
+              throw error;
+          }
+        }
+
+        if (data.session) {
+          navigate('/');
+        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -68,6 +93,46 @@ const Login: React.FC = () => {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Giriş Tipi
+            </label>
+            <div className="flex space-x-4">
+              <button
+                type="button"
+                onClick={() => setLoginType('admin')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  loginType === 'admin'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Admin/Operatör
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginType('customer')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  loginType === 'customer'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Müşteri
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginType('branch')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  loginType === 'branch'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Şube
+              </button>
+            </div>
+          </div>
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">

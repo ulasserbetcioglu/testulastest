@@ -3,6 +3,7 @@ import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../Auth/AuthProvider';
 import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp, Grid } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { localAuth } from '../../lib/localAuth';
 
 const CustomerLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -16,8 +17,17 @@ const CustomerLayout: React.FC = () => {
 
   const fetchCustomerInfo = async () => {
     try {
+      const localSession = localAuth.getSession();
+      if (localSession && localSession.type === 'customer') {
+        setCustomerName(localSession.name);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        navigate('/login');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('customers')
