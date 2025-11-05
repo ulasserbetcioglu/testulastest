@@ -105,6 +105,7 @@ import AdminOperatorShifts from './pages/AdminOperatorShifts'; // NEW: Import Ad
 import ProtectedReportViewer from './components/ProtectedReportViewer'; // ✅ YENİ: ProtectedReportViewer import edildi
 import AdminOperatorLeaves from './pages/AdminOperatorLeaves'; // NEW: Import AdminOperatorLeaves
 import AdminVehicles from './pages/AdminVehicles'; // NEW: Import AdminVehicles
+import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
 import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm'; // NEW: Import OperatorWeeklyKmForm
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -341,6 +342,8 @@ function App() {
             <Route path="/admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             {/* NEW: Admin Vehicles Page */}
             <Route path="/admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
+            {/* Monthly Visit Schedule */}
+            <Route path="/admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
           </Route>
           
         

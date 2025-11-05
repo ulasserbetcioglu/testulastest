@@ -73,13 +73,13 @@ const BranchPaidMaterials: React.FC = () => {
   const fetchSales = async () => {
     try {
       setLoading(true);
-      
+
       // Parse selected month
       const [year, month] = selectedMonth.split('-').map(Number);
       const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
       const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-      
-      const { data, error: fetchError } = await supabase
+
+      const { data: salesData, error: fetchError } = await supabase
         .from('paid_material_sales')
         .select(`
           id,
@@ -93,23 +93,56 @@ const BranchPaidMaterials: React.FC = () => {
             report_number,
             notes,
             operator:operator_id (name)
-          ),
-          items:paid_material_sale_items (
-            id,
-            product:product_id!paid_material_sale_items_product_id_fkey (name),
-            quantity
           )
         `)
         .eq('branch_id', branchId)
         .eq('status', 'approved')
         .gte('sale_date', startDate)
         .lte('sale_date', endDate);
-      
+
       if (fetchError) throw fetchError;
-      setSales(data || []);
-      
+
+      // Fetch items for each sale
+      const salesWithItems = await Promise.all(
+        (salesData || []).map(async (sale) => {
+          const { data: items, error: itemsError } = await supabase
+            .from('paid_material_sale_items')
+            .select(`
+              id,
+              quantity,
+              product_id
+            `)
+            .eq('sale_id', sale.id);
+
+          if (itemsError) {
+            console.error('Error fetching items:', itemsError);
+            return { ...sale, items: [] };
+          }
+
+          // Fetch product names
+          const itemsWithProducts = await Promise.all(
+            (items || []).map(async (item) => {
+              const { data: product } = await supabase
+                .from('paid_products')
+                .select('name')
+                .eq('id', item.product_id)
+                .single();
+
+              return {
+                ...item,
+                product: product || { name: 'Bilinmeyen Ürün' }
+              };
+            })
+          );
+
+          return { ...sale, items: itemsWithProducts };
+        })
+      );
+
+      setSales(salesWithItems);
+
       // Generate monthly reports
-      generateMonthlyReports(data || []);
+      generateMonthlyReports(salesWithItems);
     } catch (err: any) {
       setError(err.message);
       console.error('Error fetching sales:', err);

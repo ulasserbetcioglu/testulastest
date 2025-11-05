@@ -16,7 +16,9 @@ export type Customer = {
   longitude?: number;
   tax_number?: string;
   tax_office?: string;
-  is_one_time?: boolean; // Added is_one_time
+  is_one_time?: boolean;
+  assigned_operator_id?: string | null;
+  assigned_operator?: { name: string } | null;
 };
 
 type CustomerPricing = {
@@ -49,7 +51,9 @@ export type Branch = {
   longitude?: number;
   pricing?: BranchPricing;
   floor_plan?: FloorPlan;
-  is_one_time?: boolean; // Added is_one_time
+  is_one_time?: boolean;
+  assigned_operator_id?: string | null;
+  assigned_operator?: { name: string } | null;
 };
 
 export type Treatment = {

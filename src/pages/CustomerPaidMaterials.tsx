@@ -102,33 +102,65 @@ const CustomerPaidMaterials: React.FC = () => {
             report_number,
             notes,
             operator:operator_id (name)
-          ),
-          items:paid_material_sale_items (
-            id,
-            product:product_id!paid_material_sale_items_product_id_fkey (name),
-            quantity,
-            unit_price,
-            total_price
           )
         `)
-        .eq('customer_id', customerId) // Filter by customer ID
+        .eq('customer_id', customerId)
         .order('sale_date', { ascending: false });
 
       // Apply date range filter
       if (startDate && endDate) {
         query = query.gte('sale_date', startDate).lte('sale_date', endDate);
       } else {
-        // If no date range is selected, filter by selected month
         const [year, month] = selectedMonth.split('-').map(Number);
         const startOfMonth = new Date(year, month - 1, 1).toISOString().split('T')[0];
         const endOfMonth = new Date(year, month, 0).toISOString().split('T')[0];
         query = query.gte('sale_date', startOfMonth).lte('sale_date', endOfMonth);
       }
 
-      const { data, error } = await query;
+      const { data: salesData, error: salesError } = await query;
 
-      if (error) throw error;
-      setSales(data || []);
+      if (salesError) throw salesError;
+
+      // Fetch items for each sale
+      const salesWithItems = await Promise.all(
+        (salesData || []).map(async (sale) => {
+          const { data: items, error: itemsError } = await supabase
+            .from('paid_material_sale_items')
+            .select(`
+              id,
+              quantity,
+              unit_price,
+              total_price,
+              product_id
+            `)
+            .eq('sale_id', sale.id);
+
+          if (itemsError) {
+            console.error('Error fetching items:', itemsError);
+            return { ...sale, items: [] };
+          }
+
+          // Fetch product names
+          const itemsWithProducts = await Promise.all(
+            (items || []).map(async (item) => {
+              const { data: product } = await supabase
+                .from('paid_products')
+                .select('name')
+                .eq('id', item.product_id)
+                .single();
+
+              return {
+                ...item,
+                product: product || { name: 'Bilinmeyen Ürün' }
+              };
+            })
+          );
+
+          return { ...sale, items: itemsWithProducts };
+        })
+      );
+
+      setSales(salesWithItems);
     } catch (err: any) {
       setError(err.message);
     } finally {

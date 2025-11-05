@@ -139,19 +139,30 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
                             quantity,
                             unit_price,
                             total_price,
-                            product:product_id!paid_material_sale_items_product_id_fkey(name)
+                            product_id
                         `)
                         .in('sale_id', saleIds);
 
                     if (itemsError) throw itemsError;
 
-                    materialsData = (itemsData || []).map(item => ({
-                        id: item.id,
-                        material_name: item.product?.name || 'Bilinmeyen Ürün',
-                        quantity: item.quantity,
-                        unit_price: item.unit_price,
-                        total_price: item.total_price
-                    }));
+                    // Fetch product names for each item
+                    materialsData = await Promise.all(
+                        (itemsData || []).map(async (item) => {
+                            const { data: product } = await supabase
+                                .from('paid_products')
+                                .select('name')
+                                .eq('id', item.product_id)
+                                .single();
+
+                            return {
+                                id: item.id,
+                                material_name: product?.name || 'Bilinmeyen Ürün',
+                                quantity: item.quantity,
+                                unit_price: item.unit_price,
+                                total_price: item.total_price
+                            };
+                        })
+                    );
                 }
 
                 setVisitDetail({

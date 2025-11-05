@@ -30,6 +30,7 @@ const menuCategories = [
       { name: 'Şubeler', path: '/subeler', icon: <Building size={20} /> },
       { name: 'Şube Fiyatlandırma', path: '/sube-fiyatlandirma', icon: <Building size={20} /> },
       { name: 'Ziyaretler', path: '/ziyaretler', icon: <CalendarRange size={20} /> },
+      { name: 'Aylık Ziyaret Planı', path: '/admin/monthly-visit-schedule', icon: <CalendarClock size={20} /> },
       { name: 'Teklifler', path: '/teklifler', icon: <FileText size={20} /> },
     ]
   },
