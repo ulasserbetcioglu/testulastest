@@ -118,16 +118,45 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
 
                 if (visitError) throw visitError;
 
-                const { data: materialsData, error: materialsError } = await supabase
+                // Fetch paid material sales for this visit
+                const { data: salesData, error: salesError } = await supabase
                     .from('paid_material_sales')
-                    .select('id, material_name, quantity, unit_price, total_price')
+                    .select('id')
                     .eq('visit_id', visitId);
 
-                if (materialsError) throw materialsError;
+                if (salesError) throw salesError;
+
+                let materialsData: any[] = [];
+
+                // If there are sales, fetch the items with product details
+                if (salesData && salesData.length > 0) {
+                    const saleIds = salesData.map(s => s.id);
+
+                    const { data: itemsData, error: itemsError } = await supabase
+                        .from('paid_material_sale_items')
+                        .select(`
+                            id,
+                            quantity,
+                            unit_price,
+                            total_price,
+                            product:product_id(name)
+                        `)
+                        .in('sale_id', saleIds);
+
+                    if (itemsError) throw itemsError;
+
+                    materialsData = (itemsData || []).map(item => ({
+                        id: item.id,
+                        material_name: item.product?.name || 'Bilinmeyen Ürün',
+                        quantity: item.quantity,
+                        unit_price: item.unit_price,
+                        total_price: item.total_price
+                    }));
+                }
 
                 setVisitDetail({
                     ...visitData,
-                    paid_materials: materialsData || []
+                    paid_materials: materialsData
                 });
             } catch (err: any) {
                 toast.error(`Detaylar yüklenirken hata: ${err.message}`);
