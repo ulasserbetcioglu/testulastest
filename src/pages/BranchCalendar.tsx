@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 
 interface Visit {
   id: string;
@@ -25,16 +26,8 @@ const BranchCalendar: React.FC = () => {
 
   const fetchVisits = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Kullanıcı bulunamadı');
-
-      const { data: branchData } = await supabase
-        .from('branches')
-        .select('id')
-        .eq('auth_id', user.id)
-        .single();
-
-      if (!branchData) throw new Error('Şube kaydı bulunamadı');
+      const branchId = await localAuth.getCurrentBranchId();
+      if (!branchId) throw new Error('Şube kaydı bulunamadı');
 
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
@@ -47,7 +40,7 @@ const BranchCalendar: React.FC = () => {
           status,
           customer:customer_id (kisa_isim)
         `)
-        .eq('branch_id', branchData.id)
+        .eq('branch_id', branchId)
         .gte('visit_date', start.toISOString())
         .lte('visit_date', end.toISOString());
 

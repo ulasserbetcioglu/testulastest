@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { Download, Search, Filter, Eye, X } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -135,17 +136,9 @@ const CustomerCertificates: React.FC = () => {
 
   const fetchCustomerId = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Kullanıcı bulunamadı');
-
-      const { data, error } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('auth_id', user.id)
-        .single();
-
-      if (error) throw error;
-      setCustomerId(data.id);
+      const id = await localAuth.getCurrentCustomerId();
+      if (!id) throw new Error('Müşteri kaydı bulunamadı');
+      setCustomerId(id);
     } catch (err: any) {
       setError(err.message);
       setLoading(false);

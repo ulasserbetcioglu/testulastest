@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 
 interface Visit {
   id: string;
@@ -25,16 +26,8 @@ const CustomerCalendar: React.FC = () => {
 
   const fetchVisits = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Kullanıcı bulunamadı');
-
-      const { data: customerData } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('auth_id', user.id)
-        .single();
-
-      if (!customerData) throw new Error('Müşteri kaydı bulunamadı');
+      const customerId = await localAuth.getCurrentCustomerId();
+      if (!customerId) throw new Error('Müşteri kaydı bulunamadı');
 
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
@@ -47,7 +40,7 @@ const CustomerCalendar: React.FC = () => {
           status,
           branch:branch_id (sube_adi)
         `)
-        .eq('customer_id', customerData.id)
+        .eq('customer_id', customerId)
         .gte('visit_date', start.toISOString())
         .lte('visit_date', end.toISOString());
 
