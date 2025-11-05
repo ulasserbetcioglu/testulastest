@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
-// Define item types for drag and drop
+// Sürükle-bırak öğe tipleri
 const ItemTypes = {
   CUSTOMER: 'customer',
   BRANCH: 'branch',
@@ -17,6 +17,9 @@ const ItemTypes = {
   OPERATOR: 'operator'
 };
 
+// --- Arayüz (Interface) Tanımları ---
+// Not: Bunlar JSX'te zorunlu değildir, ancak veri yapısını anlamak için faydalıdır.
+/*
 interface Customer {
   id: string;
   kisa_isim: string;
@@ -56,21 +59,16 @@ interface Visit {
     name: string;
   };
 }
+*/
 
-interface DraggableItemProps {
-  item: Customer | Branch | Operator;
-  type: 'customer' | 'branch' | 'operator';
-}
+// --- 1. Sürükle-Bırak (DnD) Bileşenleri ---
 
-interface DraggableVisitProps {
-  visit: Visit;
-  onDelete: (id: string) => void;
-}
-
-// Draggable customer/branch/operator component
-const DraggableItem: React.FC<DraggableItemProps> = ({ item, type }) => {
+/**
+ * Kenar çubuğundaki (Müşteri, Şube, Operatör) sürüklenebilir öğe
+ */
+const DraggableItem = ({ item, type }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
-    type: type === 'customer' ? ItemTypes.CUSTOMER : 
+    type: type === 'customer' ? ItemTypes.CUSTOMER :
           type === 'branch' ? ItemTypes.BRANCH : ItemTypes.OPERATOR,
     item: { ...item, type },
     collect: (monitor) => ({
@@ -82,14 +80,13 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ item, type }) => {
   let bgColor = '';
   
   if (type === 'customer') {
-    displayName = (item as Customer).kisa_isim;
+    displayName = item.kisa_isim;
     bgColor = 'bg-blue-100';
   } else if (type === 'branch') {
-    const branch = item as Branch;
-    displayName = `${branch.sube_adi} ${branch.customer?.kisa_isim ? `(${branch.customer.kisa_isim})` : ''}`;
+    displayName = `${item.sube_adi} ${item.customer?.kisa_isim ? `(${item.customer.kisa_isim})` : ''}`;
     bgColor = 'bg-green-100';
   } else if (type === 'operator') {
-    displayName = (item as Operator).name;
+    displayName = item.name;
     bgColor = 'bg-purple-100';
   }
 
@@ -107,8 +104,10 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ item, type }) => {
   );
 };
 
-// Draggable visit component
-const DraggableVisit: React.FC<DraggableVisitProps> = ({ visit, onDelete }) => {
+/**
+ * Takvim üzerindeki mevcut bir ziyareti temsil eden sürüklenebilir öğe
+ */
+const DraggableVisit = ({ visit, onDelete }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.VISIT,
     item: { ...visit, type: 'visit' },
@@ -150,18 +149,10 @@ const DraggableVisit: React.FC<DraggableVisitProps> = ({ visit, onDelete }) => {
   );
 };
 
-// Custom calendar day cell component with drop capability
-const DayCell = ({ 
-  date, 
-  onEventDrop,
-  visits,
-  onDeleteVisit
-}: { 
-  date: Date, 
-  onEventDrop: (item: any, date: Date) => void,
-  visits: Visit[],
-  onDeleteVisit: (id: string) => void
-}) => {
+/**
+ * Takvimdeki her bir gün hücresi (Bırakma alanı)
+ */
+const DayCell = ({ date, onEventDrop, visits, onDeleteVisit }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: [ItemTypes.CUSTOMER, ItemTypes.BRANCH, ItemTypes.VISIT, ItemTypes.OPERATOR],
     drop: (item) => onEventDrop(item, date),
@@ -170,7 +161,7 @@ const DayCell = ({
     }),
   }));
 
-  // Filter visits for this day
+  // Bu güne ait ziyaretleri filtrele
   const dayVisits = visits.filter(visit => {
     const visitDate = new Date(visit.visit_date);
     return visitDate.getDate() === date.getDate() &&
@@ -198,22 +189,284 @@ const DayCell = ({
   );
 };
 
-const AdminCalendarPlanning: React.FC = () => {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [operators, setOperators] = useState<Operator[]>([]);
-  const [visits, setVisits] = useState<Visit[]>([]);
+
+// --- 2. Ana Sayfa Bileşenleri ---
+
+/**
+ * Sol Kenar Çubuğu (Filtreler ve Sürüklenebilir Listeler)
+ */
+const Sidebar = ({
+  showSidebar,
+  searchTerm,
+  onSearchTermChange,
+  selectedVisitType,
+  onVisitTypeChange,
+  selectedOperator,
+  onOperatorChange,
+  operators,
+  onTransfer,
+  isTransferring,
+  transferButtonDisabled,
+  filteredOperators,
+  filteredCustomers,
+  filteredBranches
+}) => {
+  if (!showSidebar) return null;
+
+  return (
+    <div className="w-48 sm:w-64 bg-white shadow-md p-2 sm:p-4 overflow-y-auto">
+      <div className="mb-4">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Ara..."
+            value={searchTerm}
+            onChange={(e) => onSearchTermChange(e.target.value)}
+            className="w-full pl-6 sm:pl-8 pr-2 py-1 sm:py-2 border rounded text-[10px] sm:text-xs"
+          />
+          <Search className="absolute left-1 sm:left-2 top-1.5 sm:top-2 text-gray-400" size={12} />
+        </div>
+      </div>
+      
+      <div className="mb-4">
+        <label className="block text-[10px] sm:text-xs font-medium text-gray-700 mb-1">
+          Ziyaret Türü
+        </label>
+        <select
+          value={selectedVisitType}
+          onChange={(e) => onVisitTypeChange(e.target.value)}
+          className="w-full p-1 sm:p-2 border rounded text-[10px] sm:text-xs"
+        >
+          <option value="ilk">İlk</option>
+          <option value="ucretli">Ücretli</option>
+          <option value="acil">Acil Çağrı</option>
+          <option value="teknik">Teknik İnceleme</option>
+          <option value="periyodik">Periyodik</option>
+          <option value="isyeri">İşyeri</option>
+          <option value="gozlem">Gözlem</option>
+          <option value="son">Son</option>
+        </select>
+      </div>
+
+      <div className="mb-4">
+        <label className="block text-[10px] sm:text-xs font-medium text-gray-700 mb-1">
+          Operatör
+        </label>
+        <select
+          value={selectedOperator || ''}
+          onChange={(e) => onOperatorChange(e.target.value || null)}
+          className="w-full p-1 sm:p-2 border rounded text-[10px] sm:text-xs"
+        >
+          <option value="">Operatör Seçin</option>
+          {operators.map(operator => (
+            <option key={operator.id} value={operator.id}>
+              {operator.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mb-4">
+        <button
+          onClick={onTransfer}
+          disabled={isTransferring || transferButtonDisabled}
+          className="w-full flex items-center justify-center gap-1 sm:gap-2 p-1 sm:p-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] sm:text-xs"
+        >
+          <Calendar size={10} className="sm:w-4 sm:h-4" />
+          <span>Sonraki Aya Aktar</span>
+        </button>
+        <p className="text-[8px] sm:text-[10px] text-gray-500 mt-1">
+          Seçili operatörün bu aydaki ziyaretlerini bir sonraki aya aynı hafta günlerine göre aktarır.
+        </p>
+      </div>
+      
+      <div className="mb-4">
+        <h3 className="font-medium text-gray-700 mb-2 text-[10px] sm:text-xs flex items-center">
+          <User size={10} className="mr-1 sm:w-4 sm:h-4" />
+          Operatörler
+        </h3>
+        <div className="space-y-0.5 max-h-[15vh] overflow-y-auto">
+          {filteredOperators.map(operator => (
+            <DraggableItem key={operator.id} item={operator} type="operator" />
+          ))}
+        </div>
+      </div>
+      
+      <div className="mb-4">
+        <h3 className="font-medium text-gray-700 mb-2 text-[10px] sm:text-xs">Müşteriler</h3>
+        <div className="space-y-0.5 max-h-[15vh] overflow-y-auto">
+          {filteredCustomers.map(customer => (
+            <DraggableItem key={customer.id} item={customer} type="customer" />
+          ))}
+        </div>
+      </div>
+      
+      <div>
+        <h3 className="font-medium text-gray-700 mb-2 text-[10px] sm:text-xs">Şubeler</h3>
+        <div className="space-y-0.5 max-h-[15vh] overflow-y-auto">
+          {filteredBranches.map(branch => (
+            <DraggableItem key={branch.id} item={branch} type="branch" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Takvimin Üst Başlığı (Navigasyon ve Dışa Aktarma)
+ */
+const CalendarHeader = ({
+  onToggleSidebar,
+  showSidebar,
+  onPrevMonth,
+  onNextMonth,
+  currentDate,
+  onExportPDF,
+  onExportImage
+}) => {
+  return (
+    <div className="flex justify-between items-center mb-2 sm:mb-4">
+      <div className="flex items-center">
+        <button
+          onClick={onToggleSidebar}
+          className="mr-2 sm:mr-4 p-1 sm:p-2 rounded hover:bg-gray-100"
+        >
+          {showSidebar ? <X size={16} className="sm:w-5 sm:h-5" /> : <Filter size={16} className="sm:w-5 sm:h-5" />}
+        </button>
+        <h1 className="text-sm sm:text-xl font-bold">Admin Ziyaret Planlama</h1>
+      </div>
+      
+      <div className="flex items-center gap-1 sm:gap-2">
+        <button
+          onClick={onPrevMonth}
+          className="p-1 sm:p-2 rounded hover:bg-gray-100"
+        >
+          <ChevronLeft size={16} className="sm:w-5 sm:h-5" />
+        </button>
+        <span className="text-xs sm:text-lg font-medium">
+          {format(currentDate, 'MMMM yyyy', { locale: tr })}
+        </span>
+        <button
+          onClick={onNextMonth}
+          className="p-1 sm:p-2 rounded hover:bg-gray-100"
+        >
+          <ChevronRight size={16} className="sm:w-5 sm:h-5" />
+        </button>
+        
+        <div className="flex gap-1 sm:gap-2 ml-1 sm:ml-4">
+          <button
+            onClick={onExportPDF}
+            className="p-1 sm:p-2 bg-red-600 text-white rounded hover:bg-red-700 text-[8px] sm:text-xs flex items-center gap-1"
+          >
+            <FileText size={10} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">PDF</span>
+          </button>
+          <button
+            onClick={onExportImage}
+            className="p-1 sm:p-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-[8px] sm:text-xs flex items-center gap-1"
+          >
+            <FileImage size={10} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Görüntü</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Takvim Izgarası (Günler ve Ziyaretler)
+ */
+const CalendarGrid = ({
+  calendarRef,
+  currentDate,
+  visits,
+  onEventDrop,
+  onDeleteVisit
+}) => {
+  // Takvim hesaplamaları
+  const days = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+  // Pazartesi'yi 0 (Pts) Pazar'ı 6 (Paz) olarak ayarla
+  let firstDayOfMonth = getDay(monthStart) - 1; 
+  if (firstDayOfMonth === -1) firstDayOfMonth = 6; // Pazar (0) ise 6 yap
+
+  return (
+    <>
+      <div ref={calendarRef} className="bg-white rounded-lg shadow-md">
+        <div className="grid grid-cols-7 gap-px bg-gray-200">
+          {/* Gün Başlıkları */}
+          {days.map(day => (
+            <div key={day} className="bg-gray-50 p-1 sm:p-2 text-center">
+              <span className="text-[8px] sm:text-xs font-medium text-gray-500">{day}</span>
+            </div>
+          ))}
+
+          {/* Ayın başındaki boş günler */}
+          {Array.from({ length: firstDayOfMonth }).map((_, index) => (
+            <div key={`empty-${index}`} className="bg-gray-50 p-1 sm:p-2 min-h-[60px] sm:min-h-[100px]" />
+          ))}
+
+          {/* Ayın günleri */}
+          {monthDays.map(day => {
+            const isCurrentDay = isToday(day);
+            return (
+              <div
+                key={day.toISOString()}
+                className={`relative bg-white p-1 sm:p-2 min-h-[60px] sm:min-h-[100px] ${
+                  isCurrentDay ? 'ring-1 sm:ring-2 ring-green-500' : ''
+                }`}
+              >
+                <div className="text-[8px] sm:text-xs font-medium mb-0.5 sm:mb-1">
+                  {format(day, 'd')}
+                </div>
+                <DayCell 
+                  date={day} 
+                  onEventDrop={onEventDrop}
+                  visits={visits}
+                  onDeleteVisit={onDeleteVisit}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      
+      {/* Yardım Metinleri */}
+      <div className="mt-4 text-[8px] sm:text-xs text-gray-500">
+        <p>• Önce bir operatör seçin, ardından müşteri veya şubeyi takvime sürükleyerek ziyaret oluşturabilirsiniz.</p>
+        <p>• Mevcut ziyaretleri sürükleyerek başka bir güne taşıyabilirsiniz.</p>
+        <p>• Ziyaretin üzerine gelip çöp kutusu simgesine tıklayarak silebilirsiniz.</p>
+      </div>
+    </>
+  );
+};
+
+
+// --- 3. Ana Bileşen (Tüm Mantık ve State) ---
+
+const AdminCalendarPlanning = () => {
+  // --- State Tanımları ---
+  const [customers, setCustomers] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [operators, setOperators] = useState([]);
+  const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSidebar, setShowSidebar] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedVisitType, setSelectedVisitType] = useState('periyodik');
-  const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
+  const [selectedOperator, setSelectedOperator] = useState(null);
   const [isTransferring, setIsTransferring] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const calendarRef = useRef<HTMLDivElement>(null);
+  const calendarRef = useRef(null);
 
+  // --- useEffect Kancaları ---
   useEffect(() => {
     checkAdminAccess();
   }, []);
@@ -222,8 +475,9 @@ const AdminCalendarPlanning: React.FC = () => {
     if (isAdmin) {
       fetchData();
     }
-  }, [isAdmin, currentDate, selectedOperator]);
+  }, [isAdmin, currentDate, selectedOperator]); // currentDate veya selectedOperator değiştiğinde veriyi yeniden çek
 
+  // --- Veri Çekme ve Yetki Fonksiyonları ---
   const checkAdminAccess = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -232,72 +486,60 @@ const AdminCalendarPlanning: React.FC = () => {
       
       if (!isAdminUser) {
         setError('Bu sayfaya erişim yetkiniz bulunmamaktadır.');
-      } else {
-        setLoading(false);
       }
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message);
       console.error('Error checking admin access:', err);
-      setLoading(false);
+    } finally {
+      setLoading(false); // Yetki kontrolü bitince yüklemeyi bitir
     }
   };
 
   const fetchData = async () => {
+    // Sadece admin ise ve yükleme zaten başlamadıysa veri çek
+    if (loading) return; 
+    setLoading(true);
+    
     try {
-      setLoading(true);
-      
-      // Fetch customers
+      // Müşteriler
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('id, kisa_isim')
         .order('kisa_isim');
-
       if (customersError) throw customersError;
       setCustomers(customersData || []);
 
-      // Fetch branches
+      // Şubeler
       const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
         .select('id, customer_id, sube_adi, customers(kisa_isim)')
         .order('sube_adi');
-
       if (branchesError) throw branchesError;
-      
-      // Transform branches data to include customer name
       const transformedBranches = branchesData?.map(branch => ({
         id: branch.id,
         customer_id: branch.customer_id,
         sube_adi: branch.sube_adi,
         customer: branch.customers
       })) || [];
-      
       setBranches(transformedBranches);
       
-      // Fetch operators
+      // Operatörler
       const { data: operatorsData, error: operatorsError } = await supabase
         .from('operators')
         .select('id, name, email, status')
         .eq('status', 'Açık')
         .order('name');
-        
       if (operatorsError) throw operatorsError;
       setOperators(operatorsData || []);
 
-      // Get the first and last day of the current month
-      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      // Ziyaretler (mevcut ay için)
+      const firstDay = startOfMonth(currentDate);
+      const lastDay = endOfMonth(currentDate);
 
-      // Fetch visits
       let query = supabase
         .from('visits')
         .select(`
-          id,
-          customer_id,
-          branch_id,
-          operator_id,
-          visit_date,
-          visit_type,
-          status,
+          id, customer_id, branch_id, operator_id, visit_date, visit_type, status,
           customer:customer_id (kisa_isim),
           branch:branch_id (sube_adi),
           operator:operator_id (name)
@@ -305,55 +547,62 @@ const AdminCalendarPlanning: React.FC = () => {
         .gte('visit_date', firstDay.toISOString())
         .lte('visit_date', lastDay.toISOString());
         
-      // Filter by selected operator if any
       if (selectedOperator) {
         query = query.eq('operator_id', selectedOperator);
       }
 
       const { data: visitsData, error: visitsError } = await query;
-
       if (visitsError) throw visitsError;
       setVisits(visitsData || []);
-    } catch (err: any) {
+      
+    } catch (err) {
       setError(err.message);
+      toast.error('Veri çekilirken hata oluştu: ' + err.message);
       console.error('Error fetching data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEventDrop = async (item: any, date: Date) => {
+  // --- Olay Yöneticileri (Event Handlers) ---
+
+  const handleEventDrop = async (item, date) => {
     try {
       if (!isAdmin) {
         toast.error('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız');
         return;
       }
       
-      // If no operator is selected for new visits
+      // Yeni ziyaretler için operatör seçili olmalı
       if (!selectedOperator && item.type !== 'visit') {
         toast.error('Lütfen önce bir operatör seçin');
         return;
       }
 
-      // Create a new date object to ensure we're working with the correct date
+      // Saat dilimi sorunlarını önlemek için tarihi ayarla (Öğlen 12)
       const visitDate = new Date(
         date.getFullYear(),
         date.getMonth(),
         date.getDate(),
-        12, // Set to noon to avoid timezone issues
-        0,
-        0
+        12, 0, 0
       );
-
-      // Format the date as YYYY-MM-DD
       const formattedDate = visitDate.toISOString().split('T')[0];
 
-      // If this is a visit being moved
+      // Durum 1: Mevcut ziyaret taşınıyor
       if (item.type === 'visit') {
-        // Delete the old visit
-        await deleteVisit(item.id);
+        // Eski ziyareti sil ve yenisini oluştur (Taşıma = Sil + Ekle)
+        // Not: Bu, atomik bir işlem değildir. İdealde tek bir 'update' olmalı
+        // veya bir veritabanı fonksiyonu (transaction) kullanılmalı.
+        // Basitlik için silip yeniden oluşturuyoruz.
         
-        // Create a new visit at the new date
+        // Önce sil
+        const { error: deleteError } = await supabase
+          .from('visits')
+          .delete()
+          .eq('id', item.id);
+        if (deleteError) throw deleteError;
+
+        // Sonra ekle
         await createVisit({
           customer_id: item.customer_id,
           branch_id: item.branch_id,
@@ -364,70 +613,46 @@ const AdminCalendarPlanning: React.FC = () => {
         
         toast.success('Ziyaret başarıyla taşındı');
       } 
-      // If this is a new customer or branch being added
+      // Durum 2: Yeni ziyaret ekleniyor
       else if (item.type === 'customer' || item.type === 'branch') {
-        // Create visit based on item type
-        if (item.type === 'customer') {
-          await createVisit({
-            customer_id: item.id,
-            branch_id: null,
-            operator_id: selectedOperator!,
-            visit_date: formattedDate,
-            visit_type: selectedVisitType
-          });
-          toast.success(`${item.kisa_isim} için ziyaret oluşturuldu`);
-        } else if (item.type === 'branch') {
-          await createVisit({
-            customer_id: item.customer_id,
-            branch_id: item.id,
-            operator_id: selectedOperator!,
-            visit_date: formattedDate,
-            visit_type: selectedVisitType
-          });
-          toast.success(`${item.sube_adi} için ziyaret oluşturuldu`);
-        }
+        const visitData = {
+          customer_id: item.type === 'branch' ? item.customer_id : item.id,
+          branch_id: item.type === 'branch' ? item.id : null,
+          operator_id: selectedOperator,
+          visit_date: formattedDate,
+          visit_type: selectedVisitType
+        };
+        await createVisit(visitData);
+        toast.success(`Ziyaret oluşturuldu: ${item.kisa_isim || item.sube_adi}`);
       }
-      // If this is an operator being assigned to a day
+      // Durum 3: Operatör sürükleniyor (Sadece seçili operatörü ayarla)
       else if (item.type === 'operator') {
-        // We'll just set the selected operator
         setSelectedOperator(item.id);
         toast.success(`${item.name} seçildi. Şimdi müşteri veya şube sürükleyebilirsiniz.`);
       }
       
-      // Refresh visits
-      fetchData();
-    } catch (err: any) {
-      toast.error('Ziyaret oluşturulurken bir hata oluştu');
-      console.error('Visit creation error:', err);
+      fetchData(); // Takvimi yenile
+    } catch (err) {
+      toast.error('Ziyaret işlenirken bir hata oluştu: ' + err.message);
+      console.error('Visit drop error:', err);
     }
   };
 
-  const createVisit = async (visitData: {
-    customer_id: string;
-    branch_id: string | null;
-    operator_id: string;
-    visit_date: string;
-    visit_type: string;
-  }) => {
-    try {
-      const { error } = await supabase
-        .from('visits')
-        .insert([{
-          customer_id: visitData.customer_id,
-          branch_id: visitData.branch_id,
-          operator_id: visitData.operator_id,
-          visit_date: visitData.visit_date,
-          visit_type: visitData.visit_type,
-          status: 'planned'
-        }]);
-
-      if (error) throw error;
-    } catch (err: any) {
-      throw err;
-    }
+  const createVisit = async (visitData) => {
+    const { error } = await supabase
+      .from('visits')
+      .insert([{
+        ...visitData,
+        status: 'planned' // Yeni ziyaretler her zaman 'planlandı' olarak başlar
+      }]);
+    if (error) throw error;
   };
 
-  const deleteVisit = async (visitId: string) => {
+  const deleteVisit = async (visitId) => {
+    // Silme onayı (Güvenlik için)
+    if (!window.confirm('Bu ziyareti silmek istediğinizden emin misiniz?')) {
+      return;
+    }
     try {
       const { error } = await supabase
         .from('visits')
@@ -436,149 +661,127 @@ const AdminCalendarPlanning: React.FC = () => {
 
       if (error) throw error;
       
-      // Update local state
-      setVisits(visits.filter(visit => visit.id !== visitId));
+      // Lokal state'i güncelle (tekrar fetch etmeye gerek kalmadan)
+      setVisits(prevVisits => prevVisits.filter(visit => visit.id !== visitId));
       toast.success('Ziyaret silindi');
-    } catch (err: any) {
-      toast.error('Ziyaret silinirken bir hata oluştu');
+    } catch (err) {
+      toast.error('Ziyaret silinirken bir hata oluştu: ' + err.message);
       console.error('Error deleting visit:', err);
     }
   };
 
   const transferToNextMonth = async () => {
-    try {
-      if (!selectedOperator) {
-        toast.error('Lütfen bir operatör seçin');
+    if (!selectedOperator) {
+      toast.error('Lütfen bir operatör seçin');
+      return;
+    }
+    if (!window.confirm(`Seçili operatör (${operators.find(o => o.id === selectedOperator)?.name}) için bu aydaki tüm ziyaretleri bir sonraki aya taşımak istediğinizden emin misiniz?`)) {
         return;
-      }
-      
-      setIsTransferring(true);
-      
-      // Get the first day of the next month
+    }
+    
+    setIsTransferring(true);
+    
+    try {
       const nextMonth = addMonths(currentDate, 1);
-      
-      // Filter visits for the selected operator
       const operatorVisits = visits.filter(visit => visit.operator_id === selectedOperator);
       
-      // Create a map to track which days of the week have visits
-      const visitsByDayOfWeek: Record<number, Visit[]> = {};
-      
-      // Group visits by day of week
-      operatorVisits.forEach(visit => {
-        const visitDate = new Date(visit.visit_date);
-        const dayOfWeek = getDay(visitDate);
-        
-        if (!visitsByDayOfWeek[dayOfWeek]) {
-          visitsByDayOfWeek[dayOfWeek] = [];
-        }
-        
-        visitsByDayOfWeek[dayOfWeek].push(visit);
-      });
-      
-      // For each day of the week that has visits
+      const visitsByDayOfWeek = operatorVisits.reduce((acc, visit) => {
+        const dayOfWeek = getDay(new Date(visit.visit_date)); // Pazar = 0, Cmt = 6
+        if (!acc[dayOfWeek]) acc[dayOfWeek] = [];
+        acc[dayOfWeek].push(visit);
+        return acc;
+      }, {});
+
+      const nextMonthDaysMap = eachDayOfInterval({
+        start: startOfMonth(nextMonth),
+        end: endOfMonth(nextMonth)
+      }).reduce((acc, date) => {
+        const dayOfWeek = getDay(date);
+        if (!acc[dayOfWeek]) acc[dayOfWeek] = [];
+        acc[dayOfWeek].push(date);
+        return acc;
+      }, {});
+
+      let newVisitsPayload = [];
       let createdCount = 0;
+
       for (const [dayOfWeekStr, dayVisits] of Object.entries(visitsByDayOfWeek)) {
         const dayOfWeek = parseInt(dayOfWeekStr);
-        
-        // Find all matching days in the next month
-        const nextMonthDays = eachDayOfInterval({
-          start: new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1),
-          end: new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0)
-        }).filter(date => getDay(date) === dayOfWeek);
-        
-        // For each visit on this day of the week
+        const targetDaysInNextMonth = nextMonthDaysMap[dayOfWeek] || [];
+
+        if (targetDaysInNextMonth.length === 0) continue; // Gelecek ay bu gün yoksa atla
+
         for (const visit of dayVisits) {
-          // Get the day of the month for the original visit
+          // Orijinal ziyaretin ayın kaçıncı haftasında olduğunu bul
           const originalDate = new Date(visit.visit_date);
-          const originalDayOfMonth = originalDate.getDate();
-          
-          // Find the closest matching day in the next month
-          let targetDay = nextMonthDays.find(date => 
-            Math.abs(date.getDate() - originalDayOfMonth) <= 3
-          );
-          
-          // If no close match, just take the first occurrence of this day of week
-          if (!targetDay && nextMonthDays.length > 0) {
-            targetDay = nextMonthDays[0];
-          }
-          
-          // If we found a target day, create the visit
+          const weekOfMonth = Math.floor((originalDate.getDate() - 1) / 7); // 0-4 arası bir değer
+
+          // Gelecek ayda ilgili haftaya denk gelen günü bul
+          const targetDay = targetDaysInNextMonth[weekOfMonth] || targetDaysInNextMonth[targetDaysInNextMonth.length - 1]; // Eğer o hafta yoksa, o ayın son ilgili gününü al
+
           if (targetDay) {
-            await createVisit({
+            newVisitsPayload.push({
               customer_id: visit.customer_id,
               branch_id: visit.branch_id,
               operator_id: visit.operator_id,
               visit_date: targetDay.toISOString().split('T')[0],
-              visit_type: visit.visit_type
+              visit_type: visit.visit_type,
+              status: 'planned'
             });
             createdCount++;
           }
         }
       }
+
+      if (newVisitsPayload.length > 0) {
+        const { error } = await supabase.from('visits').insert(newVisitsPayload);
+        if (error) throw error;
+      }
       
-      // Update the current date to the next month
-      setCurrentDate(nextMonth);
-      
+      setCurrentDate(nextMonth); // Takvimi bir sonraki aya taşı
       toast.success(`${createdCount} ziyaret bir sonraki aya aktarıldı`);
-    } catch (err: any) {
-      toast.error('Ziyaretler aktarılırken bir hata oluştu');
+      
+    } catch (err) {
+      toast.error('Ziyaretler aktarılırken bir hata oluştu: ' + err.message);
       console.error('Error transferring visits:', err);
     } finally {
       setIsTransferring(false);
     }
   };
 
+  // --- Dışa Aktarma Fonksiyonları ---
+
   const exportToPDF = async () => {
     if (!calendarRef.current) return;
-    
     try {
-      const canvas = await html2canvas(calendarRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-      
+      const canvas = await html2canvas(calendarRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const imgWidth = 280;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
       pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
       pdf.save(`Takvim_Planlama_${format(currentDate, 'MMMM_yyyy', { locale: tr })}.pdf`);
     } catch (err) {
       console.error('PDF export error:', err);
-      alert('PDF dışa aktarma hatası oluştu.');
+      toast.error('PDF dışa aktarma hatası oluştu.');
     }
   };
 
   const exportToImage = async () => {
     if (!calendarRef.current) return;
-    
     try {
-      const canvas = await html2canvas(calendarRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-      
+      const canvas = await html2canvas(calendarRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
       const link = document.createElement('a');
       link.download = `Takvim_Planlama_${format(currentDate, 'MMMM_yyyy', { locale: tr })}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (err) {
       console.error('Image export error:', err);
-      alert('Görüntü dışa aktarma hatası oluştu.');
+      toast.error('Görüntü dışa aktarma hatası oluştu.');
     }
   };
 
-  // Filter customers and branches based on search term
+  // --- Filtreleme (useMemo) ---
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => 
       customer.kisa_isim.toLowerCase().includes(searchTerm.toLowerCase())
@@ -598,213 +801,60 @@ const AdminCalendarPlanning: React.FC = () => {
       operator.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [operators, searchTerm]);
+  
+  const transferButtonDisabled = !selectedOperator || visits.filter(v => v.operator_id === selectedOperator).length === 0;
 
-  const days = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-  let firstDayOfMonth = monthStart.getDay() - 1;
-  if (firstDayOfMonth === -1) firstDayOfMonth = 6;
-
-  if (loading) return <div>Yükleniyor...</div>;
-  if (error) return <div>Hata: {error}</div>;
-  if (!isAdmin) return <div>Bu sayfaya erişim yetkiniz bulunmamaktadır.</div>;
+  // --- Ana Render ---
+  if (!isAdmin && !loading) {
+     return <div className="p-4 text-red-500">{error || 'Bu sayfaya erişim yetkiniz bulunmamaktadır.'}</div>;
+  }
+  
+  if (loading && visits.length === 0) {
+      return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
+  }
 
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex h-[calc(100vh-64px)]">
-        {/* Sidebar */}
-        {showSidebar && (
-          <div className="w-48 sm:w-64 bg-white shadow-md p-2 sm:p-4 overflow-y-auto">
-            <div className="mb-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Ara..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-6 sm:pl-8 pr-2 py-1 sm:py-2 border rounded text-[10px] sm:text-xs"
-                />
-                <Search className="absolute left-1 sm:left-2 top-1.5 sm:top-2 text-gray-400" size={12} />
-              </div>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-[10px] sm:text-xs font-medium text-gray-700 mb-1">
-                Ziyaret Türü
-              </label>
-              <select
-                value={selectedVisitType}
-                onChange={(e) => setSelectedVisitType(e.target.value)}
-                className="w-full p-1 sm:p-2 border rounded text-[10px] sm:text-xs"
-              >
-                <option value="ilk">İlk</option>
-                <option value="ucretli">Ücretli</option>
-                <option value="acil">Acil Çağrı</option>
-                <option value="teknik">Teknik İnceleme</option>
-                <option value="periyodik">Periyodik</option>
-                <option value="isyeri">İşyeri</option>
-                <option value="gozlem">Gözlem</option>
-                <option value="son">Son</option>
-              </select>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-[10px] sm:text-xs font-medium text-gray-700 mb-1">
-                Operatör
-              </label>
-              <select
-                value={selectedOperator || ''}
-                onChange={(e) => setSelectedOperator(e.target.value || null)}
-                className="w-full p-1 sm:p-2 border rounded text-[10px] sm:text-xs"
-              >
-                <option value="">Operatör Seçin</option>
-                {operators.map(operator => (
-                  <option key={operator.id} value={operator.id}>
-                    {operator.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-4">
-              <button
-                onClick={transferToNextMonth}
-                disabled={isTransferring || !selectedOperator || visits.filter(v => v.operator_id === selectedOperator).length === 0}
-                className="w-full flex items-center justify-center gap-1 sm:gap-2 p-1 sm:p-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] sm:text-xs"
-              >
-                <Calendar size={10} className="sm:w-4 sm:h-4" />
-                <span>Sonraki Aya Aktar</span>
-              </button>
-              <p className="text-[8px] sm:text-[10px] text-gray-500 mt-1">
-                Seçili operatörün bu aydaki ziyaretlerini bir sonraki aya aynı hafta günlerine göre aktarır.
-              </p>
-            </div>
-            
-            <div className="mb-4">
-              <h3 className="font-medium text-gray-700 mb-2 text-[10px] sm:text-xs flex items-center">
-                <User size={10} className="mr-1 sm:w-4 sm:h-4" />
-                Operatörler
-              </h3>
-              <div className="space-y-0.5 max-h-[15vh] overflow-y-auto">
-                {filteredOperators.map(operator => (
-                  <DraggableItem key={operator.id} item={operator} type="operator" />
-                ))}
-              </div>
-            </div>
-            
-            <div className="mb-4">
-              <h3 className="font-medium text-gray-700 mb-2 text-[10px] sm:text-xs">Müşteriler</h3>
-              <div className="space-y-0.5 max-h-[15vh] overflow-y-auto">
-                {filteredCustomers.map(customer => (
-                  <DraggableItem key={customer.id} item={customer} type="customer" />
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="font-medium text-gray-700 mb-2 text-[10px] sm:text-xs">Şubeler</h3>
-              <div className="space-y-0.5 max-h-[15vh] overflow-y-auto">
-                {filteredBranches.map(branch => (
-                  <DraggableItem key={branch.id} item={branch} type="branch" />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Kenar Çubuğu */}
+        <Sidebar
+          showSidebar={showSidebar}
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          selectedVisitType={selectedVisitType}
+          onVisitTypeChange={setSelectedVisitType}
+          selectedOperator={selectedOperator}
+          onOperatorChange={setSelectedOperator}
+          operators={operators}
+          onTransfer={transferToNextMonth}
+          isTransferring={isTransferring}
+          transferButtonDisabled={transferButtonDisabled}
+          filteredOperators={filteredOperators}
+          filteredCustomers={filteredCustomers}
+          filteredBranches={filteredBranches}
+        />
         
-        {/* Main Calendar */}
-        <div className="flex-1 p-2 sm:p-4">
-          <div className="flex justify-between items-center mb-2 sm:mb-4">
-            <div className="flex items-center">
-              <button
-                onClick={() => setShowSidebar(!showSidebar)}
-                className="mr-2 sm:mr-4 p-1 sm:p-2 rounded hover:bg-gray-100"
-              >
-                {showSidebar ? <X size={16} className="sm:w-5 sm:h-5" /> : <Filter size={16} className="sm:w-5 sm:h-5" />}
-              </button>
-              <h1 className="text-sm sm:text-xl font-bold">Admin Ziyaret Planlama</h1>
-            </div>
-            
-            <div className="flex items-center gap-1 sm:gap-2">
-              <button
-                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
-                className="p-1 sm:p-2 rounded hover:bg-gray-100"
-              >
-                <ChevronLeft size={16} className="sm:w-5 sm:h-5" />
-              </button>
-              <span className="text-xs sm:text-lg font-medium">
-                {format(currentDate, 'MMMM yyyy', { locale: tr })}
-              </span>
-              <button
-                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
-                className="p-1 sm:p-2 rounded hover:bg-gray-100"
-              >
-                <ChevronRight size={16} className="sm:w-5 sm:h-5" />
-              </button>
-              
-              <div className="flex gap-1 sm:gap-2 ml-1 sm:ml-4">
-                <button
-                  onClick={exportToPDF}
-                  className="p-1 sm:p-2 bg-red-600 text-white rounded hover:bg-red-700 text-[8px] sm:text-xs flex items-center gap-1"
-                >
-                  <FileText size={10} className="sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">PDF</span>
-                </button>
-                <button
-                  onClick={exportToImage}
-                  className="p-1 sm:p-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-[8px] sm:text-xs flex items-center gap-1"
-                >
-                  <FileImage size={10} className="sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">Görüntü</span>
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Ana Takvim Alanı */}
+        <div className="flex-1 p-2 sm:p-4 flex flex-col overflow-y-auto">
+          {/* Takvim Başlığı */}
+          <CalendarHeader
+            onToggleSidebar={() => setShowSidebar(!showSidebar)}
+            showSidebar={showSidebar}
+            onPrevMonth={() => setCurrentDate(addMonths(currentDate, -1))}
+            onNextMonth={() => setCurrentDate(addMonths(currentDate, 1))}
+            currentDate={currentDate}
+            onExportPDF={exportToPDF}
+            onExportImage={exportToImage}
+          />
           
-          <div ref={calendarRef} className="bg-white rounded-lg shadow-md">
-            <div className="grid grid-cols-7 gap-px bg-gray-200">
-              {days.map(day => (
-                <div key={day} className="bg-gray-50 p-1 sm:p-2 text-center">
-                  <span className="text-[8px] sm:text-xs font-medium text-gray-500">{day}</span>
-                </div>
-              ))}
-
-              {Array.from({ length: firstDayOfMonth }).map((_, index) => (
-                <div key={`empty-${index}`} className="bg-gray-50 p-1 sm:p-2 min-h-[60px] sm:min-h-[100px]" />
-              ))}
-
-              {monthDays.map(day => {
-                const isCurrentDay = isToday(day);
-
-                return (
-                  <div
-                    key={day.toISOString()}
-                    className={`relative bg-white p-1 sm:p-2 min-h-[60px] sm:min-h-[100px] ${
-                      isCurrentDay ? 'ring-1 sm:ring-2 ring-green-500' : ''
-                    }`}
-                  >
-                    <div className="text-[8px] sm:text-xs font-medium mb-0.5 sm:mb-1">
-                      {format(day, 'd')}
-                    </div>
-                    <DayCell 
-                      date={day} 
-                      onEventDrop={handleEventDrop}
-                      visits={visits}
-                      onDeleteVisit={deleteVisit}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          <div className="mt-4 text-[8px] sm:text-xs text-gray-500">
-            <p>• Önce bir operatör seçin, ardından müşteri veya şubeyi takvime sürükleyerek ziyaret oluşturabilirsiniz.</p>
-            <p>• Mevcut ziyaretleri sürükleyerek başka bir güne taşıyabilirsiniz.</p>
-            <p>• Ziyaretin üzerine gelip çöp kutusu simgesine tıklayarak silebilirsiniz.</p>
-          </div>
+          {/* Takvim Izgarası */}
+          <CalendarGrid
+            calendarRef={calendarRef}
+            currentDate={currentDate}
+            visits={visits}
+            onEventDrop={handleEventDrop}
+            onDeleteVisit={deleteVisit}
+          />
         </div>
       </div>
     </DndProvider>
