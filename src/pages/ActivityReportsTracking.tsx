@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 // import { supabase } from '../lib/supabase'; // Gerçek import
 // import { toast } from 'sonner'; // Gerçek import
 import { Search, Download, RefreshCw, FileText, CheckCircle, X, AlertTriangle, User, ChevronLeft, ChevronRight, Loader2, BookOpen, PlusCircle, AlertCircle } from 'lucide-react';
-import * as XLSX from 'xlsx';
+// ✅ HATA DÜZELTME: 'xlsx' modülü CDN üzerinden import edildi
+import * as XLSX from 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 import { useNavigate } from 'react-router-dom';
 // import AddVisitForReportModal from '../components/Visits/AddVisitForReportModal'; // Gerçek import
 
@@ -55,7 +56,7 @@ const supabase = {
       }),
       order: (col) => ({
         // Operatör listesi sorgusu
-        then: async () => ({ data: mockOperators, error: null }), // .order().then() mock
+        // ✅ HATA DÜZELTME: Yinelenen 'then' anahtarı kaldırıldı
         [Symbol.asyncIterator]: async function* () { // Normal .order() mock
            yield { data: mockOperators, error: null };
         },
