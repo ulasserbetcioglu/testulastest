@@ -15,7 +15,7 @@ export const localAuth = {
     try {
       const { data: customer, error } = await supabase
         .from('customers')
-        .select('id, email, kisa_isim, parola')
+        .select('id, email, kisa_isim, password_hash')
         .eq('email', email)
         .maybeSingle();
 
@@ -27,7 +27,7 @@ export const localAuth = {
         return { session: null, error: 'E-posta veya parola hatalı' };
       }
 
-      if (customer.parola !== password) {
+      if (!customer.password_hash || customer.password_hash !== password) {
         return { session: null, error: 'E-posta veya parola hatalı' };
       }
 
@@ -49,7 +49,7 @@ export const localAuth = {
     try {
       const { data: branch, error } = await supabase
         .from('branches')
-        .select('id, email, sube_adi, parola, customer_id')
+        .select('id, email, sube_adi, password_hash, customer_id')
         .eq('email', email)
         .maybeSingle();
 
@@ -61,7 +61,7 @@ export const localAuth = {
         return { session: null, error: 'E-posta veya parola hatalı' };
       }
 
-      if (branch.parola !== password) {
+      if (!branch.password_hash || branch.password_hash !== password) {
         return { session: null, error: 'E-posta veya parola hatalı' };
       }
 
