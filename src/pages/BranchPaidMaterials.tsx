@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
-import { Search, Filter, Calendar, Download } from 'lucide-react';
+import { Search, Filter, Calendar, Download, Eye } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -46,6 +46,8 @@ const BranchPaidMaterials: React.FC = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedSale, setSelectedSale] = useState<PaidMaterialUsage | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [showVisitModal, setShowVisitModal] = useState(false);
+  const [selectedVisit, setSelectedVisit] = useState<any>(null);
 
   useEffect(() => {
     fetchBranchId();
@@ -84,6 +86,12 @@ const BranchPaidMaterials: React.FC = () => {
           sale_date,
           visit_id,
           visit:visit_id (
+            id,
+            visit_date,
+            status,
+            visit_type,
+            report_number,
+            notes,
             operator:operator_id (name)
           ),
           items:paid_material_sale_items (
@@ -174,6 +182,31 @@ const BranchPaidMaterials: React.FC = () => {
   const handleViewDetails = (sale: PaidMaterialUsage) => {
     setSelectedSale(sale);
     setShowDetailsModal(true);
+  };
+
+  const handleViewVisit = async (visitId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('visits')
+        .select(`
+          id,
+          visit_date,
+          status,
+          visit_type,
+          report_number,
+          notes,
+          branch:branch_id(sube_adi),
+          operator:operator_id(name)
+        `)
+        .eq('id', visitId)
+        .single();
+
+      if (error) throw error;
+      setSelectedVisit(data);
+      setShowVisitModal(true);
+    } catch (err: any) {
+      console.error('Ziyaret detayları yüklenirken hata:', err);
+    }
   };
 
   const exportMonthlyReportToExcel = (report: MonthlyUsageReport) => {
@@ -330,6 +363,66 @@ const BranchPaidMaterials: React.FC = () => {
         </div>
       </div>
 
+      {/* Visit Details Modal */}
+      {showVisitModal && selectedVisit && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">Ziyaret Detayları</h2>
+              <button
+                onClick={() => {
+                  setShowVisitModal(false);
+                  setSelectedVisit(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500 font-semibold mb-1">ŞUBE</p>
+                  <p className="text-lg font-semibold">{selectedVisit.branch?.sube_adi || 'Genel Merkez'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500 font-semibold mb-1">TARİH</p>
+                  <p className="text-lg font-semibold">{format(new Date(selectedVisit.visit_date), 'dd MMMM yyyy, HH:mm', { locale: tr })}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500 font-semibold mb-1">OPERATÖR</p>
+                  <p className="text-lg font-semibold">{selectedVisit.operator?.name || 'Atanmadı'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500 font-semibold mb-1">ZİYARET TÜRÜ</p>
+                  <p className="text-lg font-semibold">{selectedVisit.visit_type || 'Belirtilmemiş'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500 font-semibold mb-1">RAPOR NO</p>
+                  <p className="text-lg font-semibold font-mono">{selectedVisit.report_number || '-'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500 font-semibold mb-1">DURUM</p>
+                  <p className="text-lg font-semibold capitalize">
+                    {selectedVisit.status === 'completed' ? 'Tamamlandı' : selectedVisit.status === 'planned' ? 'Planlandı' : 'İptal Edildi'}
+                  </p>
+                </div>
+              </div>
+
+              {selectedVisit.notes && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs text-gray-500 font-semibold mb-2">NOTLAR</p>
+                  <p className="text-sm text-gray-700">{selectedVisit.notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sale Details Modal */}
       {showDetailsModal && selectedSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -385,7 +478,16 @@ const BranchPaidMaterials: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-6 flex justify-end gap-2">
+              <div className="mt-6 flex justify-between gap-2">
+                {selectedSale.visit_id && (
+                  <button
+                    onClick={() => handleViewVisit(selectedSale.visit_id!)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <Eye size={18} />
+                    Ziyaret Detayları
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setShowDetailsModal(false);
