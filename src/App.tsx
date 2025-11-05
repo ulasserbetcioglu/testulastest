@@ -108,8 +108,9 @@ import AdminVehicles from './pages/AdminVehicles'; // NEW: Import AdminVehicles
 import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm'; // NEW: Import OperatorWeeklyKmForm
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const session = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
-  return session ? children : <Navigate to="/login" />;
+  const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
+  const localSession = localStorage.getItem('local_session');
+  return (supabaseSession || localSession) ? children : <Navigate to="/login" />;
 };
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {

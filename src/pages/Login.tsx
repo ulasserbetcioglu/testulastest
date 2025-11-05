@@ -40,7 +40,7 @@ const Login: React.FC = () => {
           throw new Error(error);
         }
         if (session) {
-          window.location.href = '/customer/dashboard';
+          window.location.href = '/customer';
         }
       } else if (loginType === 'branch') {
         const { session, error } = await localAuth.signInBranch(email, password);
@@ -48,7 +48,7 @@ const Login: React.FC = () => {
           throw new Error(error);
         }
         if (session) {
-          window.location.href = '/branch/dashboard';
+          window.location.href = '/branch';
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
