@@ -34,12 +34,10 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
     taxNumber: customer.tax_number || '',
     taxOffice: customer.tax_office || '',
     password: '',
+    newPassword: '',
   });
 
-  // MODIFIED: State for creating a new user instead of listing existing ones
-  const [newUserData, setNewUserData] = useState({ email: '', password: '' });
-  const [isUnlinking, setIsUnlinking] = useState(false);
-  const [linkedUserEmail, setLinkedUserEmail] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState('');
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
@@ -48,21 +46,23 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pricingType, setPricingType] = useState<'monthly' | 'per_visit' | 'none'>('none');
-  // MODIFIED: 'auth' tab is now 'account'
-  const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'password' | 'account'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'account'>('basic');
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // MODIFIED: Simplified useEffect, removed fetchAuthUsers
   useEffect(() => {
     const initialize = async () => {
         await checkAdminAccess();
         if (isOpen) {
             fetchPricingData();
             fetchBranches();
-            if (customer.auth_id) {
-                fetchLinkedUserEmail(customer.auth_id);
+            const { data: customerData } = await supabase
+              .from('customers')
+              .select('password_hash')
+              .eq('id', customer.id)
+              .single();
+            if (customerData?.password_hash) {
+              setCurrentPassword(customerData.password_hash);
             }
-            // Reset form data and states when modal opens
             setFormData({
                 kisaIsim: customer.kisa_isim,
                 cariIsim: customer.cari_isim || '',
@@ -75,11 +75,8 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
                 taxNumber: customer.tax_number || '',
                 taxOffice: customer.tax_office || '',
                 password: '',
+                newPassword: '',
             });
-            // Reset user creation/management state
-            setNewUserData({ email: customer.email || '', password: '' }); // Pre-fill email from customer data
-            setIsUnlinking(false);
-            setLinkedUserEmail(null);
             setError(null);
             setActiveTab('basic');
         }
@@ -90,22 +87,6 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
   const checkAdminAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setIsAdmin(user?.email === 'admin@ilaclamatik.com');
-  };
-  
-  // NEW: Function to get the email of the currently linked user
-  const fetchLinkedUserEmail = async (authId: string) => {
-      try {
-          const { data, error } = await supabase.functions.invoke('get-user-by-id', {
-              body: { userId: authId }
-          });
-          if (error) throw error;
-          if (data) {
-              setLinkedUserEmail(data.email);
-          }
-      } catch (err: any) {
-          console.error("Error fetching linked user's email:", err);
-          // Don't block the UI, just log the error
-      }
   };
 
   const fetchPricingData = async () => {
@@ -144,66 +125,115 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
     }
   };
 
-  const fetchBranchPricing = async (branchId: string) => { /* ... (no changes) ... */ };
-  const handleBranchChange = (branchId: string) => { /* ... (no changes) ... */ };
+  const fetchBranchPricing = async (branchId: string) => {
+    try {
+      const { data } = await supabase
+        .from('branch_pricing')
+        .select('*')
+        .eq('branch_id', branchId)
+        .maybeSingle();
 
-  // MODIFIED: handleSubmit now handles user creation and unlinking
+      if (data) {
+        if (data.monthly_price) {
+          setBranchPricingType('monthly');
+          setBranchPricing({ monthlyPrice: data.monthly_price.toString(), perVisitPrice: '' });
+        } else if (data.per_visit_price) {
+          setBranchPricingType('per_visit');
+          setBranchPricing({ monthlyPrice: '', perVisitPrice: data.per_visit_price.toString() });
+        } else {
+          setBranchPricingType('none');
+          setBranchPricing({ monthlyPrice: '', perVisitPrice: '' });
+        }
+      } else {
+        setBranchPricingType('none');
+        setBranchPricing({ monthlyPrice: '', perVisitPrice: '' });
+      }
+    } catch (err: any) {
+      console.error('Error fetching branch pricing:', err);
+    }
+  };
+
+  const handleBranchChange = (branchId: string) => {
+    setSelectedBranch(branchId);
+    if (branchId) {
+      fetchBranchPricing(branchId);
+    } else {
+      setBranchPricingType('none');
+      setBranchPricing({ monthlyPrice: '', perVisitPrice: '' });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      let customerAuthId = customer.auth_id;
+      const updateData: any = {
+        kisa_isim: formData.kisaIsim,
+        cari_isim: formData.cariIsim,
+        adres: formData.adres,
+        sehir: formData.sehir,
+        telefon: formData.telefon,
+        email: formData.email,
+        tax_number: formData.taxNumber,
+        tax_office: formData.taxOffice,
+      };
 
-      // Case 1: Create a new user if email and password are provided
-      if (newUserData.email && newUserData.password && !customer.auth_id) {
-        const { data: newUser, error: createError } = await supabase.functions.invoke('create-customer-user', {
-          body: { email: newUserData.email, password: newUserData.password },
-        });
-
-        if (createError) {
-          // Check for specific error message for existing user
-          if (createError.message.includes('User already registered')) {
-              throw new Error(`Bu e-posta adresi (${newUserData.email}) zaten kayıtlı. Lütfen farklı bir e-posta kullanın.`);
-          }
-          throw new Error(`Kullanıcı oluşturulamadı: ${createError.message}`);
-        }
-        customerAuthId = newUser.id;
-      } 
-      // Case 2: Unlink the user if requested
-      else if (isUnlinking) {
-        customerAuthId = undefined;
+      if (formData.newPassword) {
+        updateData.password_hash = formData.newPassword;
       }
 
-      // Update Customer Data
       const { error: customerUpdateError } = await supabase
         .from('customers')
-        .update({
-          kisa_isim: formData.kisaIsim,
-          cari_isim: formData.cariIsim,
-          adres: formData.adres,
-          sehir: formData.sehir,
-          telefon: formData.telefon,
-          email: formData.email,
-          tax_number: formData.taxNumber,
-          tax_office: formData.taxOffice,
-          auth_id: customerAuthId,
-        })
+        .update(updateData)
         .eq('id', customer.id);
 
       if (customerUpdateError) throw customerUpdateError;
 
-      // ... (Pricing logic remains the same) ...
+      if (pricingType === 'none') {
+        await supabase.from('customer_pricing').delete().eq('customer_id', customer.id);
+      } else {
+        const pricingData = {
+          customer_id: customer.id,
+          monthly_price: pricingType === 'monthly' ? parseFloat(formData.monthlyPrice) : null,
+          per_visit_price: pricingType === 'per_visit' ? parseFloat(formData.perVisitPrice) : null,
+        };
 
-      // Handle password update for the *currently linked* user
-      if (isAdmin && formData.password && customerAuthId) {
-        const { error: functionError } = await supabase.functions.invoke('update-user-password', {
-          body: { userId: customerAuthId, password: formData.password },
-        });
+        const { data: existingPricing } = await supabase
+          .from('customer_pricing')
+          .select('*')
+          .eq('customer_id', customer.id)
+          .maybeSingle();
 
-        if (functionError) {
-          throw new Error(`Şifre güncellenemedi: ${functionError.message}`);
+        if (existingPricing) {
+          await supabase.from('customer_pricing').update(pricingData).eq('customer_id', customer.id);
+        } else {
+          await supabase.from('customer_pricing').insert([pricingData]);
+        }
+      }
+
+      if (selectedBranch) {
+        if (branchPricingType === 'none') {
+          await supabase.from('branch_pricing').delete().eq('branch_id', selectedBranch);
+        } else {
+          const branchPricingData = {
+            branch_id: selectedBranch,
+            monthly_price: branchPricingType === 'monthly' ? parseFloat(branchPricing.monthlyPrice) : null,
+            per_visit_price: branchPricingType === 'per_visit' ? parseFloat(branchPricing.perVisitPrice) : null,
+          };
+
+          const { data: existingBranchPricing } = await supabase
+            .from('branch_pricing')
+            .select('*')
+            .eq('branch_id', selectedBranch)
+            .maybeSingle();
+
+          if (existingBranchPricing) {
+            await supabase.from('branch_pricing').update(branchPricingData).eq('branch_id', selectedBranch);
+          } else {
+            await supabase.from('branch_pricing').insert([branchPricingData]);
+          }
         }
       }
 
@@ -230,8 +260,7 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
           <div className="flex">
             <button onClick={() => setActiveTab('basic')} className={`px-4 py-2 font-medium ${activeTab === 'basic' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Temel Bilgiler</button>
             {isAdmin && (<button onClick={() => setActiveTab('pricing')} className={`px-4 py-2 font-medium ${activeTab === 'pricing' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Fiyatlandırma</button>)}
-            {isAdmin && (<button onClick={() => setActiveTab('account')} className={`px-4 py-2 font-medium ${activeTab === 'account' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Kullanıcı Hesabı</button>)}
-            {isAdmin && customer.auth_id && (<button onClick={() => setActiveTab('password')} className={`px-4 py-2 font-medium ${activeTab === 'password' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Şifre</button>)}
+            {isAdmin && (<button onClick={() => setActiveTab('account')} className={`px-4 py-2 font-medium ${activeTab === 'account' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Giriş Bilgileri</button>)}
           </div>
         </div>
 
@@ -244,38 +273,41 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
 
           {activeTab === 'account' && isAdmin && (
             <div className="space-y-6">
-              <h3 className="text-lg font-medium">Müşteri Kullanıcı Hesabı</h3>
-              {(customer.auth_id || linkedUserEmail) && !isUnlinking ? (
+              <h3 className="text-lg font-medium">Müşteri Giriş Bilgileri</h3>
+              <p className="text-sm text-gray-500 mb-4">Müşterinin sisteme giriş yapmak için kullanacağı bilgiler.</p>
+              <div className="space-y-4">
                 <div>
-                  <p className="text-sm text-gray-700">Bu müşteri <strong className="text-green-700">{linkedUserEmail || 'bir kullanıcıya'}</strong> bağlıdır.</p>
-                  <button type="button" onClick={() => setIsUnlinking(true)} className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Kullanıcı Bağlantısını Kaldır</button>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">E-posta (Kullanıcı Adı)</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="musteri@ornek.com"
+                  />
                 </div>
-              ) : (
                 <div>
-                   {isUnlinking && ( <p className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded mb-4">Kullanıcı bağlantısı kaldırılacak. Değişiklikleri kaydetmek için formu gönderin.</p> )}
-                  <p className="text-sm text-gray-500 mb-4">Müşterinin sisteme giriş yapabilmesi için yeni bir kullanıcı oluşturun.</p>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Kullanıcı E-postası</label>
-                      <input type="email" value={newUserData.email} onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="kullanici@ornek.com" disabled={isUnlinking} />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Kullanıcı Şifresi</label>
-                      <input type="password" value={newUserData.password} onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="En az 6 karakter" disabled={isUnlinking} />
-                    </div>
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mevcut Şifre</label>
+                  <input
+                    type="text"
+                    value={currentPassword}
+                    className="w-full p-2 border rounded bg-gray-100 font-mono text-sm"
+                    disabled
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Mevcut şifre görüntüleniyor</p>
                 </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'password' && isAdmin && customer.auth_id && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Şifre Değiştirme</h3>
-              <p className="text-sm text-gray-500">Bu müşterinin giriş şifresini değiştirmek için yeni bir şifre belirleyin. Bu alan boş bırakılırsa şifre değişmez.</p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Şifre</label>
-                <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Yeni şifre girin" autoComplete="new-password" />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Şifre</label>
+                  <input
+                    type="password"
+                    value={formData.newPassword}
+                    onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                    className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Yeni şifre (boş bırakılırsa değişmez)"
+                    minLength={6}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">En az 6 karakter. Boş bırakılırsa şifre değişmez.</p>
+                </div>
               </div>
             </div>
           )}

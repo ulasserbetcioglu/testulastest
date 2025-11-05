@@ -44,15 +44,6 @@ const AddBranchModal: React.FC<AddBranchModalProps> = ({ isOpen, onClose, custom
     setError(null);
 
     try {
-      // Önce kullanıcı hesabı oluştur
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.parola,
-      });
-
-      if (authError) throw authError;
-
-      // Şube bilgilerini kaydet
       const { data, error } = await supabase
         .from('branches')
         .insert([
@@ -63,6 +54,7 @@ const AddBranchModal: React.FC<AddBranchModalProps> = ({ isOpen, onClose, custom
             sehir: formData.sehir,
             telefon: formData.telefon,
             email: formData.email,
+            password_hash: formData.parola,
             latitude: formData.latitude ? parseFloat(formData.latitude) : null,
             longitude: formData.longitude ? parseFloat(formData.longitude) : null,
             floor_plan: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { Branch } from '../../types';
@@ -29,10 +29,46 @@ const EditBranchModal: React.FC<EditBranchModalProps> = ({ isOpen, onClose, bran
     telefon: branch.telefon || '',
     email: branch.email || '',
     latitude: branch.latitude ? String(branch.latitude) : '',
-    longitude: branch.longitude ? String(branch.longitude) : ''
+    longitude: branch.longitude ? String(branch.longitude) : '',
+    newPassword: ''
   });
+  const [currentPassword, setCurrentPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'basic' | 'account'>('basic');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const initialize = async () => {
+      if (isOpen) {
+        const { data: { user } } = await supabase.auth.getUser();
+        setIsAdmin(user?.email === 'admin@ilaclamatik.com');
+
+        const { data: branchData } = await supabase
+          .from('branches')
+          .select('password_hash')
+          .eq('id', branch.id)
+          .single();
+
+        if (branchData?.password_hash) {
+          setCurrentPassword(branchData.password_hash);
+        }
+
+        setFormData({
+          subeAdi: branch.sube_adi,
+          adres: branch.adres || '',
+          sehir: branch.sehir || '',
+          telefon: branch.telefon || '',
+          email: branch.email || '',
+          latitude: branch.latitude ? String(branch.latitude) : '',
+          longitude: branch.longitude ? String(branch.longitude) : '',
+          newPassword: ''
+        });
+        setActiveTab('basic');
+      }
+    };
+    initialize();
+  }, [isOpen, branch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,17 +76,23 @@ const EditBranchModal: React.FC<EditBranchModalProps> = ({ isOpen, onClose, bran
     setError(null);
 
     try {
+      const updateData: any = {
+        sube_adi: formData.subeAdi,
+        adres: formData.adres,
+        sehir: formData.sehir,
+        telefon: formData.telefon,
+        email: formData.email,
+        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
+        longitude: formData.longitude ? parseFloat(formData.longitude) : null
+      };
+
+      if (formData.newPassword) {
+        updateData.password_hash = formData.newPassword;
+      }
+
       const { error } = await supabase
         .from('branches')
-        .update({
-          sube_adi: formData.subeAdi,
-          adres: formData.adres,
-          sehir: formData.sehir,
-          telefon: formData.telefon,
-          email: formData.email,
-          latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-          longitude: formData.longitude ? parseFloat(formData.longitude) : null
-        })
+        .update(updateData)
         .eq('id', branch.id);
 
       if (error) throw error;
@@ -76,6 +118,35 @@ const EditBranchModal: React.FC<EditBranchModalProps> = ({ isOpen, onClose, bran
           </button>
         </div>
 
+        <div className="border-b">
+          <div className="flex">
+            <button
+              type="button"
+              onClick={() => setActiveTab('basic')}
+              className={`px-4 py-2 font-medium ${
+                activeTab === 'basic'
+                  ? 'border-b-2 border-green-500 text-green-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Temel Bilgiler
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('account')}
+                className={`px-4 py-2 font-medium ${
+                  activeTab === 'account'
+                    ? 'border-b-2 border-green-500 text-green-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Giriş Bilgileri
+              </button>
+            )}
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="p-6">
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -83,7 +154,8 @@ const EditBranchModal: React.FC<EditBranchModalProps> = ({ isOpen, onClose, bran
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-6">
+          {activeTab === 'basic' && (
+            <div className="grid grid-cols-1 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Şube Adı
@@ -166,18 +238,49 @@ const EditBranchModal: React.FC<EditBranchModalProps> = ({ isOpen, onClose, bran
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                E-Posta
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
             </div>
-          </div>
+          )}
+
+          {activeTab === 'account' && isAdmin && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-medium">Şube Giriş Bilgileri</h3>
+              <p className="text-sm text-gray-500 mb-4">Şubenin sisteme giriş yapmak için kullanacağı bilgiler.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">E-posta (Kullanıcı Adı)</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="sube@ornek.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mevcut Şifre</label>
+                  <input
+                    type="text"
+                    value={currentPassword}
+                    className="w-full p-2 border rounded bg-gray-100 font-mono text-sm"
+                    disabled
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Mevcut şifre görüntüleniyor</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Şifre</label>
+                  <input
+                    type="password"
+                    value={formData.newPassword}
+                    onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                    className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Yeni şifre (boş bırakılırsa değişmez)"
+                    minLength={6}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">En az 6 karakter. Boş bırakılırsa şifre değişmez.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 flex justify-end space-x-3">
             <button

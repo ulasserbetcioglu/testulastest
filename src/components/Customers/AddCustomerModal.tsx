@@ -45,47 +45,30 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
     setLoading(true);
 
     try {
-      // First, create the auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.parola,
-        options: {
-          data: {
-            role: 'customer'
-          }
-        }
-      });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Kullanıcı oluşturulamadı."); // Add a check for the user object
-
-      // Then, create the customer record using the new user's ID
       const { data, error } = await supabase
         .from('customers')
         .insert([
           {
-            auth_id: authData.user.id, // ✅ ADDED: Use the ID from the signUp response
             kisa_isim: formData.kisaIsim,
             cari_isim: formData.cariIsim,
             adres: formData.adres,
             sehir: formData.sehir,
             telefon: formData.telefon,
             email: formData.email,
-            parola: formData.parola,
+            password_hash: formData.parola,
             tax_number: formData.taxNumber,
             tax_office: formData.taxOffice
           }
         ])
         .select()
-        .single(); // Use .single() since you expect one record back
+        .single();
 
       if (error) throw error;
       if (!data) throw new Error("Müşteri kaydı oluşturulamadı.");
 
-      // If pricing is set, create the pricing record
       if (formData.priceType !== 'none') {
         const customerId = data.id;
-        
+
         const pricingData = {
           customer_id: customerId,
           monthly_price: formData.priceType === 'monthly' ? parseFloat(formData.price) : null,
