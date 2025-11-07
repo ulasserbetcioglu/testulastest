@@ -132,7 +132,7 @@ const CustomerPaidMaterials: React.FC = () => {
           items:paid_material_sale_items(
             id,
             product_id,
-            product:product_id ( name ),
+            product:product_id!paid_products ( name ),
             quantity,
             unit_price,
             total_price
@@ -454,7 +454,7 @@ const CustomerPaidMaterials: React.FC = () => {
               type="date"
               className="w-full sm:w-1/2 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               value={endDate}
-              onChange={(e) => handleDateRangeChange(startDate, e.target.value)}
+              onChange={(e) => handleDateRangeChange(startDate, e.targe.value)}
               placeholder="Bitiş Tarihi"
             />
           </div>
