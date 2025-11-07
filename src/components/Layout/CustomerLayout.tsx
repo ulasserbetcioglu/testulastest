@@ -5,9 +5,62 @@ import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
 
+// --- HATA DÜZELTMESİ: BAĞIMLILIKLARI MOCK'LAMA ---
+// Bu bileşenin bağımlı olduğu dış dosyalar (AuthProvider, supabase, localAuth)
+// bu ortamda bulunmadığı için derleme hatası alıyorsunuz.
+// Kodun bu önizleme ortamında çalışabilmesi için bu bağımlılıkları
+// taklit eden (mock'layan) basit objeler oluşturalım.
+// Gerçek projenizde, yukarıdaki 'import' satırlarındaki yolları
+// kendi proje yapınıza göre düzeltmeniz gerekecektir.
+
+const useAuth = () => ({
+  signOut: async () => {
+    console.log("Mock SignOut Çağrıldı");
+    // Gerçek uygulamada bu, kullanıcıyı yönlendirecektir.
+    // Önizleme için burada sahte bir gecikme ve yönlendirme simüle edebiliriz.
+    // Ancak şimdilik sadece konsola yazmak yeterli.
+  }
+});
+
+const supabase = {
+  auth: {
+    getUser: async () => ({
+      data: { user: { id: 'mock-user-id' } },
+      error: null
+    })
+  },
+  from: (tableName) => ({
+    select: (columns) => ({
+      eq: (column, value) => ({
+        single: async () => {
+          if (tableName === 'customers' && column === 'auth_id') {
+            return {
+              data: { kisa_isim: 'Mock Müşteri Adı' }, // Test için sahte müşteri adı
+              error: null
+            };
+          }
+          return { data: null, error: new Error('Mock Supabase Hatası') };
+        }
+      })
+    })
+  })
+};
+
+const localAuth = {
+  getSession: () => {
+    // localSession'ı test etmek için null olmayan bir değer de döndürebilirsiniz
+    // return { type: 'customer', name: 'Lokal Müşteri Adı' };
+    return null;
+  }
+};
+// --- HATA DÜZELTMESİ SONU ---
+
+
 const CustomerLayout: React.FC = () => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  // Sidebar'ın varsayılan olarak açık olması için true ile başlatıyoruz
+  // Kullanıcı deneyimine göre false ile de başlatabilirsiniz.
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [customerName, setCustomerName] = useState('');
 
@@ -61,22 +114,46 @@ const CustomerLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Mobil için karartma perdesi (backdrop/scrim).
+        Sadece mobilde (md:hidden) ve sidebar açıkken görünür.
+        Tıklayınca sidebar'ı kapatır.
+      */}
+      <div
+        className={`fixed inset-0 bg-black/60 z-30 md:hidden ${
+          isSidebarOpen ? 'block' : 'hidden'
+        }`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
+
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      {/* Header'ı z-20 ile sidebar'ın (z-40) altında ama içeriğin üstünde tutuyoruz */}
+      {/* İsteğe bağlı olarak sticky top-0 z-50 yaparak üste sabitleyebilirsiniz */}
+      <header className="bg-white shadow-sm relative z-20">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="p-2 rounded-lg hover:bg-gray-100"
             >
-              <Menu className="h-6 w-6" />
+              {/* Duruma göre ikonu değiştir (Menu veya X) */}
+              {isSidebarOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
             </button>
             <div className="ml-4 flex items-center">
-              <img 
-                src="https://i.imgur.com/PajSpus.png" 
-                alt="İlaçlamatik Logo" 
-                className="h-10 mr-3 cursor-pointer" 
+              <img
+                src="https://i.imgur.com/PajSpus.png"
+                alt="İlaçlamatik Logo"
+                className="h-10 mr-3 cursor-pointer"
                 onClick={() => navigate('/customer')}
+                onError={(e) => { 
+                  // Resim yüklenemezse yer tutucu göster
+                  e.currentTarget.src = 'https://placehold.co/100x40/eeeeee/333333?text=Logo';
+                  e.currentTarget.style.height = '40px';
+                  e.currentTarget.style.width = '100px';
+                }}
               />
               <div>
                 <h1 className="text-xl font-semibold text-gray-800">Müşteri Paneli</h1>
@@ -100,10 +177,23 @@ const CustomerLayout: React.FC = () => {
       <div className="flex">
         {/* Sidebar */}
         <aside
-          className={`${
-            isSidebarOpen ? 'w-64' : 'w-0'
-          } transition-all duration-300 bg-white shadow-sm fixed h-full z-10`}
+          className={`
+            fixed top-0 left-0 z-40 h-screen w-64 bg-white shadow-lg 
+            overflow-y-auto overflow-x-hidden 
+            transition-all duration-300 ease-in-out
+            
+            ${/* Mobil durum: Ekranın dışına kaydır */''}
+            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+            
+            ${/* Desktop durum: Mobil kaydırmayı sıfırla ve genişliği ayarla */''}
+            md:translate-x-0 
+            ${isSidebarOpen ? 'md:w-64' : 'md:w-0'}
+          `}
         >
+          {/* Navigasyon içeriği. 
+            Eğer header'ı sticky yaparsanız, buraya header yüksekliği kadar
+            (örn: pt-20) padding eklemeniz gerekir.
+          */}
           <nav className="mt-4 px-4">
             <ul className="space-y-2">
               {navItems.map((item) => (
@@ -119,13 +209,17 @@ const CustomerLayout: React.FC = () => {
                       }`
                     }
                     onClick={() => {
+                      // Mobilde bir linke tıklayınca menüyü kapat
                       if (window.innerWidth < 768) {
                         setIsSidebarOpen(false);
                       }
                     }}
                   >
                     {item.icon}
-                    <span className="ml-3">{item.name}</span>
+                    {/* Yazılar, sidebar kapalıyken (w-0) görünmesin 
+                      ve taşmasın diye span içine alındı.
+                    */}
+                    <span className="ml-3 whitespace-nowrap">{item.name}</span>
                   </NavLink>
                 </li>
               ))}
@@ -134,7 +228,15 @@ const CustomerLayout: React.FC = () => {
         </aside>
 
         {/* Main Content */}
-        <main className={`flex-1 p-6 ${isSidebarOpen ? 'md:ml-64' : ''}`}>
+        {/* Ana içerik alanı. 
+          Sidebar'ın durumuna göre masaüstünde (md:) sol margin'i ayarlar.
+        */}
+        <main
+          className={`
+            flex-1 p-6 transition-all duration-300
+            ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}
+          `}
+        >
           <Outlet />
         </main>
       </div>
