@@ -1,9 +1,51 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, NavLink } from 'react-router-dom';
-import { useAuth } from '../Auth/AuthProvider';
-import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
+
+// --- ÖNİZLEME HATA DÜZELTMESİ ---
+// Bu bileşenin bağımlı olduğu dış dosyalar (AuthProvider, supabase, localAuth)
+// bu önizleme ortamında bulunmadığı için derleme hatası alıyorsunuz.
+// Kodun bu önizlemede çalışabilmesi için bu bağımlılıkları
+// taklit eden (mock'layan) sahte objeler oluşturalım.
+// Kodu kendi projenize kopyalarken bu bloğu silebilirsiniz.
+
+const useAuth = () => ({
+  signOut: async () => {
+    console.log("Mock SignOut Çağrıldı");
+  }
+});
+
+const supabase = {
+  auth: {
+    getUser: async () => ({
+      data: { user: { id: 'mock-user-id-123' } },
+      error: null
+    })
+  },
+  from: (tableName) => ({
+    select: (columns) => ({
+      eq: (column, value) => ({
+        single: async () => {
+          if (tableName === 'customers' && column === 'auth_id') {
+            return {
+              data: { kisa_isim: 'Mock Müşteri Adı' },
+              error: null
+            };
+          }
+          return { data: null, error: new Error('Mock Supabase Hatası') };
+        }
+      })
+    })
+  })
+};
+
+const localAuth = {
+  getSession: () => {
+    // localSession'ı test etmek için null olmayan bir değer de döndürebilirsiniz
+    // return { type: 'customer', name: 'Lokal Müşteri Adı' };
+    return null; // supabase.auth.getUser() yolunu tetikle
+  }
+};
+// --- HATA DÜZELTMESİ SONU ---
 
 const CustomerLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -75,10 +117,10 @@ const CustomerLayout: React.FC = () => {
       />
 
       {/* Header */}
-      {/* Header'ı z-20 ile sidebar'ın (z-40) altında ama içeriğin üstünde tutuyoruz */}
-      {/* İsteğe bağlı olarak sticky top-0 z-50 yaparak üste sabitleyebilirsiniz */}
-      <header className="bg-white shadow-sm relative z-20">
-        <div className="flex items-center justify-between px-4 py-3">
+      {/* Header'ı z-30, sticky ve h-16 (64px) olarak sabitliyoruz */}
+      <header className="bg-white shadow-sm sticky top-0 z-30 h-16">
+        {/* py-3 kaldırıldı, h-full ile dikeyde ortalama sağlandı */}
+        <div className="flex items-center justify-between px-4 h-full">
           <div className="flex items-center">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -127,20 +169,20 @@ const CustomerLayout: React.FC = () => {
         {/* Sidebar */}
         <aside
           className={`
-            fixed top-0 left-0 z-40 h-screen w-64 bg-white shadow-lg 
+            ${/* Mobil: fixed, z-50 (backdrop'un üstünde) */''}
+            fixed top-0 left-0 z-50 h-screen w-64 bg-white shadow-lg 
             overflow-y-auto overflow-x-hidden 
             transition-all duration-300 ease-in-out
-            
-            ${/* Mobil durum: Ekranın dışına kaydır */''}
             ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
             
-            ${/* Desktop durum: Mobil kaydırmayı sıfırla ve genişliği ayarla */''}
-            md:translate-x-0 
+            ${/* Desktop: relative, sticky, header'ın (h-16) altında başlar */''}
+            md:relative md:translate-x-0 md:z-auto
+            md:h-[calc(100vh-4rem)] ${/* 4rem = h-16 */''}
+            md:sticky md:top-16 
             ${isSidebarOpen ? 'md:w-64' : 'md:w-0'}
           `}
         >
           {/* Navigasyon içeriği. 
-            Eğer header'ı sticky yaparsanız, buraya header yüksekliği kadar
             (örn: pt-20) padding eklemeniz gerekir.
           */}
           <nav className="mt-4 px-4">
@@ -178,12 +220,12 @@ const CustomerLayout: React.FC = () => {
 
         {/* Main Content */}
         {/* Ana içerik alanı. 
-          Sidebar'ın durumuna göre masaüstünde (md:) sol margin'i ayarlar.
+          Sidebar 'relative' olduğu için artık 'md:ml-64' gerekmiyor.
+          'flex-1' genişliği otomatik ayarlayacak.
         */}
         <main
           className={`
             flex-1 p-6 transition-all duration-300
-            ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}
           `}
         >
           <Outlet />
