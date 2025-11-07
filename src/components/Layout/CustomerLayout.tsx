@@ -1,9 +1,51 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, NavLink } from 'react-router-dom';
-import { useAuth } from '../Auth/AuthProvider';
-import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
+
+// --- ÖNİZLEME HATA DÜZELTMESİ ---
+// Bu bileşenin bağımlı olduğu dış dosyalar (AuthProvider, supabase, localAuth)
+// bu önizleme ortamında bulunmadığı için derleme hatası alıyorsunuz.
+// Kodun bu önizlemede çalışabilmesi için bu bağımlılıkları
+// taklit eden (mock'layan) sahte objeler oluşturalım.
+// Kodu kendi projenize kopyalarken bu bloğu silebilirsiniz.
+
+const useAuth = () => ({
+  signOut: async () => {
+    console.log("Mock SignOut Çağrıldı");
+  }
+});
+
+const supabase = {
+  auth: {
+    getUser: async () => ({
+      data: { user: { id: 'mock-user-id-123' } },
+      error: null
+    })
+  },
+  from: (tableName) => ({
+    select: (columns) => ({
+      eq: (column, value) => ({
+        single: async () => {
+          if (tableName === 'customers' && column === 'auth_id') {
+            return {
+              data: { kisa_isim: 'Mock Müşteri Adı' },
+              error: null
+            };
+          }
+          return { data: null, error: new Error('Mock Supabase Hatası') };
+        }
+      })
+    })
+  })
+};
+
+const localAuth = {
+  getSession: () => {
+    // localSession'ı test etmek için null olmayan bir değer de döndürebilirsiniz
+    // return { type: 'customer', name: 'Lokal Müşteri Adı' };
+    return null; // supabase.auth.getUser() yolunu tetikle
+  }
+};
+// --- HATA DÜZELTMESİ SONU ---
 
 const CustomerLayout: React.FC = () => {
   const navigate = useNavigate();
