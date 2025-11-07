@@ -44,7 +44,7 @@ const CustomerPaidMaterials: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
+  // const [showFilters, setShowFilters] = useState(false); // Bu satırı kaldırıyoruz
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -422,6 +422,7 @@ const CustomerPaidMaterials: React.FC = () => {
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           </div>
+          {/* Filtrele butonunu kaldırıyoruz
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
@@ -429,9 +430,10 @@ const CustomerPaidMaterials: React.FC = () => {
             <Filter className="w-5 h-5" />
             Filtrele
           </button>
+          */}
         </div>
 
-        {showFilters && (
+        {/* {showFilters && ( // Bu koşullu render satırını kaldırıyoruz */}
           <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -470,7 +472,7 @@ const CustomerPaidMaterials: React.FC = () => {
               </div>
             </div>
           </div>
-        )}
+        {/* )} // Bu koşullu render satırını kaldırıyoruz */}
       </div>
       
       {loading && (
@@ -732,7 +734,7 @@ const CustomerPaidMaterials: React.FC = () => {
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün</th>
                         <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Miktar</th>
                         <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Birim Fiyat</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Toplam</th>
+                        <th className="px-4 py-2 text-right text-xs font-mR,edium text-gray-500 uppercase tracking-wider">Toplam</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -782,4 +784,4 @@ const CustomerPaidMaterials: React.FC = () => {
   );
 };
 
-export default CustomerPaidMaterials
+export default CustomerPaidMaterials;
