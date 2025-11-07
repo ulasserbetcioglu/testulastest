@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns';
 import { tr } from 'date-fns/locale';
 // Bu import yollarının kendi projenizdeki yollarla eşleştiğini varsayıyorum.
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, Download } from 'lucide-react';
+// Bu kütüphaneyi projenize eklemeniz gerekiyor: npm install html2canvas
+import html2canvas from 'html2canvas';
 
 interface Visit {
   id: string;
@@ -22,17 +24,17 @@ const CustomerCalendar: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('');
 
+  // JPEG indirme butonu için state
+  const [isDownloading, setIsDownloading] = useState(false);
+  
+  // Takvim div'ini referans almak için
+  const calendarRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     // currentdate değiştiğinde verileri tekrar çek
     setLoading(true);
     fetchVisits();
   }, [currentDate]);
-
-  // selectedStatus değiştiğinde verileri filtrele (tekrar çekmeye gerek yok)
-  // Bu useEffect'i ayırmak, ay değiştirildiğinde gereksiz filtrelemeyi önler
-  // ve filtre değiştirildiğinde gereksiz API çağrısını engeller.
-  // Not: Bu kısım zaten getVisitsForDay içinde anlık yapıldığı için
-  // bu useEffect'e bile gerek yok, anlık filtreleme daha performanslı.
 
   const fetchVisits = async () => {
     try {
@@ -56,11 +58,39 @@ const CustomerCalendar: React.FC = () => {
 
       if (error) throw error;
       setVisits(data || []);
-    } catch (err: any) {
+    } catch (err: any)
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  // --- YENİ FONKSİYON: JPEG İndirme ---
+  const handleDownloadJPEG = () => {
+    if (!calendarRef.current) return;
+    setIsDownloading(true);
+
+    html2canvas(calendarRef.current, {
+      useCORS: true, // Varsa dışarıdan yüklenen resimler için
+      scale: 2 // Çözünürlüğü 2 kat artırarak daha kaliteli bir çıktı al
+    }).then((canvas) => {
+      // Canvas'ı JPEG verisine dönüştür
+      const imgData = canvas.toDataURL('image/jpeg', 1.0); // 1.0 = en yüksek kalite
+      
+      // Geçici bir link oluştur ve tıkla
+      const link = document.createElement('a');
+      link.href = imgData;
+      link.download = `ziyaret-takvimi-${format(currentDate, 'yyyy-MM')}.jpeg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setIsDownloading(false);
+    }).catch(err => {
+      console.error('Resim oluşturulurken hata:', err);
+      setIsDownloading(false);
+      // Kullanıcıya bir hata mesajı gösterebilirsiniz
+    });
   };
 
   const days = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
@@ -178,24 +208,44 @@ const CustomerCalendar: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Filtreleme Alanı */}
-      <div className="bg-white rounded-lg shadow p-2 sm:p-4">
-        <label htmlFor="statusFilter" className="sr-only">Duruma göre filtrele</label>
-        <select
-          id="statusFilter"
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-          className="w-full sm:w-48 px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-300 rounded-lg text-sm shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+      {/* 2. Filtreleme Alanı VE İNDİRME BUTONU */}
+      {/* DEĞİŞİKLİK: Burası flex bir container'a dönüştürüldü */}
+      <div className="bg-white rounded-lg shadow p-2 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <label htmlFor="statusFilter" className="sr-only">Duruma göre filtrele</label>
+          <select
+            id="statusFilter"
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="w-full sm:w-48 px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-300 rounded-lg text-sm shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+          >
+            <option value="">Tüm Durumlar</option>
+            <option value="planned">Planlandı</option>
+            <option value="completed">Tamamlandı</option>
+            <option value="cancelled">İptal Edildi</option>
+          </select>
+        </div>
+        
+        {/* YENİ BUTON */}
+        <button
+          onClick={handleDownloadJPEG}
+          disabled={isDownloading}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 w-full sm:w-auto"
         >
-          <option value="">Tüm Durumlar</option>
-          <option value="planned">Planlandı</option>
-          <option value="completed">Tamamlandı</option>
-          <option value="cancelled">İptal Edildi</option>
-        </select>
+          {isDownloading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Download className="w-5 h-5" />
+          )}
+          <span className="text-sm font-medium">
+            {isDownloading ? 'Oluşturuluyor...' : 'Takvimi İndir (JPEG)'}
+          </span>
+        </button>
       </div>
 
       {/* 3. Takvim Gövdesi */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* DEĞİŞİKLİK: ref buraya eklendi */}
+      <div ref={calendarRef} className="bg-white rounded-lg shadow overflow-hidden">
         <div className="grid grid-cols-7 gap-px bg-gray-200">
           
           {/* Gün Başlıkları */}
