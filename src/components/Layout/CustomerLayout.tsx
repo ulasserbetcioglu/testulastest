@@ -1,56 +1,9 @@
+import React, { useState, useEffect } from 'react';
+import { Outlet, useNavigate, NavLink } from 'react-router-dom';
+import { useAuth } from '../Auth/AuthProvider';
+import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
-
-// --- HATA DÜZELTMESİ: BAĞIMLILIKLARI MOCK'LAMA ---
-// Bu bileşenin bağımlı olduğu dış dosyalar (AuthProvider, supabase, localAuth)
-// bu ortamda bulunmadığı için derleme hatası alıyorsunuz.
-// Kodun bu önizleme ortamında çalışabilmesi için bu bağımlılıkları
-// taklit eden (mock'layan) basit objeler oluşturalım.
-// Gerçek projenizde, yukarıdaki 'import' satırlarındaki yolları
-// kendi proje yapınıza göre düzeltmeniz gerekecektir.
-
-const useAuth = () => ({
-  signOut: async () => {
-    console.log("Mock SignOut Çağrıldı");
-    // Gerçek uygulamada bu, kullanıcıyı yönlendirecektir.
-    // Önizleme için burada sahte bir gecikme ve yönlendirme simüle edebiliriz.
-    // Ancak şimdilik sadece konsola yazmak yeterli.
-  }
-});
-
-const supabase = {
-  auth: {
-    getUser: async () => ({
-      data: { user: { id: 'mock-user-id' } },
-      error: null
-    })
-  },
-  from: (tableName) => ({
-    select: (columns) => ({
-      eq: (column, value) => ({
-        single: async () => {
-          if (tableName === 'customers' && column === 'auth_id') {
-            return {
-              data: { kisa_isim: 'Mock Müşteri Adı' }, // Test için sahte müşteri adı
-              error: null
-            };
-          }
-          return { data: null, error: new Error('Mock Supabase Hatası') };
-        }
-      })
-    })
-  })
-};
-
-const localAuth = {
-  getSession: () => {
-    // localSession'ı test etmek için null olmayan bir değer de döndürebilirsiniz
-    // return { type: 'customer', name: 'Lokal Müşteri Adı' };
-    return null;
-  }
-};
-// --- HATA DÜZELTMESİ SONU ---
-
 
 const CustomerLayout: React.FC = () => {
   const navigate = useNavigate();
