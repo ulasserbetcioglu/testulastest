@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns';
 import { tr } from 'date-fns/locale';
-// Bu import yollarının kendi projenizdeki yollarla eşleştiğini varsayıyorum.
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
-import { Loader2, AlertTriangle, Download } from 'lucide-react';
-// Bu kütüphaneyi projenize eklemeniz gerekiyor: npm install html2canvas
 import html2canvas from 'html2canvas';
+import { Download, Loader2, AlertCircle, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Visit {
   id: string;
@@ -23,20 +21,16 @@ const CustomerCalendar: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>('');
-
-  // JPEG indirme butonu için state
-  const [isDownloading, setIsDownloading] = useState(false);
-  
-  // Takvim div'ini referans almak için
   const calendarRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
-    // currentdate değiştiğinde verileri tekrar çek
-    setLoading(true);
     fetchVisits();
   }, [currentDate]);
 
   const fetchVisits = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const customerId = await localAuth.getCurrentCustomerId();
       if (!customerId) throw new Error('Müşteri kaydı bulunamadı');
@@ -59,122 +53,165 @@ const CustomerCalendar: React.FC = () => {
       if (error) throw error;
       setVisits(data || []);
     } catch (err: any) {
-      setError(err.message);
-    }
-    finally {
+      setError(err.message || 'Ziyaretler yüklenirken bir hata oluştu.');
+    } finally {
       setLoading(false);
     }
   };
 
-  // --- YENİ FONKSİYON: JPEG İndirme ---
   const handleDownloadJPEG = () => {
     if (!calendarRef.current) return;
-    setIsDownloading(true);
 
-    html2canvas(calendarRef.current, {
-      useCORS: true, // Varsa dışarıdan yüklenen resimler için
-      scale: 2 // Çözünürlüğü 2 kat artırarak daha kaliteli bir çıktı al
-    }).then((canvas) => {
-      // Canvas'ı JPEG verisine dönüştür
-      const imgData = canvas.toDataURL('image/jpeg', 1.0); // 1.0 = en yüksek kalite
-      
-      // Geçici bir link oluştur ve tıkla
-      const link = document.createElement('a');
-      link.href = imgData;
-      link.download = `ziyaret-takvimi-${format(currentDate, 'yyyy-MM')}.jpeg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      setIsDownloading(false);
-    }).catch(err => {
-      console.error('Resim oluşturulurken hata:', err);
-      setIsDownloading(false);
-      // Kullanıcıya bir hata mesajı gösterebilirsiniz
+    setIsDownloading(true);
+    const calendarElement = calendarRef.current;
+
+    // 1. Stilleri geçici olarak değiştir
+    const listElements = calendarElement.querySelectorAll('.visit-list-container');
+    const itemElements = calendarElement.querySelectorAll('.visit-item-text');
+
+    const originalListStyles = new Map<number, { overflowY: string }>();
+    const originalItemStyles = new Map<number, { textOverflow: string, whiteSpace: string, overflow: string }>();
+
+    listElements.forEach((el, i) => {
+      const htmlEl = el as HTMLElement;
+      originalListStyles.set(i, { overflowY: htmlEl.style.overflowY });
+      htmlEl.style.overflowY = 'visible'; // Tüm içeriği göster
+      htmlEl.style.maxHeight = 'none'; // Yükseklik kısıtlamasını kaldır
     });
+
+    itemElements.forEach((el, i) => {
+      const htmlEl = el as HTMLElement;
+      originalItemStyles.set(i, { 
+        textOverflow: htmlEl.style.textOverflow, 
+        whiteSpace: htmlEl.style.whiteSpace, 
+        overflow: htmlEl.style.overflow 
+      });
+      htmlEl.style.textOverflow = 'clip'; // Kırpmayı kaldır
+      htmlEl.style.whiteSpace = 'normal'; // Metin kaydırmaya izin ver
+      htmlEl.style.overflow = 'visible';
+    });
+
+    // Sayfanın en üstüne kaydır
+    window.scrollTo(0, 0);
+
+    html2canvas(calendarElement, {
+      scale: 3, // Çözünürlüğü 3 kat artır
+      useCORS: true,
+      logging: false,
+      onclone: (document) => {
+        // Klonlanan dokümanda stilleri tekrar uygula
+        const clonedListElements = document.querySelectorAll('.visit-list-container');
+        clonedListElements.forEach(el => {
+          (el as HTMLElement).style.overflowY = 'visible';
+          (el as HTMLElement).style.maxHeight = 'none';
+        });
+        const clonedItemElements = document.querySelectorAll('.visit-item-text');
+        clonedItemElements.forEach(el => {
+          const htmlEl = el as HTMLElement;
+          htmlEl.style.textOverflow = 'clip';
+          htmlEl.style.whiteSpace = 'normal';
+          htmlEl.style.overflow = 'visible';
+        });
+      }
+    })
+      .then(canvas => {
+        const link = document.createElement('a');
+        link.download = `ziyaret-takvimi-${format(currentDate, 'yyyy-MM')}.jpeg`;
+        link.href = canvas.toDataURL('image/jpeg', 1.0); // En yüksek kalite
+        link.click();
+      })
+      .catch(err => {
+        console.error('JPEG indirilirken hata oluştu:', err);
+        setError('JPEG indirilirken bir hata oluştu. Lütfen tekrar deneyin.');
+      })
+      .finally(() => {
+        // 3. Orijinal stilleri geri yükle
+        listElements.forEach((el, i) => {
+          const htmlEl = el as HTMLElement;
+          const originalStyle = originalListStyles.get(i);
+          if (originalStyle) {
+            htmlEl.style.overflowY = originalStyle.overflowY;
+          }
+          htmlEl.style.maxHeight = ''; // Orijinal (CSS'deki) değere döner
+        });
+
+        itemElements.forEach((el, i) => {
+          const htmlEl = el as HTMLElement;
+          const originalStyle = originalItemStyles.get(i);
+          if (originalStyle) {
+            htmlEl.style.textOverflow = originalStyle.textOverflow;
+            htmlEl.style.whiteSpace = originalStyle.whiteSpace;
+            htmlEl.style.overflow = originalStyle.overflow;
+          }
+        });
+
+        setIsDownloading(false);
+      });
   };
+
 
   const days = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Pazartesi'yi 0 (Pts) ve Pazar'ı 6 (Paz) olarak ayarla
-  let firstDayOfMonth = monthStart.getDay() - 1; 
-  if (firstDayOfMonth === -1) firstDayOfMonth = 6; // Pazar (0) ise 6 yap
+  let firstDayOfMonth = monthStart.getDay() - 1;
+  if (firstDayOfMonth === -1) firstDayOfMonth = 6;
 
   const getVisitsForDay = (date: Date) => {
     return visits.filter(visit => {
       const visitDate = new Date(visit.visit_date);
       const matchesDate = visitDate.getDate() === date.getDate() &&
-                          visitDate.getMonth() === date.getMonth() &&
-                          visitDate.getFullYear() === date.getFullYear();
-      
+        visitDate.getMonth() === date.getMonth() &&
+        visitDate.getFullYear() === date.getFullYear();
+
       const matchesStatus = !selectedStatus || visit.status === selectedStatus;
 
       return matchesDate && matchesStatus;
     });
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusDotColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'planned':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'cancelled':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'completed': return 'bg-green-500';
+      case 'planned': return 'bg-yellow-500';
+      case 'cancelled': return 'bg-orange-500';
+      default: return 'bg-gray-500';
     }
   };
 
-  const getStatusDot = (status: string) => {
-     switch (status) {
-      case 'completed':
-        return 'bg-green-500';
-      case 'planned':
-        return 'bg-yellow-500';
-      case 'cancelled':
-        return 'bg-orange-500';
-      default:
-        return 'bg-gray-500';
-    }
-  }
-
-  const getStatusText = (status: string) => {
+  const getVisitBGColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'T';
-      case 'planned':
-        return 'P';
-      case 'cancelled':
-        return 'İ';
-      default:
-        return '';
+      case 'completed': return 'bg-green-50 hover:bg-green-100 border-green-200';
+      case 'planned': return 'bg-yellow-50 hover:bg-yellow-100 border-yellow-200';
+      case 'cancelled': return 'bg-orange-50 hover:bg-orange-100 border-orange-200';
+      default: return 'bg-gray-50 hover:bg-gray-100 border-gray-200';
     }
   };
 
-  // Yüklenme durumu için daha iyi bir arayüz
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-        <span className="ml-2 text-gray-600">Takvim yükleniyor...</span>
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="w-12 h-12 text-green-600 animate-spin" />
       </div>
     );
   }
 
-  // Hata durumu için daha iyi bir arayüz
-  if (error) {
+  if (error && !loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 bg-red-50 p-4 rounded-lg border border-red-200">
-        <AlertTriangle className="w-8 h-8 text-red-500" />
-        <span className="mt-2 text-red-700 font-medium">Hata: {error}</span>
-        <button 
-          onClick={() => { setLoading(true); fetchVisits(); }} 
-          className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
+      <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg shadow-md max-w-lg mx-auto">
+        <div className="flex items-center">
+          <AlertCircle className="w-6 h-6 mr-3" />
+          <div>
+            <h4 className="font-bold">Bir Hata Oluştu</h4>
+            <p className="text-sm">{error}</p>
+          </div>
+        </div>
+        <button
+          onClick={fetchVisits}
+          className="mt-4 flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
         >
+          <RefreshCw className="w-4 h-4 mr-2" />
           Tekrar Dene
         </button>
       </div>
@@ -182,86 +219,73 @@ const CustomerCalendar: React.FC = () => {
   }
 
   return (
-    // Ana konteyner
     <div className="space-y-4 max-w-full overflow-x-hidden">
-      
-      {/* 1. Başlık ve Ay Navigasyonu */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-2">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-800">ZİYARET TAKVİMİ</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}
-            className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-gray-600 hover:text-gray-800 bg-white rounded-full shadow text-lg sm:text-xl"
+            className="p-2 text-gray-600 hover:text-gray-800 bg-white rounded-full shadow hover:bg-gray-100 transition-colors"
             aria-label="Önceki Ay"
           >
-            ←
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
-          <span className="text-base sm:text-lg font-medium min-w-[120px] text-center capitalize">
+          <span className="text-base sm:text-lg font-medium min-w-[140px] text-center">
             {format(currentDate, 'MMMM yyyy', { locale: tr })}
           </span>
           <button
             onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}
-            className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-gray-600 hover:text-gray-800 bg-white rounded-full shadow text-lg sm:text-xl"
+            className="p-2 text-gray-600 hover:text-gray-800 bg-white rounded-full shadow hover:bg-gray-100 transition-colors"
             aria-label="Sonraki Ay"
           >
-            →
+            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
       </div>
 
-      {/* 2. Filtreleme Alanı VE İNDİRME BUTONU */}
-      {/* DEĞİŞİKLİK: Burası flex bir container'a dönüştürüldü */}
-      <div className="bg-white rounded-lg shadow p-2 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div>
-          <label htmlFor="statusFilter" className="sr-only">Duruma göre filtrele</label>
+      <div className="bg-white rounded-lg shadow p-2 sm:p-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <select
-            id="statusFilter"
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="w-full sm:w-48 px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-300 rounded-lg text-sm shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            className="w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-lg text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
           >
             <option value="">Tüm Durumlar</option>
             <option value="planned">Planlandı</option>
             <option value="completed">Tamamlandı</option>
             <option value="cancelled">İptal Edildi</option>
           </select>
-        </div>
-        
-        {/* YENİ BUTON */}
-        <button
-          onClick={handleDownloadJPEG}
-          disabled={isDownloading}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 w-full sm:w-auto"
-        >
-          {isDownloading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Download className="w-5 h-5" />
-          )}
-          <span className="text-sm font-medium">
+
+          <button
+            onClick={handleDownloadJPEG}
+            disabled={isDownloading}
+            className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isDownloading ? (
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-5 h-5 mr-2" />
+            )}
             {isDownloading ? 'Oluşturuluyor...' : 'Takvimi İndir (JPEG)'}
-          </span>
-        </button>
+          </button>
+        </div>
       </div>
 
-      {/* 3. Takvim Gövdesi */}
-      {/* DEĞİŞİKLİK: ref buraya eklendi */}
+      {/* Takvimi bu div'den yakalıyoruz */}
       <div ref={calendarRef} className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="grid grid-cols-7 gap-px bg-gray-200">
-          
-          {/* Gün Başlıkları */}
+        <div className="grid grid-cols-7 gap-px bg-gray-200 border-b border-gray-200">
           {days.map(day => (
             <div key={day} className="bg-gray-50 p-1 sm:p-2 text-center">
               <span className="text-xs sm:text-sm font-medium text-gray-500">{day}</span>
             </div>
           ))}
+        </div>
 
-          {/* Ay Başındaki Boş Hücreler */}
+        <div className="grid grid-cols-7 gap-px bg-gray-200">
           {Array.from({ length: firstDayOfMonth }).map((_, index) => (
-            <div key={`empty-${index}`} className="bg-gray-50 p-1 sm:p-2 min-h-[80px] sm:min-h-[120px]" />
+            <div key={`empty-${index}`} className="bg-gray-50 p-1 sm:p-2 min-h-[100px] sm:min-h-[140px]" />
           ))}
 
-          {/* Ayın Gün Hücreleri */}
           {monthDays.map(day => {
             const dayVisits = getVisitsForDay(day);
             const isCurrentDay = isToday(day);
@@ -269,51 +293,28 @@ const CustomerCalendar: React.FC = () => {
             return (
               <div
                 key={day.toISOString()}
-                className={`
-                  bg-white p-1 sm:p-2 min-h-[80px] sm:min-h-[120px] 
-                  ${/* DEĞİŞİKLİK: Sığma sorununu çözmek için flex eklendi */''}
-                  flex flex-col
-                  ${isCurrentDay ? 'bg-green-50' : ''}
-                `}
+                className={`flex flex-col bg-white p-1 sm:p-2 min-h-[100px] sm:min-h-[140px] transition-colors ${
+                  isCurrentDay ? 'bg-green-50' : ''
+                }`}
               >
-                {/* Gün Numarası */}
-                <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 ${isCurrentDay ? 'text-green-600 font-bold' : 'text-gray-700'}`}>
+                <div className={`text-xs sm:text-sm font-medium mb-1 ${
+                  isCurrentDay ? 'text-green-700 font-bold' : 'text-gray-700'
+                }`}>
                   {format(day, 'd')}
                 </div>
                 
-                {/* DEĞİŞİKLİK: Ziyaret Listesi
-                  - 'flex-1' ile kalan tüm dikey alanı doldurur.
-                  - 'min-h-0' ile flex-1'in düzgün çalışmasını sağlar.
-                  - 'overflow-y-auto' ile gerekirse kaydırma çubuğu çıkarır.
-                  - Artık 'max-h' kullanmıyoruz, bu daha esnek.
-                */}
-                <div className="flex-1 min-h-0 space-y-1 overflow-y-auto">
+                {/* Ziyaret listesi için kaydırma alanı */}
+                <div className="flex-1 min-h-0 space-y-1 overflow-y-auto visit-list-container">
                   {dayVisits.map(visit => (
                     <div
                       key={visit.id}
-                      className={`
-                        ${/* DEĞİŞİKLİK: Stil ve Kısaltma iyileştirmesi */''}
-                        text-[10px] sm:text-xs p-1 rounded border 
-                        ${getStatusColor(visit.status)}
-                        overflow-hidden ${/* truncate için gerekli */''}
-                        flex items-center
-                      `}
+                      className={`flex items-center text-xs p-1 rounded border ${getVisitBGColor(visit.status)} cursor-pointer`}
                       title={`Şube: ${visit.branch?.sube_adi || 'Belirtilmemiş'}`}
                     >
-                      {/* Durum Noktası */}
-                      <span className={`w-2 h-2 ${getStatusDot(visit.status)} rounded-full mr-1.5 flex-shrink-0`}></span>
-                      
-                      {/* DEĞİŞİKLİK: Metin Kısaltma (Truncate)
-                        - 'substring' yerine Tailwind'in 'truncate' sınıfı kullanıldı.
-                        - Bu, metni otomatik olarak '...' ile kısaltır.
-                      */}
-                      <span className="truncate">
+                      <span className={`w-2 h-2 rounded-full mr-2 flex-shrink-0 ${getStatusDotColor(visit.status)}`}></span>
+                      <span className="flex-1 truncate visit-item-text">
                         {visit.branch?.sube_adi || 'Belirtilmemiş'}
                       </span>
-
-                      {/* DEĞİŞİKLİK: Eski metin kısaltma mantığı kaldırıldı.
-                        Yeni 'truncate' sınıfı hem mobil hem desktop için çalışır.
-                      */}
                     </div>
                   ))}
                 </div>
@@ -323,18 +324,18 @@ const CustomerCalendar: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Lejant (Açıklama) */}
-      <div className="flex flex-wrap justify-center sm:justify-end gap-2 sm:gap-4 p-2 text-xs sm:text-sm">
-        <div className="flex items-center gap-1 sm:gap-2">
-          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded border border-green-600"></div>
+      {/* Lejant */}
+      <div className="flex flex-wrap justify-center sm:justify-end gap-3 sm:gap-4 p-2 text-xs text-gray-600">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
           <span>Tamamlandı</span>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2">
-          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-500 rounded border border-yellow-600"></div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
           <span>Planlandı</span>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2">
-          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-orange-500 rounded border border-orange-600"></div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
           <span>İptal Edildi</span>
         </div>
       </div>
