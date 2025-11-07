@@ -1,3 +1,7 @@
+import React, { useState, useEffect } from 'react';
+import { Outlet, useNavigate, NavLink } from 'react-router-dom';
+import { useAuth } from '../Auth/AuthProvider';
+import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
 
@@ -8,6 +12,7 @@ import { localAuth } from '../../lib/localAuth';
 // taklit eden (mock'layan) sahte objeler oluşturalım.
 // Kodu kendi projenize kopyalarken bu bloğu silebilirsiniz.
 
+/*
 const useAuth = () => ({
   signOut: async () => {
     console.log("Mock SignOut Çağrıldı");
@@ -45,7 +50,26 @@ const localAuth = {
     return null; // supabase.auth.getUser() yolunu tetikle
   }
 };
+*/
 // --- HATA DÜZELTMESİ SONU ---
+
+// --- GERÇEK KOD ---
+// Önizleme ortamı, projenizdeki diğer dosyalara erişemediği için
+// (AuthProvider, supabase, localAuth) derleme hatası verecektir.
+// Bu sahte (mock) objeler, bileşenin önizlemede görünmesini sağlar.
+// Kodu kendi projenize kopyalarken, bu bloğu ve üstteki import'ları
+// kendi projenize göre düzenlemelisiniz.
+
+const mockUseAuth = () => ({
+  signOut: async () => {
+    console.log("Mock SignOut Çağrıldı");
+  }
+});
+
+// `useAuth` import'u bu ortamda çalışmayacağı için,
+// onu taklit eden bir fonksiyon kullanıyoruz.
+const useAuth = typeof useAuth === 'undefined' ? mockUseAuth : useAuth;
+
 
 const CustomerLayout: React.FC = () => {
   const navigate = useNavigate();
