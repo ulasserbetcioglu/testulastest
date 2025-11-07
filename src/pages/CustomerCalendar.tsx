@@ -58,9 +58,10 @@ const CustomerCalendar: React.FC = () => {
 
       if (error) throw error;
       setVisits(data || []);
-    } catch (err: any)
+    } catch (err: any) {
       setError(err.message);
-    } finally {
+    }
+    finally {
       setLoading(false);
     }
   };
