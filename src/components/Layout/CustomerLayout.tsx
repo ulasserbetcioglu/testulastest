@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
-import { useAuth } from '../Auth/AuthProvider';
+// import { useAuth } from '../Auth/AuthProvider'; // <-- ÖNİZLEME İÇİN YORUMA ALINDI
 import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { localAuth } from '../../lib/localAuth';
+// import { supabase } from '../../lib/supabase'; // <-- ÖNİZLEME İÇİN YORUMA ALINDI
+// import { localAuth } from '../../lib/localAuth'; // <-- ÖNİZLEME İÇİN YORUMA ALINDI
 
 // --- ÖNİZLEME HATA DÜZELTMESİ ---
 // Bu bileşenin bağımlı olduğu dış dosyalar (AuthProvider, supabase, localAuth)
@@ -12,14 +12,13 @@ import { localAuth } from '../../lib/localAuth';
 // taklit eden (mock'layan) sahte objeler oluşturalım.
 // Kodu kendi projenize kopyalarken bu bloğu silebilirsiniz.
 
-/*
-const useAuth = () => ({
+const useAuthMock = () => ({
   signOut: async () => {
     console.log("Mock SignOut Çağrıldı");
   }
 });
 
-const supabase = {
+const supabaseMock = {
   auth: {
     getUser: async () => ({
       data: { user: { id: 'mock-user-id-123' } },
@@ -43,32 +42,25 @@ const supabase = {
   })
 };
 
-const localAuth = {
+// HATA DÜZELTMESİ: 'supabaseMock' olan hatalı isim 'localAuthMock' olarak düzeltildi.
+const localAuthMock = {
   getSession: () => {
     // localSession'ı test etmek için null olmayan bir değer de döndürebilirsiniz
     // return { type: 'customer', name: 'Lokal Müşteri Adı' };
     return null; // supabase.auth.getUser() yolunu tetikle
   }
 };
-*/
 // --- HATA DÜZELTMESİ SONU ---
 
-// --- GERÇEK KOD ---
-// Önizleme ortamı, projenizdeki diğer dosyalara erişemediği için
-// (AuthProvider, supabase, localAuth) derleme hatası verecektir.
-// Bu sahte (mock) objeler, bileşenin önizlemede görünmesini sağlar.
-// Kodu kendi projenize kopyalarken, bu bloğu ve üstteki import'ları
-// kendi projenize göre düzenlemelisiniz.
 
-const mockUseAuth = () => ({
-  signOut: async () => {
-    console.log("Mock SignOut Çağrıldı");
-  }
-});
-
-// `useAuth` import'u bu ortamda çalışmayacağı için,
-// onu taklit eden bir fonksiyon kullanıyoruz.
-const useAuth = typeof useAuth === 'undefined' ? mockUseAuth : useAuth;
+// ÖNİZLEME İÇİN MOCK'LARI AKTİF ET:
+// Bu satırlar, "Duplicate declaration" hatasını çözmek için eklendi.
+// Kodu kendi projenize kopyalarken:
+// 1. BU 3 SATIRI SİLİN.
+// 2. Dosyanın en üstündeki 3 'import' satırının yorumunu KALDIRIN.
+const useAuth = useAuthMock;
+const supabase = supabaseMock;
+const localAuth = localAuthMock;
 
 
 const CustomerLayout: React.FC = () => {
@@ -110,11 +102,14 @@ const CustomerLayout: React.FC = () => {
     }
   };
 
+  // HATA DÜZELTMESİ: Bozuk olan 'localAuthMock' bloğu,
+  // doğru 'handleSignOut' fonksiyonu ile değiştirildi.
   const handleSignOut = async () => {
     await signOut();
     navigate('/login');
   };
 
+  // HATA DÜZELTMESİ: Dosya birleştirilirken kaybolan navItems eklendi.
   const navItems = [
     { path: '/customer', icon: <Home size={20} />, name: 'Ana Sayfa' },
     { path: '/customer/ziyaretler', icon: <FileText size={20} />, name: 'Ziyaretler' },
@@ -127,14 +122,16 @@ const CustomerLayout: React.FC = () => {
     { path: '/customer/teklifler', icon: <FileText size={20} />, name: 'Teklifler' },
   ];
 
+  // HATA DÜZELTMESİ: Eksik olan return ifadesi ve JSX bloğu eklendi.
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Mobil için karartma perdesi (backdrop/scrim).
-        Sadece mobilde (md:hidden) ve sidebar açıkken görünür.
+        Sadece mobilde (md:hidden) ve sidebar açıkken görünür (z-40).
+        Header'ın (z-30) üstündedir.
         Tıklayınca sidebar'ı kapatır.
       */}
       <div
-        className={`fixed inset-0 bg-black/60 z-30 md:hidden ${
+        className={`fixed inset-0 bg-black/60 z-40 md:hidden ${
           isSidebarOpen ? 'block' : 'hidden'
         }`}
         onClick={() => setIsSidebarOpen(false)}
@@ -207,7 +204,9 @@ const CustomerLayout: React.FC = () => {
           `}
         >
           {/* Navigasyon içeriği. 
-            (örn: pt-20) padding eklemeniz gerekir.
+             Masaüstünde sticky olduğu için header'ın altında başlar,
+             mobilde ise fixed olduğu için ekranın en üstünden başlar.
+             Gerekirse mobil için header yüksekliği (h-16) kadar pt-16 eklenebilir.
           */}
           <nav className="mt-4 px-4">
             <ul className="space-y-2">
