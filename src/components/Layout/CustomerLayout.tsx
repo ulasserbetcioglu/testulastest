@@ -1,7 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, NavLink } from 'react-router-dom';
-import { useAuth } from '../Auth/AuthProvider';
-import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
 
