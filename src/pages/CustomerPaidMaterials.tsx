@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
-import { Search, Filter, Calendar, Download, Eye } from 'lucide-react';
+import { Search, Filter, Calendar, Download, Eye, Loader2, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -15,6 +15,7 @@ interface PaidMaterialSale {
     sube_adi: string;
   } | null;
   sale_date: string;
+  // Supabase'den 'items' olarak alias (takma ad) ile çekeceğiz
   items: {
     id: string;
     product: {
@@ -63,7 +64,7 @@ const CustomerPaidMaterials: React.FC = () => {
     if (customerId) {
       fetchSales();
     }
-  }, [selectedMonth, startDate, endDate, customerId]);
+  }, [selectedMonth, startDate, endDate, customerId, currentPage]); // Sayfa değiştiğinde de veriyi filtrele
 
   const fetchCustomerId = async () => {
     try {
@@ -79,6 +80,8 @@ const CustomerPaidMaterials: React.FC = () => {
   const fetchSales = async () => {
     try {
       setLoading(true);
+      setError(null);
+      if (!customerId) return; // Müşteri ID'si yoksa sorgu atma
 
       let query = supabase
         .from('paid_material_sales')
@@ -102,6 +105,13 @@ const CustomerPaidMaterials: React.FC = () => {
             report_number,
             notes,
             operator:operator_id (name)
+          ),
+          items:paid_material_sale_items (
+            id,
+            quantity,
+            unit_price,
+            total_price,
+            product:paid_products ( name )
           )
         `)
         .eq('customer_id', customerId)
@@ -116,57 +126,52 @@ const CustomerPaidMaterials: React.FC = () => {
         const endOfMonth = new Date(year, month, 0).toISOString().split('T')[0];
         query = query.gte('sale_date', startOfMonth).lte('sale_date', endOfMonth);
       }
+      
+      // Arama terimini filtrele
+      if (searchTerm) {
+         query = query.or(
+           `branch_id.sube_adi.ilike.%${searchTerm}%`,
+           `items.paid_products.name.ilike.%${searchTerm}%`
+         );
+      }
 
       const { data: salesData, error: salesError } = await query;
 
       if (salesError) throw salesError;
 
-      // Fetch items for each sale
-      const salesWithItems = await Promise.all(
-        (salesData || []).map(async (sale) => {
-          const { data: items, error: itemsError } = await supabase
-            .from('paid_material_sale_items')
-            .select(`
-              id,
-              quantity,
-              unit_price,
-              total_price,
-              product_id
-            `)
-            .eq('sale_id', sale.id);
+      // Artık iç içe Promise.all'a gerek yok. Veri tek seferde geldi.
+      // Sadece Supabase'den gelen 'null' ürünleri ayıklayalım (opsiyonel)
+      const cleanedData = salesData.map(sale => ({
+        ...sale,
+        items: (sale.items || []).map(item => ({
+          ...item,
+          product: item.product || { name: 'Bilinmeyen Ürün' }
+        }))
+      }));
 
-          if (itemsError) {
-            console.error('Error fetching items:', itemsError);
-            return { ...sale, items: [] };
-          }
+      setSales(cleanedData);
 
-          // Fetch product names
-          const itemsWithProducts = await Promise.all(
-            (items || []).map(async (item) => {
-              const { data: product } = await supabase
-                .from('paid_products')
-                .select('name')
-                .eq('id', item.product_id)
-                .single();
-
-              return {
-                ...item,
-                product: product || { name: 'Bilinmeyen Ürün' }
-              };
-            })
-          );
-
-          return { ...sale, items: itemsWithProducts };
-        })
-      );
-
-      setSales(salesWithItems);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Satışlar yüklenirken bir hata oluştu.');
     } finally {
       setLoading(false);
     }
   };
+  
+  // Arama gecikmesi (debounce) için useEffect
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if(customerId) {
+        setCurrentPage(1); // Arama yapıldığında 1. sayfaya dön
+        fetchSales();
+      }
+    }, 500); // 500ms gecikme
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]); // Sadece searchTerm değiştiğinde tetiklenir
+
 
   const handlePageChange = (pageNumber: number) => {
     setCurrentPage(pageNumber);
@@ -209,50 +214,88 @@ const CustomerPaidMaterials: React.FC = () => {
   };
 
   const exportToExcel = () => {
+    // Excel'e tüm filtrelenmiş veriyi aktar, sadece mevcut sayfayı değil
     const data = filteredSales.map(sale => ({
-      'Satış No': sale.id,
-      'Tarih': new Date(sale.sale_date).toLocaleDateString('tr-TR'),
+      'Satış ID': sale.id,
+      'Tarih': format(new Date(sale.sale_date), 'dd.MM.yyyy', { locale: tr }),
       'Müşteri': sale.customer.kisa_isim,
       'Şube': sale.branch?.sube_adi || '-',
-      'Ürünler': sale.items.map(item => `${item.product.name} (${item.quantity})`).join(', '),
-      'Tutar': sale.total_amount.toLocaleString('tr-TR')
+      'Ürünler': sale.items.map(item => `${item.product.name} (${item.quantity} adet)`).join('\n'), // \n ile alt alta
+      'Tutar (₺)': sale.total_amount,
+      'Durum': getStatusText(sale.status),
+      'Fatura No': sale.invoice_number || '-',
+      'Operatör': sale.visit?.operator?.name || '-',
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Sütun genişliklerini ayarla
+    ws['!cols'] = [
+      { wch: 36 }, // ID
+      { wch: 12 }, // Tarih
+      { wch: 25 }, // Müşteri
+      { wch: 25 }, // Şube
+      { wch: 40 }, // Ürünler (Geniş)
+      { wch: 15 }, // Tutar
+      { wch: 15 }, // Durum
+      { wch: 15 }, // Fatura No
+      { wch: 20 }  // Operatör
+    ];
+    
+    // Ürünler sütununda alt alta yazmayı etkinleştir
+     Object.keys(ws).forEach(cellAddress => {
+      if (cellAddress.startsWith('E') && cellAddress !== 'E1') { // E sütunu (Ürünler)
+        if(ws[cellAddress].v) {
+          ws[cellAddress].s = { alignment: { wrapText: true } };
+        }
+      }
+    });
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Satışlar');
-    XLSX.writeFile(wb, 'satislar.xlsx');
+    XLSX.writeFile(wb, `satislar_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
   };
+  
+  const getStatusText = (status: string) => {
+     switch (status) {
+      case 'pending': return 'Beklemede';
+      case 'approved': return 'Onaylandı';
+      case 'rejected': return 'Reddedildi';
+      case 'invoiced': return 'Faturalandı';
+      case 'paid': return 'Ödendi';
+      default: return 'Bilinmiyor';
+    }
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
         return (
-          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
             Beklemede
           </span>
         );
       case 'approved':
         return (
-          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
             Onaylandı
           </span>
         );
       case 'rejected':
         return (
-          <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">
+          <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
             Reddedildi
           </span>
         );
       case 'invoiced':
         return (
-          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
+          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
             Faturalandı
           </span>
         );
       case 'paid':
         return (
-          <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+          <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
             Ödendi
           </span>
         );
@@ -261,17 +304,9 @@ const CustomerPaidMaterials: React.FC = () => {
     }
   };
 
-  const filteredSales = sales.filter(sale => {
-    const matchesSearch = 
-      sale.customer.kisa_isim.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (sale.branch?.sube_adi || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    const saleDate = new Date(sale.sale_date);
-    const matchesDateRange = (!startDate || !endDate ||
-      (saleDate >= new Date(startDate) && saleDate <= new Date(endDate)));
-
-    return matchesSearch && matchesDateRange;
-  });
+  // Filtreleme artık sunucu tarafında (fetchSales içinde) yapılıyor.
+  // Bu değişkeni sadece sayfalama ve toplam kayıt sayısı için tutuyoruz.
+  const filteredSales = sales;
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -281,15 +316,50 @@ const CustomerPaidMaterials: React.FC = () => {
 
   const renderPageNumbers = () => {
     const pageNumbers = [];
+    const maxPagesToShow = 5;
+    const halfMaxPages = Math.floor(maxPagesToShow / 2);
 
-    for (let i = 1; i <= totalPages; i++) {
+    let startPage = Math.max(1, currentPage - halfMaxPages);
+    let endPage = Math.min(totalPages, currentPage + halfMaxPages);
+
+    if (currentPage - halfMaxPages < 1) {
+      endPage = Math.min(totalPages, maxPagesToShow);
+    }
+    
+    if (currentPage + halfMaxPages > totalPages) {
+      startPage = Math.max(1, totalPages - maxPagesToShow + 1);
+    }
+
+    if (startPage > 1) {
+      pageNumbers.push(
+        <button key={1} onClick={() => handlePageChange(1)} className="px-4 py-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">
+          1
+        </button>
+      );
+      if (startPage > 2) {
+        pageNumbers.push(<span key="start-ellipsis" className="px-4 py-2 text-gray-500">...</span>);
+      }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
       pageNumbers.push(
         <button
           key={i}
           onClick={() => handlePageChange(i)}
-          className={`px-4 py-2 rounded-full ${currentPage === i ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+          className={`px-4 py-2 rounded-full ${currentPage === i ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
         >
           {i}
+        </button>
+      );
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        pageNumbers.push(<span key="end-ellipsis" className="px-4 py-2 text-gray-500">...</span>);
+      }
+      pageNumbers.push(
+        <button key={totalPages} onClick={() => handlePageChange(totalPages)} className="px-4 py-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">
+          {totalPages}
         </button>
       );
     }
@@ -297,20 +367,46 @@ const CustomerPaidMaterials: React.FC = () => {
     return pageNumbers;
   };
 
-  if (loading) return <div>Yükleniyor...</div>;
-  if (error) return <div>Hata: {error}</div>;
+  if (loading && sales.length === 0) { // Sadece ilk yüklemede tam ekran göster
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="w-12 h-12 text-green-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error && !loading) {
+     return (
+      <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg shadow-md max-w-lg mx-auto">
+        <div className="flex items-center">
+          <AlertCircle className="w-6 h-6 mr-3" />
+          <div>
+            <h4 className="font-bold">Bir Hata Oluştu</h4>
+            <p className="text-sm">{error}</p>
+          </div>
+        </div>
+        <button
+          onClick={fetchSales}
+          className="mt-4 flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+        >
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Tekrar Dene
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold">ÜCRETLİ MALZEME SATIŞLARIM</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <h2 className="text-2xl font-semibold text-gray-800">ÜCRETLİ MALZEME SATIŞLARIM</h2>
         <button
           onClick={exportToExcel}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition-colors disabled:opacity-50"
           disabled={!sales || sales.length === 0}
         >
-          <Download size={20} />
-          Excel
+          <Download size={18} />
+          Excel'e Aktar
         </button>
       </div>
 
@@ -319,12 +415,12 @@ const CustomerPaidMaterials: React.FC = () => {
           <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Müşteri veya Şube Ara..."
+              placeholder="Şube adı veya ürün adı ile ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -343,7 +439,7 @@ const CustomerPaidMaterials: React.FC = () => {
               </label>
               <input
                 type="month"
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 value={selectedMonth}
                 onChange={(e) => {
                   setSelectedMonth(e.target.value)
@@ -358,15 +454,16 @@ const CustomerPaidMaterials: React.FC = () => {
               <div className="flex gap-2">
                 <input
                   type="date"
-                  className="w-1/2 p-2 border rounded"
+                  className="w-1/2 p-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   value={startDate}
                   onChange={(e) => handleDateRangeChange(e.target.value, endDate)}
                   placeholder="Başlangıç Tarihi"
                 />
                 <input
                   type="date"
-                  className="w-1/2 p-2 border rounded"
+                  className="w-1/2 p-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   value={endDate}
+                  min={startDate} // Bitiş tarihi başlangıçtan önce olamaz
                   onChange={(e) => handleDateRangeChange(startDate, e.target.value)}
                   placeholder="Bitiş Tarihi"
                 />
@@ -375,6 +472,13 @@ const CustomerPaidMaterials: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {loading && (
+        <div className="flex justify-center items-center py-4">
+            <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
+            <span className="ml-2 text-gray-500">Veriler güncelleniyor...</span>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
@@ -385,10 +489,10 @@ const CustomerPaidMaterials: React.FC = () => {
                   Tarih
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Müşteri
+                  Şube
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Şube
+                  Ürünler
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Tutar
@@ -400,7 +504,7 @@ const CustomerPaidMaterials: React.FC = () => {
                   Ziyaret
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  İşlemler
+                  Detay
                 </th>
               </tr>
             </thead>
@@ -408,7 +512,7 @@ const CustomerPaidMaterials: React.FC = () => {
               {currentItems.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                    Satış kaydı bulunamadı
+                    Filtrelere uygun satış kaydı bulunamadı.
                   </td>
                 </tr>
               ) : (
@@ -416,16 +520,28 @@ const CustomerPaidMaterials: React.FC = () => {
                   <tr key={sale.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {new Date(sale.sale_date).toLocaleDateString('tr-TR')}
+                        {format(new Date(sale.sale_date), 'dd.MM.yyyy', { locale: tr })}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {sale.customer.kisa_isim}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {sale.branch?.sube_adi || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                    {/* YENİ SÜTUN: Ürünler ve Miktarları */}
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {sale.items && sale.items.length > 0 ? (
+                        <ul className="list-none p-0 m-0 space-y-1">
+                          {sale.items.map(item => (
+                            <li key={item.id} className="text-xs">
+                              <span className="font-medium text-gray-900">{item.product.name}</span>
+                              <span className="text-gray-500"> ({item.quantity} adet)</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
                       {sale.total_amount.toLocaleString('tr-TR')} ₺
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -461,13 +577,29 @@ const CustomerPaidMaterials: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-sm text-gray-500">
-          Toplam {filteredSales.length} kayıt
+          Toplam {filteredSales.length} kayıt bulundu.
         </div>
-        <div className="space-x-2">
-          {renderPageNumbers()}
-        </div>
+        {totalPages > 1 && (
+          <div className="space-x-1 flex items-center">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="p-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            {renderPageNumbers()}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Visit Details Modal */}
@@ -481,48 +613,46 @@ const CustomerPaidMaterials: React.FC = () => {
                   setShowVisitModal(false);
                   setSelectedVisit(null);
                 }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-6 h-6" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 font-semibold mb-1">ŞUBE</p>
+                  <p className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">Şube</p>
                   <p className="text-lg font-semibold">{selectedVisit.branch?.sube_adi || 'Genel Merkez'}</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 font-semibold mb-1">TARİH</p>
+                  <p className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">Tarih</p>
                   <p className="text-lg font-semibold">{format(new Date(selectedVisit.visit_date), 'dd MMMM yyyy, HH:mm', { locale: tr })}</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 font-semibold mb-1">OPERATÖR</p>
+                  <p className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">Operatör</p>
                   <p className="text-lg font-semibold">{selectedVisit.operator?.name || 'Atanmadı'}</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 font-semibold mb-1">ZİYARET TÜRÜ</p>
+                  <p className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">Ziyaret Türü</p>
                   <p className="text-lg font-semibold">{selectedVisit.visit_type || 'Belirtilmemiş'}</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 font-semibold mb-1">RAPOR NO</p>
+                  <p className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">Rapor No</p>
                   <p className="text-lg font-semibold font-mono">{selectedVisit.report_number || '-'}</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 font-semibold mb-1">DURUM</p>
+                  <p className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">Durum</p>
                   <p className="text-lg font-semibold capitalize">
-                    {selectedVisit.status === 'completed' ? 'Tamamlandı' : selectedVisit.status === 'planned' ? 'Planlandı' : 'İptal Edildi'}
+                    {getStatusText(selectedVisit.status)}
                   </p>
                 </div>
               </div>
 
               {selectedVisit.notes && (
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 font-semibold mb-2">NOTLAR</p>
-                  <p className="text-sm text-gray-700">{selectedVisit.notes}</p>
+                  <p className="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider">Notlar</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedVisit.notes}</p>
                 </div>
               )}
             </div>
@@ -532,20 +662,18 @@ const CustomerPaidMaterials: React.FC = () => {
 
       {/* Sale Details Modal */}
       {showDetailsModal && selectedSale && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b flex justify-between items-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
               <h3 className="text-lg font-semibold">Satış Detayları</h3>
               <button
                 onClick={() => {
                   setShowDetailsModal(false);
                   setSelectedSale(null);
                 }}
-                className="text-gray-500 hover:text-gray-700"
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-6 h-6" />
               </button>
             </div>
             <div className="p-6">
@@ -577,13 +705,13 @@ const CustomerPaidMaterials: React.FC = () => {
                 {selectedSale.invoice_date && (
                   <div>
                     <h4 className="text-sm font-medium text-gray-500 mb-1">Fatura Tarihi</h4>
-                    <p className="font-medium">{new Date(selectedSale.invoice_date).toLocaleDateString('tr-TR')}</p>
+                    <p className="font-medium">{format(new Date(selectedSale.invoice_date), 'dd.MM.yyyy', { locale: tr })}</p>
                   </div>
                 )}
                 {selectedSale.payment_date && (
                   <div>
                     <h4 className="text-sm font-medium text-gray-500 mb-1">Ödeme Tarihi</h4>
-                    <p className="font-medium">{new Date(selectedSale.payment_date).toLocaleDateString('tr-TR')}</p>
+                    <p className="font-medium">{format(new Date(selectedSale.payment_date), 'dd.MM.yyyy', { locale: tr })}</p>
                   </div>
                 )}
                 {selectedSale.visit?.operator?.name && (
@@ -597,7 +725,7 @@ const CustomerPaidMaterials: React.FC = () => {
               {/* Items */}
               <div className="mb-6">
                 <h4 className="font-medium text-gray-800 mb-3 pb-2 border-b">Satış Kalemleri</h4>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto rounded-lg border">
                   <table className="min-w-full">
                     <thead className="bg-gray-100">
                       <tr>
@@ -631,7 +759,7 @@ const CustomerPaidMaterials: React.FC = () => {
               {selectedSale.notes && (
                 <div className="mb-6">
                   <h4 className="font-medium text-gray-800 mb-3 pb-2 border-b">Notlar</h4>
-                  <p className="text-gray-700">{selectedSale.notes}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{selectedSale.notes}</p>
                 </div>
               )}
 
@@ -641,7 +769,7 @@ const CustomerPaidMaterials: React.FC = () => {
                     setShowDetailsModal(false);
                     setSelectedSale(null);
                   }}
-                  className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                  className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors"
                 >
                   Kapat
                 </button>
