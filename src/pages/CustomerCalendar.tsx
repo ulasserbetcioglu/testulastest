@@ -2,68 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns';
 import { tr } from 'date-fns/locale';
 // Bu import yollarının kendi projenizdeki yollarla eşleştiğini varsayıyorum.
-// import { supabase } from '../lib/supabase'; // <-- ÖNİZLEME İÇİN YORUMA ALINDI
-// import { localAuth } from '../lib/localAuth'; // <-- ÖNİZLEME İÇİN YORUMA ALINDI
+import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { Loader2, AlertTriangle } from 'lucide-react';
-
-// --- ÖNİZLEME HATA DÜZELTMESİ ---
-// Bu bileşenin bağımlı olduğu dış dosyalar (supabase, localAuth)
-// bu önizleme ortamında bulunmadığı için derleme hatası alıyorsunuz.
-// Kodun bu önizlemede çalışabilmesi için bu bağımlılıkları
-// taklit eden (mock'layan) sahte objeler oluşturalım.
-// Kodu kendi projenize kopyalarken bu bloğu silebilirsiniz.
-
-const supabaseMock = {
-  from: (tableName) => ({
-    select: (columns) => ({
-      eq: (column, value) => ({
-        gte: (col, val) => ({
-          lte: (col, val) => ({
-            // Mock data: Birkaç sahte ziyaret ekleyelim
-            data: [
-              {
-                id: '1',
-                visit_date: new Date().toISOString(),
-                status: 'completed',
-                branch: { sube_adi: 'Merkez Şube' }
-              },
-              {
-                id: '2',
-                visit_date: new Date().toISOString(),
-                status: 'planned',
-                branch: { sube_adi: 'Depo Alanı' }
-              },
-              // Başka bir güne sahte ziyaret
-              {
-                id: '3',
-                visit_date: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(),
-                status: 'planned',
-                branch: { sube_adi: 'Üretim Tesisi' }
-              }
-            ],
-            error: null
-          })
-        })
-      })
-    })
-  })
-};
-
-const localAuthMock = {
-  getCurrentCustomerId: async () => {
-    return 'mock-customer-id-123'; // Sahte bir müşteri ID'si döndür
-  }
-};
-// --- HATA DÜZELTMESİ SONU ---
-
-
-// ÖNİZLEME İÇİN MOCK'LARI AKTİF ET:
-// Kodu kendi projenize kopyalarken:
-// 1. BU 2 SATIRI SİLİN.
-// 2. Dosyanın en üstündeki 2 'import' satırının yorumunu KALDIRIN.
-const supabase = supabaseMock;
-const localAuth = localAuthMock;
-
 
 interface Visit {
   id: string;
