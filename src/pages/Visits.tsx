@@ -1,72 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch, CalendarUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-// HATA DÜZELTME: Orijinal importlar kaldırıldı.
-// import { supabase } from '../lib/supabase';
-// import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
-// import VisitDetailsModal from '../components/VisitDetailsModal';
+// GÜNCELLEME: Orijinal importlar geri yüklendi
+import { supabase } from '../lib/supabase';
+import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
+import VisitDetailsModal from '../components/VisitDetailsModal';
 import { toast } from 'sonner';
 import { format, startOfToday, endOfToday, isBefore, isAfter } from 'date-fns';
-
-// --- HATA DÜZELTME: SUPABASE STUB ---
-// Yerel ../lib/supabase dosyasını çözümleyememe hatasını düzeltmek için
-// sahte bir Supabase istemcisi oluşturuldu.
-// @ts-ignore
-const createDummyClient = () => ({
-  from: (tableName: string) => ({
-    select: (query: string) => ({
-      eq: (column: string, value: any) => ({
-        or: (options: string) => Promise.resolve({ data: [], error: { message: `Supabase stub: ${tableName} not configured` }, count: 0 }),
-        single: () => Promise.resolve({ data: { id: 'dummy-op' }, error: null }),
-        in: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
-      }),
-      in: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
-    }),
-    update: (data: any) => ({
-      eq: (column: string, value: any) => Promise.resolve({ error: null })
-    })
-  }),
-  auth: {
-    getUser: () => Promise.resolve({
-      data: { user: { id: 'dummy-user-auth-id' } }, error: null
-    })
-  }
-});
-// @ts-ignore
-const supabase = createDummyClient();
-
-// --- HATA DÜZELTME: MODAL STUBS ---
-// Yerel component importlarını çözümleyememe hatasını düzeltmek için
-// sahte modal bileşenleri eklendi.
-// @ts-ignore
-const CorrectiveActionModal: React.FC<any> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 shadow-xl">
-        <h2 className="text-xl font-bold mb-4">DÖF Modalı (Stub)</h2>
-        <p className="text-gray-600">Bu bileşen önizleme için kodlanmadı.</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Kapat</button>
-      </div>
-    </div>
-  );
-};
-
-// @ts-ignore
-const VisitDetailsModal: React.FC<any> = ({ isOpen, onClose, visit }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 shadow-xl">
-        <h2 className="text-xl font-bold mb-4">Ziyaret Detayı (Stub)</h2>
-        <p className="text-gray-600">Ziyaret: {visit?.customer?.kisa_isim}</p>
-        <p className="text-gray-600">Bu bileşen önizleme için kodlanmadı.</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Kapat</button>
-      </div>
-    </div>
-  );
-};
-
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface Visit {
@@ -140,7 +80,6 @@ const EditVisitModal: React.FC<{
     setSaving(true);
     try {
       const visitDateTime = new Date(`${formData.visitDate}T${formData.visitTime}:00`).toISOString();
-      // @ts-ignore
       const { error } = await supabase.from('visits').update({ visit_date: visitDateTime, visit_type: formData.visitType, pest_types: formData.pestTypes, notes: formData.notes }).eq('id', visit.id);
       if (error) throw error;
       toast.success("Ziyaret başarıyla güncellendi.");
@@ -208,18 +147,15 @@ const Visits: React.FC = () => {
       const to = from + visitsPerPage - 1;
 
       // Tüm veriyi tek seferde çek (sayfalama olmadan)
-      // @ts-ignore
       let baseQuery = supabase
         .from('visits')
         .select(`id, visit_date, status, visit_type, notes, report_number, customer:customer_id (kisa_isim), branch:branch_id (sube_adi), operator:operator_id (name, phone)`)
         .eq('operator_id', operatorId);
 
       if (searchTerm) {
-        // @ts-ignore
         baseQuery = baseQuery.or(`customer.kisa_isim.ilike.%${searchTerm}%,branch.sube_adi.ilike.%${searchTerm}%,report_number.ilike.%${searchTerm}%`);
       }
 
-      // @ts-ignore
       const { data: allVisitsData, error: allError } = await baseQuery;
       
       if (allError) throw allError;
@@ -229,7 +165,6 @@ const Visits: React.FC = () => {
       let paidMaterialsByVisit: { [key: string]: any[] } = {};
 
       if (allVisitIds.length > 0) {
-        // @ts-ignore
         const { data: materialsData, error: materialsError } = await supabase
           .from('paid_material_sales')
           .select('visit_id, items:paid_material_sale_items(product:product_id(name), quantity)')
@@ -238,7 +173,6 @@ const Visits: React.FC = () => {
         if (materialsError) throw materialsError;
 
         paidMaterialsByVisit = (materialsData || []).reduce((acc, sale) => {
-          // @ts-ignore
           acc[sale.visit_id] = (sale.items as any[]) || [];
           return acc;
         }, {} as { [key: string]: any[] });
@@ -246,7 +180,6 @@ const Visits: React.FC = () => {
 
       const allEnhancedVisits = (allVisitsData || []).map(visit => ({
         ...visit,
-        // @ts-ignore
         paid_materials: paidMaterialsByVisit[visit.id] || [],
       }));
 
@@ -318,13 +251,11 @@ const Visits: React.FC = () => {
   useEffect(() => {
     const checkUserRole = async () => {
       try {
-        // @ts-ignore
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
             navigate('/login'); // Kullanıcı yoksa login'e yönlendir
             return;
         }
-        // @ts-ignore
         const { data: operatorData, error: operatorError } = await supabase.from('operators').select('id').eq('auth_id', user.id).single();
         
         // PGRST116 = "single() was called, but 0 rows were found"
@@ -337,7 +268,6 @@ const Visits: React.FC = () => {
         if (operatorError) throw operatorError;
 
         if (operatorData) {
-          // @ts-ignore
           setOperatorId(operatorData.id);
         } else {
           setLoading(false);
@@ -576,11 +506,8 @@ const Visits: React.FC = () => {
       )}
 
       {/* MODALLAR */}
-      {/* @ts-ignore */}
       <CorrectiveActionModal isOpen={showActionModal} onClose={() => { setShowActionModal(false); setSelectedVisitId(null); }} visitId={selectedVisitId || undefined} onSave={fetchVisits} />
-      {/* @ts-ignore */}
       {showVisitDetails && selectedVisit && (<VisitDetailsModal visit={selectedVisit as any} onClose={() => { setShowVisitDetails(false); setSelectedVisit(null); }} />)}
-      {/* @ts-ignore */}
       <EditVisitModal isOpen={showEditModal} onClose={() => setShowEditModal(false)} visit={editingVisit} onSave={fetchVisits} />
     </div>
   );
