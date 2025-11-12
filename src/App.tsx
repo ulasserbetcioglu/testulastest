@@ -1,434 +1,323 @@
-// src/App.tsx
-'use client';
-
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { BarChart2 } from 'lucide-react';
-// ✅ DÜZELTME: Dosya yolları, App.tsx'in konumuna göre düzeltildi.
-import { AuthProvider } from './components/Auth/AuthProvider';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { AuthProvider, useAuth } from './components/Auth/AuthProvider';
 import Layout from './components/Layout/Layout';
-import OperatorLayout from './components/Layout/OperatorLayout';
-import CustomerLayout from './components/Layout/CustomerLayout';
-import BranchLayout from './components/Layout/BranchLayout';
-import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import OperatorDashboard from './pages/OperatorDashboard';
-import CustomerDashboard from './pages/CustomerDashboard';
-import BranchDashboard from './pages/BranchDashboard';
+import Login from './pages/Login';
 import Customers from './pages/Customers';
 import CustomerDetails from './components/Customers/CustomerDetails';
-import Offers from './pages/Offers';
-import OfferTemplates from './pages/OfferTemplates';
-import NewOffer from './pages/NewOffer';
-import Definitions from './pages/Definitions';
+import CustomerBranches from './components/Customers/CustomerBranches';
+import CustomerTreatments from './components/Customers/CustomerTreatments';
+import CustomerDocuments from './components/Customers/CustomerDocuments';
+import CustomerOffers from './components/Customers/CustomerOffers';
+import AdminOperators from './pages/AdminOperators';
+import AdminProducts from './pages/AdminProducts';
+import AdminVehicles from './pages/AdminVehicles';
+import AdminVisits from './pages/AdminVisits';
+import AdminCalendar from './pages/AdminCalendar';
+import AdminVisitReports from './pages/AdminVisitReports';
+import Documents from './pages/Documents';
+import Settings from './pages/Settings';
+import CustomerLayout from './components/Layout/CustomerLayout';
+import BranchLayout from './components/Layout/BranchLayout';
+import BranchDashboard from './pages/BranchDashboard';
+import BranchDocuments from './pages/BranchDocuments';
+import CustomerVisits from './pages/CustomerVisits';
+import BranchCalendar from './pages/BranchCalendar';
+import CorrectiveActions from './pages/CorrectiveActions';
+import CustomerDOF from './pages/CustomerDOF';
+import TrendAnalysisReport from './pages/TrendAnalysisReport';
 import Warehouses from './pages/Warehouses';
 import WarehouseTransfers from './pages/WarehouseTransfers';
-import Visits from './pages/Visits';
-import AdminVisits from './pages/AdminVisits';
-import VisitForm from './pages/VisitForm';
-import VisitDetails from './pages/VisitDetails';
-import AdminCalendar from './pages/AdminCalendar';
-import AdminCalendarPlanning from './pages/AdminCalendarPlanning';
-import OperatorCalendar from './pages/OperatorCalendar';
-import OperatorCalendarPlanning from './pages/OperatorCalendarPlanning';
-import CustomerCalendar from './pages/CustomerCalendar';
-import BranchCalendar from './pages/BranchCalendar';
 import PaidMaterialSales from './pages/PaidMaterialSales';
-import OperatorPaidMaterials from './pages/OperatorPaidMaterials';
-import OperatorMaterialUsage from './pages/OperatorMaterialUsage';
-import CustomerPaidMaterials from './pages/CustomerPaidMaterials';
 import BranchPaidMaterials from './pages/BranchPaidMaterials';
-import CorrectiveActions from './pages/CorrectiveActions';
-import CustomerVisits from './pages/CustomerVisits';
-import CustomerDOF from './pages/CustomerDOF';
-import Documents from './pages/Documents';
-import CustomerDocuments from './pages/CustomerDocuments';
-import BranchDocuments from './pages/BranchDocuments';
-import OperatorDocuments from './pages/OperatorDocuments';
-import Settings from './pages/Settings';
-import Notifications from './pages/Notifications';
+import CustomerPaidMaterials from './pages/CustomerPaidMaterials';
+import LiveTrackingMap from './pages/LiveTrackingMap';
+import AdminOperatorDistances from './pages/AdminOperatorDistances';
+import AdminUsers from './pages/AdminUsers';
+import AdminBranches from './pages/AdminBranches';
 import AdminNotifications from './pages/AdminNotifications';
+import Notifications from './pages/Notifications';
+import VisitDetails from './pages/VisitDetails';
+import AdminBranchPricing from './pages/AdminBranchPricing';
+import AdminQuickNotes from './pages/AdminQuickNotes';
 import Certificates from './pages/Certificates';
 import CustomerCertificates from './pages/CustomerCertificates';
-import AdminRevenue from './pages/AdminRevenue';
-import AdminOperators from './pages/AdminOperators';
-import AdminUsers from './pages/AdminUsers';
-import AdminOperatorDistances from './pages/AdminOperatorDistances';
-import AdminBranchPricing from './pages/AdminBranchPricing';
-import OperatorDailyChecklist from './pages/OperatorDailyChecklist';
 import InvoiceExport from './pages/InvoiceExport';
-import Modules from './pages/Modules';
-import ActivityReportsTracking from './pages/ActivityReportsTracking';
-import RiskAssessmentModule from './pages/modules/RiskAssessmentModule';
-import ProposalReportModule from './pages/modules/ProposalReportModule';
-import PaidVisitsPage from './pages/PaidVisitsPage';
-import TrendAnalysisReport from './pages/TrendAnalysisReport';
-import AdminProducts from './pages/AdminProducts';
-import BulkDeletePage from './pages/BulkDeletePage';
-import RouteOptimizationPage from './pages/RouteOptimizationPage';
-import LiveTrackingMap from './pages/LiveTrackingMap';
-import CariSatisRaporu from './pages/CariSatisRaporu';
-import UvLampReport from './pages/modules/UvLampReport';
-import SubeLokasyon from './pages/SubeLokasyon';
-import OperatorPerformance from './pages/OperatorPerformance';
-import AylikTakvimEposta from './pages/AylikTakvimEposta';
-import OperatorCollectionReceipt from './pages/OperatorCollectionReceipt';
-import AylikMalzemeEposta from './pages/AylikMalzemeEposta';
-import PazarlamaEposta from './pages/PazarlamaEposta';
-import EkipmanPazarlama from './pages/EkipmanPazarlama';
-import EkipmanYonetimi from './pages/EkipmanYonetimi';
-import HizmetPazarlama from './pages/HizmetYonetimi';
-import GonderilenEpostalar from './pages/GonderilenEpostalar';
-import TedarikSiparisi from './pages/TedarikSiparisi';
-import SiparisOlusturma from './pages/SiparisOlusturma';
-import HizmetYonetimi from './pages/HizmetYonetimi';
-import TeklifGoruntule from './pages/TeklifGoruntule';
-import TekliflerListesi from './pages/TekliflerListesi';
-import IsletmeKesif from './components/IsletmeKesif'; // Dosya yolunu kendi projenize göre güncelleyin
-import ModulRaporGoruntuleme from './pages/ModulRaporGoruntuleme';
-import RaporSecVeGoruntule from './pages/RaporSecVeGoruntule';
-import GenelRaporGoruntuleme from './pages/GenelRaporGoruntuleme';
-import BilgilendirimePazarlama from './pages/BilgilendirimePazarlama';
-import EpostaPazarlama from './pages/EpostaPazarlama';
-import { supabase } from './lib/supabase';
-// YENİ EKLENEN IMPORT
-import YillikKarZararRaporu from './pages/YillikKarZararRaporu';
 import ProfitabilityAnalysis from './pages/ProfitabilityAnalysis';
-import BulkVisitImport from './pages/BulkVisitImport'; // Import the new component
-import AdminBranches from './pages/AdminBranches'; 
-import OperatorQuickNotes from './pages/OperatorQuickNotes'; // Import the new component
-import AdminQuickNotes from './pages/AdminQuickNotes'; // Import the new AdminQuickNotes component
-import UnbilledCustomers from './pages/UnbilledCustomers'; // YENİ: Faturasız Müşteriler sayfasını import edin
-import AdminCollectionReceipts from './pages/AdminCollectionReceipts'; // YENİ: AdminCollectionReceipts sayfasını import edin
-import AdminVisitReports from './pages/AdminVisitReports'; // NEW: Import AdminVisitReports
-import AdminOperatorShifts from './pages/AdminOperatorShifts'; // NEW: Import AdminOperatorShifts
-import ProtectedReportViewer from './components/ProtectedReportViewer'; // ✅ YENİ: ProtectedReportViewer import edildi
-import AdminOperatorLeaves from './pages/AdminOperatorLeaves'; // NEW: Import AdminOperatorLeaves
-import AdminVehicles from './pages/AdminVehicles'; // NEW: Import AdminVehicles
+import UnbilledCustomers from './pages/UnbilledCustomers';
+import PaidVisitsPage from './pages/PaidVisitsPage';
+
+// Operator Sayfaları
+import OperatorLayout from './components/Layout/OperatorLayout';
+import OperatorDashboard from './pages/OperatorDashboard';
+import OperatorCalendar from './pages/OperatorCalendar';
+import Visits from './pages/Visits';
+import VisitForm from './pages/VisitForm';
+import OperatorPaidMaterials from './pages/OperatorPaidMaterials';
+import OperatorMaterialUsage from './pages/OperatorMaterialUsage';
+import OperatorDocuments from './pages/OperatorDocuments';
+import OperatorQuickNotes from './pages/OperatorQuickNotes';
+import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm';
+import OperatorDailyChecklist from './pages/OperatorDailyChecklist';
+import OperatorCollectionReceipt from './pages/OperatorCollectionReceipt';
+
+// Customer Sayfaları
+import CustomerDashboard from './pages/CustomerDashboard';
+import CustomerCalendar from './pages/CustomerCalendar';
+import EkipmanYonetimi from './pages/EkipmanYonetimi';
+import HizmetYonetimi from './pages/HizmetYonetimi';
+import SubeLokasyon from './pages/SubeLokasyon';
+import BulkVisitImport from './pages/BulkVisitImport';
 import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
-import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm'; // NEW: Import OperatorWeeklyKmForm
+import OperatorCalendarPlanning from './pages/OperatorCalendarPlanning';
+import AdminCalendarPlanning from './pages/AdminCalendarPlanning';
+import RouteOptimizationPage from './pages/RouteOptimizationPage';
+import AdminOperatorShifts from './pages/AdminOperatorShifts';
+import AdminOperatorLeaves from './pages/AdminOperatorLeaves';
+import TekliflerListesi from './pages/TekliflerListesi';
+import NewOffer from './pages/NewOffer';
+import OfferTemplates from './pages/OfferTemplates';
+import TeklifGoruntule from './pages/TeklifGoruntule';
+import EpostaPazarlama from './pages/EpostaPazarlama';
+import PazarlamaEposta from './pages/PazarlamaEposta';
+import GonderilenEpostalar from './pages/GonderilenEpostalar';
+import AylikTakvimEposta from './pages/AylikTakvimEposta';
+import AylikMalzemeEposta from './pages/AylikMalzemeEposta';
+import HizmetPazarlama from './pages/HizmetPazarlama';
+import EkipmanPazarlama from './pages/EkipmanPazarlama';
+import BilgilendirimePazarlama from './pages/BilgilendirimePazarlama';
+import TedarikSiparisi from './pages/TedarikSiparisi';
+import SiparisOlusturma from './pages_m/SiparisOlusturma';
+import YillikKarZararRaporu from './pages_m/YillikKarZararRaporu';
+import CariSatisRaporu from './pages_m/CariSatisRaporu';
+import ActivityReportsTracking from './pages_m/ActivityReportsTracking';
+import BulkDeletePage from './pages_m/BulkDeletePage';
+import Definitions from './pages/Definitions';
+import Modules from './pages/Modules';
+import RiskAssessmentModule from './pages/modules/RiskAssessmentModule';
+import UvLampReport from './pages/modules/UvLampReport';
+import ProposalReportModule from './pages/modules/ProposalReportModule';
+import GenelRaporGoruntuleme from './pages/GenelRaporGoruntuleme';
+import ModulRaporGoruntuleme from './pages/ModulRaporGoruntuleme';
+import RaporSecVeGoruntule from './pages/RaporSecVeGoruntuleme';
+import ProtectedReportViewer from './components/ProtectedReportViewer';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
-  const localSession = localStorage.getItem('local_session');
-  return (supabaseSession || localSession) ? children : <Navigate to="/login" />;
-};
+// YENİ EKLENEN SAYFALAR
+import BranchBiocidalReport from './pages/BranchBiocidalReport';
+import BranchBiocidalPrint from './pages/BranchBiocidalPrint';
 
-const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-const [isAdmin, setIsAdmin] = React.useState<boolean | null>(null);
-  const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => {
-    const checkAdminStatus = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setIsAdmin(false);
-          setLoading(false);
-          return;
-        }
-
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-
-        if (profileError) {
-          setIsAdmin(user.email === 'admin@ilaclamatik.com');
-        } else {
-          setIsAdmin(profileData.role === 'admin');
-        }
-      } catch (error) {
-        console.error('Admin check error:', error);
-        setIsAdmin(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAdminStatus();
-  }, []);
-
+// Auth durumu kontrolü için sarmalayıcı
+const ProtectedRoute: React.FC<{ children: React.ReactElement; roles: string[] }> = ({ children, roles }) => {
+  const { user, loading, userRole } = useAuth();
   if (loading) {
     return <div>Yükleniyor...</div>;
   }
-
-  return isAdmin ? children : <Navigate to="/" />;
-};
-
-const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const navigate = useNavigate();
-  const [userRole, setUserRole] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [currentUser, setCurrentUser] = React.useState<any>(null);
-
-  React.useEffect(() => {
-    const checkUserRole = async () => {
-      try {
-        const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
-        if (!user) {
-          setLoading(false);
-          return;
-        }
-
-        setCurrentUser(user);
-
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (profileData?.role) {
-          setUserRole(profileData.role);
-        } else {
-          const { data: operatorData } = await supabase
-            .from('operators')
-            .select('id')
-            .eq('auth_id', user.id)
-            .maybeSingle();
-
-          if (operatorData) {
-            setUserRole('operator');
-          } else {
-            const { data: customerData } = await supabase
-              .from('customers')
-              .select('id')
-              .eq('auth_id', user.id)
-              .maybeSingle();
-
-            if (customerData) {
-              setUserRole('customer');
-            } else {
-              const { data: branchData } = await supabase
-                .from('branches')
-                .select('id')
-                .eq('auth_id', user.id)
-                .maybeSingle();
-
-              if (branchData) {
-                setUserRole('branch');
-              } else if (user.email === 'admin@ilaclamatik.com') {
-                setUserRole('admin');
-              } else {
-                setUserRole('user');
-              }
-            }
-          }
-        }
-      } catch (err: any) {
-        console.error('Role check error:', err);
-        setUserRole('user');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkUserRole();
-  }, [navigate]);
-
-  if (loading) {
-    return <div>Yükleniyor...</div>;
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
-
-  if (userRole === 'operator' || (userRole === 'user' && /^[^@]+@ilaclamatik\.com$/.test(currentUser?.email ?? '') && currentUser?.email !== 'admin@ilaclamatik.com')) {
-    return <Navigate to="/operator" />;
-  } else if (userRole === 'customer') {
-    return <Navigate to="/customer" />;
-  } else if (userRole === 'branch') {
-    return <Navigate to="/branch" />;
+  if (!userRole || !roles.includes(userRole)) {
+    // Opsiyonel: Rolü yanlışsa bir "Yetkiniz Yok" sayfasına yönlendir
+    return <Navigate to="/login" replace />;
   }
-  
   return children;
 };
 
+// Operatör rolü için kısayol
+const OperatorRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => (
+  <ProtectedRoute roles={['operator']}>{children}</ProtectedRoute>
+);
+
+// Admin/Manager rolleri için kısayol
+const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => (
+  <ProtectedRoute roles={['admin', 'manager']}>{children}</ProtectedRoute>
+);
+
+// Müşteri rolü için kısayol
+const CustomerRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => (
+  <ProtectedRoute roles={['customer']}>{children}</ProtectedRoute>
+);
+
+
 function App() {
   return (
-    <Router>
-      <AuthProvider>
+    <AuthProvider>
+      <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
           
-          <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
-          {/* ✅ YENİ ROTA: Korumalı rapor görüntüleyici */}
-          <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
+          {/* Rapor Görüntüleyici (Auth Korumalı Link) */}
+          <Route path="/report-viewer/:reportId" element={<ProtectedReportViewer />} />
           
-          {/* Admin Routes */}
+          {/* YENİ EKLENEN ROTA: Biyosidal Raporu Yazdırma Sayfası (Layout olmadan) */}
+          <Route path="/customer/branches/:branchId/biocidal-report/print" 
+            element={
+              <CustomerRoute>
+                <BranchBiocidalPrint />
+              </CustomerRoute>
+            } 
+          />
+          
+          {/* Modül Raporları (Layout olmadan) */}
+          <Route path="/modules/risk-assessment/:visitId" element={<RiskAssessmentModule />} />
+          <Route path="/modules/uv-lamp-report/:visitId" element={<UvLampReport />} />
+          <Route path="/modules/proposal-report/:visitId" element={<ProposalReportModule />} />
+          <Route path="/rapor/genel/:visitId" element={<GenelRaporGoruntuleme />} />
+          <Route path="/rapor/modul/:reportId" element={<ModulRaporGoruntuleme />} />
+          <Route path="/rapor/goruntule" element={<RaporSecVeGoruntule />} />
+          <Route path="/teklif/goruntule/:offerId" element={<TeklifGoruntule />} />
+          <Route path="/eposta/pazarlama/:templateId" element={<PazarlamaEposta />} />
+          <Route path="/eposta/takvim/:customerId" element={<AylikTakvimEposta />} />
+          <Route path="/eposta/malzeme/:saleId" element={<AylikMalzemeEposta />} />
+          <Route path="/eposta/hizmet/:customerId" element={<HizmetPazarlama />} />
+          <Route path="/eposta/ekipman/:customerId" element={<EkipmanPazarlama />} />
+          <Route path="/eposta/bilgilendirme/:customerId" element={<BilgilendirimePazarlama />} />
+          
+          {/* Admin/Manager Rotaları */}
           <Route
             path="/"
             element={
-              <ProtectedRoute>
-                <RoleBasedRoute>
-                  <Layout />
-                </RoleBasedRoute>
-              </ProtectedRoute>
+              <AdminRoute>
+                <Layout />
+              </AdminRoute>
             }
           >
-            <Route index element={<Dashboard />} />
-            <Route path="modules" element={<Modules />} />
-            <Route path="musteriler" element={<Customers />} />
-            <Route path="musteriler/:id" element={<CustomerDetails />} />
-            <Route path="ziyaretler" element={<AdminVisits />} />
-            <Route path="ziyaretler/yeni" element={<VisitForm />} />
-            <Route path="teklifler" element={<TekliflerListesi />} />
-            <Route path="teklifler/templates" element={<OfferTemplates />} />
-            <Route path="teklifler/new" element={<NewOffer />} />
-            <Route path="depolar" element={<Warehouses />} />
-            <Route path="depolar/transfer" element={<WarehouseTransfers />} />
-            <Route path="ucretli-malzemeler" element={<PaidMaterialSales />} />
-            <Route path="gelir-yonetimi" element={<AdminRevenue />} />
-            <Route path="dokumanlar" element={<Documents />} />
-            <Route path="sertifikalar" element={<Certificates />} />
-            <Route path="ayarlar" element={<Settings />} />
-            <Route path="bildirimler" element={<Notifications />} />
-            <Route path="bildirim-gonder" element={<AdminNotifications />} />
-            <Route path="tanimlamalar" element={<Definitions />} />
-            <Route path="takvim" element={<AdminCalendar />} />
-            <Route path="takvim-planlama" element={<AdminCalendarPlanning />} />
-            <Route path="operatorler" element={<AdminOperators />} />
-            <Route path="kullanicilar" element={<AdminUsers />} />      
-            <Route path="operator-mesafeleri" element={<AdminOperatorDistances />} />
-            <Route path="subeler" element={<AdminBranches />} /> {/* NEW: Admin Branches Page */}
-            <Route path="sube-fiyatlandirma" element={<AdminBranchPricing />} />
-            <Route path="fatura-export" element={<AdminRoute><InvoiceExport /></AdminRoute>} />
-            <Route path="faaliyet-rapor-takip" element={<ActivityReportsTracking />} />
-            <Route path="moduller/risk-degerlendirme" element={<RiskAssessmentModule />} />
-            <Route path="ucretli-ziyaretler" element={<PaidVisitsPage />} />
-            <Route path="trend-analizi" element={<TrendAnalysisReport />} />
-            <Route path="urunler" element={<AdminProducts />} />
-            <Route path="toplu-silme" element={<BulkDeletePage />} />
-            <Route path="rota-optimizasyonu" element={<RouteOptimizationPage />} />
-            <Route path="canli-harita" element={<LiveTrackingMap />} />
-            <Route path="cari-satis-raporu" element={<CariSatisRaporu />} />
-            {/* YENİ EKLENEN ROTA */}
-            <Route path="yillik-kar-zarar" element={<YillikKarZararRaporu />} />
-            <Route path="karlilik-analizi" element={<ProfitabilityAnalysis />} />
-            <Route path="/moduller/uv-lamba-raporu" element={<UvLampReport />} />
-            <Route path="sube-lokasyon" element={<SubeLokasyon />} />
-            <Route path="operator-performans" element={<OperatorPerformance />} />
-            <Route path="aylik-takvim-eposta" element={<AylikTakvimEposta />} />
-            <Route path="tahsilat-makbuzu" element={<OperatorCollectionReceipt />} />
-            <Route path="aylik-malzeme-eposta" element={<AylikMalzemeEposta />} />
-            <Route path="pazarlama-eposta" element={<PazarlamaEposta />} />
-            <Route path="ekipman-pazarlama" element={<EkipmanPazarlama />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="customers" element={<Customers />} />
+            <Route path="customers/:id" element={<CustomerLayout />}>
+              <Route index element={<Navigate to="details" replace />} />
+              <Route path="details" element={<CustomerDetails />} />
+              <Route path="branches" element={<CustomerBranches />} />
+              <Route path="treatments" element={<CustomerTreatments />} />
+              <Route path="documents" element={<CustomerDocuments />} />
+              <Route path="offers" element={<CustomerOffers />} />
+            </Route>
+            <Route path="branches" element={<AdminBranches />} />
+            <Route path="branch-pricing" element={<AdminBranchPricing />} />
+            <Route path="operators" element={<AdminOperators />} />
+            <Route path="operator-distances" element={<AdminOperatorDistances />} />
+            <Route path="operator-shifts" element={<AdminOperatorShifts />} />
+            <Route path="operator-leaves" element={<AdminOperatorLeaves />} />
+            <Route path="products" element={<AdminProducts />} />
+            <Route path="vehicles" element={<AdminVehicles />} />
+            <Route path="visits" element={<AdminVisits />} />
+            <Route path="visit-reports" element={<AdminVisitReports />} />
+            <Route path="calendar" element={<AdminCalendar />} />
+            <Route path="calendar-planning" element={<AdminCalendarPlanning />} />
+            <Route path="monthly-visit-schedule" element={<AdminMonthlyVisitSchedule />} />
+            <Route path="corrective-actions" element={<CorrectiveActions />} />
+            <Route path="documents" element={<Documents />} />
+            <Route path="certificates" element={<Certificates />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="warehouses" element={<Warehouses />} />
+            <Route path="warehouse-transfers" element={<WarehouseTransfers />} />
+            <Route path="paid-material-sales" element={<PaidMaterialSales />} />
+            <Route path="live-map" element={<LiveTrackingMap />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="notifications" element={<AdminNotifications />} />
+            <Route path="quick-notes" element={<AdminQuickNotes />} />
+            <Route path="invoice-export" element={<InvoiceExport />} />
+            <Route path="profit-analysis" element={<ProfitabilityAnalysis />} />
+            <Route path="unbilled-customers" element={<UnbilledCustomers />} />
+            <Route path="paid-visits" element={<PaidVisitsPage />} />
             <Route path="ekipman-yonetimi" element={<EkipmanYonetimi />} />
-            <Route path="hizmet-pazarlama" element={<HizmetPazarlama />} />
-            <Route path="gonderilen-epostalar" element={<GonderilenEpostalar />} />
-            <Route path="siparis-olustur" element={<SiparisOlusturma />} />
-            <Route path="tedarik-siparisi" element={<TedarikSiparisi />} />
             <Route path="hizmet-yonetimi" element={<HizmetYonetimi />} />
-            <Route path="moduller/teklif-raporu" element={<ProposalReportModule />} />
-            <Route path="teklif-goruntule" element={<TeklifGoruntule />} />
-            <Route path="/rapor/goruntule/:reportId" element={<ModulRaporGoruntuleme />} />
-            <Route path="/rapor-goruntule" element={<RaporSecVeGoruntule />} />
-            <Route path="/raporlar" element={<GenelRaporGoruntuleme />} />
-            <Route path="/hizmet-pazarlama" element={<BilgilendirimePazarlama />} />
-            <Route path="/eposta-pazarlama" element={<EpostaPazarlama />} />
-            <Route path="/isletme-kesif" element={<IsletmeKesif />} />
-            {/* NEW ADMIN ROUTE FOR BULK VISIT IMPORT */}
-            <Route path="/bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
-            {/* NEW ADMIN ROUTE FOR QUICK NOTES */}
-            <Route path="/hizli-notlar" element={<AdminRoute><AdminQuickNotes /></AdminRoute>} />
-            {/* YENİ: Faturasız Müşteriler Sayfası */}
-            <Route path="/faturasiz-musteriler" element={<AdminRoute><UnbilledCustomers /></AdminRoute>} />
-            {/* YENİ: Admin Tahsilat Makbuzları Sayfası */}
-            <Route path="/admin/tahsilat-makbuzlari" element={<AdminRoute><AdminCollectionReceipts /></AdminRoute>} />
-            {/* NEW: Admin Visit Reports Page */}
-            <Route path="/admin/ziyaret-raporlari" element={<AdminRoute><AdminVisitReports /></AdminRoute>} />
-            {/* NEW: Admin Operator Shifts Page */}
-            <Route path="/admin/mesai-cizelgeleri" element={<AdminRoute><AdminOperatorShifts /></AdminRoute>} />
-            {/* NEW: Admin Operator Leaves Page */}
-            <Route path="/admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
-            {/* NEW: Admin Vehicles Page */}
-            <Route path="/admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
-            {/* Monthly Visit Schedule */}
-            <Route path="/admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
+            <Route path="bulk-visit-import" element={<BulkVisitImport />} />
+            <Route path="route-optimization" element={<RouteOptimizationPage />} />
+            <Route path="offers" element={<TekliflerListesi />} />
+            <Route path="offers/new" element={<NewOffer />} />
+            <Route path="offer-templates" element={<OfferTemplates />} />
+            <Route path="email-marketing" element={<EpostaPazarlama />} />
+            <Route path="sent-emails" element={<GonderilenEpostalar />} />
+            <Route path="tedarik-siparisi" element={<TedarikSiparisi />} />
+            <Route path="siparis-olusturma" element={<SiparisOlusturma />} />
+            <Route path="yillik-kar-zarar" element={<YillikKarZararRaporu />} />
+            <Route path="cari-satis-raporu" element={<CariSatisRaporu />} />
+            <Route path="activity-reports-tracking" element={<ActivityReportsTracking />} />
+            <Route path="bulk-delete" element={<BulkDeletePage />} />
+            <Route path="definitions" element={<Definitions />} />
+            <Route path="modules" element={<Modules />} />
           </Route>
-          
-        
 
-          {/* Operator Routes */}
+          {/* Operatör Rotaları */}
           <Route
             path="/operator"
             element={
-              <ProtectedRoute>
+              <OperatorRoute>
                 <OperatorLayout />
-              </ProtectedRoute>
+              </OperatorRoute>
             }
           >
-            <Route index element={<OperatorDashboard />} />
-            <Route path="modules" element={<Modules />} />
-            <Route path="gunluk-kontrol" element={<OperatorDailyChecklist />} />
-            <Route path="ziyaretler" element={<Visits />} />
-            <Route path="ziyaretler/yeni" element={<VisitForm />} />
-            <Route path="ziyaretler/:id/start" element={<VisitDetails />} />
-            <Route path="depolar" element={<Warehouses />} />
-            <Route path="depolar/transfer" element={<WarehouseTransfers />} />
-            <Route path="ucretli-malzemeler" element={<OperatorPaidMaterials />} />
-            <Route path="malzeme-kullanimi" element={<OperatorMaterialUsage />} />
-            <Route path="takvim" element={<OperatorCalendar />} />
-            <Route path="takvim-planlama" element={<OperatorCalendarPlanning />} />
-            <Route path="dof" element={<CorrectiveActions />} />
-            <Route path="dokumanlar" element={<OperatorDocuments />} />
-            <Route path="sertifikalar" element={<Certificates />} />
-            <Route path="bildirimler" element={<Notifications />} />
-            <Route path="teklifler" element={<Offers />} />
-            <Route path="teklifler/new" element={<NewOffer />} />
-            <Route path="fatura-export" element={<AdminRoute><InvoiceExport /></AdminRoute>} />
-            <Route path="moduller/uv-lamba-raporu" element={<UvLampReport />} />
-            <Route path="faaliyet-rapor-takip" element={<ActivityReportsTracking />} />
-            <Route path="ekipman-pazarlama" element={<EkipmanPazarlama />} />
-            <Route path="hizmet-pazarlama" element={<HizmetPazarlama />} />
-            <Route path="tahsilat-makbuzu" element={<OperatorCollectionReceipt />} />
-            <Route path="hizli-notlar" element={<OperatorQuickNotes />} /> {/* NEW: Quick Notes Route */}
-            <Route path="weekly-km" element={<OperatorWeeklyKmForm />} /> {/* NEW: Operator Weekly KM Form */}
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<OperatorDashboard />} />
+            <Route path="calendar" element={<OperatorCalendar />} />
+            <Route path="calendar-planning" element={<OperatorCalendarPlanning />} />
+            <Route path="visits" element={<Visits />} />
+            <Route path="visits/:visitId/start" element={<VisitForm />} />
+            <Route path="new-visit" element={<VisitForm />} />
+            <Route path="paid-materials" element={<OperatorPaidMaterials />} />
+            <Route path="material-usage" element={<OperatorMaterialUsage />} />
+            <Route path="documents" element={<OperatorDocuments />} />
+            <Route path="quick-notes" element={<OperatorQuickNotes />} />
+            <Route path="weekly-km" element={<OperatorWeeklyKmForm />} />
+            <Route path="daily-checklist" element={<OperatorDailyChecklist />} />
+            <Route path="collection-receipt" element={<OperatorCollectionReceipt />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="visit-details/:visitId" element={<VisitDetails />} />
+            <Route path="corrective-actions" element={<CorrectiveActions />} />
+            <Route path="dof" element={<CustomerDOF />} />
+            <Route path="sube-lokasyon" element={<SubeLokasyon />} />
           </Route>
-
-          {/* Customer Routes */}
-          <Route
+          
+          {/* Müşteri Rotaları */}
+          <Route 
             path="/customer"
             element={
-              <ProtectedRoute>
+              <CustomerRoute>
                 <CustomerLayout />
-              </ProtectedRoute>
+              </CustomerRoute>
             }
           >
-            <Route index element={<CustomerDashboard />} />
-            <Route path="modules" element={<Modules />} />
-            <Route path="takvim" element={<CustomerCalendar />} />
-            <Route path="ziyaretler" element={<CustomerVisits />} />
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<CustomerDashboard />} />
+            <Route path="calendar" element={<CustomerCalendar />} />
             <Route path="dof" element={<CustomerDOF />} />
-            <Route path="dokumanlar" element={<CustomerDocuments />} />
-            <Route path="sertifikalar" element={<CustomerCertificates />} />
-            <Route path="bildirimler" element={<Notifications />} />
-            <Route path="malzemeler" element={<CustomerPaidMaterials />} />
-            <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
-            <Route path="teklifler" element={<Offers />} />
+            <Route path="documents" element={<CustomerDocuments />} />
+            <Route path="certificates" element={<CustomerCertificates />} />
+            <Route path="paid-materials" element={<CustomerPaidMaterials />} />
+            <Route path="notifications" element={<Notifications />} />
+          </Route>
+          
+          {/* Şube Rotaları (Müşteri için) */}
+          <Route 
+            path="/customer/branches/:branchId"
+            element={
+              <CustomerRoute>
+                <BranchLayout />
+              </CustomerRoute>
+            }
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<BranchDashboard />} />
+            <Route path="visits" element={<CustomerVisits />} />
+            <Route path="calendar" element={<BranchCalendar />} />
+            <Route path="documents" element={<BranchDocuments />} />
+            <Route path="dof" element={<CustomerDOF />} />
+            <Route path="trend-analysis" element={<TrendAnalysisReport />} />
+            <Route path="paid-materials" element={<BranchPaidMaterials />} />
+            
+            {/* YENİ EKLENEN ROTA: Biyosidal Rapor Sayfası */}
+            <Route path="biocidal-report" element={<BranchBiocidalReport />} />
           </Route>
 
-          {/* Branch Routes */}
-          <Route
-            path="/branch"
-            element={
-              <ProtectedRoute>
-                <BranchLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<BranchDashboard />} />
-            <Route path="modules" element={<Modules />} />
-            <Route path="takvim" element={<BranchCalendar />} />
-            <Route path="dokumanlar" element={<BranchDocuments />} />
-            <Route path="sertifikalar" element={<Certificates />} />
-            <Route path="bildirimler" element={<Notifications />} />
-            <Route path="malzemeler" element={<BranchPaidMaterials />} />
-            <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
-            <Route path="teklifler" element={<Offers />} />
-          </Route>
+          {/* Fallback Rota */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      </AuthProvider>
-    </Router>
+        <Toaster richColors position="top-right" />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
