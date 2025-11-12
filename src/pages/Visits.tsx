@@ -409,7 +409,7 @@ const Visits: React.FC = () => {
         <h1 className="text-xl font-bold">Kontrol Listesi</h1>
         <div className="flex gap-2">
           <button onClick={() => navigate('/operator/ziyaretler/yeni')} className="w-10 h-10 bg-red-600 text-white rounded-lg flex items-center justify-center hover:bg-red-700" title="Yeni Ziyaret"><Plus size={20} /></button>
-          <button onClick={() => setShowActionModal(true)} className="w-10 h-10 bg-orange-500 text-white rounded-lg flex items-center justify-center hover:bg-orange-600" title="Düzeltici Önleyici Faaliyet Ekle"><AlertCircle size={2Gereç0} /></button>
+          <button onClick={() => setShowActionModal(true)} className="w-10 h-10 bg-orange-500 text-white rounded-lg flex items-center justify-center hover:bg-orange-600" title="Düzeltici Önleyici Faaliyet Ekle"><AlertCircle size={20} /></button>
         </div>
       </div>
 
