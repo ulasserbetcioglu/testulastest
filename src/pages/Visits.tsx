@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch, CalendarUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
 import VisitDetailsModal from '../components/VisitDetailsModal';
 import { toast } from 'sonner';
-import { format, startOfToday, endOfToday, isBefore } from 'date-fns';
+import { format, startOfToday, endOfToday, isBefore, isAfter } from 'date-fns';
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface Visit {
@@ -110,7 +110,8 @@ const Visits: React.FC = () => {
   // GÜNCELLEME: Ziyaretleri gruplara ayırmak için yeni state'ler
   const [overdueVisits, setOverdueVisits] = useState<Visit[]>([]);
   const [todayVisits, setTodayVisits] = useState<Visit[]>([]);
-  const [otherVisits, setOtherVisits] = useState<Visit[]>([]); // Bu, "visits" state'inin yerini aldı ve sayfalama için kullanılacak
+  const [futureVisits, setFutureVisits] = useState<Visit[]>([]); // YENİ: Gelecek ziyaretler için
+  const [otherVisits, setOtherVisits] = useState<Visit[]>([]); // Artık sadece "arşiv" (tamamlanmış/iptal) ziyaretlerini tutacak
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +125,7 @@ const Visits: React.FC = () => {
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
   
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalVisits, setTotalVisits] = useState(0); // Artık "otherVisits" toplamını tutacak
+  const [totalVisits, setTotalVisits] = useState(0); // Artık "otherVisits" (arşiv) toplamını tutacak
   const visitsPerPage = 10;
 
   const fetchVisits = useCallback(async () => {
@@ -179,7 +180,8 @@ const Visits: React.FC = () => {
 
       let overdue: Visit[] = [];
       let todayScheduled: Visit[] = [];
-      let other: Visit[] = [];
+      let futureScheduled: Visit[] = []; // YENİ: Gelecek için
+      let archived: Visit[] = []; // YENİ: Tamamlanmış/iptaller için
 
       for (const visit of allEnhancedVisits) {
         const visitDate = new Date(visit.visit_date);
@@ -188,11 +190,11 @@ const Visits: React.FC = () => {
             overdue.push(visit);
           } else if (visitDate >= today && visitDate <= endToday) {
             todayScheduled.push(visit);
-          } else {
-            other.push(visit); // Gelecek planlı
+          } else if (isAfter(visitDate, endToday)) { // YENİ: Gelecek kontrolü
+            futureScheduled.push(visit);
           }
         } else {
-          other.push(visit); // Tamamlanmış, iptal vs.
+          archived.push(visit); // Tamamlanmış, iptal vs.
         }
       }
 
@@ -201,26 +203,23 @@ const Visits: React.FC = () => {
       overdue.sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
       // Bugün: Eskiden yeniye
       todayScheduled.sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
-      // Diğer: Önce gelecek planlı (eskiden yeniye), sonra diğerleri (yeniden eskiye)
-      other.sort((a, b) => {
-        if (a.status === 'planned' && b.status !== 'planned') return -1;
-        if (a.status !== 'planned' && b.status === 'planned') return 1;
-        if (a.status === 'planned' && b.status === 'planned') {
-          return new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime();
-        }
-        if (a.status !== 'planned' && b.status !== 'planned') {
-          return new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime();
-        }
-        return 0;
+      // YENİ - Gelecek: Eskiden yeniye
+      futureScheduled.sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
+      
+      // Arşiv (other): Yeniden eskiye
+      archived.sort((a, b) => {
+        // Hepsi non-planned olduğu için sadece tarihe göre sırala
+        return new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime();
       });
 
       // GÜNCELLEME: State'leri ayarla
       setOverdueVisits(overdue);
       setTodayVisits(todayScheduled);
+      setFutureVisits(futureScheduled); // YENİ
       
-      // "Diğer" grubunu sayfalama
-      setTotalVisits(other.length);
-      setOtherVisits(other.slice(from, to + 1));
+      // "Arşiv" grubunu sayfalama (önceki "other" grubu)
+      setTotalVisits(archived.length);
+      setOtherVisits(archived.slice(from, to + 1));
 
     } catch (err: any) {
       setError(err.message);
@@ -327,7 +326,7 @@ const Visits: React.FC = () => {
     }
   };
 
-  // GÜNCELLEME: Sayfalanan "otherVisits" listesi için toplam sayfa
+  // GÜNCELLEME: Sayfalanan "otherVisits" (arşiv) listesi için toplam sayfa
   const totalPages = Math.ceil(totalVisits / visitsPerPage);
 
   // GÜNCELLEME: Ziyaret kartını render etmek için yardımcı fonksiyon
@@ -366,7 +365,7 @@ const Visits: React.FC = () => {
   );
 
   // GÜNCELLEME: İlk yüklemede ve hiç ziyaret yokken gösterilecek içerik
-  if (loading && overdueVisits.length === 0 && todayVisits.length === 0 && otherVisits.length === 0) {
+  if (loading && overdueVisits.length === 0 && todayVisits.length === 0 && futureVisits.length === 0 && otherVisits.length === 0) {
     return <div className="p-4 text-center"><Loader2 className="animate-spin text-red-600" size={32} /></div>;
   }
   
@@ -391,7 +390,7 @@ const Visits: React.FC = () => {
       </div>
 
       {/* GÜNCELLEME: Yüklenme göstergesi (sadece listeler boşken) */}
-      {loading && overdueVisits.length === 0 && todayVisits.length === 0 && otherVisits.length === 0 && (
+      {loading && overdueVisits.length === 0 && todayVisits.length === 0 && futureVisits.length === 0 && otherVisits.length === 0 && (
           <div className="text-center p-4"><Loader2 className="animate-spin text-red-600"/></div>
       )}
 
@@ -424,12 +423,25 @@ const Visits: React.FC = () => {
           </section>
         )}
 
-        {/* GRUP 3: Diğer Ziyaretler (Sayfalamalı) */}
-        {(otherVisits.length > 0 || totalPages > 1) && (
+        {/* YENİ GRUP 3: Gelecek Planlı Ziyaretler */}
+        {futureVisits.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-gray-700 mb-2 flex items-center gap-2">
+              <CalendarUp size={20} />
+              Gelecek Planlı Ziyaretler ({futureVisits.length})
+            </h2>
+            <div className="space-y-2">
+              {futureVisits.map(renderVisitCard)}
+            </div>
+          </section>
+        )}
+
+        {/* GRUP 4: Ziyaret Geçmişi (Sayfalamalı - Önceki "Diğer") */}
+        {(otherVisits.length > 0 || (totalPages > 1 && !loading)) && (
+          <section>
+            <h2 className="text-lg font-bold text-gray-500 mb-2 flex items-center gap-2">
               <CalendarSearch size={20} />
-              Diğer Ziyaretler
+              Ziyaret Geçmişi (Tamamlanan/İptal)
             </h2>
             {otherVisits.length > 0 ? (
               <div className="space-y-2">
@@ -443,7 +455,7 @@ const Visits: React.FC = () => {
         )}
 
         {/* GÜNCELLEME: Hiçbir sonuç bulunamadı durumu */}
-        {!loading && overdueVisits.length === 0 && todayVisits.length === 0 && otherVisits.length === 0 && (
+        {!loading && overdueVisits.length === 0 && todayVisits.length === 0 && futureVisits.length === 0 && otherVisits.length === 0 && (
           <div className="bg-white rounded-lg shadow-sm p-4 text-center text-gray-500">
             {searchTerm ? 'Arama kriterine uygun ziyaret bulunamadı' : 'Gösterilecek ziyaret bulunamadı'}
           </div>
@@ -451,7 +463,7 @@ const Visits: React.FC = () => {
 
       </div>
 
-      {/* GÜNCELLEME: Sayfalama artık sadece "Diğer Ziyaretler" için geçerli */}
+      {/* GÜNCELLEME: Sayfalama artık sadece "Ziyaret Geçmişi" için geçerli */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center p-4 mt-4">
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-4 py-2 text-sm bg-gray-200 rounded-lg disabled:opacity-50 flex items-center gap-2"><ChevronLeft size={16}/> Önceki</button>
