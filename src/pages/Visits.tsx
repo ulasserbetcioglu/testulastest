@@ -1,76 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch, CalendarUp } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-// import { supabase } from '../lib/supabase'; // HATA DÜZELTME: Orijinal import kaldırıldı
-// import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal'; // HATA DÜZELTME: Orijinal import kaldırıldı
-// import VisitDetailsModal from '../components/VisitDetailsModal'; // HATA DÜZELTME: Orijinal import kaldırıldı
+import { supabase } from '../lib/supabase';
+import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
+import VisitDetailsModal from '../components/VisitDetailsModal';
 import { toast } from 'sonner';
-import { format, startOfToday, endOfToday, isBefore, isAfter } from 'date-fns';
-
-// --- HATA DÜZELTME: SUPABASE STUB ---
-// Yerel ../lib/supabase dosyasını çözümleyememe hatasını düzeltmek için
-// sahte bir Supabase istemcisi oluşturuldu.
-// @ts-ignore
-const createDummyClient = () => ({
-  from: (tableName: string) => ({
-    select: (query: string) => ({
-      eq: (column: string, value: any) => ({
-        or: (options: string) => Promise.resolve({ data: [], error: { message: `Supabase stub: ${tableName} not configured` }, count: 0 }),
-        single: () => Promise.resolve({ data: { id: 'dummy-op' }, error: null }),
-        in: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
-      }),
-      in: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
-    }),
-    update: (data: any) => ({
-      eq: (column: string, value: any) => Promise.resolve({ error: null })
-    })
-  }),
-  auth: {
-    getUser: () => Promise.resolve({
-      data: { user: { id: 'dummy-user-auth-id' } }, error: null
-    })
-  }
-});
-// @ts-ignore
-const supabase = createDummyClient();
-
-// --- HATA DÜZELTME: MODAL STUBS ---
-// Yerel component importlarını çözümleyememe hatasını düzeltmek için
-// sahte modal bileşenleri eklendi.
-// @ts-ignore
-const CorrectiveActionModal: React.FC<any> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 shadow-xl">
-        <h2 className="text-xl font-bold mb-4">DÖF Modalı (Stub)</h2>
-        <p className="text-gray-600">Bu bileşen önizleme için kodlanmadı.</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Kapat</button>
-      </div>
-    </div>
-  );
-};
-
-// @ts-ignore
-const VisitDetailsModal: React.FC<any> = ({ isOpen, onClose, visit }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 shadow-xl">
-        <h2 className="text-xl font-bold mb-4">Ziyaret Detayı (Stub)</h2>
-        <p className="text-gray-600">Ziyaret: {visit?.customer?.kisa_isim}</p>
-        <p className="text-gray-600">Bu bileşen önizleme için kodlanmadı.</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Kapat</button>
-      </div>
-    </div>
-  );
-};
-
+import { format, startOfToday, endOfToday, isBefore } from 'date-fns';
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface Visit {
   id: string;
-  customer: { kisa_isim: string; } | null; // GÜNCELLEME: Müşteri null olabilir
+  customer: { kisa_isim: string; };
   branch?: { sube_adi: string; };
   visit_date: string;
   status: 'planned' | 'completed' | 'cancelled';
@@ -170,8 +110,7 @@ const Visits: React.FC = () => {
   // GÜNCELLEME: Ziyaretleri gruplara ayırmak için yeni state'ler
   const [overdueVisits, setOverdueVisits] = useState<Visit[]>([]);
   const [todayVisits, setTodayVisits] = useState<Visit[]>([]);
-  const [futureVisits, setFutureVisits] = useState<Visit[]>([]); // YENİ: Gelecek ziyaretler için
-  const [otherVisits, setOtherVisits] = useState<Visit[]>([]); // Artık sadece "arşiv" (tamamlanmış/iptal) ziyaretlerini tutacak
+  const [otherVisits, setOtherVisits] = useState<Visit[]>([]); // Bu, "visits" state'inin yerini aldı ve sayfalama için kullanılacak
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -185,7 +124,7 @@ const Visits: React.FC = () => {
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
   
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalVisits, setTotalVisits] = useState(0); // Artık "otherVisits" (arşiv) toplamını tutacak
+  const [totalVisits, setTotalVisits] = useState(0); // Artık "otherVisits" toplamını tutacak
   const visitsPerPage = 10;
 
   const fetchVisits = useCallback(async () => {
@@ -207,7 +146,6 @@ const Visits: React.FC = () => {
         baseQuery = baseQuery.or(`customer.kisa_isim.ilike.%${searchTerm}%,branch.sube_adi.ilike.%${searchTerm}%,report_number.ilike.%${searchTerm}%`);
       }
 
-      // @ts-ignore
       const { data: allVisitsData, error: allError } = await baseQuery;
       
       if (allError) throw allError;
@@ -217,7 +155,6 @@ const Visits: React.FC = () => {
       let paidMaterialsByVisit = {};
 
       if (allVisitIds.length > 0) {
-        // @ts-ignore
         const { data: materialsData, error: materialsError } = await supabase
           .from('paid_material_sales')
           .select('visit_id, items:paid_material_sale_items(product:product_id(name), quantity)')
@@ -226,7 +163,6 @@ const Visits: React.FC = () => {
         if (materialsError) throw materialsError;
 
         paidMaterialsByVisit = (materialsData || []).reduce((acc, sale) => {
-          // @ts-ignore
           acc[sale.visit_id] = sale.items || [];
           return acc;
         }, {});
@@ -234,7 +170,6 @@ const Visits: React.FC = () => {
 
       const allEnhancedVisits = (allVisitsData || []).map(visit => ({
         ...visit,
-        // @ts-ignore
         paid_materials: paidMaterialsByVisit[visit.id] || [],
       }));
 
@@ -244,27 +179,20 @@ const Visits: React.FC = () => {
 
       let overdue: Visit[] = [];
       let todayScheduled: Visit[] = [];
-      let futureScheduled: Visit[] = []; // YENİ: Gelecek için
-      let archived: Visit[] = []; // YENİ: Tamamlanmış/iptaller için
+      let other: Visit[] = [];
 
       for (const visit of allEnhancedVisits) {
-        // visit_date null veya geçersizse çökmemek için kontrol
-        if (!visit.visit_date) {
-            archived.push(visit); // Tarihi olmayanları arşive at
-            continue;
-        }
         const visitDate = new Date(visit.visit_date);
-        
         if (visit.status === 'planned') {
           if (isBefore(visitDate, today)) {
             overdue.push(visit);
           } else if (visitDate >= today && visitDate <= endToday) {
             todayScheduled.push(visit);
-          } else if (isAfter(visitDate, endToday)) { // YENİ: Gelecek kontrolü
-            futureScheduled.push(visit);
+          } else {
+            other.push(visit); // Gelecek planlı
           }
         } else {
-          archived.push(visit); // Tamamlanmış, iptal vs.
+          other.push(visit); // Tamamlanmış, iptal vs.
         }
       }
 
@@ -273,26 +201,26 @@ const Visits: React.FC = () => {
       overdue.sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
       // Bugün: Eskiden yeniye
       todayScheduled.sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
-      // YENİ - Gelecek: Eskiden yeniye
-      futureScheduled.sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
-      
-      // Arşiv (other): Yeniden eskiye
-      archived.sort((a, b) => {
-        // Tarih null ise sona at
-        if (!a.visit_date) return 1;
-        if (!b.visit_date) return -1;
-        // Hepsi non-planned olduğu için sadece tarihe göre sırala
-        return new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime();
+      // Diğer: Önce gelecek planlı (eskiden yeniye), sonra diğerleri (yeniden eskiye)
+      other.sort((a, b) => {
+        if (a.status === 'planned' && b.status !== 'planned') return -1;
+        if (a.status !== 'planned' && b.status === 'planned') return 1;
+        if (a.status === 'planned' && b.status === 'planned') {
+          return new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime();
+        }
+        if (a.status !== 'planned' && b.status !== 'planned') {
+          return new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime();
+        }
+        return 0;
       });
 
       // GÜNCELLEME: State'leri ayarla
       setOverdueVisits(overdue);
       setTodayVisits(todayScheduled);
-      setFutureVisits(futureScheduled); // YENİ
       
-      // "Arşiv" grubunu sayfalama (önceki "other" grubu)
-      setTotalVisits(archived.length);
-      setOtherVisits(archived.slice(from, to + 1));
+      // "Diğer" grubunu sayfalama
+      setTotalVisits(other.length);
+      setOtherVisits(other.slice(from, to + 1));
 
     } catch (err: any) {
       setError(err.message);
@@ -310,7 +238,6 @@ const Visits: React.FC = () => {
         const { data: operatorData, error: operatorError } = await supabase.from('operators').select('id').eq('auth_id', user.id).single();
         if (operatorError && operatorError.code !== 'PGRST116') throw operatorError;
         if (operatorData) {
-          // @ts-ignore
           setOperatorId(operatorData.id);
         } else {
           setLoading(false);
@@ -400,7 +327,7 @@ const Visits: React.FC = () => {
     }
   };
 
-  // GÜNCELLEME: Sayfalanan "otherVisits" (arşiv) listesi için toplam sayfa
+  // GÜNCELLEME: Sayfalanan "otherVisits" listesi için toplam sayfa
   const totalPages = Math.ceil(totalVisits / visitsPerPage);
 
   // GÜNCELLEME: Ziyaret kartını render etmek için yardımcı fonksiyon
@@ -408,8 +335,7 @@ const Visits: React.FC = () => {
     <div key={visit.id} className="bg-white rounded-lg shadow-sm">
       <div className="p-3 border-b border-gray-100">
         <div className="flex justify-between items-center text-xs mb-1">
-            {/* GÜNCELLEME: visit_date null ise çökmeyi engelle */}
-            <span className="text-gray-500">{visit.visit_date ? new Date(visit.visit_date).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Tarih Yok'}</span>
+            <span className="text-gray-500">{new Date(visit.visit_date).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
             <div className="flex gap-2">
               <span className={`font-semibold px-2 py-1 rounded-full text-xs ${getStatusBadge(visit.status)}`}>
                   {getStatusText(visit.status)}
@@ -419,8 +345,7 @@ const Visits: React.FC = () => {
               </span>
             </div>
         </div>
-        {/* GİNCELLEME: Müşteri null ise çökmeyi engelle */}
-        <div className="font-bold text-sm">{visit.customer ? visit.customer.kisa_isim : 'Müşteri Bilgisi Yok'}</div>
+        <div className="font-bold text-sm">{visit.customer.kisa_isim}</div>
         <div className="flex justify-between items-center mt-1">
           <div className="text-xs text-gray-700">{visit.branch ? visit.branch.sube_adi : ''}</div>
           {visit.report_number && <div className="text-xs text-gray-600">Rapor: {visit.report_number}</div>}
@@ -441,7 +366,7 @@ const Visits: React.FC = () => {
   );
 
   // GÜNCELLEME: İlk yüklemede ve hiç ziyaret yokken gösterilecek içerik
-  if (loading && overdueVisits.length === 0 && todayVisits.length === 0 && futureVisits.length === 0 && otherVisits.length === 0) {
+  if (loading && overdueVisits.length === 0 && todayVisits.length === 0 && otherVisits.length === 0) {
     return <div className="p-4 text-center"><Loader2 className="animate-spin text-red-600" size={32} /></div>;
   }
   
@@ -466,7 +391,7 @@ const Visits: React.FC = () => {
       </div>
 
       {/* GÜNCELLEME: Yüklenme göstergesi (sadece listeler boşken) */}
-      {loading && overdueVisits.length === 0 && todayVisits.length === 0 && futureVisits.length === 0 && otherVisits.length === 0 && (
+      {loading && overdueVisits.length === 0 && todayVisits.length === 0 && otherVisits.length === 0 && (
           <div className="text-center p-4"><Loader2 className="animate-spin text-red-600"/></div>
       )}
 
@@ -499,25 +424,12 @@ const Visits: React.FC = () => {
           </section>
         )}
 
-        {/* YENİ GRUP 3: Gelecek Planlı Ziyaretler */}
-        {futureVisits.length > 0 && (
+        {/* GRUP 3: Diğer Ziyaretler (Sayfalamalı) */}
+        {(otherVisits.length > 0 || totalPages > 1) && (
           <section>
             <h2 className="text-lg font-bold text-gray-700 mb-2 flex items-center gap-2">
-              <CalendarUp size={20} />
-              Gelecek Planlı Ziyaretler ({futureVisits.length})
-            </h2>
-            <div className="space-y-2">
-              {futureVisits.map(renderVisitCard)}
-            </div>
-          </section>
-        )}
-
-        {/* GRUP 4: Ziyaret Geçmişi (Sayfalamalı - Önceki "Diğer") */}
-        {(otherVisits.length > 0 || (totalPages > 1 && !loading)) && (
-          <section>
-            <h2 className="text-lg font-bold text-gray-500 mb-2 flex items-center gap-2">
               <CalendarSearch size={20} />
-              Ziyaret Geçmişi (Tamamlanan/İptal)
+              Diğer Ziyaretler
             </h2>
             {otherVisits.length > 0 ? (
               <div className="space-y-2">
@@ -531,7 +443,7 @@ const Visits: React.FC = () => {
         )}
 
         {/* GÜNCELLEME: Hiçbir sonuç bulunamadı durumu */}
-        {!loading && overdueVisits.length === 0 && todayVisits.length === 0 && futureVisits.length === 0 && otherVisits.length === 0 && (
+        {!loading && overdueVisits.length === 0 && todayVisits.length === 0 && otherVisits.length === 0 && (
           <div className="bg-white rounded-lg shadow-sm p-4 text-center text-gray-500">
             {searchTerm ? 'Arama kriterine uygun ziyaret bulunamadı' : 'Gösterilecek ziyaret bulunamadı'}
           </div>
@@ -539,7 +451,7 @@ const Visits: React.FC = () => {
 
       </div>
 
-      {/* GÜNCELLEME: Sayfalama artık sadece "Ziyaret Geçmişi" için geçerli */}
+      {/* GÜNCELLEME: Sayfalama artık sadece "Diğer Ziyaretler" için geçerli */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center p-4 mt-4">
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-4 py-2 text-sm bg-gray-200 rounded-lg disabled:opacity-50 flex items-center gap-2"><ChevronLeft size={16}/> Önceki</button>
