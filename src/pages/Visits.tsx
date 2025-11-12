@@ -1,70 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-// HATA DÜZELTME: Orijinal importlar kaldırıldı ve yerel önizleme için sahte (stub) objeler eklendi
-// import { supabase } from '../lib/supabase';
-// import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
-// import VisitDetailsModal from '../components/VisitDetailsModal';
+import { supabase } from '../lib/supabase';
+import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
+import VisitDetailsModal from '../components/VisitDetailsModal';
 import { toast } from 'sonner';
 import { format, startOfToday, endOfToday, isBefore } from 'date-fns';
-
-// --- HATA DÜZELTME: SUPABASE STUB ---
-// Yerel ../lib/supabase dosyasını çözümleyememe hatasını düzeltmek için
-// sahte bir Supabase istemcisi oluşturuldu.
-// Bu, kodun derlenmesini sağlar ancak gerçek veri alışverişi yapmaz.
-const createDummyClient = () => ({
-  from: (tableName: string) => ({
-    select: (query: string) => ({
-      eq: (column: string, value: any) => ({
-        or: (options: string) => Promise.resolve({ data: [], error: { message: `Supabase stub: ${tableName} not configured` } }),
-        single: () => Promise.resolve({ data: { id: 'dummy-op' }, error: null }),
-        in: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
-        data: [], error: { message: `Supabase stub: ${tableName} not configured` }
-      }),
-      in: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
-    }),
-    update: (data: any) => ({
-      eq: (column: string, value: any) => Promise.resolve({ error: null })
-    })
-  }),
-  auth: {
-    getUser: () => Promise.resolve({
-      data: { user: { id: 'dummy-user-auth-id' } }, error: null
-    })
-  }
-});
-const supabase = createDummyClient();
-
-// --- HATA DÜZELTME: MODAL STUBS ---
-// Yerel component importlarını çözümleyememe hatasını düzeltmek için
-// sahte modal bileşenleri eklendi.
-const CorrectiveActionModal: React.FC<any> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 shadow-xl">
-        <h2 className="text-xl font-bold mb-4">DÖF Modalı (Stub)</h2>
-        <p className="text-gray-600">Bu bileşen önizleme için kodlanmadı.</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Kapat</button>
-      </div>
-    </div>
-  );
-};
-
-const VisitDetailsModal: React.FC<any> = ({ isOpen, onClose, visit }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 shadow-xl">
-        <h2 className="text-xl font-bold mb-4">Ziyaret Detayı (Stub)</h2>
-        <p className="text-gray-600">Ziyaret: {visit?.customer?.kisa_isim}</p>
-        <p className="text-gray-600">Bu bileşen önizleme için kodlanmadı.</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Kapat</button>
-      </div>
-    </div>
-  );
-};
-
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface Visit {
