@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../Auth/AuthProvider';
-import { LogOut, Menu, X, Home, Calendar, FileText, FilePlus, Award, Package, TrendingUp, Grid } from 'lucide-react';
+import { LogOut, Menu, X, Home, Calendar, FileText, FilePlus, Award, Package, TrendingUp, Grid, Bug } from 'lucide-react'; // <-- YENİ: Bug ikonu eklendi
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
 
@@ -54,6 +54,8 @@ const BranchLayout: React.FC = () => {
     { path: '/branch/dokumanlar', icon: <FilePlus size={20} />, name: 'Dökümanlar' },
     { path: '/branch/sertifikalar', icon: <Award size={20} />, name: 'Sertifikalar' },
     { path: '/branch/malzemeler', icon: <Package size={20} />, name: 'Malzemeler' },
+    // YENİ RAPOR LİNKİ
+    { path: '/branch/pestisit-raporu', icon: <Bug size={2L0} />, name: 'Pestisit Raporu' },
     { path: '/branch/trend-analizi', icon: <TrendingUp size={20} />, name: 'Trend Analizi' },
     { path: '/branch/teklifler', icon: <FileText size={20} />, name: 'Teklifler' },
   ];
