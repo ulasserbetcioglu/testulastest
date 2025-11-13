@@ -45,40 +45,47 @@ const PesticideUsageReport: React.FC = () => {
     const fetchUserProfile = async () => {
       setIsProfileLoading(true); 
       try {
+        // Önce Müşteri mi diye bak
         let { data: customerData, error: customerError } = await supabase
           .from('customers')
           .select('id')
           .eq('auth_id', user.id)
           .single();
 
-        if (customerError && customerError.code !== 'PGRST116') throw customerError; 
+        if (customerError && customerError.code !== 'PGRST116') {
+          throw customerError; 
+        }
 
         if (customerData) {
           setUserRole('customer');
           setProfileId(customerData.id);
-          return; 
+          // ✅ DÜZELTME: 'return' kaldırıldı. 'finally' bloğunun çalışması lazım.
+        } else {
+          // Müşteri değilse Şube mi diye bak
+          let { data: branchData, error: branchError } = await supabase
+            .from('branches')
+            .select('id')
+            .eq('auth_id', user.id)
+            .single();
+
+          if (branchError && branchError.code !== 'PGRST116') {
+            throw branchError; 
+          }
+
+          if (branchData) {
+            setUserRole('branch');
+            setProfileId(branchData.id);
+             // ✅ DÜZELTME: 'return' kaldırıldı.
+          } else {
+            // Ne müşteri ne de şube ise
+            setError('Bu kullanıcı için yetkili Müşteri veya Şube profili bulunamadı.');
+          }
         }
-
-        let { data: branchData, error: branchError } = await supabase
-          .from('branches')
-          .select('id')
-          .eq('auth_id', user.id)
-          .single();
-
-        if (branchError && branchError.code !== 'PGRST116') throw branchError; 
-
-        if (branchData) {
-          setUserRole('branch');
-          setProfileId(branchData.id);
-          return; 
-        }
-
-        setError('Bu kullanıcı için yetkili Müşteri veya Şube profili bulunamadı.');
-
       } catch (err: any) {
         console.error("Profil alınırken hata oluştu:", err);
         setError(`Profil bilgisi alınamadı: ${err.message}`);
       } finally {
+        // ✅ DÜZELTME: Bu blok artık profil bulunsa da bulunmasa da çalışacak.
         setIsProfileLoading(false); // Profil yüklemesi bitti
       }
     };
@@ -102,7 +109,7 @@ const PesticideUsageReport: React.FC = () => {
     setReportData([]); 
 
     try {
-      // ✅ DÜZELTME: Sorgudaki 'product:products' 'product:paid_products' olarak değiştirildi
+      // 'paid_products' tablosundan veri çek
       let query = supabase
         .from('biocidal_products_usage')
         .select(`
@@ -111,13 +118,13 @@ const PesticideUsageReport: React.FC = () => {
           quantity,
           unit,
           dosage,
-          product:paid_products (name),  /* <-- DÜZELTME BURADA */
+          product:paid_products (name),
           operator:operators (name),
           customer:customers (kisa_isim),
           branch:branches (sube_adi),
           visit:visits (visit_date)
         `)
-        .gte('created_at', startDate) // Tarih filtresi
+        .gte('created_at', startDate) 
         .lte('created_at', new Date(endDate + 'T23:59:59').toISOString());
 
       // Rol bazlı filtreleme
