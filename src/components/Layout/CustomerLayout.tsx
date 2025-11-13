@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 // import { useAuth } from '../Auth/AuthProvider'; // <-- ÖNİZLEME İÇİN YORUMA ALINDI
-import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp } from 'lucide-react';
+import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp, Bug } from 'lucide-react'; // <-- YENİ: Bug ikonu eklendi
 // import { supabase } from '../../lib/supabase'; // <-- ÖNİZLEME İÇİN YORUMA ALINDI
 // import { localAuth } from '../../lib/localAuth'; // <-- ÖNİZLEME İÇİN YORUMA ALINDI
 
@@ -25,9 +25,9 @@ const supabaseMock = {
       error: null
     })
   },
-  from: (tableName) => ({
-    select: (columns) => ({
-      eq: (column, value) => ({
+  from: (tableName: string) => ({
+    select: (columns: string) => ({
+      eq: (column: string, value: string) => ({
         single: async () => {
           if (tableName === 'customers' && column === 'auth_id') {
             return {
@@ -59,7 +59,7 @@ const localAuthMock = {
 // 1. BU 3 SATIRI SİLİN.
 // 2. Dosyanın en üstündeki 3 'import' satırının yorumunu KALDIRIN.
 const useAuth = useAuthMock;
-const supabase = supabaseMock;
+const supabase = supabaseMock as any; // Mock'u 'any' olarak cast et
 const localAuth = localAuthMock;
 
 
@@ -118,6 +118,8 @@ const CustomerLayout: React.FC = () => {
     { path: '/customer/dokumanlar', icon: <FilePlus size={20} />, name: 'Dökümanlar' },
     { path: '/customer/sertifikalar', icon: <Award size={20} />, name: 'Sertifikalar' },
     { path: '/customer/malzemeler', icon: <Package size={20} />, name: 'Malzemeler' },
+    // YENİ RAPOR LİNKİ
+    { path: '/customer/pestisit-raporu', icon: <Bug size={20} />, name: 'Pestisit Raporu' },
     { path: '/customer/trend-analizi', icon: <TrendingUp size={20} />, name: 'Trend Analizi' },
     { path: '/customer/teklifler', icon: <FileText size={20} />, name: 'Teklifler' },
   ];
@@ -162,9 +164,10 @@ const CustomerLayout: React.FC = () => {
                 onClick={() => navigate('/customer')}
                 onError={(e) => { 
                   // Resim yüklenemezse yer tutucu göster
-                  e.currentTarget.src = 'https://placehold.co/100x40/eeeeee/333333?text=Logo';
-                  e.currentTarget.style.height = '40px';
-                  e.currentTarget.style.width = '100px';
+                  const target = e.currentTarget as HTMLImageElement;
+                  target.src = 'https://placehold.co/100x40/eeeeee/333333?text=Logo';
+                  target.style.height = '40px';
+                  target.style.width = '100px';
                 }}
               />
               <div>
