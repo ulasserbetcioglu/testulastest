@@ -114,6 +114,7 @@ const PesticideUsageReport: React.FC = () => {
     setReportData([]); 
 
     try {
+      // ✅ DÜZELTME: Sorgu 'biocidal_products' tablosuna join yapıyor
       let query = supabase
         .from('biocidal_products_usage')
         .select(`
@@ -122,7 +123,7 @@ const PesticideUsageReport: React.FC = () => {
           quantity,
           unit,
           dosage,
-          product:paid_products (name),
+          product:biocidal_products (name),  /* <-- DÜZELTME BURADA */
           operator:operators (name),
           customer:customers (kisa_isim),
           branch:branches (sube_adi),
@@ -131,9 +132,8 @@ const PesticideUsageReport: React.FC = () => {
         .gte('created_at', startDate) 
         .lte('created_at', new Date(endDate + 'T23:59:59').toISOString());
 
-      // ✅ DÜZELTME: Rol bazlı filtreleme mantığı düzeltildi
+      // Rol bazlı filtreleme
       if (userRole === 'customer') {
-        // 1. Müşteriye ait tüm şubelerin ID'lerini al
         const { data: branches, error: branchError } = await supabase
             .from('branches')
             .select('id')
@@ -141,10 +141,8 @@ const PesticideUsageReport: React.FC = () => {
 
         if (branchError) throw branchError;
 
-        // Şube ID'lerinden bir liste oluştur
         const branchIds = branches.map(b => b.id);
 
-        // 2. Sorguyu güncelle: customer_id = X VEYA branch_id bu listede olanlar
         query = query.or(
             `customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',') || 'null'})`
         );
@@ -152,7 +150,6 @@ const PesticideUsageReport: React.FC = () => {
       } else { // userRole === 'branch'
         query = query.eq('branch_id', profileId);
       }
-      // ✅ DÜZELTME SONU
 
       const { data, error: queryError } = await query.order('created_at', { ascending: false });
 
