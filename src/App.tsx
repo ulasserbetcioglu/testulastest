@@ -107,6 +107,8 @@ import AdminOperatorLeaves from './pages/AdminOperatorLeaves'; // NEW: Import Ad
 import AdminVehicles from './pages/AdminVehicles'; // NEW: Import AdminVehicles
 import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
 import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm'; // NEW: Import OperatorWeeklyKmForm
+// YENİ EKLENEN RAPOR SAYFASI
+import PesticideUsageReport from './pages/PesticideUsageReport';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -405,6 +407,8 @@ function App() {
             <Route path="malzemeler" element={<CustomerPaidMaterials />} />
             <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
             <Route path="teklifler" element={<Offers />} />
+            {/* YENİ PESTİSİT RAPORU ROTASI */}
+            <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
           </Route>
 
           {/* Branch Routes */}
@@ -425,6 +429,8 @@ function App() {
             <Route path="malzemeler" element={<BranchPaidMaterials />} />
             <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
             <Route path="teklifler" element={<Offers />} />
+            {/* YENİ PESTİSİT RAPORU ROTASI */}
+            <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
           </Route>
         </Routes>
       </AuthProvider>
