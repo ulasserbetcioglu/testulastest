@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useAuth } from '../components/Auth/AuthProvider'; 
+import { localAuth } from '../lib/localAuth'; // ✅ DÜZELTME 1: localAuth import edildi
 
 // Rapor verisinin arayüzü
 interface PesticideUsage {
@@ -22,7 +23,7 @@ interface PesticideUsage {
 }
 
 const PesticideUsageReport: React.FC = () => {
-  const { user } = useAuth(); 
+  const { user } = useAuth(); // Supabase Auth kullanıcısı
   
   const [reportData, setReportData] = useState<PesticideUsage[]>([]);
   const [isProfileLoading, setIsProfileLoading] = useState(true); 
@@ -37,47 +38,54 @@ const PesticideUsageReport: React.FC = () => {
 
   // 1. Aşama: Kullanıcı profili bulma
   useEffect(() => {
-    if (!user) {
-      setIsProfileLoading(true); 
-      return; 
-    }
-
     const fetchUserProfile = async () => {
       setIsProfileLoading(true); 
       try {
-        // Önce Müşteri mi diye bak
+        // ✅ DÜZELTME 2: Önce localAuth kontrol ediliyor (Layout'lardaki gibi)
+        const localSession = localAuth.getSession();
+        if (localSession) {
+          if (localSession.type === 'customer') {
+            setUserRole('customer');
+            setProfileId(localSession.id);
+            return; // Profil bulundu
+          } else if (localSession.type === 'branch') {
+            setUserRole('branch');
+            setProfileId(localSession.id);
+            return; // Profil bulundu
+          }
+        }
+
+        // Local session yoksa veya 'customer'/'branch' değilse, Supabase Auth'u (useAuth) kullan
+        if (!user) {
+          // 'user' objesi hala yükleniyorsa bekle (isProfileLoading true kalır)
+          return; 
+        }
+
+        // 'user' objesi var, Supabase'den auth_id ile profili ara
         let { data: customerData, error: customerError } = await supabase
           .from('customers')
           .select('id')
           .eq('auth_id', user.id)
           .single();
 
-        if (customerError && customerError.code !== 'PGRST116') {
-          throw customerError; 
-        }
+        if (customerError && customerError.code !== 'PGRST116') throw customerError; 
 
         if (customerData) {
           setUserRole('customer');
           setProfileId(customerData.id);
-          // ✅ DÜZELTME: 'return' kaldırıldı. 'finally' bloğunun çalışması lazım.
         } else {
-          // Müşteri değilse Şube mi diye bak
           let { data: branchData, error: branchError } = await supabase
             .from('branches')
             .select('id')
             .eq('auth_id', user.id)
             .single();
 
-          if (branchError && branchError.code !== 'PGRST116') {
-            throw branchError; 
-          }
+          if (branchError && branchError.code !== 'PGRST116') throw branchError; 
 
           if (branchData) {
             setUserRole('branch');
             setProfileId(branchData.id);
-             // ✅ DÜZELTME: 'return' kaldırıldı.
           } else {
-            // Ne müşteri ne de şube ise
             setError('Bu kullanıcı için yetkili Müşteri veya Şube profili bulunamadı.');
           }
         }
@@ -85,13 +93,12 @@ const PesticideUsageReport: React.FC = () => {
         console.error("Profil alınırken hata oluştu:", err);
         setError(`Profil bilgisi alınamadı: ${err.message}`);
       } finally {
-        // ✅ DÜZELTME: Bu blok artık profil bulunsa da bulunmasa da çalışacak.
         setIsProfileLoading(false); // Profil yüklemesi bitti
       }
     };
 
     fetchUserProfile();
-  }, [user]); 
+  }, [user]); // 'user' objesi (useAuth'dan) değiştiğinde tetiklenir
 
   // 2. Aşama: Rapor verisini çek
   const fetchReportData = useCallback(async () => {
@@ -109,7 +116,6 @@ const PesticideUsageReport: React.FC = () => {
     setReportData([]); 
 
     try {
-      // 'paid_products' tablosundan veri çek
       let query = supabase
         .from('biocidal_products_usage')
         .select(`
@@ -127,10 +133,9 @@ const PesticideUsageReport: React.FC = () => {
         .gte('created_at', startDate) 
         .lte('created_at', new Date(endDate + 'T23:59:59').toISOString());
 
-      // Rol bazlı filtreleme
       if (userRole === 'customer') {
         query = query.or(`customer_id.eq.${profileId},branch.customer_id.eq.${profileId}`);
-      } else { // userRole === 'branch'
+      } else { 
         query = query.eq('branch_id', profileId);
       }
 
@@ -138,7 +143,6 @@ const PesticideUsageReport: React.FC = () => {
 
       if (queryError) throw queryError;
 
-      // Veriyi rapor formatına çevir
       const formattedData = data.map(item => ({
         id: item.id,
         created_at: item.created_at,
@@ -158,7 +162,7 @@ const PesticideUsageReport: React.FC = () => {
       console.error('Rapor verisi alınırken hata:', err);
       setError(err.message);
     } finally {
-      setIsReportLoading(false); // Rapor sorgusu bitti
+      setIsReportLoading(false); 
     }
   }, [profileId, userRole, startDate, endDate, isProfileLoading]);
 
