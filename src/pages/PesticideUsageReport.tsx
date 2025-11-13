@@ -5,8 +5,8 @@ import { Loader2, Download, Calendar, Bug } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { useAuth } from '../components/Auth/AuthProvider'; 
-import { localAuth } from '../lib/localAuth'; 
+// import { useAuth } from '../components/Auth/AuthProvider'; // <-- ARTIK KULLANILMIYOR
+import { localAuth } from '../lib/localAuth'; // ✅ DÜZELTME: localAuth import edildi
 
 // Rapor verisinin arayüzü
 interface PesticideUsage {
@@ -23,7 +23,7 @@ interface PesticideUsage {
 }
 
 const PesticideUsageReport: React.FC = () => {
-  const { user } = useAuth(); 
+  // const { user } = useAuth(); // <-- ARTIK KULLANILMIYOR
   
   const [reportData, setReportData] = useState<PesticideUsage[]>([]);
   const [isProfileLoading, setIsProfileLoading] = useState(true); 
@@ -32,59 +32,41 @@ const PesticideUsageReport: React.FC = () => {
   const [userRole, setUserRole] = useState<'customer' | 'branch' | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
 
-  // Tarih filtreleri
   const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  // 1. Aşama: Kullanıcı profili bulma
+  // 1. Aşama: Kullanıcı profili bulma (localAuth kullanarak)
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      setIsProfileLoading(true); 
+    const fetchUserProfile = () => {
+      setIsProfileLoading(true);
       try {
+        // ✅ DÜZELTME: Profil tespiti localAuth'tan yapılıyor
         const localSession = localAuth.getSession();
-        if (localSession) {
-          if (localSession.type === 'customer') {
-            setUserRole('customer');
-            setProfileId(localSession.id);
-            return; 
-          } else if (localSession.type === 'branch') {
-            setUserRole('branch');
-            setProfileId(localSession.id);
-            return; 
-          }
-        }
-
-        if (!user) {
-          return; 
-        }
-
-        let { data: customerData, error: customerError } = await supabase
-          .from('customers')
-          .select('id')
-          .eq('auth_id', user.id)
-          .single();
-
-        if (customerError && customerError.code !== 'PGRST116') throw customerError; 
-
-        if (customerData) {
+        
+        if (localSession && localSession.type === 'customer') {
           setUserRole('customer');
-          setProfileId(customerData.id);
-        } else {
-          let { data: branchData, error: branchError } = await supabase
-            .from('branches')
-            .select('id')
-            .eq('auth_id', user.id)
-            .single();
-
-          if (branchError && branchError.code !== 'PGRST116') throw branchError; 
-
-          if (branchData) {
-            setUserRole('branch');
-            setProfileId(branchData.id);
-          } else {
-            setError('Bu kullanıcı için yetkili Müşteri veya Şube profili bulunamadı.');
+          // 'CustomerLayout' 'localSession.name' kullanıyor.
+          // 'PesticideUsageReport' ise ID'ye ihtiyaç duyar.
+          // 'localAuth.ts' dosyanızın 'id' (profile_id) sakladığını varsayıyorum.
+          if (!localSession.id) {
+             setError("localAuth oturumunda profil ID bulunamadı. Lütfen localAuth.ts dosyanızı kontrol edin.");
+             return;
           }
+          setProfileId(localSession.id);
+
+        } else if (localSession && localSession.type === 'branch') {
+          setUserRole('branch');
+          if (!localSession.id) {
+             setError("localAuth oturumunda profil ID bulunamadı. Lütfen localAuth.ts dosyanızı kontrol edin.");
+             return;
+          }
+          setProfileId(localSession.id);
+
+        } else {
+          // Eğer localSession yoksa veya tipi uymuyorsa
+          setError('Geçerli bir Müşteri veya Şube oturumu bulunamadı.');
         }
+
       } catch (err: any) {
         console.error("Profil alınırken hata oluştu:", err);
         setError(`Profil bilgisi alınamadı: ${err.message}`);
@@ -94,7 +76,7 @@ const PesticideUsageReport: React.FC = () => {
     };
 
     fetchUserProfile();
-  }, [user]); 
+  }, []); // Artık 'user' objesine bağlı değil, sadece sayfa yüklendiğinde çalışır
 
   // 2. Aşama: Rapor verisini çek
   const fetchReportData = useCallback(async () => {
@@ -112,13 +94,12 @@ const PesticideUsageReport: React.FC = () => {
     setReportData([]); 
 
     try {
-      // ✅ DÜZELTME: MANTIK DEĞİŞİKLİĞİ
       // ADIM 1: Önce tarih aralığına ve role uyan ZİYARET ID'lerini bul.
       let visitQuery = supabase
         .from('visits')
-        .select('id') // Sadece ID'leri al
-        .gte('visit_date', startDate) // Ziyaret tarihine göre filtrele
-        .lte('visit_date', new Date(endDate + 'T23:59:59').toISOString()) // Ziyaret tarihine göre filtrele
+        .select('id') 
+        .gte('visit_date', startDate) 
+        .lte('visit_date', new Date(endDate + 'T23:59:59').toISOString())
         .eq('status', 'completed');
 
       if (userRole === 'customer') {
@@ -142,15 +123,13 @@ const PesticideUsageReport: React.FC = () => {
       if (visitsError) throw visitsError;
 
       if (!visitsData || visitsData.length === 0) {
-        // Bu tarih aralığında ve rolde hiç ziyaret bulunamadı.
         setReportData([]); 
-        return; // finally bloğu 'loading'i kapatacak
+        return; 
       }
 
-      // Ziyaret ID'lerinden bir liste oluştur
       const visitIds = visitsData.map(v => v.id);
 
-      // ADIM 2: Şimdi 'biocidal_products_usage' tablosunu bu ZİYARET ID'leri ile sorgula.
+      // ADIM 2: 'biocidal_products_usage' tablosunu bu ZİYARET ID'leri ile sorgula.
       const { data, error: queryError } = await supabase
         .from('biocidal_products_usage')
         .select(`
@@ -165,12 +144,11 @@ const PesticideUsageReport: React.FC = () => {
           branch:branches (sube_adi),
           visit:visits (visit_date)
         `)
-        .in('visit_id', visitIds) // Filtreyi 'created_at' yerine 'visit_id' listesi ile yap
+        .in('visit_id', visitIds) 
         .order('created_at', { ascending: false });
 
       if (queryError) throw queryError;
 
-      // Veriyi rapor formatına çevir
       const formattedData = data.map(item => ({
         id: item.id,
         created_at: item.created_at,
