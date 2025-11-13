@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useAuth } from '../components/Auth/AuthProvider'; 
-import { localAuth } from '../lib/localAuth'; // localAuth import edildi
+import { localAuth } from '../lib/localAuth'; 
 
 // Rapor verisinin arayüzü
 interface PesticideUsage {
@@ -41,7 +41,6 @@ const PesticideUsageReport: React.FC = () => {
     const fetchUserProfile = async () => {
       setIsProfileLoading(true); 
       try {
-        // Önce localAuth kontrol ediliyor
         const localSession = localAuth.getSession();
         if (localSession) {
           if (localSession.type === 'customer') {
@@ -55,7 +54,6 @@ const PesticideUsageReport: React.FC = () => {
           }
         }
 
-        // Local session yoksa Supabase Auth'u (useAuth) kullan
         if (!user) {
           return; 
         }
@@ -114,8 +112,46 @@ const PesticideUsageReport: React.FC = () => {
     setReportData([]); 
 
     try {
-      // ✅ DÜZELTME: Hatalı yorum satırı kaldırıldı
-      let query = supabase
+      // ✅ DÜZELTME: MANTIK DEĞİŞİKLİĞİ
+      // ADIM 1: Önce tarih aralığına ve role uyan ZİYARET ID'lerini bul.
+      let visitQuery = supabase
+        .from('visits')
+        .select('id') // Sadece ID'leri al
+        .gte('visit_date', startDate) // Ziyaret tarihine göre filtrele
+        .lte('visit_date', new Date(endDate + 'T23:59:59').toISOString()) // Ziyaret tarihine göre filtrele
+        .eq('status', 'completed');
+
+      if (userRole === 'customer') {
+        const { data: branches, error: branchError } = await supabase
+            .from('branches')
+            .select('id')
+            .eq('customer_id', profileId);
+
+        if (branchError) throw branchError;
+
+        const branchIds = branches.map(b => b.id);
+        visitQuery = visitQuery.or(
+            `customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',') || 'null'})`
+        );
+
+      } else { // userRole === 'branch'
+        visitQuery = visitQuery.eq('branch_id', profileId);
+      }
+
+      const { data: visitsData, error: visitsError } = await visitQuery;
+      if (visitsError) throw visitsError;
+
+      if (!visitsData || visitsData.length === 0) {
+        // Bu tarih aralığında ve rolde hiç ziyaret bulunamadı.
+        setReportData([]); 
+        return; // finally bloğu 'loading'i kapatacak
+      }
+
+      // Ziyaret ID'lerinden bir liste oluştur
+      const visitIds = visitsData.map(v => v.id);
+
+      // ADIM 2: Şimdi 'biocidal_products_usage' tablosunu bu ZİYARET ID'leri ile sorgula.
+      const { data, error: queryError } = await supabase
         .from('biocidal_products_usage')
         .select(`
           id,
@@ -129,32 +165,12 @@ const PesticideUsageReport: React.FC = () => {
           branch:branches (sube_adi),
           visit:visits (visit_date)
         `)
-        .gte('created_at', startDate) 
-        .lte('created_at', new Date(endDate + 'T23:59:59').toISOString());
-
-      // Rol bazlı filtreleme
-      if (userRole === 'customer') {
-        const { data: branches, error: branchError } = await supabase
-            .from('branches')
-            .select('id')
-            .eq('customer_id', profileId);
-
-        if (branchError) throw branchError;
-
-        const branchIds = branches.map(b => b.id);
-
-        query = query.or(
-            `customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',') || 'null'})`
-        );
-
-      } else { // userRole === 'branch'
-        query = query.eq('branch_id', profileId);
-      }
-
-      const { data, error: queryError } = await query.order('created_at', { ascending: false });
+        .in('visit_id', visitIds) // Filtreyi 'created_at' yerine 'visit_id' listesi ile yap
+        .order('created_at', { ascending: false });
 
       if (queryError) throw queryError;
 
+      // Veriyi rapor formatına çevir
       const formattedData = data.map(item => ({
         id: item.id,
         created_at: item.created_at,
