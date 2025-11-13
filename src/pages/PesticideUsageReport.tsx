@@ -5,93 +5,99 @@ import { Loader2, Download, Calendar, Bug } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { useAuth } from '../components/Auth/AuthProvider'; // ✅ DÜZELTME 1: useAuth import edildi
+import { useAuth } from '../components/Auth/AuthProvider';
 
-// Rapor verisinin arayüzü
 interface PesticideUsage {
   id: string;
   sale_date: string;
   product_name: string;
   quantity: number;
-  unit: string; // "adet", "lt", "kg" vb.
+  unit: string;
   customer_name: string;
   branch_name: string | null;
   operator_name: string;
 }
 
-// Ürünleri filtrelemek için kullanılacak anahtar kelimeler
-// BU LİSTEYİ KENDİ 'products' TABLONUZA GÖRE GÜNCELLEYİN
 const PESTICIDE_KEYWORDS = ['biyosidal', 'pestisit', 'insektisit', 'rodentisit', 'ilaç'];
 
 const PesticideUsageReport: React.FC = () => {
-  const { user } = useAuth(); // ✅ DÜZELTME 2: user, AuthContext'ten (vekil) alındı
+  const { user } = useAuth();
   
   const [reportData, setReportData] = useState<PesticideUsage[]>([]);
-  const [loading, setLoading] = useState(true); // Başlangıçta true kalsın
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'branch' | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
 
-  // Tarih filtreleri
   const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  // ✅ DÜZELTME 3: Kullanıcı profili bulma
-  // Bu useEffect, 'user' objesi (AuthProvider'dan gelen) değiştiğinde çalışır
+  // 🔧 DÜZELTME: Kullanıcı profili bulma
   useEffect(() => {
-    // Eğer user (henüz) yoksa, bekle.
     if (!user) {
-      // ProtectedRoute'dan geçtiyse 'user' objesi birazdan gelecektir.
-      // 'user' null iken loading=true'da kalır.
-      // Eğer 'user' hiç gelmezse (token geçersizse), AuthProvider
-      // zaten kullanıcıyı /login'e yönlendirecektir.
-      setLoading(true); // Kullanıcı beklenirken yükleniyor ekranı göster
+      setLoading(true);
       return; 
     }
 
-    // 'user' geldi, profili çek.
     const fetchUserProfile = async () => {
-      // Önce Müşteri mi diye bak
-      let { data: customerData } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('auth_id', user.id)
-        .single();
+      try {
+        // Önce Müşteri mi diye bak
+        const { data: customerData, error: customerError } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('auth_id', user.id)
+          .maybeSingle(); // 🔧 single() yerine maybeSingle() kullan
 
-      if (customerData) {
-        setUserRole('customer');
-        setProfileId(customerData.id);
-        return;
+        if (customerError && customerError.code !== 'PGRST116') {
+          throw customerError;
+        }
+
+        if (customerData) {
+          console.log('✅ Müşteri profili bulundu:', customerData.id);
+          setUserRole('customer');
+          setProfileId(customerData.id);
+          setLoading(false); // 🔧 Profil bulununca loading'i kapat
+          return;
+        }
+
+        // Değilse Şube mi diye bak
+        const { data: branchData, error: branchError } = await supabase
+          .from('branches')
+          .select('id')
+          .eq('auth_id', user.id)
+          .maybeSingle(); // 🔧 single() yerine maybeSingle() kullan
+
+        if (branchError && branchError.code !== 'PGRST116') {
+          throw branchError;
+        }
+
+        if (branchData) {
+          console.log('✅ Şube profili bulundu:', branchData.id);
+          setUserRole('branch');
+          setProfileId(branchData.id);
+          setLoading(false); // 🔧 Profil bulununca loading'i kapat
+          return;
+        }
+
+        // Hiçbir profil bulunamadı
+        console.error('❌ Profil bulunamadı');
+        setError('Yetkili profil bulunamadı.');
+        setLoading(false);
+      } catch (err: any) {
+        console.error('❌ Profil çekme hatası:', err);
+        setError('Profil yüklenirken hata: ' + err.message);
+        setLoading(false);
       }
-
-      // Değilse Şube mi diye bak
-      let { data: branchData } = await supabase
-        .from('branches')
-        .select('id')
-        .eq('auth_id', user.id)
-        .single();
-
-      if (branchData) {
-        setUserRole('branch');
-        setProfileId(branchData.id);
-        return;
-      }
-
-      setError('Yetkili profil bulunamadı.');
-      setLoading(false);
     };
 
     fetchUserProfile();
-  }, [user]); // Bağımlılık: user
+  }, [user]);
 
-  // Rapor verisini çek
+  // 🔧 DÜZELTME: Rapor verisini çek
   const fetchReportData = useCallback(async () => {
-    // profileId veya userRole henüz ayarlanmadıysa bekle
-    // (yukarıdaki useEffect'in çalışması beklenir)
+    // Profil henüz yüklenmemişse bekle
     if (!profileId || !userRole) {
-      // Eğer user varsa ama profil henüz yükleniyorsa,
-      // loading=true kalsın.
-      if(user) setLoading(true);
+      console.log('⏳ Profil bekleniyor...');
       return;
     }
 
@@ -101,6 +107,7 @@ const PesticideUsageReport: React.FC = () => {
       return;
     }
 
+    console.log('📊 Rapor çekiliyor...', { profileId, userRole, startDate, endDate });
     setLoading(true);
     setError(null);
 
@@ -109,7 +116,6 @@ const PesticideUsageReport: React.FC = () => {
       let visitQuery = supabase.from('visits').select('id');
 
       if (userRole === 'customer') {
-        // Müşterinin kendi ve tüm şubelerinin ziyaretleri
         const { data: branches, error: branchError } = await supabase
           .from('branches')
           .select('id')
@@ -119,11 +125,15 @@ const PesticideUsageReport: React.FC = () => {
         
         const branchIds = branches ? branches.map(b => b.id) : [];
         
-        visitQuery = visitQuery.or(
-          `customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',')})`
-        );
+        // 🔧 DÜZELTME: Eğer şube yoksa sadece customer_id kontrolü yap
+        if (branchIds.length > 0) {
+          visitQuery = visitQuery.or(
+            `customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',')})`
+          );
+        } else {
+          visitQuery = visitQuery.eq('customer_id', profileId);
+        }
       } else {
-        // Sadece bu şubenin ziyaretleri
         visitQuery = visitQuery.eq('branch_id', profileId);
       }
 
@@ -134,6 +144,8 @@ const PesticideUsageReport: React.FC = () => {
 
       if (visitsError) throw visitsError;
       
+      console.log('📍 Ziyaretler bulundu:', visits?.length || 0);
+
       if (!visits || visits.length === 0) {
         setReportData([]);
         setLoading(false);
@@ -143,33 +155,38 @@ const PesticideUsageReport: React.FC = () => {
       const visitIds = visits.map(v => v.id);
 
       // 2. Bu ziyaretlerde kullanılan ürünleri (satışları) bul
+      // 🔧 DÜZELTME: Query düzeltildi
       const { data: sales, error: salesError } = await supabase
         .from('paid_material_sale_items')
         .select(`
           id,
           quantity,
-          sale:paid_material_sales (
+          paid_material_sales!inner (
             sale_date,
-            visit:visits (
+            visit_id,
+            visits!inner (
               customer:customers (kisa_isim),
               branch:branches (sube_adi),
               operator:operators (name)
             )
           ),
-          product:product_id (name, unit, type, category)
+          products!inner (name, unit, type, category)
         `)
-        .in('sale:visit_id', visitIds)
-        .order('sale_date', { referencedTable: 'paid_material_sales', ascending: false });
+        .in('paid_material_sales.visit_id', visitIds);
 
-      if (salesError) throw salesError;
+      if (salesError) {
+        console.error('❌ Satış verisi hatası:', salesError);
+        throw salesError;
+      }
 
-      // 3. Veriyi filtrele ve düzelt (Sadece Pestisit/Biyosidal olanlar)
+      console.log('🛒 Satışlar bulundu:', sales?.length || 0);
+
+      // 3. Veriyi filtrele ve düzelt
       const filteredData = sales
-        .map(item => {
-          // Ürünün pestisit olup olmadığını kontrol et
-          const productName = item.product?.name?.toLowerCase() || '';
-          const productType = item.product?.type?.toLowerCase() || '';
-          const productCategory = item.product?.category?.toLowerCase() || '';
+        .map((item: any) => {
+          const productName = item.products?.name?.toLowerCase() || '';
+          const productType = item.products?.type?.toLowerCase() || '';
+          const productCategory = item.products?.category?.toLowerCase() || '';
 
           const isPesticide = PESTICIDE_KEYWORDS.some(keyword => 
             productName.includes(keyword) || 
@@ -177,39 +194,41 @@ const PesticideUsageReport: React.FC = () => {
             productCategory.includes(keyword)
           );
 
-          if (!isPesticide || !item.product || !item.sale || !item.sale.visit) return null;
+          if (!isPesticide || !item.products || !item.paid_material_sales) return null;
 
+          const visit = item.paid_material_sales.visits;
+          
           return {
             id: item.id,
-            sale_date: item.sale.sale_date,
-            product_name: item.product.name,
+            sale_date: item.paid_material_sales.sale_date,
+            product_name: item.products.name,
             quantity: item.quantity,
-            unit: item.product.unit || 'adet',
-            customer_name: item.sale.visit.customer?.kisa_isim || 'N/A',
-            branch_name: item.sale.visit.branch?.sube_adi || null,
-            operator_name: item.sale.visit.operator?.name || 'N/A',
+            unit: item.products.unit || 'adet',
+            customer_name: visit?.customer?.kisa_isim || 'N/A',
+            branch_name: visit?.branch?.sube_adi || null,
+            operator_name: visit?.operator?.name || 'N/A',
           };
         })
-        .filter(Boolean) as PesticideUsage[]; // null olanları kaldır
+        .filter(Boolean) as PesticideUsage[];
 
+      console.log('✅ Filtrelenmiş pestisit verileri:', filteredData.length);
       setReportData(filteredData);
 
     } catch (err: any) {
-      console.error('Rapor verisi alınırken hata:', err);
+      console.error('❌ Rapor verisi alınırken hata:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-    // ✅ DÜZELTME 4: 'user' bağımlılığı eklendi (useCallback'in !profileId kontrolü user'a bağlı)
-  }, [profileId, userRole, startDate, endDate, user]); 
+  }, [profileId, userRole, startDate, endDate]);
 
-  // ✅ DÜZELTME 5: Raporu otomatik çekmek için useEffect
-  // Bu, `fetchReportData`'nın *tanımı* (useCallback) değiştiğinde tetiklenir.
+  // 🔧 DÜZELTME: Raporu otomatik çek
   useEffect(() => {
-    // profileId set edildiğinde (veya tarihler değiştiğinde) fetchReportData'nın
-    // tanımı değişir ve bu effect raporu otomatik çeker.
-    fetchReportData();
-  }, [fetchReportData]);
+    if (profileId && userRole) {
+      console.log('🚀 Rapor otomatik çekiliyor...');
+      fetchReportData();
+    }
+  }, [profileId, userRole, startDate, endDate]); // fetchReportData değil, bağımlılıkları direkt kullan
 
   const exportToExcel = () => {
     const dataToExport = reportData.map(item => ({
@@ -270,7 +289,7 @@ const PesticideUsageReport: React.FC = () => {
           </div>
           <div className="self-end">
             <button
-              onClick={fetchReportData} // Manuel olarak da tetiklenebilir
+              onClick={fetchReportData}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
               disabled={loading}
             >
@@ -281,14 +300,12 @@ const PesticideUsageReport: React.FC = () => {
         </div>
       </div>
 
-      {/* Hata mesajı (Oturum hatası yerine 'error' state'i) */}
       {!loading && error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
           Hata: {error}
         </div>
       )}
 
-      {/* Yükleniyor durumu */}
       {loading && (
         <div className="flex justify-center items-center p-8">
           <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
