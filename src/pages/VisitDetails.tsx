@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Plus, Minus, Trash, MapPin, Navigation, Mail, PenTool as Tool, Edit, Camera, UploadCloud, X as CloseIcon } from 'lucide-react'; // Added Camera, UploadCloud, CloseIcon
+import { Plus, Minus, Trash, MapPin, Navigation, Mail, PenTool as Tool, Edit, Camera, UploadCloud, X as CloseIcon } from 'lucide-react';
 import { calculateDistance } from '../lib/utils';
 import { sendEmail, getRecipientEmails } from '../lib/emailClient';
 import { toast } from 'sonner';
@@ -46,14 +46,15 @@ interface Visit {
     };
   } | null;
   status?: string;
-  report_photo_url?: string; // Added for report photo
-  report_photo_file_path?: string; // Added for report photo file path
+  report_photo_url?: string;
+  report_photo_file_path?: string;
 }
 
+// ✅ DÜZELTME: Arayüz 'paid_products' tablosuna göre güncellendi
 interface BiocidalProduct {
   id: string;
   name: string;
-  unit_type: string;
+  unit_type: string; // 'unit_type' AdminProducts dosyasından alındı
 }
 
 interface PaidProduct {
@@ -74,6 +75,14 @@ interface PaidMaterialItem {
   total_price: number;
 }
 
+// ✅ YENİ: Biyosidal kullanım state'i için arayüz
+interface BiocidalUsageItem {
+  productId: string;
+  quantity: string;
+  dosage: string;
+  unit: string;
+}
+
 interface AddEquipmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -81,6 +90,7 @@ interface AddEquipmentModalProps {
   onSave: () => void;
 }
 
+// ... (visitTypes, pestTypes, densityOptions sabitleri - Değişiklik yok) ...
 const visitTypes = [
   { id: 'ilk', label: 'İlk' },
   { id: 'ucretli', label: 'Ücretli' },
@@ -112,7 +122,8 @@ const densityOptions = [
   { id: 'istila', label: 'İstila' }
 ];
 
-// Simple AddEquipmentModal component
+
+// ... (AddEquipmentModal bileşeni - Değişiklik yok) ...
 const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, branchId, onSave }) => {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -321,6 +332,7 @@ const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, 
   );
 };
 
+
 const VisitDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -339,14 +351,17 @@ const VisitDetails: React.FC = () => {
   const [startTime, setStartTime] = useState(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
   const [endTime, setEndTime] = useState('');
   const [reportNumber, setReportNumber] = useState('');
-  const [biocidalUsage, setBiocidalUsage] = useState<Array<{
-    productId: string;
-    quantity: string;
-  }>>([{ productId: '', quantity: '' }]);
+
+  // ✅ DÜZELTME: Biyosidal state'i 'dosage' ve 'unit' içerecek şekilde güncellendi
+  const [biocidalUsage, setBiocidalUsage] = useState<BiocidalUsageItem[]>([
+    { productId: '', quantity: '', dosage: '', unit: '' }
+  ]);
+  
   const [paidProductUsage, setPaidProductUsage] = useState<Array<{
     productId: string;
     quantity: string;
   }>>([{ productId: '', quantity: '' }]);
+  
   const [noPaidProductsUsed, setNoPaidProductsUsed] = useState(false);
   const [operatorId, setOperatorId] = useState<string | null>(null);
   const [distanceFromPrevious, setDistanceFromPrevious] = useState<number | null>(null);
@@ -358,14 +373,13 @@ const VisitDetails: React.FC = () => {
   const [previousPaidMaterials, setPreviousPaidMaterials] = useState<PaidMaterialItem[]>([]);
   const [existingSaleId, setExistingSaleId] = useState<string | null>(null);
 
-  // NEW: State for report photo
   const [reportPhotoFile, setReportPhotoFile] = useState<File | null>(null);
   const [reportPhotoPreview, setReportPhotoPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for hidden file input
+  const fileInputRef = useRef<HTMLInputElement>(null); 
 
   useEffect(() => {
     fetchVisitDetails();
-    fetchBiocidalProducts();
+    fetchBiocidalProducts(); // ✅ GÜNCELLENDİ: Artık paid_products'tan çekecek
     fetchOperatorId();
   }, [id]);
 
@@ -384,12 +398,10 @@ const VisitDetails: React.FC = () => {
   }, [operatorId]);
 
   useEffect(() => {
-    // Show paid visit amount field if 'ucretli' is selected
     setShowPaidVisitAmount(selectedVisitTypes.includes('ucretli'));
   }, [selectedVisitTypes]);
 
   useEffect(() => {
-    // If we're in edit mode and have previous paid materials, initialize the form with them
     if (isEditMode && previousPaidMaterials.length > 0) {
       const initialPaidProducts = previousPaidMaterials.map(item => ({
         productId: item.product.id,
@@ -400,6 +412,7 @@ const VisitDetails: React.FC = () => {
     }
   }, [isEditMode, previousPaidMaterials]);
 
+  // ... (calculateDistanceFromPrevious, fetchOperatorId, fetchPaidProducts - Değişiklik yok) ...
   const calculateDistanceFromPrevious = () => {
     if (
       visit?.branch?.latitude && 
@@ -451,6 +464,7 @@ const VisitDetails: React.FC = () => {
       setError(err.message);
     }
   };
+
 
   const fetchVisitDetails = async () => {
     try {
@@ -517,16 +531,13 @@ const VisitDetails: React.FC = () => {
       }
       
       if (data?.visit_type) {
-        // Handle both string and array formats for backward compatibility
         if (Array.isArray(data.visit_type)) {
           setSelectedVisitTypes(data.visit_type);
-          // Check if 'ucretli' is in the array to show paid visit amount field
           if (data.visit_type.includes('ucretli')) {
             setShowPaidVisitAmount(true);
           }
         } else if (typeof data.visit_type === 'string') {
           setSelectedVisitTypes([data.visit_type]);
-          // Check if 'ucretli' is selected to show paid visit amount field
           if (data.visit_type === 'ucretli') {
             setShowPaidVisitAmount(true);
           }
@@ -534,11 +545,9 @@ const VisitDetails: React.FC = () => {
       }
       
       if (data?.notes) {
-        // Check if notes contain paid visit amount information
         const paidVisitAmountMatch = data.notes.match(/Ücretli ziyaret tutarı: (\d+) TL/);
         if (paidVisitAmountMatch) {
           setPaidVisitAmount(paidVisitAmountMatch[1]);
-          // Remove the paid visit amount line from notes
           setNotes(data.notes.replace(/Ücretli ziyaret tutarı: \d+ TL\n\n/, ''));
         } else {
           setNotes(data.notes);
@@ -549,14 +558,14 @@ const VisitDetails: React.FC = () => {
         setReportNumber(data.report_number);
       }
 
-      // Set existing report photo
       if (data?.report_photo_url) {
         setReportPhotoPreview(data.report_photo_url);
       }
 
-      // Fetch previous paid materials if in edit mode
+      // ✅ GÜNCELLENDİ: Düzenleme modunda hem ücretli hem de biyosidal verileri çek
       if (data?.status === 'completed') {
         fetchPreviousPaidMaterials(id);
+        fetchPreviousBiocidalUsage(id); // ✅ YENİ
       }
     } catch (err: any) {
       setError(err.message);
@@ -565,6 +574,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ... (fetchPreviousPaidMaterials - Değişiklik yok) ...
   const fetchPreviousPaidMaterials = async (visitId: string) => {
     try {
       const { data, error } = await supabase
@@ -593,6 +603,33 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+
+  // ✅ YENİ: Düzenleme modunda eski biyosidal verilerini çeker
+  const fetchPreviousBiocidalUsage = async (visitId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('biocidal_products_usage')
+        .select('product_id, quantity, unit, dosage')
+        .eq('visit_id', visitId);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        // Veriyi state'in formatıyla eşleştir
+        const loadedUsage = data.map(item => ({
+          productId: item.product_id,
+          quantity: item.quantity.toString(), // State'de string tutuluyor
+          unit: item.unit || '',
+          dosage: item.dosage || ''
+        }));
+        setBiocidalUsage(loadedUsage);
+      }
+    } catch (err: any) {
+      console.error('Error fetching previous biocidal usage:', err);
+    }
+  };
+
+  // ... (fetchBranchEquipment - Değişiklik yok) ...
   const fetchBranchEquipment = async (branchId: string) => {
     try {
       const { data: branchEquipmentData, error: branchEquipmentError } = await supabase
@@ -647,10 +684,17 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+
+  // ✅ DÜZELTME: Biyosidal ürünleri 'paid_products' tablosundan çeker
   const fetchBiocidalProducts = async () => {
     try {
+      // AdminProducts.tsx'teki gibi 'paid_products' tablosunu kullanıyoruz
+      // NOT: Eğer 'paid_products' içinde biyosidal olanları ayırmak için
+      // (örn: 'type' veya 'category' gibi) bir sütununuz varsa,
+      // buraya .eq('category', 'BİYOSİDAL') gibi bir filtre ekleyebilirsiniz.
+      // Şimdilik hepsi çekiliyor:
       const { data, error } = await supabase
-        .from('biocidal_products')
+        .from('paid_products') 
         .select('id, name, unit_type')
         .eq('is_active', true)
         .order('name');
@@ -662,6 +706,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ... (handleEquipmentCheckChange, handlePestTypeChange, handleVisitTypeChange - Değişiklik yok) ...
   const handleEquipmentCheckChange = (equipmentId: string, field: string, value: any) => {
     setEquipmentChecks(prev => ({
       ...prev,
@@ -690,17 +735,27 @@ const VisitDetails: React.FC = () => {
     });
   };
 
-  const handleBiocidalChange = (index: number, field: 'productId' | 'quantity', value: string) => {
+
+  // ✅ DÜZELTME: Biyosidal state handler'ı 'dosage' ve 'unit'i içerecek şekilde güncellendi
+  const handleBiocidalChange = (index: number, field: 'productId' | 'quantity' | 'dosage' | 'unit', value: string) => {
     const newBiocidalUsage = [...biocidalUsage];
     newBiocidalUsage[index] = {
       ...newBiocidalUsage[index],
       [field]: value
     };
+
+    // Eğer ürün seçimi değiştiyse, birimi otomatik doldur
+    if (field === 'productId') {
+      const product = biocidalProducts.find(p => p.id === value);
+      newBiocidalUsage[index].unit = product?.unit_type || 'adet';
+    }
+    
     setBiocidalUsage(newBiocidalUsage);
   };
 
+  // ✅ DÜZELTME: Yeni eklenen satır 'dosage' ve 'unit' içeriyor
   const addBiocidalProduct = () => {
-    setBiocidalUsage([...biocidalUsage, { productId: '', quantity: '' }]);
+    setBiocidalUsage([...biocidalUsage, { productId: '', quantity: '', dosage: '', unit: '' }]);
   };
 
   const removeBiocidalProduct = (index: number) => {
@@ -711,6 +766,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ... (handlePaidProductChange, addPaidProduct, removePaidProduct, updateOperatorStock, savePaidMaterialSale - Değişiklik yok) ...
   const handlePaidProductChange = (index: number, field: 'productId' | 'quantity', value: string) => {
     const newPaidProductUsage = [...paidProductUsage];
     newPaidProductUsage[index] = {
@@ -804,15 +860,12 @@ const VisitDetails: React.FC = () => {
         };
       });
       
-      // If in edit mode, check if there's an existing sale to update
       if (isEditMode && existingSaleId) {
-        // Delete existing sale items
         await supabase
           .from('paid_material_sale_items')
           .delete()
           .eq('sale_id', existingSaleId);
           
-        // Update sale
         await supabase
           .from('paid_material_sales')
           .update({
@@ -821,7 +874,6 @@ const VisitDetails: React.FC = () => {
           })
           .eq('id', existingSaleId);
           
-        // Insert new items
         const saleItemsWithSaleId = saleItems.map(item => ({
           ...item,
           sale_id: existingSaleId
@@ -834,7 +886,6 @@ const VisitDetails: React.FC = () => {
         return;
       }
       
-      // Create new sale if no existing sale or not in edit mode
       const { data: saleData, error: saleError } = await supabase
         .from('paid_material_sales')
         .insert([{
@@ -872,7 +923,56 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // NEW: Handle photo capture
+
+  // ✅ YENİ: Biyosidal verilerini 'biocidal_products_usage' tablosuna kaydeder
+  const saveBiocidalUsage = async () => {
+    if (!id || !operatorId || !visit) return; // Gerekli ID'ler var mı kontrol et
+
+    // Düzenleme modundaysak, bu ziyarete ait eski kayıtları sil
+    if (isEditMode) {
+      const { error: deleteError } = await supabase
+        .from('biocidal_products_usage')
+        .delete()
+        .eq('visit_id', id);
+      
+      if (deleteError) {
+        throw new Error(`Eski biyosidal verileri silinemedi: ${deleteError.message}`);
+      }
+    }
+
+    // Sadece geçerli (ürün seçilmiş ve miktar girilmiş) satırları filtrele
+    const validBiocidalUsage = biocidalUsage.filter(
+      item => item.productId && item.quantity && parseFloat(item.quantity) > 0
+    );
+
+    if (validBiocidalUsage.length === 0) {
+      return; // Kaydedilecek bir şey yok
+    }
+
+    // Veritabanı tablosuna eklenecek verileri hazırla
+    const dataToInsert = validBiocidalUsage.map(item => ({
+      visit_id: id,
+      product_id: item.productId,
+      quantity: parseFloat(item.quantity), // String'i sayıya çevir
+      unit: item.unit,
+      dosage: item.dosage,
+      operator_id: operatorId,
+      customer_id: visit.customer.id,
+      branch_id: visit.branch?.id || null
+    }));
+
+    // Yeni verileri ekle
+    const { error: insertError } = await supabase
+      .from('biocidal_products_usage')
+      .insert(dataToInsert);
+
+    if (insertError) {
+      throw new Error(`Biyosidal verileri kaydedilemedi: ${insertError.message}`);
+    }
+  };
+
+
+  // ... (handlePhotoChange, clearPhoto - Değişiklik yok) ...
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) {
       setReportPhotoFile(null);
@@ -882,22 +982,14 @@ const VisitDetails: React.FC = () => {
 
     const file = e.target.files[0];
     setReportPhotoFile(file);
-    setReportPhotoPreview(URL.createObjectURL(file)); // Create a preview URL
-
-    // Optional: Automatically upload the photo here if you want real-time upload
-    // Or keep it in saveVisit for a single transaction
+    setReportPhotoPreview(URL.createObjectURL(file)); 
   };
 
-  // NEW: Clear photo
   const clearPhoto = () => {
     setReportPhotoFile(null);
     setReportPhotoPreview(null);
-    // Also clear from DB if it was an existing photo
-    if (visit && visit.report_photo_file_path) {
-      // This would require a separate DB update or be handled in saveVisit
-      // For now, it just clears the local state.
-    }
   };
+
 
   const saveVisit = async () => {
     if (!reportNumber) {
@@ -924,7 +1016,7 @@ const VisitDetails: React.FC = () => {
     try {
       setLoading(true);
       
-      // 1. Upload report photo if a new one is selected
+      // 1. Rapor fotoğrafı yükleme
       let uploadedPhotoUrl: string | null = visit?.report_photo_url || null;
       let uploadedPhotoFilePath: string | null = visit?.report_photo_file_path || null;
 
@@ -933,10 +1025,10 @@ const VisitDetails: React.FC = () => {
         const fileName = `report_photos/${id}-${Date.now()}.${fileExt}`;
         
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('documents') // Assuming 'documents' is your bucket name
+          .from('documents') 
           .upload(fileName, reportPhotoFile, {
             cacheControl: '3600',
-            upsert: true, // Overwrite if file with same name exists
+            upsert: true, 
           });
 
         if (uploadError) throw uploadError;
@@ -944,46 +1036,49 @@ const VisitDetails: React.FC = () => {
         uploadedPhotoUrl = supabase.storage.from('documents').getPublicUrl(fileName).data.publicUrl;
         uploadedPhotoFilePath = fileName;
       } else if (reportPhotoPreview === null && visit?.report_photo_url) {
-        // If photo was cleared and it was an existing one, set to null
         uploadedPhotoUrl = null;
         uploadedPhotoFilePath = null;
-        // Optionally, delete the file from storage here if needed
-        // await supabase.storage.from('documents').remove([visit.report_photo_file_path]);
       }
 
-      // Prepare notes with paid visit amount if applicable
+      // Notları hazırla
       let updatedNotes = notes;
       if (showPaidVisitAmount && paidVisitAmount) {
         updatedNotes = `Ücretli ziyaret tutarı: ${paidVisitAmount} TL\n\n${notes}`;
       }
       
-      // Convert selectedVisitTypes array to a single string value for database constraint
+      // Ziyaret tipini string'e çevir
       const visitTypeValue = selectedVisitTypes.length > 0 ? selectedVisitTypes[0] : null;
       
+      // 2. 'visits' tablosunu güncelle
       const { data, error } = await supabase
         .from('visits')
         .update({
           equipment_checks: equipmentChecks,
           pest_types: selectedPestTypes,
-          visit_type: visitTypeValue, // Use single string value instead of array
+          visit_type: visitTypeValue, 
           notes: updatedNotes,
           report_number: reportNumber,
           status: 'completed',
-          report_photo_url: uploadedPhotoUrl, // Update photo URL
-          report_photo_file_path: uploadedPhotoFilePath, // Update photo file path
+          report_photo_url: uploadedPhotoUrl, 
+          report_photo_file_path: uploadedPhotoFilePath,
         })
         .eq('id', id)
         .select();
 
       if (error) throw error;
       
-      if (!isEditMode && !noPaidProductsUsed) {
+      // 3. Ücretli ürünleri kaydet (veya güncelle)
+      if (!noPaidProductsUsed) {
         await savePaidMaterialSale();
-      } else if (isEditMode && !noPaidProductsUsed) {
-        // In edit mode, update the paid materials
-        await savePaidMaterialSale();
+      } else if (isEditMode && existingSaleId) {
+        // Eğer "ürün kullanılmadı" seçildiyse ve eski satış varsa, onu sil
+        await supabase.from('paid_material_sales').delete().eq('id', existingSaleId);
       }
 
+      // ✅ YENİ: 4. Biyosidal ürünleri kaydet (veya güncelle)
+      await saveBiocidalUsage();
+
+      // 5. E-posta gönder
       if (sendEmailNotification && visit) {
         try {
           const recipientEmails = await getRecipientEmails(
@@ -1013,6 +1108,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ... (handleAddEquipment, handleEquipmentAdded, groupedEquipment - Değişiklik yok) ...
   const handleAddEquipment = () => {
     if (visit?.branch?.id) {
       setShowAddEquipmentModal(true);
@@ -1035,12 +1131,14 @@ const VisitDetails: React.FC = () => {
     return acc;
   }, {} as Record<string, BranchEquipment[]>);
 
+
   if (loading) return <div>Yükleniyor...</div>;
   if (error) return <div>Hata: {error}</div>;
   if (!visit) return <div>Ziyaret bulunamadı</div>;
 
   return (
     <div className="max-w-4xl mx-auto p-4">
+      {/* ... (Header bölümü - Müşteri, Şube vb. - Değişiklik yok) ... */}
       <div className="mb-6">
         <div className="text-sm text-gray-500">
           {new Date(visit.visit_date).toLocaleString('tr-TR', {
@@ -1081,6 +1179,7 @@ const VisitDetails: React.FC = () => {
         )}
       </div>
 
+      {/* ... (Ekipmanlar bölümü - Değişiklik yok) ... */}
       {visit.branch && (
         <div className="bg-white rounded-lg shadow-md mb-6">
           <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg flex justify-between items-center">
@@ -1169,6 +1268,7 @@ const VisitDetails: React.FC = () => {
         </div>
       )}
 
+      {/* ... (Ziyaret Türü, Hedef Zararlılar, Yoğunluk bölümleri - Değişiklik yok) ... */}
       <div className="bg-white rounded-lg shadow-md mb-6">
         <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
           <h2 className="font-medium">Ziyaret Türü</h2>
@@ -1187,7 +1287,6 @@ const VisitDetails: React.FC = () => {
           ))}
         </div>
         
-        {/* Paid Visit Amount Field */}
         {showPaidVisitAmount && (
           <div className="px-4 pb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1244,6 +1343,8 @@ const VisitDetails: React.FC = () => {
         </div>
       </div>
 
+
+      {/* ✅ GÜNCELLENDİ: Biyosidal Ürünler bölümü */}
       {biocidalUsage.map((item, index) => (
         <div key={`biocidal-${index}`} className="bg-white rounded-lg shadow-md mb-6">
           <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg flex justify-between items-center">
@@ -1269,6 +1370,7 @@ const VisitDetails: React.FC = () => {
                   className="w-full p-2 border rounded"
                 >
                   <option value="">Seçiniz...</option>
+                  {/* 'biocidalProducts' state'i artık 'paid_products'tan geliyor */}
                   {biocidalProducts.map(product => (
                     <option key={product.id} value={product.id}>
                       {product.name}
@@ -1276,40 +1378,63 @@ const VisitDetails: React.FC = () => {
                   ))}
                 </select>
               </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Miktar / Doz
+                    Miktar
                   </label>
-                  <div className="flex">
-                    <input 
-                      type="text" 
-                      value={item.quantity}
-                      onChange={(e) => handleBiocidalChange(index, 'quantity', e.target.value)}
-                      className="w-full p-2 border rounded-l" 
-                    />
-                    <span className="bg-gray-100 p-2 border border-l-0 rounded-r">
-                      {biocidalProducts.find(p => p.id === item.productId)?.unit_type || 'birim'}
-                    </span>
-                  </div>
+                  <input 
+                    type="text" 
+                    value={item.quantity}
+                    onChange={(e) => handleBiocidalChange(index, 'quantity', e.target.value)}
+                    className="w-full p-2 border rounded" 
+                    placeholder="örn: 1.5"
+                  />
                 </div>
-                {index === biocidalUsage.length - 1 && (
-                  <div className="flex items-end">
-                    <button 
-                      onClick={addBiocidalProduct}
-                      className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center"
-                    >
-                      <Plus size={16} className="mr-1" /> Ürün Ekle
-                    
-                    </button>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Birim
+                  </label>
+                  <input 
+                    type="text" 
+                    value={item.unit}
+                    onChange={(e) => handleBiocidalChange(index, 'unit', e.target.value)}
+                    className="w-full p-2 border rounded bg-gray-50" 
+                    placeholder="örn: lt, ml, gr"
+                  />
+                </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Doz
+                </label>
+                <input 
+                  type="text" 
+                  value={item.dosage}
+                  onChange={(e) => handleBiocidalChange(index, 'dosage', e.target.value)}
+                  className="w-full p-2 border rounded" 
+                  placeholder="örn: 10ml / 1L Su"
+                />
+              </div>
+
+              {index === biocidalUsage.length - 1 && (
+                <div className="flex items-end">
+                  <button 
+                    onClick={addBiocidalProduct}
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center"
+                  >
+                    <Plus size={16} className="mr-1" /> Biyosidal Ekle
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       ))}
 
+      {/* ... (Ücretli Ürünler bölümü - Değişiklik yok) ... */}
       <div className="bg-white rounded-lg shadow-md mb-6">
         <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
           <h2 className="font-medium">Ücretli Ürünler</h2>
@@ -1414,6 +1539,7 @@ const VisitDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* ... (Notlar, Açıklamalar, Saatler, Rapor No, Fotoğraf, E-posta ve Kaydet Butonu - Değişiklik yok) ... */}
       <div className="bg-white rounded-lg shadow-md mb-6">
         <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
           <h2 className="font-medium">Notlar (Sadece Operatör Görür)</h2>
@@ -1492,14 +1618,14 @@ const VisitDetails: React.FC = () => {
           <input
             type="file"
             accept="image/*"
-            capture="camera" // This is the key for camera access
+            capture="camera"
             onChange={handlePhotoChange}
             ref={fileInputRef}
-            style={{ display: 'none' }} // Hide the actual input
+            style={{ display: 'none' }} 
           />
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()} // Trigger hidden input click
+            onClick={() => fileInputRef.current?.click()} 
             className="w-full p-2 border rounded bg-gray-100 flex items-center justify-center gap-2 hover:bg-gray-200"
           >
             <Camera size={18} /> Resim Çek / Yükle
@@ -1541,7 +1667,6 @@ const VisitDetails: React.FC = () => {
         {loading ? 'Kaydediliyor...' : isEditMode ? 'Güncelle' : 'Tamamlandı'}
       </button>
 
-      {/* Add Equipment Modal */}
       <AddEquipmentModal
         isOpen={showAddEquipmentModal}
         onClose={() => setShowAddEquipmentModal(false)}
