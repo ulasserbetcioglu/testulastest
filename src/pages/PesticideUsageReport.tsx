@@ -114,7 +114,7 @@ const PesticideUsageReport: React.FC = () => {
     setReportData([]); 
 
     try {
-      // ✅ DÜZELTME: Sorgu 'biocidal_products' tablosuna join yapıyor
+      // ✅ DÜZELTME: Hatalı yorum satırı kaldırıldı
       let query = supabase
         .from('biocidal_products_usage')
         .select(`
@@ -123,7 +123,7 @@ const PesticideUsageReport: React.FC = () => {
           quantity,
           unit,
           dosage,
-          product:biocidal_products (name),  /* <-- DÜZELTME BURADA */
+          product:biocidal_products (name),
           operator:operators (name),
           customer:customers (kisa_isim),
           branch:branches (sube_adi),
