@@ -77,7 +77,6 @@ const PesticideUsageReport: React.FC = () => {
   // 2. Aşama: Rapor verisini çek
   const fetchReportData = useCallback(async () => {
     if (isProfileLoading || !profileId || !userRole) {
-      // Profil yüklenirken veya ID yoksa raporu getirme
       if (!isProfileLoading && !profileId) {
           setError(prevError => prevError || "Raporu getirmek için profil ID bulunamadı.");
       }
