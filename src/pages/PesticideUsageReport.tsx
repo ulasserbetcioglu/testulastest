@@ -5,8 +5,8 @@ import { Loader2, Download, Calendar, Bug } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
-// import { useAuth } from '../components/Auth/AuthProvider'; // <-- ARTIK KULLANILMIYOR
-import { localAuth } from '../lib/localAuth'; // ✅ DÜZELTME: localAuth import edildi
+// import { useAuth } from '../components/Auth/AuthProvider'; // <-- KULLANILMIYOR
+import { localAuth } from '../lib/localAuth'; // ✅ DÜZELTME: Sadece localAuth kullanılıyor
 
 // Rapor verisinin arayüzü
 interface PesticideUsage {
@@ -23,8 +23,6 @@ interface PesticideUsage {
 }
 
 const PesticideUsageReport: React.FC = () => {
-  // const { user } = useAuth(); // <-- ARTIK KULLANILMIYOR
-  
   const [reportData, setReportData] = useState<PesticideUsage[]>([]);
   const [isProfileLoading, setIsProfileLoading] = useState(true); 
   const [isReportLoading, setIsReportLoading] = useState(false); 
@@ -35,7 +33,7 @@ const PesticideUsageReport: React.FC = () => {
   const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  // 1. Aşama: Kullanıcı profili bulma (localAuth kullanarak)
+  // 1. Aşama: Kullanıcı profili bulma (SADECE localAuth kullanarak)
   useEffect(() => {
     const fetchUserProfile = () => {
       setIsProfileLoading(true);
@@ -45,26 +43,24 @@ const PesticideUsageReport: React.FC = () => {
         
         if (localSession && localSession.type === 'customer') {
           setUserRole('customer');
-          // 'CustomerLayout' 'localSession.name' kullanıyor.
-          // 'PesticideUsageReport' ise ID'ye ihtiyaç duyar.
-          // 'localAuth.ts' dosyanızın 'id' (profile_id) sakladığını varsayıyorum.
+          // localAuth.ts'nizin 'id' (Müşteri UUID) sakladığını varsayıyoruz.
           if (!localSession.id) {
-             setError("localAuth oturumunda profil ID bulunamadı. Lütfen localAuth.ts dosyanızı kontrol edin.");
+             setError("localAuth oturumunda profil ID (localSession.id) bulunamadı. Lütfen Login.tsx veya localAuth.ts dosyanızı kontrol edin.");
              return;
           }
           setProfileId(localSession.id);
 
         } else if (localSession && localSession.type === 'branch') {
           setUserRole('branch');
+           // localAuth.ts'nizin 'id' (Şube UUID) sakladığını varsayıyoruz.
           if (!localSession.id) {
-             setError("localAuth oturumunda profil ID bulunamadı. Lütfen localAuth.ts dosyanızı kontrol edin.");
+             setError("localAuth oturumunda profil ID (localSession.id) bulunamadı. Lütfen Login.tsx veya localAuth.ts dosyanızı kontrol edin.");
              return;
           }
           setProfileId(localSession.id);
 
         } else {
-          // Eğer localSession yoksa veya tipi uymuyorsa
-          setError('Geçerli bir Müşteri veya Şube oturumu bulunamadı.');
+          setError('Geçerli bir Müşteri veya Şube oturumu (localAuth) bulunamadı.');
         }
 
       } catch (err: any) {
@@ -76,11 +72,15 @@ const PesticideUsageReport: React.FC = () => {
     };
 
     fetchUserProfile();
-  }, []); // Artık 'user' objesine bağlı değil, sadece sayfa yüklendiğinde çalışır
+  }, []); // Sadece sayfa yüklendiğinde bir kez çalışır
 
   // 2. Aşama: Rapor verisini çek
   const fetchReportData = useCallback(async () => {
     if (isProfileLoading || !profileId || !userRole) {
+      // Profil yüklenirken veya ID yoksa raporu getirme
+      if (!isProfileLoading && !profileId) {
+          setError(prevError => prevError || "Raporu getirmek için profil ID bulunamadı.");
+      }
       return;
     }
 
