@@ -55,7 +55,7 @@ const BranchLayout: React.FC = () => {
     { path: '/branch/sertifikalar', icon: <Award size={20} />, name: 'Sertifikalar' },
     { path: '/branch/malzemeler', icon: <Package size={20} />, name: 'Malzemeler' },
     // YENİ RAPOR LİNKİ
-    { path: '/branch/pestisit-raporu', icon: <Bug size={2L0} />, name: 'Pestisit Raporu' },
+    { path: '/branch/pestisit-raporu', icon: <Bug size={20} />, name: 'Pestisit Raporu' },
     { path: '/branch/trend-analizi', icon: <TrendingUp size={20} />, name: 'Trend Analizi' },
     { path: '/branch/teklifler', icon: <FileText size={20} />, name: 'Teklifler' },
   ];
