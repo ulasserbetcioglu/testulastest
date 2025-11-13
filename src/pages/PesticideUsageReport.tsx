@@ -5,8 +5,9 @@ import { Loader2, Download, Calendar, Bug } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { useAuth } from '../components/Auth/AuthProvider';
+import { useAuth } from '../components/Auth/AuthProvider'; // AuthProvider'dan 'user' alınır
 
+// Rapor verisinin arayüzü
 interface PesticideUsage {
   id: string;
   sale_date: string;
@@ -18,97 +19,99 @@ interface PesticideUsage {
   operator_name: string;
 }
 
+// Ürünleri filtrelemek için kullanılacak anahtar kelimeler
 const PESTICIDE_KEYWORDS = ['biyosidal', 'pestisit', 'insektisit', 'rodentisit', 'ilaç'];
 
 const PesticideUsageReport: React.FC = () => {
-  const { user } = useAuth();
+  const { user } = useAuth(); // AuthContext'ten 'user' alınır
   
   const [reportData, setReportData] = useState<PesticideUsage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Başlangıçta true
   const [error, setError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'branch' | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
 
+  // Tarih filtreleri
   const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  // 🔧 DÜZELTME: Kullanıcı profili bulma
+  // DÜZELTME: Kullanıcı profili bulma (Daha sağlam hata yönetimi ile)
   useEffect(() => {
     if (!user) {
-      setLoading(true);
+      setLoading(true); // 'user' beklenirken yükleniyor ekranı göster
       return; 
     }
 
     const fetchUserProfile = async () => {
-      try {
+      try { // ✅ DÜZELTME 1: try...catch bloğu eklendi
         // Önce Müşteri mi diye bak
-        const { data: customerData, error: customerError } = await supabase
+        let { data: customerData, error: customerError } = await supabase
           .from('customers')
           .select('id')
           .eq('auth_id', user.id)
-          .maybeSingle(); // 🔧 single() yerine maybeSingle() kullan
+          .single();
 
+        // 'PGRST116' (No rows found) bir hata değildir, sadece kayıt yok demektir.
         if (customerError && customerError.code !== 'PGRST116') {
-          throw customerError;
+          throw customerError; // Gerçek bir veritabanı hatasıysa fırlat
         }
 
         if (customerData) {
-          console.log('✅ Müşteri profili bulundu:', customerData.id);
           setUserRole('customer');
           setProfileId(customerData.id);
-          setLoading(false); // 🔧 Profil bulununca loading'i kapat
-          return;
+          return; // Profili bulduk, çık
         }
 
-        // Değilse Şube mi diye bak
-        const { data: branchData, error: branchError } = await supabase
+        // Müşteri değilse Şube mi diye bak
+        let { data: branchData, error: branchError } = await supabase
           .from('branches')
           .select('id')
           .eq('auth_id', user.id)
-          .maybeSingle(); // 🔧 single() yerine maybeSingle() kullan
+          .single();
 
         if (branchError && branchError.code !== 'PGRST116') {
-          throw branchError;
+          throw branchError; // Gerçek bir veritabanı hatasıysa fırlat
         }
 
         if (branchData) {
-          console.log('✅ Şube profili bulundu:', branchData.id);
           setUserRole('branch');
           setProfileId(branchData.id);
-          setLoading(false); // 🔧 Profil bulununca loading'i kapat
-          return;
+          return; // Profili bulduk, çık
         }
 
-        // Hiçbir profil bulunamadı
-        console.error('❌ Profil bulunamadı');
-        setError('Yetkili profil bulunamadı.');
-        setLoading(false);
-      } catch (err: any) {
-        console.error('❌ Profil çekme hatası:', err);
-        setError('Profil yüklenirken hata: ' + err.message);
-        setLoading(false);
+        // Ne müşteri ne de şube ise (örn: admin panele girmiş olabilir)
+        setError('Bu kullanıcı için yetkili Müşteri veya Şube profili bulunamadı.');
+        setLoading(false); // Yüklemeyi durdur ve hata göster
+
+      } catch (err: any) { // ✅ DÜZELTME 2: catch bloğu
+        console.error("Profil alınırken hata oluştu:", err);
+        setError(`Profil bilgisi alınamadı: ${err.message}`);
+        setLoading(false); // Hata olursa, yüklemeyi durdur.
       }
     };
 
     fetchUserProfile();
-  }, [user]);
+  }, [user]); // Bağımlılık: user
 
-  // 🔧 DÜZELTME: Rapor verisini çek
+  // Rapor verisini çek
   const fetchReportData = useCallback(async () => {
-    // Profil henüz yüklenmemişse bekle
+    // profileId veya userRole henüz ayarlanmadıysa bekle
     if (!profileId || !userRole) {
-      console.log('⏳ Profil bekleniyor...');
+      // Eğer 'user' var ama 'profileId' henüz gelmediyse
+      // ve bir hata da ayarlanmadıysa, yükleniyor durumunda kal.
+      if (user && !error) {
+        setLoading(true);
+      }
       return;
     }
 
     if (!startDate || !endDate) {
-      setError("Tarih aralığı seçmelisiniz.");
+      setError("Lütfen geçerli bir tarih aralığı seçin.");
       setLoading(false);
       return;
     }
 
-    console.log('📊 Rapor çekiliyor...', { profileId, userRole, startDate, endDate });
-    setLoading(true);
+    setLoading(true); // Veri çekme işlemi başlıyor
     setError(null);
 
     try {
@@ -125,14 +128,9 @@ const PesticideUsageReport: React.FC = () => {
         
         const branchIds = branches ? branches.map(b => b.id) : [];
         
-        // 🔧 DÜZELTME: Eğer şube yoksa sadece customer_id kontrolü yap
-        if (branchIds.length > 0) {
-          visitQuery = visitQuery.or(
-            `customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',')})`
-          );
-        } else {
-          visitQuery = visitQuery.eq('customer_id', profileId);
-        }
+        visitQuery = visitQuery.or(
+          `customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',')})`
+        );
       } else {
         visitQuery = visitQuery.eq('branch_id', profileId);
       }
@@ -144,49 +142,41 @@ const PesticideUsageReport: React.FC = () => {
 
       if (visitsError) throw visitsError;
       
-      console.log('📍 Ziyaretler bulundu:', visits?.length || 0);
-
       if (!visits || visits.length === 0) {
         setReportData([]);
-        setLoading(false);
+        // setLoading(false) -> finally bloğu halledecek
         return;
       }
 
       const visitIds = visits.map(v => v.id);
 
       // 2. Bu ziyaretlerde kullanılan ürünleri (satışları) bul
-      // 🔧 DÜZELTME: Query düzeltildi
       const { data: sales, error: salesError } = await supabase
         .from('paid_material_sale_items')
         .select(`
           id,
           quantity,
-          paid_material_sales!inner (
+          sale:paid_material_sales (
             sale_date,
-            visit_id,
-            visits!inner (
+            visit:visits (
               customer:customers (kisa_isim),
               branch:branches (sube_adi),
               operator:operators (name)
             )
           ),
-          products!inner (name, unit, type, category)
+          product:product_id (name, unit, type, category)
         `)
-        .in('paid_material_sales.visit_id', visitIds);
+        .in('sale:visit_id', visitIds)
+        .order('sale_date', { referencedTable: 'paid_material_sales', ascending: false });
 
-      if (salesError) {
-        console.error('❌ Satış verisi hatası:', salesError);
-        throw salesError;
-      }
+      if (salesError) throw salesError;
 
-      console.log('🛒 Satışlar bulundu:', sales?.length || 0);
-
-      // 3. Veriyi filtrele ve düzelt
+      // 3. Veriyi filtrele ve düzelt (Sadece Pestisit/Biyosidal olanlar)
       const filteredData = sales
-        .map((item: any) => {
-          const productName = item.products?.name?.toLowerCase() || '';
-          const productType = item.products?.type?.toLowerCase() || '';
-          const productCategory = item.products?.category?.toLowerCase() || '';
+        .map(item => {
+          const productName = item.product?.name?.toLowerCase() || '';
+          const productType = item.product?.type?.toLowerCase() || '';
+          const productCategory = item.product?.category?.toLowerCase() || '';
 
           const isPesticide = PESTICIDE_KEYWORDS.some(keyword => 
             productName.includes(keyword) || 
@@ -194,41 +184,37 @@ const PesticideUsageReport: React.FC = () => {
             productCategory.includes(keyword)
           );
 
-          if (!isPesticide || !item.products || !item.paid_material_sales) return null;
+          if (!isPesticide || !item.product || !item.sale || !item.sale.visit) return null;
 
-          const visit = item.paid_material_sales.visits;
-          
           return {
             id: item.id,
-            sale_date: item.paid_material_sales.sale_date,
-            product_name: item.products.name,
+            sale_date: item.sale.sale_date,
+            product_name: item.product.name,
             quantity: item.quantity,
-            unit: item.products.unit || 'adet',
-            customer_name: visit?.customer?.kisa_isim || 'N/A',
-            branch_name: visit?.branch?.sube_adi || null,
-            operator_name: visit?.operator?.name || 'N/A',
+            unit: item.product.unit || 'adet',
+            customer_name: item.sale.visit.customer?.kisa_isim || 'N/A',
+            branch_name: item.sale.visit.branch?.sube_adi || null,
+            operator_name: item.sale.visit.operator?.name || 'N/A',
           };
         })
         .filter(Boolean) as PesticideUsage[];
 
-      console.log('✅ Filtrelenmiş pestisit verileri:', filteredData.length);
       setReportData(filteredData);
 
     } catch (err: any) {
-      console.error('❌ Rapor verisi alınırken hata:', err);
+      console.error('Rapor verisi alınırken hata:', err);
       setError(err.message);
     } finally {
-      setLoading(false);
+      // ✅ DÜZELTME 3: Hata da olsa, kayıt bulunamasa da, başarı da olsa
+      // 'finally' bloğu çalışır ve yüklemeyi durdurur.
+      setLoading(false); 
     }
-  }, [profileId, userRole, startDate, endDate]);
+  }, [profileId, userRole, startDate, endDate, user, error]); // 'error'u bağımlılığa ekledik
 
-  // 🔧 DÜZELTME: Raporu otomatik çek
+  // Raporu otomatik çekmek için
   useEffect(() => {
-    if (profileId && userRole) {
-      console.log('🚀 Rapor otomatik çekiliyor...');
-      fetchReportData();
-    }
-  }, [profileId, userRole, startDate, endDate]); // fetchReportData değil, bağımlılıkları direkt kullan
+    fetchReportData();
+  }, [fetchReportData]);
 
   const exportToExcel = () => {
     const dataToExport = reportData.map(item => ({
@@ -247,6 +233,7 @@ const PesticideUsageReport: React.FC = () => {
     XLSX.writeFile(wb, `Pestisit_Kullanim_Raporu_${startDate}_${endDate}.xlsx`);
   };
 
+  // JSX (Görünüm)
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -289,7 +276,7 @@ const PesticideUsageReport: React.FC = () => {
           </div>
           <div className="self-end">
             <button
-              onClick={fetchReportData}
+              onClick={fetchReportData} // Manuel olarak da tetiklenebilir
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
               disabled={loading}
             >
@@ -300,12 +287,14 @@ const PesticideUsageReport: React.FC = () => {
         </div>
       </div>
 
+      {/* Hata mesajı */}
       {!loading && error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
           Hata: {error}
         </div>
       )}
 
+      {/* Yükleniyor durumu */}
       {loading && (
         <div className="flex justify-center items-center p-8">
           <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
@@ -313,6 +302,7 @@ const PesticideUsageReport: React.FC = () => {
         </div>
       )}
 
+      {/* Rapor Tablosu (Yüklenmiyorsa ve Hata yoksa) */}
       {!loading && !error && (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="overflow-x-auto">
