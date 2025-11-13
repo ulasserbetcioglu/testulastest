@@ -5,6 +5,7 @@ import { Loader2, Download, Calendar, Bug } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { useAuth } from '../components/Auth/AuthProvider'; // ✅ DÜZELTME 1: useAuth import edildi
 
 // Rapor verisinin arayüzü
 interface PesticideUsage {
@@ -23,8 +24,10 @@ interface PesticideUsage {
 const PESTICIDE_KEYWORDS = ['biyosidal', 'pestisit', 'insektisit', 'rodentisit', 'ilaç'];
 
 const PesticideUsageReport: React.FC = () => {
+  const { user } = useAuth(); // ✅ DÜZELTME 2: user, AuthContext'ten (vekil) alındı
+  
   const [reportData, setReportData] = useState<PesticideUsage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Başlangıçta true kalsın
   const [error, setError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'branch' | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -33,52 +36,70 @@ const PesticideUsageReport: React.FC = () => {
   const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  // Kullanıcı rolünü ve ID'sini al
-  const fetchUserProfile = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setError('Oturum bulunamadı');
-      setLoading(false);
-      return;
-    }
-
-    // Önce Müşteri mi diye bak
-    let { data: customerData, error: customerError } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('auth_id', user.id)
-      .single();
-
-    if (customerData) {
-      setUserRole('customer');
-      setProfileId(customerData.id);
-      return;
-    }
-
-    // Değilse Şube mi diye bak
-    let { data: branchData, error: branchError } = await supabase
-      .from('branches')
-      .select('id')
-      .eq('auth_id', user.id)
-      .single();
-
-    if (branchData) {
-      setUserRole('branch');
-      setProfileId(branchData.id);
-      return;
-    }
-
-    setError('Yetkili profil bulunamadı.');
-    setLoading(false);
-  }, []);
-
+  // ✅ DÜZELTME 3: Kullanıcı profili bulma
+  // Bu useEffect, 'user' objesi (AuthProvider'dan gelen) değiştiğinde çalışır
   useEffect(() => {
+    // Eğer user (henüz) yoksa, bekle.
+    if (!user) {
+      // ProtectedRoute'dan geçtiyse 'user' objesi birazdan gelecektir.
+      // 'user' null iken loading=true'da kalır.
+      // Eğer 'user' hiç gelmezse (token geçersizse), AuthProvider
+      // zaten kullanıcıyı /login'e yönlendirecektir.
+      setLoading(true); // Kullanıcı beklenirken yükleniyor ekranı göster
+      return; 
+    }
+
+    // 'user' geldi, profili çek.
+    const fetchUserProfile = async () => {
+      // Önce Müşteri mi diye bak
+      let { data: customerData } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('auth_id', user.id)
+        .single();
+
+      if (customerData) {
+        setUserRole('customer');
+        setProfileId(customerData.id);
+        return;
+      }
+
+      // Değilse Şube mi diye bak
+      let { data: branchData } = await supabase
+        .from('branches')
+        .select('id')
+        .eq('auth_id', user.id)
+        .single();
+
+      if (branchData) {
+        setUserRole('branch');
+        setProfileId(branchData.id);
+        return;
+      }
+
+      setError('Yetkili profil bulunamadı.');
+      setLoading(false);
+    };
+
     fetchUserProfile();
-  }, [fetchUserProfile]);
+  }, [user]); // Bağımlılık: user
 
   // Rapor verisini çek
   const fetchReportData = useCallback(async () => {
-    if (!profileId || !userRole || !startDate || !endDate) return;
+    // profileId veya userRole henüz ayarlanmadıysa bekle
+    // (yukarıdaki useEffect'in çalışması beklenir)
+    if (!profileId || !userRole) {
+      // Eğer user varsa ama profil henüz yükleniyorsa,
+      // loading=true kalsın.
+      if(user) setLoading(true);
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      setError("Tarih aralığı seçmelisiniz.");
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -93,6 +114,8 @@ const PesticideUsageReport: React.FC = () => {
           .from('branches')
           .select('id')
           .eq('customer_id', profileId);
+        
+        if (branchError) throw branchError;
         
         const branchIds = branches ? branches.map(b => b.id) : [];
         
@@ -110,6 +133,7 @@ const PesticideUsageReport: React.FC = () => {
         .lte('visit_date', new Date(endDate + 'T23:59:59').toISOString());
 
       if (visitsError) throw visitsError;
+      
       if (!visits || visits.length === 0) {
         setReportData([]);
         setLoading(false);
@@ -153,7 +177,7 @@ const PesticideUsageReport: React.FC = () => {
             productCategory.includes(keyword)
           );
 
-          if (!isPesticide) return null;
+          if (!isPesticide || !item.product || !item.sale || !item.sale.visit) return null;
 
           return {
             id: item.id,
@@ -176,9 +200,14 @@ const PesticideUsageReport: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [profileId, userRole, startDate, endDate]);
+    // ✅ DÜZELTME 4: 'user' bağımlılığı eklendi (useCallback'in !profileId kontrolü user'a bağlı)
+  }, [profileId, userRole, startDate, endDate, user]); 
 
+  // ✅ DÜZELTME 5: Raporu otomatik çekmek için useEffect
+  // Bu, `fetchReportData`'nın *tanımı* (useCallback) değiştiğinde tetiklenir.
   useEffect(() => {
+    // profileId set edildiğinde (veya tarihler değiştiğinde) fetchReportData'nın
+    // tanımı değişir ve bu effect raporu otomatik çeker.
     fetchReportData();
   }, [fetchReportData]);
 
@@ -241,7 +270,7 @@ const PesticideUsageReport: React.FC = () => {
           </div>
           <div className="self-end">
             <button
-              onClick={fetchReportData}
+              onClick={fetchReportData} // Manuel olarak da tetiklenebilir
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
               disabled={loading}
             >
@@ -252,16 +281,18 @@ const PesticideUsageReport: React.FC = () => {
         </div>
       </div>
 
+      {/* Hata mesajı (Oturum hatası yerine 'error' state'i) */}
+      {!loading && error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+          Hata: {error}
+        </div>
+      )}
+
+      {/* Yükleniyor durumu */}
       {loading && (
         <div className="flex justify-center items-center p-8">
           <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
           <span className="ml-3 text-gray-600">Rapor yükleniyor...</span>
-        </div>
-      )}
-
-      {!loading && error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
-          Hata: {error}
         </div>
       )}
 
