@@ -46,15 +46,15 @@ interface Visit {
     };
   } | null;
   status?: string;
-  report_photo_url?: string;
+  report_photo_url?: string; 
   report_photo_file_path?: string;
 }
 
-// ✅ DÜZELTME: Arayüz 'paid_products' tablosuna göre güncellendi
+// ✅ DÜZELTME: Orijinal dosyanızdaki gibi 'biocidal_products' tablosunu kullanır
 interface BiocidalProduct {
   id: string;
   name: string;
-  unit_type: string; // 'unit_type' AdminProducts dosyasından alındı
+  unit_type: string;
 }
 
 interface PaidProduct {
@@ -75,7 +75,7 @@ interface PaidMaterialItem {
   total_price: number;
 }
 
-// ✅ YENİ: Biyosidal kullanım state'i için arayüz
+// Biyosidal kullanım state'i için arayüz
 interface BiocidalUsageItem {
   productId: string;
   quantity: string;
@@ -90,7 +90,6 @@ interface AddEquipmentModalProps {
   onSave: () => void;
 }
 
-// ... (visitTypes, pestTypes, densityOptions sabitleri - Değişiklik yok) ...
 const visitTypes = [
   { id: 'ilk', label: 'İlk' },
   { id: 'ucretli', label: 'Ücretli' },
@@ -121,7 +120,6 @@ const densityOptions = [
   { id: 'orta', label: 'Orta' },
   { id: 'istila', label: 'İstila' }
 ];
-
 
 // ... (AddEquipmentModal bileşeni - Değişiklik yok) ...
 const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, branchId, onSave }) => {
@@ -161,7 +159,6 @@ const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, 
     setError(null);
 
     try {
-      // Generate equipment codes for each item
       const equipmentToInsert = formData.items.flatMap(item => {
         if (!item.equipmentId) return [];
         
@@ -352,7 +349,7 @@ const VisitDetails: React.FC = () => {
   const [endTime, setEndTime] = useState('');
   const [reportNumber, setReportNumber] = useState('');
 
-  // ✅ DÜZELTME: Biyosidal state'i 'dosage' ve 'unit' içerecek şekilde güncellendi
+  // Biyosidal state'i yeni arayüze göre güncellendi
   const [biocidalUsage, setBiocidalUsage] = useState<BiocidalUsageItem[]>([
     { productId: '', quantity: '', dosage: '', unit: '' }
   ]);
@@ -379,7 +376,7 @@ const VisitDetails: React.FC = () => {
 
   useEffect(() => {
     fetchVisitDetails();
-    fetchBiocidalProducts(); // ✅ GÜNCELLENDİ: Artık paid_products'tan çekecek
+    fetchBiocidalProducts(); // Orijinal fonksiyon
     fetchOperatorId();
   }, [id]);
 
@@ -412,7 +409,7 @@ const VisitDetails: React.FC = () => {
     }
   }, [isEditMode, previousPaidMaterials]);
 
-  // ... (calculateDistanceFromPrevious, fetchOperatorId, fetchPaidProducts - Değişiklik yok) ...
+  // ... (calculateDistanceFromPrevious, fetchOperatorId) ...
   const calculateDistanceFromPrevious = () => {
     if (
       visit?.branch?.latitude && 
@@ -450,6 +447,8 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+
+  // 'paid_products' tablosunu çeker
   const fetchPaidProducts = async () => {
     try {
       const { data, error } = await supabase
@@ -464,7 +463,6 @@ const VisitDetails: React.FC = () => {
       setError(err.message);
     }
   };
-
 
   const fetchVisitDetails = async () => {
     try {
@@ -562,10 +560,10 @@ const VisitDetails: React.FC = () => {
         setReportPhotoPreview(data.report_photo_url);
       }
 
-      // ✅ GÜNCELLENDİ: Düzenleme modunda hem ücretli hem de biyosidal verileri çek
+      // Düzenleme modunda ücretli ve biyosidal verileri çek
       if (data?.status === 'completed') {
         fetchPreviousPaidMaterials(id);
-        fetchPreviousBiocidalUsage(id); // ✅ YENİ
+        fetchPreviousBiocidalUsage(id); // Biyosidal verileri çeken fonksiyon
       }
     } catch (err: any) {
       setError(err.message);
@@ -574,7 +572,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // ... (fetchPreviousPaidMaterials - Değişiklik yok) ...
   const fetchPreviousPaidMaterials = async (visitId: string) => {
     try {
       const { data, error } = await supabase
@@ -603,8 +600,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-
-  // ✅ YENİ: Düzenleme modunda eski biyosidal verilerini çeker
+  // Düzenleme modunda eski biyosidal verilerini çeker
   const fetchPreviousBiocidalUsage = async (visitId: string) => {
     try {
       const { data, error } = await supabase
@@ -615,10 +611,9 @@ const VisitDetails: React.FC = () => {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        // Veriyi state'in formatıyla eşleştir
         const loadedUsage = data.map(item => ({
           productId: item.product_id,
-          quantity: item.quantity.toString(), // State'de string tutuluyor
+          quantity: item.quantity.toString(),
           unit: item.unit || '',
           dosage: item.dosage || ''
         }));
@@ -684,17 +679,11 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-
-  // ✅ DÜZELTME: Biyosidal ürünleri 'paid_products' tablosundan çeker
+  // ✅ DÜZELTME: Biyosidal ürünleri 'biocidal_products' tablosundan çeker
   const fetchBiocidalProducts = async () => {
     try {
-      // AdminProducts.tsx'teki gibi 'paid_products' tablosunu kullanıyoruz
-      // NOT: Eğer 'paid_products' içinde biyosidal olanları ayırmak için
-      // (örn: 'type' veya 'category' gibi) bir sütununuz varsa,
-      // buraya .eq('category', 'BİYOSİDAL') gibi bir filtre ekleyebilirsiniz.
-      // Şimdilik hepsi çekiliyor:
       const { data, error } = await supabase
-        .from('paid_products') 
+        .from('biocidal_products')
         .select('id, name, unit_type')
         .eq('is_active', true)
         .order('name');
@@ -735,8 +724,7 @@ const VisitDetails: React.FC = () => {
     });
   };
 
-
-  // ✅ DÜZELTME: Biyosidal state handler'ı 'dosage' ve 'unit'i içerecek şekilde güncellendi
+  // Biyosidal state handler'ı 'dosage' ve 'unit'i içerecek şekilde güncellendi
   const handleBiocidalChange = (index: number, field: 'productId' | 'quantity' | 'dosage' | 'unit', value: string) => {
     const newBiocidalUsage = [...biocidalUsage];
     newBiocidalUsage[index] = {
@@ -753,7 +741,7 @@ const VisitDetails: React.FC = () => {
     setBiocidalUsage(newBiocidalUsage);
   };
 
-  // ✅ DÜZELTME: Yeni eklenen satır 'dosage' ve 'unit' içeriyor
+  // Yeni eklenen satır 'dosage' ve 'unit' içeriyor
   const addBiocidalProduct = () => {
     setBiocidalUsage([...biocidalUsage, { productId: '', quantity: '', dosage: '', unit: '' }]);
   };
@@ -924,9 +912,9 @@ const VisitDetails: React.FC = () => {
   };
 
 
-  // ✅ YENİ: Biyosidal verilerini 'biocidal_products_usage' tablosuna kaydeder
+  // Biyosidal verilerini 'biocidal_products_usage' tablosuna kaydeder
   const saveBiocidalUsage = async () => {
-    if (!id || !operatorId || !visit) return; // Gerekli ID'ler var mı kontrol et
+    if (!id || !operatorId || !visit) return;
 
     // Düzenleme modundaysak, bu ziyarete ait eski kayıtları sil
     if (isEditMode) {
@@ -940,20 +928,18 @@ const VisitDetails: React.FC = () => {
       }
     }
 
-    // Sadece geçerli (ürün seçilmiş ve miktar girilmiş) satırları filtrele
     const validBiocidalUsage = biocidalUsage.filter(
       item => item.productId && item.quantity && parseFloat(item.quantity) > 0
     );
 
     if (validBiocidalUsage.length === 0) {
-      return; // Kaydedilecek bir şey yok
+      return; 
     }
 
-    // Veritabanı tablosuna eklenecek verileri hazırla
     const dataToInsert = validBiocidalUsage.map(item => ({
       visit_id: id,
       product_id: item.productId,
-      quantity: parseFloat(item.quantity), // String'i sayıya çevir
+      quantity: parseFloat(item.quantity),
       unit: item.unit,
       dosage: item.dosage,
       operator_id: operatorId,
@@ -961,7 +947,6 @@ const VisitDetails: React.FC = () => {
       branch_id: visit.branch?.id || null
     }));
 
-    // Yeni verileri ekle
     const { error: insertError } = await supabase
       .from('biocidal_products_usage')
       .insert(dataToInsert);
@@ -970,7 +955,6 @@ const VisitDetails: React.FC = () => {
       throw new Error(`Biyosidal verileri kaydedilemedi: ${insertError.message}`);
     }
   };
-
 
   // ... (handlePhotoChange, clearPhoto - Değişiklik yok) ...
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1046,7 +1030,6 @@ const VisitDetails: React.FC = () => {
         updatedNotes = `Ücretli ziyaret tutarı: ${paidVisitAmount} TL\n\n${notes}`;
       }
       
-      // Ziyaret tipini string'e çevir
       const visitTypeValue = selectedVisitTypes.length > 0 ? selectedVisitTypes[0] : null;
       
       // 2. 'visits' tablosunu güncelle
@@ -1071,11 +1054,10 @@ const VisitDetails: React.FC = () => {
       if (!noPaidProductsUsed) {
         await savePaidMaterialSale();
       } else if (isEditMode && existingSaleId) {
-        // Eğer "ürün kullanılmadı" seçildiyse ve eski satış varsa, onu sil
         await supabase.from('paid_material_sales').delete().eq('id', existingSaleId);
       }
 
-      // ✅ YENİ: 4. Biyosidal ürünleri kaydet (veya güncelle)
+      // 4. Biyosidal ürünleri kaydet (veya güncelle)
       await saveBiocidalUsage();
 
       // 5. E-posta gönder
@@ -1138,7 +1120,7 @@ const VisitDetails: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4">
-      {/* ... (Header bölümü - Müşteri, Şube vb. - Değişiklik yok) ... */}
+      {/* ... (Header bölümü - Değişiklik yok) ... */}
       <div className="mb-6">
         <div className="text-sm text-gray-500">
           {new Date(visit.visit_date).toLocaleString('tr-TR', {
@@ -1343,8 +1325,7 @@ const VisitDetails: React.FC = () => {
         </div>
       </div>
 
-
-      {/* ✅ GÜNCELLENDİ: Biyosidal Ürünler bölümü */}
+      {/* ✅ GÜNCELLENDİ: Biyosidal Ürünler bölümü (Doz/Birim eklendi) */}
       {biocidalUsage.map((item, index) => (
         <div key={`biocidal-${index}`} className="bg-white rounded-lg shadow-md mb-6">
           <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg flex justify-between items-center">
@@ -1370,7 +1351,7 @@ const VisitDetails: React.FC = () => {
                   className="w-full p-2 border rounded"
                 >
                   <option value="">Seçiniz...</option>
-                  {/* 'biocidalProducts' state'i artık 'paid_products'tan geliyor */}
+                  {/* 'biocidal_products' tablosundan çekilen veriler */}
                   {biocidalProducts.map(product => (
                     <option key={product.id} value={product.id}>
                       {product.name}
@@ -1398,7 +1379,7 @@ const VisitDetails: React.FC = () => {
                   </label>
                   <input 
                     type="text" 
-                    value={item.unit}
+                    value={item.unit} // State'den 'unit' alınıyor
                     onChange={(e) => handleBiocidalChange(index, 'unit', e.target.value)}
                     className="w-full p-2 border rounded bg-gray-50" 
                     placeholder="örn: lt, ml, gr"
@@ -1412,7 +1393,7 @@ const VisitDetails: React.FC = () => {
                 </label>
                 <input 
                   type="text" 
-                  value={item.dosage}
+                  value={item.dosage} // State'den 'dosage' alınıyor
                   onChange={(e) => handleBiocidalChange(index, 'dosage', e.target.value)}
                   className="w-full p-2 border rounded" 
                   placeholder="örn: 10ml / 1L Su"
