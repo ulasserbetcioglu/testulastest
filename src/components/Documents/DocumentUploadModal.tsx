@@ -7,7 +7,7 @@ interface DocumentUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: () => void;
-  entityType: 'customer' | 'branch' | 'operator' | 'general';
+  entityType: 'internal' | 'public';
   entityId?: string;
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, FileText, FileImage, File as FilePdf } from 'lucide-react';
+import { Plus, FileText, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import DocumentList from '../components/Documents/DocumentList';
 import DocumentUploadModal from '../components/Documents/DocumentUploadModal';
@@ -7,7 +7,7 @@ import DocumentUploadModal from '../components/Documents/DocumentUploadModal';
 const Documents: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'customer' | 'branch' | 'operator'>('general');
+  const [activeTab, setActiveTab] = useState<'internal' | 'public'>('internal');
 
   useEffect(() => {
     checkAdminAccess();
@@ -37,48 +37,26 @@ const Documents: React.FC = () => {
         <div className="border-b">
           <nav className="flex">
             <button
-              onClick={() => setActiveTab('general')}
-              className={`px-6 py-3 text-sm font-medium ${
-                activeTab === 'general'
+              onClick={() => setActiveTab('internal')}
+              className={`flex-1 px-6 py-3 text-sm font-medium ${
+                activeTab === 'internal'
                   ? 'border-b-2 border-green-500 text-green-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <FileText className="inline-block mr-2 h-4 w-4" />
-              Genel Dökümanlar
+              <FileText className="inline-block mr-2 h-5 w-5" />
+              Firma ve Operatörler İçin
             </button>
             <button
-              onClick={() => setActiveTab('customer')}
-              className={`px-6 py-3 text-sm font-medium ${
-                activeTab === 'customer'
+              onClick={() => setActiveTab('public')}
+              className={`flex-1 px-6 py-3 text-sm font-medium ${
+                activeTab === 'public'
                   ? 'border-b-2 border-green-500 text-green-600'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <FileImage className="inline-block mr-2 h-4 w-4" />
-              Müşteri Dökümanları
-            </button>
-            <button
-              onClick={() => setActiveTab('branch')}
-              className={`px-6 py-3 text-sm font-medium ${
-                activeTab === 'branch'
-                  ? 'border-b-2 border-green-500 text-green-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <FilePdf className="inline-block mr-2 h-4 w-4" />
-              Şube Dökümanları
-            </button>
-            <button
-              onClick={() => setActiveTab('operator')}
-              className={`px-6 py-3 text-sm font-medium ${
-                activeTab === 'operator'
-                  ? 'border-b-2 border-green-500 text-green-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <FileText className="inline-block mr-2 h-4 w-4" />
-              Operatör Dökümanları
+              <Users className="inline-block mr-2 h-5 w-5" />
+              Herkes İçin (Firma, Operatör, Müşteri, Şubeler)
             </button>
           </nav>
         </div>

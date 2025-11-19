@@ -22,7 +22,7 @@ interface DocumentData {
 }
 
 interface DocumentListProps {
-  entityType: 'customer' | 'branch' | 'operator' | 'general';
+  entityType: 'internal' | 'public';
   entityId?: string;
   showFilters?: boolean;
 }
@@ -54,19 +54,19 @@ const DocumentList: React.FC<DocumentListProps> = ({
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      
-      // Use a simpler query without trying to join with users table
+
+      // Query documents based on entity type
       let query = supabase
         .from('documents')
         .select('*')
         .eq('entity_type', entityType);
-        
+
       if (entityId) {
         query = query.eq('entity_id', entityId);
-      } else if (entityType !== 'general') {
+      } else {
         query = query.is('entity_id', null);
       }
-      
+
       const { data, error: fetchError } = await query.order('created_at', { ascending: false });
       
       if (fetchError) throw fetchError;
