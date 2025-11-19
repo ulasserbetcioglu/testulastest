@@ -320,7 +320,7 @@ function App() {
             {/* YENİ EKLENEN ROTA */}
             <Route path="yillik-kar-zarar" element={<YillikKarZararRaporu />} />
             <Route path="karlilik-analizi" element={<ProfitabilityAnalysis />} />
-            <Route path="/moduller/uv-lamba-raporu" element={<UvLampReport />} />
+            <Route path="moduller/uv-lamba-raporu" element={<UvLampReport />} />
             <Route path="sube-lokasyon" element={<SubeLokasyon />} />
             <Route path="operator-performans" element={<OperatorPerformance />} />
             <Route path="aylik-takvim-eposta" element={<AylikTakvimEposta />} />
@@ -336,30 +336,30 @@ function App() {
             <Route path="hizmet-yonetimi" element={<HizmetYonetimi />} />
             <Route path="moduller/teklif-raporu" element={<ProposalReportModule />} />
             <Route path="teklif-goruntule" element={<TeklifGoruntule />} />
-            <Route path="/rapor/goruntule/:reportId" element={<ModulRaporGoruntuleme />} />
-            <Route path="/rapor-goruntule" element={<RaporSecVeGoruntule />} />
-            <Route path="/raporlar" element={<GenelRaporGoruntuleme />} />
-            <Route path="/hizmet-pazarlama" element={<BilgilendirimePazarlama />} />
-            <Route path="/eposta-pazarlama" element={<EpostaPazarlama />} />
-            <Route path="/isletme-kesif" element={<IsletmeKesif />} />
+            <Route path="rapor/goruntule/:reportId" element={<ModulRaporGoruntuleme />} />
+            <Route path="rapor-goruntule" element={<RaporSecVeGoruntule />} />
+            <Route path="raporlar" element={<GenelRaporGoruntuleme />} />
+            <Route path="hizmet-pazarlama" element={<BilgilendirimePazarlama />} />
+            <Route path="eposta-pazarlama" element={<EpostaPazarlama />} />
+            <Route path="isletme-kesif" element={<IsletmeKesif />} />
             {/* NEW ADMIN ROUTE FOR BULK VISIT IMPORT */}
-            <Route path="/bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
+            <Route path="bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
             {/* NEW ADMIN ROUTE FOR QUICK NOTES */}
-            <Route path="/hizli-notlar" element={<AdminRoute><AdminQuickNotes /></AdminRoute>} />
+            <Route path="hizli-notlar" element={<AdminRoute><AdminQuickNotes /></AdminRoute>} />
             {/* YENİ: Faturasız Müşteriler Sayfası */}
-            <Route path="/faturasiz-musteriler" element={<AdminRoute><UnbilledCustomers /></AdminRoute>} />
+            <Route path="faturasiz-musteriler" element={<AdminRoute><UnbilledCustomers /></AdminRoute>} />
             {/* YENİ: Admin Tahsilat Makbuzları Sayfası */}
-            <Route path="/admin/tahsilat-makbuzlari" element={<AdminRoute><AdminCollectionReceipts /></AdminRoute>} />
+            <Route path="admin/tahsilat-makbuzlari" element={<AdminRoute><AdminCollectionReceipts /></AdminRoute>} />
             {/* NEW: Admin Visit Reports Page */}
-            <Route path="/admin/ziyaret-raporlari" element={<AdminRoute><AdminVisitReports /></AdminRoute>} />
+            <Route path="admin/ziyaret-raporlari" element={<AdminRoute><AdminVisitReports /></AdminRoute>} />
             {/* NEW: Admin Operator Shifts Page */}
-            <Route path="/admin/mesai-cizelgeleri" element={<AdminRoute><AdminOperatorShifts /></AdminRoute>} />
+            <Route path="admin/mesai-cizelgeleri" element={<AdminRoute><AdminOperatorShifts /></AdminRoute>} />
             {/* NEW: Admin Operator Leaves Page */}
-            <Route path="/admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
+            <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             {/* NEW: Admin Vehicles Page */}
-            <Route path="/admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
+            <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             {/* Monthly Visit Schedule */}
-            <Route path="/admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
+            <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
           </Route>
           
         
