@@ -148,6 +148,12 @@ const PesticideUsageReport: React.FC = () => {
 
       if (queryError) throw queryError;
 
+      if (!data || data.length === 0) {
+        console.log('Pestisit Raporu - Hiç veri bulunamadı');
+        setReportData([]);
+        return;
+      }
+
       const formattedData = data.map(item => ({
         id: item.id,
         created_at: item.created_at,
@@ -158,9 +164,11 @@ const PesticideUsageReport: React.FC = () => {
         customer_name: item.customer?.kisa_isim || 'N/A',
         branch_name: item.branch?.sube_adi || null,
         operator_name: item.operator?.name || 'N/A',
-        visit_date: item.visit?.visit_date || item.created_at, 
+        visit_date: item.visit?.visit_date || item.created_at,
       }));
 
+      console.log('Pestisit Raporu - Ham Veri:', data);
+      console.log('Pestisit Raporu - Formatlanmış Veri:', formattedData);
       setReportData(formattedData);
 
     } catch (err: any) {
@@ -184,8 +192,8 @@ const PesticideUsageReport: React.FC = () => {
       'Müşteri': item.customer_name,
       'Şube': item.branch_name || '-',
       'Ürün Adı': item.product_name,
-      'Doz': item.dosage || '-', 
-      'Miktar': item.quantity,
+      'Doz': item.dosage || '-',
+      'Miktar': item.quantity !== null && item.quantity !== undefined ? item.quantity : 0,
       'Birim': item.unit || 'adet',
       'Uygulayan Operatör': item.operator_name,
     }));
@@ -307,7 +315,13 @@ const PesticideUsageReport: React.FC = () => {
                         {item.dosage || '-'} 
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {item.quantity} {item.unit}
+                        <span className="font-semibold text-gray-900">
+                          {item.quantity !== null && item.quantity !== undefined ? item.quantity : '0'}
+                        </span>
+                        {' '}
+                        <span className="text-gray-500">
+                          {item.unit || 'adet'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {item.operator_name}
