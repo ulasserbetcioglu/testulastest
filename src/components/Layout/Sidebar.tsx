@@ -81,9 +81,9 @@ const menuCategories = [
     title: 'Sistem & Tanımlar',
     items: [
       { name: 'Depolar', path: '/depolar', icon: <Warehouse size={20} /> },
-      // ✅ DEĞİŞİKLİK: "Ekipmanlar" ismi "Ekipman Yönetimi" olarak düzeltildi.
       { name: 'Ekipman Yönetimi', path: '/ekipman-yonetimi', icon: <Package size={20} /> },
       { name: 'Sertifikalar', path: '/sertifikalar', icon: <Award size={20} /> },
+      { name: 'Dökümanlar', path: '/dokumanlar', icon: <FileText size={20} /> },
       { name: 'Tanımlamalar', path: '/tanimlamalar', icon: <Settings size={20} /> },
     ]
   }
