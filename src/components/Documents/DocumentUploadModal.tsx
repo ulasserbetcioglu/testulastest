@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, File, FileText, FileImage, FilePlus } from 'lucide-react';
+import { X, Upload, File as FileIcon, FileText, FileImage, FilePlus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -53,8 +53,8 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   };
 
   const getFileIcon = (fileType: string | undefined) => {
-    if (!fileType) return <File />;
-    
+    if (!fileType) return <FileIcon />;
+
     if (fileType.includes('pdf')) {
       return <FileText className="text-red-500" />;
     } else if (fileType.includes('image')) {
@@ -62,7 +62,7 @@ const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
     } else if (fileType.includes('word')) {
       return <FileText className="text-blue-700" />;
     } else {
-      return <File className="text-gray-500" />;
+      return <FileIcon className="text-gray-500" />;
     }
   };
 

@@ -66,7 +66,7 @@ const Documents: React.FC = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <File className="inline-block mr-2 h-4 w-4" />
+              <FilePdf className="inline-block mr-2 h-4 w-4" />
               Şube Dökümanları
             </button>
             <button

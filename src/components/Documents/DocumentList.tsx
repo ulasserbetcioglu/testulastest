@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Trash2, Eye, Search, Filter, FileText, FileImage, File, X } from 'lucide-react';
+import { Download, Trash2, Eye, Search, Filter, FileText, FileImage, File as FileIcon, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
-interface Document {
+interface DocumentData {
   id: string;
   title: string;
   description: string;
@@ -32,14 +32,14 @@ const DocumentList: React.FC<DocumentListProps> = ({
   entityId,
   showFilters = true
 }) => {
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [previewDocument, setPreviewDocument] = useState<Document | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<DocumentData | null>(null);
 
   useEffect(() => {
     checkAdminAccess();
@@ -137,20 +137,20 @@ const DocumentList: React.FC<DocumentListProps> = ({
     }
   };
 
-  const handlePreview = (document: Document) => {
-    setPreviewDocument(document);
+  const handlePreview = (doc: DocumentData) => {
+    setPreviewDocument(doc);
     setShowPreview(true);
   };
 
-  const handleDownload = async (document: Document) => {
+  const handleDownload = async (doc: DocumentData) => {
     try {
       // For direct download, we can use the public URL
-      const a = document.createElement('a');
-      a.href = document.file_url;
-      a.download = document.title;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const link = document.createElement('a');
+      link.href = doc.file_url;
+      link.download = doc.title;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
       toast.success('Döküman indiriliyor');
     } catch (err: any) {
@@ -182,7 +182,7 @@ const DocumentList: React.FC<DocumentListProps> = ({
     } else if (fileType.includes('word')) {
       return <FileText className="text-blue-700" />;
     } else {
-      return <File className="text-gray-500" />;
+      return <FileIcon className="text-gray-500" />;
     }
   };
 
