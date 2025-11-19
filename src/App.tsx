@@ -168,7 +168,21 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   React.useEffect(() => {
     const checkUserRole = async () => {
       try {
-        const { data: { user } = {} } = await supabase.auth.getUser(); // Destructure with default empty object
+        const localSessionStr = localStorage.getItem('local_session');
+        if (localSessionStr) {
+          const localSession = JSON.parse(localSessionStr);
+          if (localSession.type === 'customer') {
+            setUserRole('customer');
+            setLoading(false);
+            return;
+          } else if (localSession.type === 'branch') {
+            setUserRole('branch');
+            setLoading(false);
+            return;
+          }
+        }
+
+        const { data: { user } = {} } = await supabase.auth.getUser();
         if (!user) {
           setLoading(false);
           return;
@@ -241,7 +255,7 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   } else if (userRole === 'branch') {
     return <Navigate to="/branch" />;
   }
-  
+
   return children;
 };
 
@@ -258,7 +272,7 @@ function App() {
           
           {/* Admin Routes */}
           <Route
-            path="/"
+            path="/*"
             element={
               <ProtectedRoute>
                 <RoleBasedRoute>
@@ -352,7 +366,7 @@ function App() {
 
           {/* Operator Routes */}
           <Route
-            path="/operator"
+            path="/operator/*"
             element={
               <ProtectedRoute>
                 <OperatorLayout />
@@ -389,7 +403,7 @@ function App() {
 
           {/* Customer Routes */}
           <Route
-            path="/customer"
+            path="/customer/*"
             element={
               <ProtectedRoute>
                 <CustomerLayout />
@@ -413,7 +427,7 @@ function App() {
 
           {/* Branch Routes */}
           <Route
-            path="/branch"
+            path="/branch/*"
             element={
               <ProtectedRoute>
                 <BranchLayout />
