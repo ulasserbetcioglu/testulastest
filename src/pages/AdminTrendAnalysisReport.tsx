@@ -37,7 +37,7 @@ import {
 import html2canvas from 'html2canvas';
 
 interface Customer { id: string; kisa_isim: string; }
-interface Branch { id: string; sube_adi: string; musteri_id: string; }
+interface Branch { id: string; sube_adi: string; customer_id: string; }
 
 interface VisitStats {
   total_visits: number;
@@ -118,7 +118,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
   useEffect(() => {
     if (selectedCustomerId) {
-      setFilteredBranches(branches.filter(b => b.musteri_id === selectedCustomerId));
+      setFilteredBranches(branches.filter(b => b.customer_id === selectedCustomerId));
       setSelectedBranchId('');
     } else {
       setFilteredBranches([]);
@@ -143,7 +143,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('branches')
-        .select('id, sube_adi, musteri_id')
+        .select('id, sube_adi, customer_id')
         .order('sube_adi');
       if (error) throw error;
       setBranches(data || []);
