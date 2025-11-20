@@ -109,6 +109,21 @@ interface VisitCompletionRate {
   rate: number;
 }
 
+interface EquipmentTypeActivity {
+  equipment_code: string;
+  equipment_name: string;
+  branch_name: string;
+  [key: string]: string | number;
+}
+
+interface EquipmentTypeData {
+  type: string;
+  type_label: string;
+  activities: EquipmentTypeActivity[];
+  propertyKeys: string[];
+  propertyLabels: Record<string, string>;
+}
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF4560'];
 const STATUS_COLORS = {
   open: '#FF4560',
@@ -139,6 +154,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
   const [equipmentList, setEquipmentList] = useState<EquipmentListItem[]>([]);
   const [correctiveActions, setCorrectiveActions] = useState<CorrectiveAction[]>([]);
   const [visitCompletionRates, setVisitCompletionRates] = useState<VisitCompletionRate[]>([]);
+  const [equipmentTypeData, setEquipmentTypeData] = useState<EquipmentTypeData[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [branchName, setBranchName] = useState('');
 
@@ -213,7 +229,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
         fetchBiocidalProducts(),
         fetchEquipmentList(),
         fetchCorrectiveActions(),
-        fetchVisitCompletionRates()
+        fetchVisitCompletionRates(),
+        fetchEquipmentTypeActivities()
       ]);
       toast.success('Rapor başarıyla oluşturuldu');
     } catch (error) {
@@ -657,6 +674,148 @@ const AdminTrendAnalysisReport: React.FC = () => {
       setVisitCompletionRates(ratesArray);
     } catch (error) {
       console.error('Error fetching visit completion rates:', error);
+    }
+  };
+
+  const fetchEquipmentTypeActivities = async () => {
+    try {
+      let branchIds: string[] = [];
+
+      if (selectedBranchId) {
+        branchIds = [selectedBranchId];
+      } else {
+        const customerBranches = branches.filter(b => b.customer_id === selectedCustomerId);
+        branchIds = customerBranches.map(b => b.id);
+      }
+
+      if (branchIds.length === 0) {
+        setEquipmentTypeData([]);
+        return;
+      }
+
+      // Fetch equipment with properties and type info
+      const { data: equipmentData, error: eqError } = await supabase
+        .from('branch_equipment')
+        .select(`
+          equipment_code,
+          equipment:equipment_id (
+            name,
+            type,
+            properties
+          ),
+          branch:branch_id (
+            sube_adi
+          )
+        `)
+        .in('branch_id', branchIds);
+
+      if (eqError) throw eqError;
+
+      // Fetch visits for activity data
+      const { data: visitsData } = await supabase
+        .from('visits')
+        .select('equipment_checks')
+        .in('branch_id', branchIds)
+        .gte('visit_date', dateRange.from)
+        .lte('visit_date', dateRange.to)
+        .eq('status', 'completed');
+
+      // Calculate activity for each equipment code
+      const activityMap = new Map<string, Record<string, number>>();
+
+      visitsData?.forEach(visit => {
+        if (visit.equipment_checks) {
+          Object.entries(visit.equipment_checks).forEach(([code, checkData]: [string, any]) => {
+            if (!activityMap.has(code)) {
+              activityMap.set(code, {});
+            }
+            const activity = activityMap.get(code)!;
+
+            if (checkData && typeof checkData === 'object') {
+              Object.entries(checkData).forEach(([key, value]) => {
+                if (typeof value === 'number') {
+                  activity[key] = (activity[key] || 0) + value;
+                }
+              });
+            }
+          });
+        }
+      });
+
+      // Group by equipment type
+      const typeGroups = new Map<string, {
+        equipments: any[];
+        properties: Record<string, any>;
+      }>();
+
+      equipmentData?.forEach((item: any) => {
+        const type = item.equipment?.type || 'DIGER';
+        if (!typeGroups.has(type)) {
+          typeGroups.set(type, { equipments: [], properties: {} });
+        }
+        const group = typeGroups.get(type)!;
+        group.equipments.push(item);
+        if (item.equipment?.properties) {
+          group.properties = item.equipment.properties;
+        }
+      });
+
+      // Build type data array
+      const typeLabels: Record<string, string> = {
+        UCAN: 'Uçan Zararlılar (Sinek, UV Tuzak)',
+        KEMIRGEN: 'Kemirgenler (Yem İstasyonu, Fare Kapanı)',
+        YURUYEN: 'Yürüyen Haşereler',
+        AMBAR: 'Ambar Zararlıları',
+        DIGER: 'Diğer Ekipmanlar'
+      };
+
+      const typeDataArray: EquipmentTypeData[] = [];
+
+      typeGroups.forEach((group, type) => {
+        const activities: EquipmentTypeActivity[] = [];
+        const propertyKeys: string[] = [];
+        const propertyLabels: Record<string, string> = {};
+
+        // Extract property keys and labels
+        if (group.properties) {
+          Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
+            if (value.type === 'number') {
+              propertyKeys.push(key);
+              propertyLabels[key] = value.label || key;
+            }
+          });
+        }
+
+        // Build activity data for each equipment
+        group.equipments.forEach((eq: any) => {
+          const activityData = activityMap.get(eq.equipment_code) || {};
+          const activity: EquipmentTypeActivity = {
+            equipment_code: eq.equipment_code || '',
+            equipment_name: eq.equipment?.name || 'Bilinmeyen',
+            branch_name: eq.branch?.sube_adi || 'Bilinmeyen Şube'
+          };
+
+          propertyKeys.forEach(key => {
+            activity[key] = activityData[key] || 0;
+          });
+
+          activities.push(activity);
+        });
+
+        if (activities.length > 0 && propertyKeys.length > 0) {
+          typeDataArray.push({
+            type,
+            type_label: typeLabels[type] || type,
+            activities,
+            propertyKeys,
+            propertyLabels
+          });
+        }
+      });
+
+      setEquipmentTypeData(typeDataArray);
+    } catch (error) {
+      console.error('Error fetching equipment type activities:', error);
     }
   };
 
@@ -1270,6 +1429,145 @@ const AdminTrendAnalysisReport: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Equipment Type Activity Charts */}
+            {equipmentTypeData.map((typeData, typeIdx) => (
+              <div key={typeData.type} className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  {typeData.type_label} - Aktivite Detayları
+                  <span className="ml-2 text-sm font-normal text-gray-600">
+                    ({typeData.activities.length} ekipman)
+                  </span>
+                </h3>
+
+                <div className="space-y-6">
+                  {/* Bar Chart for Each Property */}
+                  {typeData.propertyKeys.map((propKey, propIdx) => (
+                    <div key={propKey} className="bg-white p-4 rounded-lg border border-gray-200">
+                      <h4 className="text-sm font-semibold text-gray-800 mb-3">
+                        {typeData.propertyLabels[propKey]}
+                      </h4>
+                      <ResponsiveContainer width="100%" height={Math.max(200, typeData.activities.length * 40)}>
+                        <BarChart
+                          data={typeData.activities}
+                          layout="vertical"
+                          margin={{ top: 5, right: 30, left: 150, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" style={{ fontSize: '12px' }} />
+                          <YAxis
+                            dataKey="equipment_code"
+                            type="category"
+                            width={140}
+                            style={{ fontSize: '11px' }}
+                          />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                  <div className="bg-white p-3 border border-gray-300 rounded shadow-lg">
+                                    <p className="font-semibold text-sm">{data.equipment_code}</p>
+                                    <p className="text-xs text-gray-600">{data.equipment_name}</p>
+                                    <p className="text-xs text-gray-600">{data.branch_name}</p>
+                                    <p className="text-sm font-bold text-blue-600 mt-1">
+                                      {typeData.propertyLabels[propKey]}: {payload[0].value}
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Bar
+                            dataKey={propKey}
+                            fill={COLORS[propIdx % COLORS.length]}
+                            radius={[0, 4, 4, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ))}
+
+                  {/* Summary Table */}
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h4 className="text-sm font-semibold text-gray-800 mb-3">Özet Tablo</h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-white">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-700">Kod</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-700">Şube</th>
+                            {typeData.propertyKeys.map(key => (
+                              <th key={key} className="px-3 py-2 text-center text-xs font-medium text-gray-700">
+                                {typeData.propertyLabels[key]}
+                              </th>
+                            ))}
+                            <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 bg-blue-50">
+                              Toplam
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {typeData.activities.map((activity, idx) => {
+                            const total = typeData.propertyKeys.reduce((sum, key) =>
+                              sum + (Number(activity[key]) || 0), 0
+                            );
+                            return (
+                              <tr key={idx} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 font-mono text-xs text-gray-900">
+                                  {activity.equipment_code}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-gray-600">
+                                  {activity.branch_name}
+                                </td>
+                                {typeData.propertyKeys.map(key => (
+                                  <td key={key} className="px-3 py-2 text-center text-xs">
+                                    <span className={`font-medium ${
+                                      Number(activity[key]) > 0 ? 'text-blue-600' : 'text-gray-400'
+                                    }`}>
+                                      {activity[key] || 0}
+                                    </span>
+                                  </td>
+                                ))}
+                                <td className="px-3 py-2 text-center bg-blue-50">
+                                  <span className="font-bold text-blue-700">{total}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {/* Totals Row */}
+                          <tr className="bg-gray-100 font-semibold">
+                            <td colSpan={2} className="px-3 py-2 text-xs text-gray-900">
+                              TOPLAM
+                            </td>
+                            {typeData.propertyKeys.map(key => {
+                              const columnTotal = typeData.activities.reduce((sum, activity) =>
+                                sum + (Number(activity[key]) || 0), 0
+                              );
+                              return (
+                                <td key={key} className="px-3 py-2 text-center text-xs text-blue-700 font-bold">
+                                  {columnTotal}
+                                </td>
+                              );
+                            })}
+                            <td className="px-3 py-2 text-center bg-blue-100">
+                              <span className="text-sm font-bold text-blue-900">
+                                {typeData.activities.reduce((sum, activity) =>
+                                  sum + typeData.propertyKeys.reduce((s, key) =>
+                                    s + (Number(activity[key]) || 0), 0
+                                  ), 0
+                                )}
+                              </span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
