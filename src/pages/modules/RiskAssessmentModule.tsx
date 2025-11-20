@@ -12,11 +12,19 @@ interface Company {
   logo_url?: string;
 }
 
+interface Branch {
+  id: string;
+  sube_adi: string;
+  musteri_id: string;
+}
+
 interface AssessmentData {
   assessorCompany: string;
   assessorName: string;
   clientCompany: string;
   clientName: string;
+  customerId?: string; // Müşteri ID'si
+  branchId?: string; // Şube ID'si
   assessmentDate: string;
   propertyType: string;
   rodentRisk: string;
@@ -40,11 +48,15 @@ interface RiskLevel {
 const RiskAssessmentPage = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [companies, setCompanies] = useState<Company[]>([]); // Şirketleri tutmak için state
+  const [branches, setBranches] = useState<Branch[]>([]); // Şubeleri tutmak için state
+  const [filteredBranches, setFilteredBranches] = useState<Branch[]>([]);
   const [assessmentData, setAssessmentData] = useState<AssessmentData>({
     assessorCompany: '',
     assessorName: '',
     clientCompany: '',
     clientName: '',
+    customerId: '',
+    branchId: '',
     assessmentDate: new Date().toISOString().split('T')[0],
     propertyType: 'commercial',
     rodentRisk: 'low',
@@ -62,12 +74,12 @@ const RiskAssessmentPage = () => {
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // Sayfa yüklendiğinde şirketleri Supabase'den çek
+  // Sayfa yüklendiğinde şirketleri ve şubeleri Supabase'den çek
   useEffect(() => {
     const fetchCompanies = async () => {
       // DÜZELTME: Tablo adı 'companies' yerine 'customers' olarak değiştirildi.
       const { data, error } = await supabase
-        .from('customers') 
+        .from('customers')
         .select('id, name, logo_url');
 
       if (error) {
@@ -77,7 +89,20 @@ const RiskAssessmentPage = () => {
       }
     };
 
+    const fetchBranches = async () => {
+      const { data, error } = await supabase
+        .from('branches')
+        .select('id, sube_adi, musteri_id');
+
+      if (error) {
+        console.error('Şubeler çekilirken hata oluştu:', error);
+      } else if (data) {
+        setBranches(data);
+      }
+    };
+
     fetchCompanies();
+    fetchBranches();
   }, []);
 
 
@@ -196,9 +221,21 @@ const RiskAssessmentPage = () => {
     if (selectedCompany) {
       setAssessmentData(prev => ({
         ...prev,
-        clientCompany: selectedCompany.name
+        customerId: selectedCompany.id,
+        clientCompany: selectedCompany.name,
+        branchId: '' // Reset branch when customer changes
       }));
+      // Filter branches for selected customer
+      setFilteredBranches(branches.filter(b => b.musteri_id === selectedCompany.id));
     }
+  };
+
+  const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const branchId = e.target.value;
+    setAssessmentData(prev => ({
+      ...prev,
+      branchId: branchId
+    }));
   };
 
   const saveAssessment = async (reportUrl: string) => {
@@ -207,20 +244,27 @@ const RiskAssessmentPage = () => {
         .from('risk_assessments')
         .insert([
           {
+            customer_id: assessmentData.customerId || null,
+            branch_id: assessmentData.branchId || null,
             assessor_company: assessmentData.assessorCompany,
             assessor_name: assessmentData.assessorName,
             client_company: assessmentData.clientCompany,
             client_name: assessmentData.clientName,
             assessment_date: assessmentData.assessmentDate,
+            next_assessment_date: new Date(new Date(assessmentData.assessmentDate).setFullYear(new Date(assessmentData.assessmentDate).getFullYear() + 1)).toISOString().split('T')[0],
             property_type: assessmentData.propertyType,
             rodent_risk: assessmentData.rodentRisk,
             insect_risk: assessmentData.insectRisk,
             bird_risk: assessmentData.birdRisk,
             other_risk: assessmentData.otherRisk,
+            storage_pest_risk: assessmentData.storagePestRisk,
+            flying_pest_risk: assessmentData.flyingPestRisk,
+            equipment_risk: assessmentData.equipmentRisk,
+            status: 'active',
             report_url: reportUrl
           }
         ]);
-      
+
       if (error) {
         throw new Error(`Değerlendirme kaydedilirken hata:\n\n${error.message}`);
       }
@@ -494,6 +538,24 @@ const RiskAssessmentPage = () => {
                           ))}
                         </select>
                       </div>
+                      {filteredBranches.length > 0 && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Şube (Opsiyonel)</label>
+                          <select
+                            name="branchId"
+                            value={assessmentData.branchId || ''}
+                            onChange={handleBranchChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">Şube Seçin (Opsiyonel)</option>
+                            {filteredBranches.map((branch) => (
+                              <option key={branch.id} value={branch.id}>
+                                {branch.sube_adi}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri Yetkilisi *</label>
                         <input type="text" name="clientName" value={assessmentData.clientName} onChange={handleInputChange} required className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Ad Soyad" />
