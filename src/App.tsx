@@ -47,6 +47,8 @@ import BranchDocuments from './pages/BranchDocuments';
 import OperatorDocuments from './pages/OperatorDocuments';
 import CustomerModuleReports from './pages/CustomerModuleReports';
 import CustomerTrendAnalysis from './pages/CustomerTrendAnalysis';
+import CustomerTrendReports from './pages/CustomerTrendReports';
+import CustomerTrendReportView from './pages/CustomerTrendReportView';
 import AdminTrendAnalysisReport from './pages/AdminTrendAnalysisReport';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
@@ -432,6 +434,8 @@ function App() {
             {/* MODÜL RAPORLARI */}
             <Route path="modul-raporlari" element={<CustomerModuleReports />} />
             <Route path="trend-analizi" element={<CustomerTrendAnalysis />} />
+            <Route path="trend-raporlari" element={<CustomerTrendReports />} />
+            <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
           </Route>
 
           {/* Branch Routes */}
@@ -454,6 +458,8 @@ function App() {
             <Route path="teklifler" element={<Offers />} />
             {/* YENİ PESTİSİT RAPORU ROTASI */}
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
+            <Route path="trend-raporlari" element={<CustomerTrendReports />} />
+            <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
           </Route>
         </Routes>
       </AuthProvider>
