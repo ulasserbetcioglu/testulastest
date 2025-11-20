@@ -433,7 +433,25 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
   const fetchEquipmentList = async () => {
     try {
-      let query = supabase
+      // First get the branch IDs for the selected customer
+      let branchIds: string[] = [];
+
+      if (selectedBranchId) {
+        // If specific branch selected, use only that
+        branchIds = [selectedBranchId];
+      } else {
+        // Get all branches for the customer
+        const customerBranches = branches.filter(b => b.customer_id === selectedCustomerId);
+        branchIds = customerBranches.map(b => b.id);
+      }
+
+      if (branchIds.length === 0) {
+        setEquipmentList([]);
+        return;
+      }
+
+      // Fetch equipment for these branches
+      const { data, error } = await supabase
         .from('branch_equipment')
         .select(`
           equipment_code,
@@ -446,13 +464,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
             sube_adi
           )
         `)
-        .eq('customer_id', selectedCustomerId);
+        .in('branch_id', branchIds);
 
-      if (selectedBranchId) {
-        query = query.eq('branch_id', selectedBranchId);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
 
       const equipmentArray: EquipmentListItem[] = data?.map((item: any) => ({
