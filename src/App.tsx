@@ -46,6 +46,8 @@ import CustomerDocuments from './pages/CustomerDocuments';
 import BranchDocuments from './pages/BranchDocuments';
 import OperatorDocuments from './pages/OperatorDocuments';
 import CustomerModuleReports from './pages/CustomerModuleReports';
+import CustomerTrendAnalysis from './pages/CustomerTrendAnalysis';
+import AdminTrendAnalysisReport from './pages/AdminTrendAnalysisReport';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
 import AdminNotifications from './pages/AdminNotifications';
@@ -313,7 +315,7 @@ function App() {
             <Route path="faaliyet-rapor-takip" element={<ActivityReportsTracking />} />
             <Route path="moduller/risk-degerlendirme" element={<RiskAssessmentModule />} />
             <Route path="ucretli-ziyaretler" element={<PaidVisitsPage />} />
-            <Route path="trend-analizi" element={<TrendAnalysisReport />} />
+            <Route path="trend-analizi" element={<AdminTrendAnalysisReport />} />
             <Route path="urunler" element={<AdminProducts />} />
             <Route path="toplu-silme" element={<BulkDeletePage />} />
             <Route path="rota-optimizasyonu" element={<RouteOptimizationPage />} />
@@ -429,6 +431,7 @@ function App() {
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
             {/* MODÜL RAPORLARI */}
             <Route path="modul-raporlari" element={<CustomerModuleReports />} />
+            <Route path="trend-analizi" element={<CustomerTrendAnalysis />} />
           </Route>
 
           {/* Branch Routes */}
