@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase';
 import { Loader2, Download, Calendar, Bug, Image as ImageIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -248,15 +248,23 @@ const PesticideUsageReport: React.FC = () => {
     const yearlyMap = new Map<string, number>();
 
     reportData.forEach(item => {
-      const date = parseISO(item.visit_date);
-      const dayKey = format(date, 'dd/MM/yyyy');
-      const monthKey = format(date, 'MM/yyyy');
-      const yearKey = format(date, 'yyyy');
-      const quantity = item.quantity || 0;
+      try {
+        if (!item.visit_date) return;
 
-      dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + quantity);
-      monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + quantity);
-      yearlyMap.set(yearKey, (yearlyMap.get(yearKey) || 0) + quantity);
+        const date = new Date(item.visit_date);
+        if (isNaN(date.getTime())) return;
+
+        const dayKey = format(date, 'dd/MM/yyyy');
+        const monthKey = format(date, 'MM/yyyy');
+        const yearKey = format(date, 'yyyy');
+        const quantity = item.quantity || 0;
+
+        dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + quantity);
+        monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + quantity);
+        yearlyMap.set(yearKey, (yearlyMap.get(yearKey) || 0) + quantity);
+      } catch (err) {
+        console.error('Tarih parse hatası:', item.visit_date, err);
+      }
     });
 
     return {
