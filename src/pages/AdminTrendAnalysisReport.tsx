@@ -14,7 +14,8 @@ import {
   Activity,
   AlertCircle,
   CheckCircle,
-  XCircle
+  XCircle,
+  Save
 } from 'lucide-react';
 import {
   LineChart,
@@ -105,6 +106,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
   const [pestTypeStats, setPestTypeStats] = useState<PestTypeStat[]>([]);
   const [biocidalProducts, setBiocidalProducts] = useState<BiocidalProductUsage[]>([]);
   const [equipmentList, setEquipmentList] = useState<EquipmentListItem[]>([]);
+  const [customerName, setCustomerName] = useState('');
+  const [branchName, setBranchName] = useState('');
 
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -158,6 +161,17 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
     setLoading(true);
     try {
+      // Fetch customer and branch names first
+      const customer = customers.find(c => c.id === selectedCustomerId);
+      setCustomerName(customer?.kisa_isim || '');
+
+      if (selectedBranchId) {
+        const branch = branches.find(b => b.id === selectedBranchId);
+        setBranchName(branch?.sube_adi || '');
+      } else {
+        setBranchName('');
+      }
+
       await Promise.all([
         fetchVisitStats(),
         fetchEquipmentData(),
@@ -456,6 +470,48 @@ const AdminTrendAnalysisReport: React.FC = () => {
     }
   };
 
+  const handleSaveReport = async () => {
+    if (!selectedCustomerId || !visitStats) {
+      toast.error('Lütfen önce rapor oluşturun');
+      return;
+    }
+
+    try {
+      const reportName = `${customerName}${branchName ? ' - ' + branchName : ''} - ${format(parseISO(dateRange.from), 'dd/MM/yyyy')} - ${format(parseISO(dateRange.to), 'dd/MM/yyyy')}`;
+
+      const reportData = {
+        visitStats,
+        equipmentData,
+        monthlyTrends,
+        pestTypeStats,
+        biocidalProducts,
+        equipmentList,
+        customerName,
+        branchName,
+        dateRange
+      };
+
+      const { error } = await supabase
+        .from('trend_analysis_reports')
+        .insert({
+          customer_id: selectedCustomerId,
+          branch_id: selectedBranchId || null,
+          report_name: reportName,
+          date_from: dateRange.from,
+          date_to: dateRange.to,
+          report_data: reportData,
+          created_by: 'admin'
+        });
+
+      if (error) throw error;
+
+      toast.success('Rapor başarıyla kaydedildi');
+    } catch (error) {
+      console.error('Error saving report:', error);
+      toast.error('Rapor kaydedilirken hata oluştu');
+    }
+  };
+
   const handleExportImage = async () => {
     if (!reportRef.current) return;
 
@@ -569,14 +625,24 @@ const AdminTrendAnalysisReport: React.FC = () => {
             </button>
 
             {visitStats && (
-              <button
-                onClick={handleExportImage}
-                disabled={generating}
-                className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 transition-colors"
-              >
-                {generating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-                Raporu İndir
-              </button>
+              <>
+                <button
+                  onClick={handleSaveReport}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 transition-colors"
+                >
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                  Raporu Kaydet
+                </button>
+                <button
+                  onClick={handleExportImage}
+                  disabled={generating}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                >
+                  {generating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+                  Raporu İndir
+                </button>
+              </>
             )}
           </div>
         </div>
