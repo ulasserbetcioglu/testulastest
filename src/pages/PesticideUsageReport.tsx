@@ -1,11 +1,12 @@
 // src/pages/PesticideUsageReport.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Loader2, Download, Calendar, Bug, Image as ImageIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import html2canvas from 'html2canvas';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 // import { useAuth } from '../components/Auth/AuthProvider'; // <-- KULLANILMIYOR
 import { localAuth } from '../lib/localAuth'; // ✅ DÜZELTME: Sadece localAuth kullanılıyor
 
@@ -14,6 +15,7 @@ interface PesticideUsage {
   id: string;
   created_at: string;
   product_name: string;
+  active_ingredient: string | null;
   quantity: number;
   unit: string | null;
   dosage: string | null;
@@ -21,6 +23,12 @@ interface PesticideUsage {
   branch_name: string | null;
   operator_name: string;
   visit_date: string;
+}
+
+interface CompanySettings {
+  company_name: string;
+  logo_url: string;
+  website: string;
 }
 
 const PesticideUsageReport: React.FC = () => {
@@ -33,6 +41,7 @@ const PesticideUsageReport: React.FC = () => {
 
   const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [companySettings, setCompanySettings] = useState<CompanySettings>({ company_name: 'İlaçlamatik', logo_url: '', website: 'www.ilaclamatik.com' });
   const reportRef = useRef<HTMLDivElement>(null);
 
   // 1. Aşama: Kullanıcı profili bulma (SADECE localAuth kullanarak)
@@ -74,7 +83,29 @@ const PesticideUsageReport: React.FC = () => {
     };
 
     fetchUserProfile();
+    fetchCompanySettings();
   }, []); // Sadece sayfa yüklendiğinde bir kez çalışır
+
+  const fetchCompanySettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('company_name, logo_url, website')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setCompanySettings({
+          company_name: data.company_name || 'İlaçlamatik',
+          logo_url: data.logo_url || '',
+          website: data.website || 'www.ilaclamatik.com'
+        });
+      }
+    } catch (err: any) {
+      console.error('Şirket ayarları yüklenirken hata:', err);
+    }
+  };
 
   // 2. Aşama: Rapor verisini çek
   const fetchReportData = useCallback(async () => {
@@ -139,13 +170,13 @@ const PesticideUsageReport: React.FC = () => {
           quantity,
           unit,
           dosage,
-          product:biocidal_products (name),
+          product:biocidal_products (name, active_ingredient),
           operator:operators (name),
           customer:customers (kisa_isim),
           branch:branches (sube_adi),
           visit:visits (visit_date)
         `)
-        .in('visit_id', visitIds) 
+        .in('visit_id', visitIds)
         .order('created_at', { ascending: false });
 
       if (queryError) throw queryError;
@@ -160,6 +191,7 @@ const PesticideUsageReport: React.FC = () => {
         id: item.id,
         created_at: item.created_at,
         product_name: item.product?.name || 'Bilinmeyen Ürün',
+        active_ingredient: item.product?.active_ingredient || null,
         quantity: item.quantity,
         unit: item.unit,
         dosage: item.dosage,
@@ -194,6 +226,7 @@ const PesticideUsageReport: React.FC = () => {
       'Müşteri': item.customer_name,
       'Şube': item.branch_name || '-',
       'Ürün Adı': item.product_name,
+      'Aktif Madde': item.active_ingredient || '-',
       'Doz': item.dosage || '-',
       'Miktar': item.quantity !== null && item.quantity !== undefined ? item.quantity : 0,
       'Birim': item.unit || 'adet',
@@ -205,6 +238,39 @@ const PesticideUsageReport: React.FC = () => {
     XLSX.utils.book_append_sheet(wb, ws, 'Pestisit Kullanım Raporu');
     XLSX.writeFile(wb, `Pestisit_Kullanim_Raporu_${startDate}_${endDate}.xlsx`);
   };
+
+  // Grafik verilerini hazırla
+  const chartData = useMemo(() => {
+    if (reportData.length === 0) return { daily: [], monthly: [], yearly: [] };
+
+    const dailyMap = new Map<string, number>();
+    const monthlyMap = new Map<string, number>();
+    const yearlyMap = new Map<string, number>();
+
+    reportData.forEach(item => {
+      const date = parseISO(item.visit_date);
+      const dayKey = format(date, 'dd/MM/yyyy');
+      const monthKey = format(date, 'MM/yyyy');
+      const yearKey = format(date, 'yyyy');
+      const quantity = item.quantity || 0;
+
+      dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + quantity);
+      monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + quantity);
+      yearlyMap.set(yearKey, (yearlyMap.get(yearKey) || 0) + quantity);
+    });
+
+    return {
+      daily: Array.from(dailyMap.entries())
+        .map(([date, total]) => ({ date, total }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      monthly: Array.from(monthlyMap.entries())
+        .map(([date, total]) => ({ date, total }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      yearly: Array.from(yearlyMap.entries())
+        .map(([date, total]) => ({ date, total }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    };
+  }, [reportData]);
 
   const exportToJPEG = async () => {
     if (!reportRef.current) return;
@@ -322,16 +388,18 @@ const PesticideUsageReport: React.FC = () => {
           <div className="p-8 bg-gradient-to-r from-green-50 to-blue-50 border-b-4 border-green-600">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-4">
-                <img
-                  src="/ilaclamatik-logo.png"
-                  alt="İlaçlamatik Logo"
-                  className="h-16 w-auto"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
+                {companySettings.logo_url && (
+                  <img
+                    src={companySettings.logo_url}
+                    alt={`${companySettings.company_name} Logo`}
+                    className="h-16 w-auto object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                )}
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-800">İlaçlamatik</h1>
+                  <h1 className="text-3xl font-bold text-gray-800">{companySettings.company_name}</h1>
                   <p className="text-sm text-gray-600">Profesyonel Pest Kontrol Hizmetleri</p>
                 </div>
               </div>
@@ -367,6 +435,7 @@ const PesticideUsageReport: React.FC = () => {
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Tarih</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Lokasyon</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Biyosidal Ürün</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Aktif Madde</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Doz</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Miktar</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Uygulayan Operatör</th>
@@ -375,7 +444,7 @@ const PesticideUsageReport: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {reportData.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                       Belirtilen tarihler arasında pestisit kullanımı bulunamadı.
                     </td>
                   </tr>
@@ -392,6 +461,9 @@ const PesticideUsageReport: React.FC = () => {
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
                           {item.product_name}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {item.active_ingredient || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         {item.dosage || '-'}
@@ -415,6 +487,78 @@ const PesticideUsageReport: React.FC = () => {
             </table>
           </div>
 
+          {/* Kullanım Grafikleri */}
+          {reportData.length > 0 && (
+            <div className="p-6 bg-white border-t">
+              <h3 className="text-xl font-bold text-gray-800 mb-6">Biyosidal Ürün Kullanım İstatistikleri</h3>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Günlük Kullanım */}
+                {chartData.daily.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Günlük Kullanım</h4>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={chartData.daily}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                        />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Bar dataKey="total" fill="#16a34a" name="Toplam Miktar" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Aylık Kullanım */}
+                {chartData.monthly.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Aylık Kullanım</h4>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={chartData.monthly}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 10 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                        />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Bar dataKey="total" fill="#2563eb" name="Toplam Miktar" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Yıllık Kullanım */}
+                {chartData.yearly.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Yıllık Kullanım</h4>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={chartData.yearly}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Bar dataKey="total" fill="#dc2626" name="Toplam Miktar" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {reportData.length > 0 && (
             <div className="p-6 bg-gradient-to-r from-green-50 to-blue-50 border-t-2 border-green-600">
               <div className="flex justify-between items-center">
@@ -423,9 +567,9 @@ const PesticideUsageReport: React.FC = () => {
                   <p className="text-2xl font-bold text-green-700">{reportData.length}</p>
                 </div>
                 <div className="text-right text-sm text-gray-600">
-                  <p>Bu rapor İlaçlamatik tarafından</p>
+                  <p>Bu rapor {companySettings.company_name} tarafından</p>
                   <p>elektronik ortamda oluşturulmuştur.</p>
-                  <p className="mt-2 font-semibold">www.ilaclamatik.com</p>
+                  <p className="mt-2 font-semibold">{companySettings.website}</p>
                 </div>
               </div>
             </div>
