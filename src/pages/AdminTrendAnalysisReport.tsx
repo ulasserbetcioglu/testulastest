@@ -87,7 +87,35 @@ interface EquipmentListItem {
   activity_details?: Record<string, number>;
 }
 
+interface CorrectiveAction {
+  id: string;
+  non_compliance_type: string;
+  non_compliance_description: string;
+  corrective_action: string;
+  preventive_action: string;
+  status: string;
+  due_date: string;
+  completion_date: string | null;
+  responsible: string;
+  related_standard: string;
+}
+
+interface VisitCompletionRate {
+  month: string;
+  total: number;
+  completed: number;
+  cancelled: number;
+  pending: number;
+  rate: number;
+}
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF4560'];
+const STATUS_COLORS = {
+  open: '#FF4560',
+  in_progress: '#FFBB28',
+  completed: '#00C49F',
+  verified: '#0088FE'
+};
 
 const AdminTrendAnalysisReport: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -109,6 +137,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
   const [pestTypeStats, setPestTypeStats] = useState<PestTypeStat[]>([]);
   const [biocidalProducts, setBiocidalProducts] = useState<BiocidalProductUsage[]>([]);
   const [equipmentList, setEquipmentList] = useState<EquipmentListItem[]>([]);
+  const [correctiveActions, setCorrectiveActions] = useState<CorrectiveAction[]>([]);
+  const [visitCompletionRates, setVisitCompletionRates] = useState<VisitCompletionRate[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [branchName, setBranchName] = useState('');
 
@@ -181,7 +211,9 @@ const AdminTrendAnalysisReport: React.FC = () => {
         fetchMonthlyTrends(),
         fetchPestTypeStats(),
         fetchBiocidalProducts(),
-        fetchEquipmentList()
+        fetchEquipmentList(),
+        fetchCorrectiveActions(),
+        fetchVisitCompletionRates()
       ]);
       toast.success('Rapor başarıyla oluşturuldu');
     } catch (error) {
@@ -523,6 +555,108 @@ const AdminTrendAnalysisReport: React.FC = () => {
       setEquipmentList(equipmentArray);
     } catch (error) {
       console.error('Error fetching equipment list:', error);
+    }
+  };
+
+  const fetchCorrectiveActions = async () => {
+    try {
+      let branchIds: string[] = [];
+
+      if (selectedBranchId) {
+        branchIds = [selectedBranchId];
+      } else {
+        const customerBranches = branches.filter(b => b.customer_id === selectedCustomerId);
+        branchIds = customerBranches.map(b => b.id);
+      }
+
+      if (branchIds.length === 0) {
+        setCorrectiveActions([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('corrective_actions')
+        .select('*')
+        .in('branch_id', branchIds)
+        .gte('created_at', dateRange.from)
+        .lte('created_at', dateRange.to)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const actionsArray: CorrectiveAction[] = data?.map((item: any) => ({
+        id: item.id,
+        non_compliance_type: item.non_compliance_type || 'Belirtilmemiş',
+        non_compliance_description: item.non_compliance_description || '',
+        corrective_action: item.corrective_action || '',
+        preventive_action: item.preventive_action || '',
+        status: item.status || 'open',
+        due_date: item.due_date ? format(parseISO(item.due_date), 'dd.MM.yyyy') : '-',
+        completion_date: item.completion_date ? format(parseISO(item.completion_date), 'dd.MM.yyyy') : null,
+        responsible: item.responsible || '-',
+        related_standard: item.related_standard || '-'
+      })) || [];
+
+      setCorrectiveActions(actionsArray);
+    } catch (error) {
+      console.error('Error fetching corrective actions:', error);
+    }
+  };
+
+  const fetchVisitCompletionRates = async () => {
+    try {
+      let branchIds: string[] = [];
+
+      if (selectedBranchId) {
+        branchIds = [selectedBranchId];
+      } else {
+        const customerBranches = branches.filter(b => b.customer_id === selectedCustomerId);
+        branchIds = customerBranches.map(b => b.id);
+      }
+
+      if (branchIds.length === 0) {
+        setVisitCompletionRates([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('visits')
+        .select('visit_date, status')
+        .in('branch_id', branchIds)
+        .gte('visit_date', dateRange.from)
+        .lte('visit_date', dateRange.to);
+
+      if (error) throw error;
+
+      // Group by month
+      const monthlyData = new Map<string, { total: number; completed: number; cancelled: number; pending: number }>();
+
+      data?.forEach(visit => {
+        const month = format(parseISO(visit.visit_date), 'MMM yyyy');
+        if (!monthlyData.has(month)) {
+          monthlyData.set(month, { total: 0, completed: 0, cancelled: 0, pending: 0 });
+        }
+        const stats = monthlyData.get(month)!;
+        stats.total++;
+        if (visit.status === 'completed') stats.completed++;
+        else if (visit.status === 'cancelled') stats.cancelled++;
+        else stats.pending++;
+      });
+
+      const ratesArray: VisitCompletionRate[] = Array.from(monthlyData.entries())
+        .map(([month, stats]) => ({
+          month,
+          total: stats.total,
+          completed: stats.completed,
+          cancelled: stats.cancelled,
+          pending: stats.pending,
+          rate: stats.total > 0 ? (stats.completed / stats.total) * 100 : 0
+        }))
+        .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
+
+      setVisitCompletionRates(ratesArray);
+    } catch (error) {
+      console.error('Error fetching visit completion rates:', error);
     }
   };
 
@@ -948,6 +1082,191 @@ const AdminTrendAnalysisReport: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Corrective Actions (DOF) */}
+            {correctiveActions.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Düzeltici ve Önleyici Faaliyetler (DÖF)
+                  <span className="ml-2 text-sm font-normal text-gray-600">
+                    ({correctiveActions.length} kayıt)
+                  </span>
+                </h3>
+                <div className="space-y-4">
+                  {correctiveActions.map((action, idx) => (
+                    <div key={action.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-semibold text-gray-500">#{idx + 1}</span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              action.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              action.status === 'verified' ? 'bg-blue-100 text-blue-800' :
+                              action.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {action.status === 'completed' ? 'Tamamlandı' :
+                               action.status === 'verified' ? 'Doğrulandı' :
+                               action.status === 'in_progress' ? 'Devam Ediyor' :
+                               'Açık'}
+                            </span>
+                            {action.related_standard !== '-' && (
+                              <span className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded">
+                                {action.related_standard}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="text-sm font-semibold text-gray-900 mb-1">
+                            {action.non_compliance_type}
+                          </h4>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-500">Termin: {action.due_date}</div>
+                          {action.completion_date && (
+                            <div className="text-xs text-green-600 font-medium">
+                              Tamamlanma: {action.completion_date}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-600 font-medium mb-1">Uygunsuzluk:</p>
+                          <p className="text-gray-800 text-xs leading-relaxed">{action.non_compliance_description}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 font-medium mb-1">Düzeltici Faaliyet:</p>
+                          <p className="text-gray-800 text-xs leading-relaxed">{action.corrective_action}</p>
+                        </div>
+                      </div>
+
+                      {action.preventive_action && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-gray-600 font-medium mb-1 text-sm">Önleyici Faaliyet:</p>
+                          <p className="text-gray-800 text-xs leading-relaxed">{action.preventive_action}</p>
+                        </div>
+                      )}
+
+                      {action.responsible !== '-' && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Sorumlu:</span>
+                          <span className="text-xs font-medium text-gray-700">{action.responsible}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Visit Completion Rate Chart */}
+            {visitCompletionRates.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Ziyaret Tamamlanma Oranları</h3>
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={visitCompletionRates}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" style={{ fontSize: '12px' }} />
+                      <YAxis yAxisId="left" style={{ fontSize: '12px' }} />
+                      <YAxis yAxisId="right" orientation="right" style={{ fontSize: '12px' }} />
+                      <Tooltip />
+                      <Legend />
+                      <Line yAxisId="left" type="monotone" dataKey="completed" stroke="#00C49F" strokeWidth={2} name="Tamamlanan" />
+                      <Line yAxisId="left" type="monotone" dataKey="cancelled" stroke="#FF4560" strokeWidth={2} name="İptal" />
+                      <Line yAxisId="left" type="monotone" dataKey="pending" stroke="#FFBB28" strokeWidth={2} name="Bekleyen" />
+                      <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#0088FE" strokeWidth={3} name="Tamamlanma Oranı (%)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Pest Type Distribution Pie Chart */}
+            {pestTypeStats.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Zararlı Türü Dağılımı</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white p-4 rounded-lg border border-gray-200">
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={pestTypeStats}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="count"
+                        >
+                          {pestTypeStats.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-gray-200">
+                    <h4 className="font-medium text-gray-900 mb-3">Detaylı İstatistikler</h4>
+                    <div className="space-y-2">
+                      {pestTypeStats.map((pest, idx) => (
+                        <div key={idx} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-4 h-4 rounded"
+                              style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                            />
+                            <span className="text-sm font-medium text-gray-700">{pest.name}</span>
+                          </div>
+                          <span className="text-sm font-bold text-gray-900">{pest.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Equipment Effectiveness Summary */}
+            {equipmentData.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Ekipman Etkinlik Özeti</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {equipmentData.slice(0, 6).map((eq, idx) => (
+                    <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                      <h4 className="font-semibold text-gray-900 text-sm mb-3">{eq.equipment_name}</h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-600">Toplam Kontrol:</span>
+                          <span className="text-sm font-bold text-blue-600">{eq.total_checks}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-600">Sorunsuz:</span>
+                          <span className="text-sm font-bold text-green-600">{eq.ok_count}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-600">Sorunlu:</span>
+                          <span className="text-sm font-bold text-red-600">{eq.issue_count}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-600">Eksik:</span>
+                          <span className="text-sm font-bold text-yellow-600">{eq.missing_count}</span>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-medium text-gray-700">Etkinlik Oranı:</span>
+                            <span className="text-lg font-bold text-purple-600">{eq.effectiveness_rate.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
