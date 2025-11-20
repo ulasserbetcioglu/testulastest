@@ -222,7 +222,7 @@ const UvLampReport: React.FC = () => {
     };
 
     // --- SUPABASE KAYIT/SİLME İŞLEMLERİ ---
-    const handleSaveReport = async () => {
+    const handleSaveReport = async (reportUrl?: string) => {
         setLoading(prev => ({ ...prev, saving: true }));
         const reportDataPayload = {
             ...reportInfo,
@@ -232,11 +232,17 @@ const UvLampReport: React.FC = () => {
             equipmentTypeId: selectedEquipmentTypeId
         };
 
-        const { error } = await supabase.from('uv_lamp_reports').upsert({ 
-            report_number: reportInfo.reportNumber, 
+        const { error } = await supabase.from('uv_lamp_reports').upsert({
+            report_number: reportInfo.reportNumber,
+            customer_id: selectedCustomerId || null,
+            branch_id: selectedBranchId || null,
             customer_name: reportInfo.customerName,
             report_date: reportInfo.reportDate,
-            report_data: reportDataPayload 
+            prepared_by: reportInfo.technician,
+            location: reportInfo.branchName,
+            report_url: reportUrl || null,
+            report_data: reportDataPayload,
+            status: 'active'
         }, { onConflict: 'report_number' });
 
         if (error) showToast('Rapor kaydedilirken bir hata oluştu.', 'error');
@@ -350,6 +356,29 @@ const UvLampReport: React.FC = () => {
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+
+                // Upload to Supabase Storage and save to database
+                try {
+                    const blob = await (await fetch(imgData)).blob();
+                    const storageFileName = `uv_lamp_reports/${selectedCustomerId}_${Date.now()}.jpg`;
+
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                        .from('documents')
+                        .upload(storageFileName, blob, {
+                            contentType: 'image/jpeg',
+                            upsert: false
+                        });
+
+                    if (!uploadError) {
+                        const { data: urlData } = supabase.storage
+                            .from('documents')
+                            .getPublicUrl(storageFileName);
+
+                        await handleSaveReport(urlData.publicUrl);
+                    }
+                } catch (storageError) {
+                    console.error('Storage upload error:', storageError);
+                }
             } else {
                 const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
                 const pdfWidth = pdf.internal.pageSize.getWidth();

@@ -45,6 +45,7 @@ import Documents from './pages/Documents';
 import CustomerDocuments from './pages/CustomerDocuments';
 import BranchDocuments from './pages/BranchDocuments';
 import OperatorDocuments from './pages/OperatorDocuments';
+import CustomerModuleReports from './pages/CustomerModuleReports';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
 import AdminNotifications from './pages/AdminNotifications';
@@ -426,6 +427,8 @@ function App() {
             <Route path="teklifler" element={<Offers />} />
             {/* YENİ PESTİSİT RAPORU ROTASI */}
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
+            {/* MODÜL RAPORLARI */}
+            <Route path="modul-raporlari" element={<CustomerModuleReports />} />
           </Route>
 
           {/* Branch Routes */}

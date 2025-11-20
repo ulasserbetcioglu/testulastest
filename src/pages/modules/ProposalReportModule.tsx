@@ -13,6 +13,12 @@ interface Customer {
   kisa_isim: string;
 }
 
+interface Branch {
+  id: string;
+  sube_adi: string;
+  musteri_id: string;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -35,18 +41,21 @@ interface ProductItem {
 const ProposalReportModule: React.FC = () => {
   // --- STATE YÖNETİMİ ---
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [filteredBranches, setFilteredBranches] = useState<Branch[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Form Verileri
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState('');
   const [proposalDate, setProposalDate] = useState(new Date().toISOString().split('T')[0]);
   const [preparedBy, setPreparedBy] = useState('');
   const [scopeItems, setScopeItems] = useState<ScopeItem[]>([{ id: 1, area: '', action: '' }]);
   const [productItems, setProductItems] = useState<ProductItem[]>([{ id: 1, product_id: '', product_name: '', usage_description: '' }]);
   const [price, setPrice] = useState('');
   const [terms, setTerms] = useState('Teklif, onay tarihinden itibaren 15 gün geçerlidir.\nÖdeme, hizmet sonrası 7 gün içinde yapılmalıdır.');
-  
+
   const reportRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
 
@@ -55,18 +64,23 @@ const ProposalReportModule: React.FC = () => {
     const fetchInitialData = async () => {
       try {
         setLoading(true);
-        const [customersRes, productsRes] = await Promise.all([
+        const [customersRes, branchesRes, productsRes] = await Promise.all([
           supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+          supabase.from('branches').select('id, sube_adi, musteri_id').order('sube_adi'),
           supabase.from('products').select('id, name, description').order('name')
         ]);
 
         if (customersRes.error) throw customersRes.error;
+        if (branchesRes.error) {
+          console.warn("Şubeler tablosu bulunamadı veya yüklenemedi:", branchesRes.error.message);
+        }
         if (productsRes.error) {
             console.warn("Ürünler tablosu bulunamadı veya yüklenemedi:", productsRes.error.message);
             toast.warning("Ürün listesi yüklenemedi. Lütfen veritabanı ayarlarınızı kontrol edin.");
         }
 
         setCustomers(customersRes.data || []);
+        setBranches(branchesRes.data || []);
         setProducts(productsRes.data || []);
       } catch (error: any) {
         toast.error('Gerekli veriler yüklenemedi: ' + error.message);
@@ -107,7 +121,49 @@ const ProposalReportModule: React.FC = () => {
       setProductItems(productItems.map(item => item.id === id ? { ...item, [field]: value } : item));
     }
   };
-  
+
+  // --- CUSTOMER CHANGE HANDLER ---
+  const handleCustomerChange = (customerId: string) => {
+    setSelectedCustomerId(customerId);
+    setSelectedBranchId(''); // Reset branch
+    // Filter branches for selected customer
+    setFilteredBranches(branches.filter(b => b.musteri_id === customerId));
+  };
+
+  // --- SAVE TO DATABASE ---
+  const saveProposal = async (reportUrl: string) => {
+    try {
+      const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+
+      const { error } = await supabase
+        .from('proposals')
+        .insert([
+          {
+            customer_id: selectedCustomerId || null,
+            branch_id: selectedBranchId || null,
+            company_name: selectedCustomer?.kisa_isim || '',
+            proposal_date: proposalDate,
+            prepared_by: preparedBy,
+            total_amount: parseFloat(price) || 0,
+            scope_items: scopeItems,
+            product_items: productItems,
+            terms: terms,
+            report_url: reportUrl,
+            status: 'draft'
+          }
+        ]);
+
+      if (error) {
+        throw new Error(`Teklif kaydedilirken hata: ${error.message}`);
+      }
+
+      toast.success("Teklif veritabanına kaydedildi!");
+    } catch (error: any) {
+      console.error('Teklif kaydedilirken hata:', error);
+      toast.error('Teklif kaydedilemedi: ' + error.message);
+    }
+  };
+
   // --- RAPOR OLUŞTURMA ---
   const generateReport = async () => {
     if (!selectedCustomerId || !price || !preparedBy) {
@@ -121,12 +177,41 @@ const ProposalReportModule: React.FC = () => {
 
     try {
         const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true });
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.98);
+
+        // Download report
         const link = document.createElement('a');
-        link.href = canvas.toDataURL('image/jpeg', 0.98);
+        link.href = imageDataUrl;
         const customerName = customers.find(c => c.id === selectedCustomerId)?.kisa_isim || 'teklif';
         link.download = `Teklif_Raporu_${customerName.replace(/\s+/g, '_')}.jpeg`;
         link.click();
-        toast.success("Rapor başarıyla oluşturuldu ve indirildi!");
+
+        // Upload to Supabase Storage
+        const blob = await (await fetch(imageDataUrl)).blob();
+        const fileName = `proposal_reports/${selectedCustomerId}_${Date.now()}.jpg`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(fileName, blob, {
+            contentType: 'image/jpeg',
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError);
+          toast.warning("Rapor indirildi ancak sunucuya yüklenemedi.");
+          return;
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(fileName);
+
+        // Save to database
+        await saveProposal(urlData.publicUrl);
+
+        toast.success("Rapor başarıyla oluşturuldu, indirildi ve kaydedildi!");
     } catch (error) {
         toast.error("Rapor oluşturulurken bir hata oluştu.");
         console.error(error);
@@ -164,18 +249,27 @@ const ProposalReportModule: React.FC = () => {
               <h2 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">1. Teklif Bilgileri</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Müşteri</label>
-                  <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Müşteri *</label>
+                  <select value={selectedCustomerId} onChange={(e) => handleCustomerChange(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg">
                     <option value="">Müşteri Seçin</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.kisa_isim}</option>)}
                   </select>
                 </div>
+                {filteredBranches.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Şube (Opsiyonel)</label>
+                    <select value={selectedBranchId} onChange={(e) => setSelectedBranchId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg">
+                      <option value="">Şube Seçin (Opsiyonel)</option>
+                      {filteredBranches.map(b => <option key={b.id} value={b.id}>{b.sube_adi}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-1">Teklif Tarihi</label>
                   <input type="date" value={proposalDate} onChange={(e) => setProposalDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-600 mb-1">Hazırlayan</label>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Hazırlayan *</label>
                   <input type="text" value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} placeholder="Adınız Soyadınız" className="w-full p-2 border border-gray-300 rounded-lg" />
                 </div>
               </div>

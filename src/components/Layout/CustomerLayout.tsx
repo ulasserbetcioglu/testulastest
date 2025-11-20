@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../Auth/AuthProvider'; // Gerçek import
-import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp, Bug } from 'lucide-react';
+import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp, Bug, Layers } from 'lucide-react';
 import { supabase } from '../../lib/supabase'; // Gerçek import
 import { localAuth } from '../../lib/localAuth'; // Gerçek import
 
@@ -54,6 +54,7 @@ const CustomerLayout: React.FC = () => {
     { path: '/customer/dof', icon: <AlertCircle size={20} />, name: 'DÖF' },
     { path: '/customer/dokumanlar', icon: <FilePlus size={20} />, name: 'Dökümanlar' },
     { path: '/customer/sertifikalar', icon: <Award size={20} />, name: 'Sertifikalar' },
+    { path: '/customer/modul-raporlari', icon: <Layers size={20} />, name: 'Modül Raporları' },
     { path: '/customer/malzemeler', icon: <Package size={20} />, name: 'Malzemeler' },
     { path: '/customer/pestisit-raporu', icon: <Bug size={20} />, name: 'Pestisit Raporu' },
     { path: '/customer/trend-analizi', icon: <TrendingUp size={20} />, name: 'Trend Analizi' },
