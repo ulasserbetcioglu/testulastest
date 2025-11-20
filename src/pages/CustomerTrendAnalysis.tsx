@@ -61,6 +61,23 @@ interface PestTypeStat {
   count: number;
 }
 
+interface BiocidalProductUsage {
+  product_name: string;
+  active_ingredient: string;
+  total_quantity: number;
+  unit: string;
+  usage_count: number;
+}
+
+interface EquipmentListItem {
+  equipment_name: string;
+  equipment_code: string;
+  department: string;
+  branch_name: string;
+  last_check_status: string;
+  last_check_date: string;
+}
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF4560'];
 
 const CustomerTrendAnalysis: React.FC = () => {
@@ -77,6 +94,8 @@ const CustomerTrendAnalysis: React.FC = () => {
   const [equipmentData, setEquipmentData] = useState<EquipmentCheckData[]>([]);
   const [monthlyTrends, setMonthlyTrends] = useState<MonthlyTrend[]>([]);
   const [pestTypeStats, setPestTypeStats] = useState<PestTypeStat[]>([]);
+  const [biocidalProducts, setBiocidalProducts] = useState<BiocidalProductUsage[]>([]);
+  const [equipmentList, setEquipmentList] = useState<EquipmentListItem[]>([]);
   const [customerName, setCustomerName] = useState('');
 
   const reportRef = useRef<HTMLDivElement>(null);
@@ -117,7 +136,9 @@ const CustomerTrendAnalysis: React.FC = () => {
         fetchVisitStats(),
         fetchEquipmentData(),
         fetchMonthlyTrends(),
-        fetchPestTypeStats()
+        fetchPestTypeStats(),
+        fetchBiocidalProducts(),
+        fetchEquipmentList()
       ]);
       toast.success('Rapor başarıyla oluşturuldu');
     } catch (error) {
@@ -300,6 +321,94 @@ const CustomerTrendAnalysis: React.FC = () => {
       setPestTypeStats(pestArray);
     } catch (error) {
       console.error('Error fetching pest type stats:', error);
+    }
+  };
+
+  const fetchBiocidalProducts = async () => {
+    if (!user?.customer_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('biocidal_products_usage')
+        .select(`
+          quantity,
+          unit,
+          biocidal_products (
+            name,
+            active_ingredient
+          )
+        `)
+        .eq('customer_id', user.customer_id)
+        .gte('created_at', dateRange.from)
+        .lte('created_at', dateRange.to);
+
+      if (error) throw error;
+
+      const productMap = new Map<string, BiocidalProductUsage>();
+
+      data?.forEach((usage: any) => {
+        const productName = usage.biocidal_products?.name || 'Bilinmeyen Ürün';
+        const activeIngredient = usage.biocidal_products?.active_ingredient || '';
+        const unit = usage.unit || 'adet';
+        const quantity = parseFloat(usage.quantity) || 0;
+
+        if (!productMap.has(productName)) {
+          productMap.set(productName, {
+            product_name: productName,
+            active_ingredient: activeIngredient,
+            total_quantity: 0,
+            unit: unit,
+            usage_count: 0
+          });
+        }
+
+        const product = productMap.get(productName)!;
+        product.total_quantity += quantity;
+        product.usage_count++;
+      });
+
+      const productArray = Array.from(productMap.values())
+        .sort((a, b) => b.total_quantity - a.total_quantity);
+
+      setBiocidalProducts(productArray);
+    } catch (error) {
+      console.error('Error fetching biocidal products:', error);
+    }
+  };
+
+  const fetchEquipmentList = async () => {
+    if (!user?.customer_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('branch_equipment')
+        .select(`
+          equipment_code,
+          department,
+          last_check,
+          equipment:equipment_id (
+            name
+          ),
+          branch:branch_id (
+            sube_adi
+          )
+        `)
+        .eq('customer_id', user.customer_id);
+
+      if (error) throw error;
+
+      const equipmentArray: EquipmentListItem[] = data?.map((item: any) => ({
+        equipment_name: item.equipment?.name || 'Bilinmeyen Ekipman',
+        equipment_code: item.equipment_code || '',
+        department: item.department || 'Belirtilmemiş',
+        branch_name: item.branch?.sube_adi || 'Bilinmeyen Şube',
+        last_check_status: item.last_check?.status || 'Kontrol edilmedi',
+        last_check_date: item.last_check?.date ? format(parseISO(item.last_check.date), 'dd.MM.yyyy') : 'Yok'
+      })) || [];
+
+      setEquipmentList(equipmentArray);
+    } catch (error) {
+      console.error('Error fetching equipment list:', error);
     }
   };
 
@@ -547,6 +656,84 @@ const CustomerTrendAnalysis: React.FC = () => {
                     <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Biocidal Products Usage */}
+            {biocidalProducts.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Biyosidal Ürün Kullanımı</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ürün Adı</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Etken Madde</th>
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Toplam Miktar</th>
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Birim</th>
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Kullanım Sayısı</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {biocidalProducts.map((product, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">{product.product_name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{product.active_ingredient || '-'}</td>
+                          <td className="px-4 py-3 text-sm text-center text-blue-600 font-medium">{product.total_quantity.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-700">{product.unit}</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-700">{product.usage_count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Equipment List */}
+            {equipmentList.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Ekipman Listesi</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ekipman Adı</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Kod</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Departman</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Şube</th>
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Son Kontrol</th>
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Durum</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {equipmentList.map((eq, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{eq.equipment_name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 font-mono">{eq.equipment_code}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{eq.department}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{eq.branch_name}</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-600">{eq.last_check_date}</td>
+                          <td className="px-4 py-3 text-sm text-center">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              eq.last_check_status === 'ok' || eq.last_check_status === 'working' ? 'bg-green-100 text-green-800' :
+                              eq.last_check_status === 'issue' || eq.last_check_status === 'problem' ? 'bg-red-100 text-red-800' :
+                              eq.last_check_status === 'missing' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {eq.last_check_status === 'ok' ? 'Sorunsuz' :
+                               eq.last_check_status === 'working' ? 'Çalışıyor' :
+                               eq.last_check_status === 'issue' ? 'Sorunlu' :
+                               eq.last_check_status === 'problem' ? 'Problem' :
+                               eq.last_check_status === 'missing' ? 'Eksik' :
+                               eq.last_check_status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
