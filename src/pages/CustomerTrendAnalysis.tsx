@@ -12,7 +12,8 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Save
 } from 'lucide-react';
 import {
   LineChart,
@@ -97,15 +98,23 @@ const CustomerTrendAnalysis: React.FC = () => {
   const [biocidalProducts, setBiocidalProducts] = useState<BiocidalProductUsage[]>([]);
   const [equipmentList, setEquipmentList] = useState<EquipmentListItem[]>([]);
   const [customerName, setCustomerName] = useState('');
+  const [branches, setBranches] = useState<any[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState('');
 
   const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user?.customer_id) {
       fetchCustomerName();
-      handleGenerateReport();
+      fetchBranches();
     }
   }, [user?.customer_id]);
+
+  useEffect(() => {
+    if (user?.customer_id && branches.length > 0) {
+      handleGenerateReport();
+    }
+  }, [user?.customer_id, branches]);
 
   const fetchCustomerName = async () => {
     if (!user?.customer_id) return;
@@ -121,6 +130,23 @@ const CustomerTrendAnalysis: React.FC = () => {
       setCustomerName(data?.kisa_isim || '');
     } catch (error) {
       console.error('Error fetching customer name:', error);
+    }
+  };
+
+  const fetchBranches = async () => {
+    if (!user?.customer_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('branches')
+        .select('id, sube_adi')
+        .eq('musteri_id', user.customer_id)
+        .order('sube_adi');
+
+      if (error) throw error;
+      setBranches(data || []);
+    } catch (error) {
+      console.error('Error fetching branches:', error);
     }
   };
 
@@ -153,12 +179,18 @@ const CustomerTrendAnalysis: React.FC = () => {
     if (!user?.customer_id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('visits')
         .select('id, status, visit_date')
         .eq('customer_id', user.customer_id)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to);
+
+      if (selectedBranchId) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -179,13 +211,19 @@ const CustomerTrendAnalysis: React.FC = () => {
     if (!user?.customer_id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('visits')
         .select('equipment_checks, visit_date')
         .eq('customer_id', user.customer_id)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
         .not('equipment_checks', 'is', null);
+
+      if (selectedBranchId) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -246,12 +284,18 @@ const CustomerTrendAnalysis: React.FC = () => {
         const monthStart = startOfMonth(month);
         const monthEnd = endOfMonth(month);
 
-        const { data, error } = await supabase
+        let query = supabase
           .from('visits')
           .select('id, equipment_checks')
           .eq('customer_id', user.customer_id)
           .gte('visit_date', format(monthStart, 'yyyy-MM-dd'))
           .lte('visit_date', format(monthEnd, 'yyyy-MM-dd'));
+
+        if (selectedBranchId) {
+          query = query.eq('branch_id', selectedBranchId);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -292,13 +336,19 @@ const CustomerTrendAnalysis: React.FC = () => {
     if (!user?.customer_id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('visits')
         .select('pest_types')
         .eq('customer_id', user.customer_id)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
         .not('pest_types', 'is', null);
+
+      if (selectedBranchId) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -328,7 +378,7 @@ const CustomerTrendAnalysis: React.FC = () => {
     if (!user?.customer_id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('biocidal_products_usage')
         .select(`
           quantity,
@@ -341,6 +391,12 @@ const CustomerTrendAnalysis: React.FC = () => {
         .eq('customer_id', user.customer_id)
         .gte('created_at', dateRange.from)
         .lte('created_at', dateRange.to);
+
+      if (selectedBranchId) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -380,7 +436,7 @@ const CustomerTrendAnalysis: React.FC = () => {
     if (!user?.customer_id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('branch_equipment')
         .select(`
           equipment_code,
@@ -394,6 +450,12 @@ const CustomerTrendAnalysis: React.FC = () => {
           )
         `)
         .eq('customer_id', user.customer_id);
+
+      if (selectedBranchId) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -409,6 +471,49 @@ const CustomerTrendAnalysis: React.FC = () => {
       setEquipmentList(equipmentArray);
     } catch (error) {
       console.error('Error fetching equipment list:', error);
+    }
+  };
+
+  const handleSaveReport = async () => {
+    if (!user?.customer_id || !visitStats) {
+      toast.error('Rapor verisi bulunamadı');
+      return;
+    }
+
+    try {
+      const reportName = `${customerName} - ${format(parseISO(dateRange.from), 'dd/MM/yyyy')} - ${format(parseISO(dateRange.to), 'dd/MM/yyyy')}`;
+      const selectedBranchName = selectedBranchId ? branches.find(b => b.id === selectedBranchId)?.sube_adi : null;
+
+      const reportData = {
+        visitStats,
+        equipmentData,
+        monthlyTrends,
+        pestTypeStats,
+        biocidalProducts,
+        equipmentList,
+        customerName,
+        branchName: selectedBranchName,
+        dateRange
+      };
+
+      const { error } = await supabase
+        .from('trend_analysis_reports')
+        .insert({
+          customer_id: user.customer_id,
+          branch_id: selectedBranchId || null,
+          report_name: reportName,
+          date_from: dateRange.from,
+          date_to: dateRange.to,
+          report_data: reportData,
+          created_by: user.email
+        });
+
+      if (error) throw error;
+
+      toast.success('Rapor başarıyla kaydedildi');
+    } catch (error) {
+      console.error('Error saving report:', error);
+      toast.error('Rapor kaydedilirken hata oluştu');
     }
   };
 
@@ -466,14 +571,24 @@ const CustomerTrendAnalysis: React.FC = () => {
               </div>
             </div>
             {visitStats && (
-              <button
-                onClick={handleExportImage}
-                disabled={generating}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-              >
-                {generating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-                Raporu İndir
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveReport}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 transition-colors"
+                >
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                  Raporu Kaydet
+                </button>
+                <button
+                  onClick={handleExportImage}
+                  disabled={generating}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                >
+                  {generating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+                  Raporu İndir
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -482,9 +597,25 @@ const CustomerTrendAnalysis: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <CalendarIcon className="h-5 w-5" />
-            Tarih Aralığı
+            Filtreler
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {branches.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Şube (Opsiyonel)</label>
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Tüm Şubeler</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.sube_adi}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Başlangıç Tarihi</label>
               <input
