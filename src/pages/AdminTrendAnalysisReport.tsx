@@ -82,6 +82,9 @@ interface EquipmentListItem {
   branch_name: string;
   last_check_status: string;
   last_check_date: string;
+  properties?: Record<string, any>;
+  total_activity?: number;
+  activity_details?: Record<string, number>;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF4560'];
@@ -450,7 +453,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
         return;
       }
 
-      // Fetch equipment for these branches
+      // Fetch equipment with properties for these branches
       const { data, error } = await supabase
         .from('branch_equipment')
         .select(`
@@ -458,7 +461,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
           department,
           last_check,
           equipment:equipment_id (
-            name
+            name,
+            properties
           ),
           branch:branch_id (
             sube_adi
@@ -468,14 +472,53 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
       if (error) throw error;
 
-      const equipmentArray: EquipmentListItem[] = data?.map((item: any) => ({
-        equipment_name: item.equipment?.name || 'Bilinmeyen Ekipman',
-        equipment_code: item.equipment_code || '',
-        department: item.department || 'Belirtilmemiş',
-        branch_name: item.branch?.sube_adi || 'Bilinmeyen Şube',
-        last_check_status: item.last_check?.status || 'Kontrol edilmedi',
-        last_check_date: item.last_check?.date ? format(parseISO(item.last_check.date), 'dd.MM.yyyy') : 'Yok'
-      })) || [];
+      // Fetch visits for activity data in the selected date range
+      const { data: visitsData } = await supabase
+        .from('visits')
+        .select('equipment_checks, visit_date')
+        .in('branch_id', branchIds)
+        .gte('visit_date', dateRange.from)
+        .lte('visit_date', dateRange.to)
+        .eq('status', 'completed');
+
+      // Calculate activity for each equipment code
+      const activityMap = new Map<string, { total: number; details: Record<string, number> }>();
+
+      visitsData?.forEach(visit => {
+        if (visit.equipment_checks) {
+          Object.entries(visit.equipment_checks).forEach(([code, checkData]: [string, any]) => {
+            if (!activityMap.has(code)) {
+              activityMap.set(code, { total: 0, details: {} });
+            }
+            const activity = activityMap.get(code)!;
+
+            // Sum up numeric properties (counts, quantities, etc.)
+            if (checkData && typeof checkData === 'object') {
+              Object.entries(checkData).forEach(([key, value]) => {
+                if (typeof value === 'number') {
+                  activity.total += value;
+                  activity.details[key] = (activity.details[key] || 0) + value;
+                }
+              });
+            }
+          });
+        }
+      });
+
+      const equipmentArray: EquipmentListItem[] = data?.map((item: any) => {
+        const activityData = activityMap.get(item.equipment_code);
+        return {
+          equipment_name: item.equipment?.name || 'Bilinmeyen Ekipman',
+          equipment_code: item.equipment_code || '',
+          department: item.department || 'Belirtilmemiş',
+          branch_name: item.branch?.sube_adi || 'Bilinmeyen Şube',
+          last_check_status: item.last_check?.status || 'Kontrol edilmedi',
+          last_check_date: item.last_check?.date ? format(parseISO(item.last_check.date), 'dd.MM.yyyy') : 'Yok',
+          properties: item.equipment?.properties || {},
+          total_activity: activityData?.total || 0,
+          activity_details: activityData?.details || {}
+        };
+      }) || [];
 
       setEquipmentList(equipmentArray);
     } catch (error) {
@@ -837,7 +880,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
             {/* Equipment List */}
             {equipmentList.length > 0 && (
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Ekipman Listesi</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Ekipman Listesi ve Aktivite Detayları</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
@@ -846,6 +889,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Kod</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Departman</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Şube</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Aktivite Detayları</th>
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Toplam Aktivite</th>
                         <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Son Kontrol</th>
                         <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Durum</th>
                       </tr>
@@ -853,10 +898,36 @@ const AdminTrendAnalysisReport: React.FC = () => {
                     <tbody className="divide-y divide-gray-200">
                       {equipmentList.map((eq, idx) => (
                         <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">{eq.equipment_name}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600 font-mono">{eq.equipment_code}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">{eq.equipment_name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 font-mono text-xs">{eq.equipment_code}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{eq.department}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{eq.branch_name}</td>
+                          <td className="px-4 py-3 text-sm">
+                            {eq.activity_details && Object.keys(eq.activity_details).length > 0 ? (
+                              <div className="space-y-1">
+                                {Object.entries(eq.activity_details).map(([key, value]) => {
+                                  const propertyLabel = eq.properties?.[key]?.label || key;
+                                  return (
+                                    <div key={key} className="flex items-center gap-2">
+                                      <span className="text-gray-500 text-xs">{propertyLabel}:</span>
+                                      <span className="text-blue-600 font-medium">{value}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-xs">Veri yok</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {eq.total_activity !== undefined && eq.total_activity > 0 ? (
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold">
+                                {eq.total_activity}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">0</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-sm text-center text-gray-600">{eq.last_check_date}</td>
                           <td className="px-4 py-3 text-sm text-center">
                             <span className={`px-2 py-1 rounded text-xs font-medium ${
