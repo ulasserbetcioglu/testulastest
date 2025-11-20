@@ -62,6 +62,7 @@ const menuCategories = [
       // YENİ EKLENEN BAĞLANTI
       { name: 'Yıllık Kar/Zarar', path: '/yillik-kar-zarar', icon: <TrendingUp size={20} /> },
       { name: 'Karlılık Analizi', path: '/karlilik-analizi', icon: <DollarSign size={20} /> },
+      { name: 'Trend Analizi', path: '/trend-analizi', icon: <TrendingUp size={20} /> },
       { name: 'Faaliyet Raporu Takip', path: '/faaliyet-rapor-takip', icon: <FileText size={20} /> },
       { name: 'Pestisit Kullanım Raporu', path: '/pestisit-raporu', icon: <Bug size={20} /> },
       { name: 'Faturasız Müşteriler', path: '/faturasiz-musteriler', icon: <Wallet size={20} /> }, // YENİ EKLENEN BAĞLANTI
