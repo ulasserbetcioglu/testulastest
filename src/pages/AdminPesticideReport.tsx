@@ -214,10 +214,12 @@ const AdminPesticideReport: React.FC = () => {
 
     try {
       const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
+        scale: 3,
         backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
+        allowTaint: true,
+        imageTimeout: 0,
       });
 
       const imageData = canvas.toDataURL('image/jpeg', 0.95);
@@ -359,37 +361,83 @@ const AdminPesticideReport: React.FC = () => {
 
       {!isLoading && !error && (
         <div ref={reportRef} className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-4 bg-gray-50 border-b">
-            <h3 className="font-semibold text-lg">
-              {selectedCustomer && customers.find(c => c.id === selectedCustomer)?.kisa_isim}
-              {selectedBranch && ` - ${filteredBranches.find(b => b.id === selectedBranch)?.sube_adi}`}
-            </h3>
-            <p className="text-sm text-gray-600">
-              Tarih Aralığı: {format(new Date(startDate), 'dd/MM/yyyy', { locale: tr })} - {format(new Date(endDate), 'dd/MM/yyyy', { locale: tr })}
-            </p>
+          {/* Rapor Başlığı - Profesyonel Görünüm */}
+          <div className="p-8 bg-gradient-to-r from-green-50 to-blue-50 border-b-4 border-green-600">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <img
+                  src="/ilaclamatik-logo.png"
+                  alt="İlaçlamatik Logo"
+                  className="h-16 w-auto"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800">İlaçlamatik</h1>
+                  <p className="text-sm text-gray-600">Profesyonel Pest Kontrol Hizmetleri</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Rapor Tarihi</p>
+                <p className="text-lg font-semibold text-gray-800">
+                  {format(new Date(), 'dd/MM/yyyy', { locale: tr })}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-green-200 pt-4">
+              <h2 className="text-2xl font-bold text-green-800 mb-3 flex items-center gap-2">
+                <Bug className="w-6 h-6" />
+                BİYOSİDAL ÜRÜN KULLANIM RAPORU
+              </h2>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-semibold text-gray-700">Müşteri:</span>
+                  <span className="ml-2 text-gray-900">
+                    {selectedCustomer && customers.find(c => c.id === selectedCustomer)?.kisa_isim}
+                  </span>
+                </div>
+                {selectedBranch && (
+                  <div>
+                    <span className="font-semibold text-gray-700">Şube:</span>
+                    <span className="ml-2 text-gray-900">
+                      {filteredBranches.find(b => b.id === selectedBranch)?.sube_adi}
+                    </span>
+                  </div>
+                )}
+                <div>
+                  <span className="font-semibold text-gray-700">Rapor Dönemi:</span>
+                  <span className="ml-2 text-gray-900">
+                    {format(new Date(startDate), 'dd/MM/yyyy', { locale: tr })} - {format(new Date(endDate), 'dd/MM/yyyy', { locale: tr })}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-green-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
                     Tarih
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
                     Lokasyon
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ürün Adı
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    Biyosidal Ürün
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
                     Doz
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
                     Miktar
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Uygulayan
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">
+                    Uygulayan Operatör
                   </th>
                 </tr>
               </thead>
@@ -401,30 +449,32 @@ const AdminPesticideReport: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  reportData.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  reportData.map((item, index) => (
+                    <tr key={item.id} className={`hover:bg-green-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
                         {format(new Date(item.visit_date), 'dd/MM/yyyy')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                         {item.branch_name || item.customer_name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                        {item.product_name}
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                          {item.product_name}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         {item.dosage || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        <span className="font-semibold text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className="font-bold text-green-700 text-base">
                           {item.quantity !== null && item.quantity !== undefined ? item.quantity : '0'}
                         </span>
                         {' '}
-                        <span className="text-gray-500">
+                        <span className="text-gray-600 font-medium">
                           {item.unit || 'adet'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         {item.operator_name}
                       </td>
                     </tr>
@@ -435,10 +485,18 @@ const AdminPesticideReport: React.FC = () => {
           </div>
 
           {reportData.length > 0 && (
-            <div className="p-4 bg-gray-50 border-t">
-              <p className="text-sm text-gray-600">
-                Toplam <span className="font-semibold">{reportData.length}</span> kayıt bulundu.
-              </p>
+            <div className="p-6 bg-gradient-to-r from-green-50 to-blue-50 border-t-2 border-green-600">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Toplam Kayıt Sayısı</p>
+                  <p className="text-2xl font-bold text-green-700">{reportData.length}</p>
+                </div>
+                <div className="text-right text-sm text-gray-600">
+                  <p>Bu rapor İlaçlamatik tarafından</p>
+                  <p>elektronik ortamda oluşturulmuştur.</p>
+                  <p className="mt-2 font-semibold">www.ilaclamatik.com</p>
+                </div>
+              </div>
             </div>
           )}
         </div>

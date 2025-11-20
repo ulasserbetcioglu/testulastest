@@ -1,10 +1,11 @@
 // src/pages/PesticideUsageReport.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, Download, Calendar, Bug } from 'lucide-react';
+import { Loader2, Download, Calendar, Bug, Image as ImageIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import html2canvas from 'html2canvas';
 // import { useAuth } from '../components/Auth/AuthProvider'; // <-- KULLANILMIYOR
 import { localAuth } from '../lib/localAuth'; // ✅ DÜZELTME: Sadece localAuth kullanılıyor
 
@@ -32,6 +33,7 @@ const PesticideUsageReport: React.FC = () => {
 
   const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const reportRef = useRef<HTMLDivElement>(null);
 
   // 1. Aşama: Kullanıcı profili bulma (SADECE localAuth kullanarak)
   useEffect(() => {
@@ -204,24 +206,60 @@ const PesticideUsageReport: React.FC = () => {
     XLSX.writeFile(wb, `Pestisit_Kullanim_Raporu_${startDate}_${endDate}.xlsx`);
   };
 
+  const exportToJPEG = async () => {
+    if (!reportRef.current) return;
+
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 3,
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        imageTimeout: 0,
+      });
+
+      const imageData = canvas.toDataURL('image/jpeg', 0.95);
+      const link = document.createElement('a');
+      const fileName = `Pestisit_Raporu_${startDate}_${endDate}.jpg`;
+
+      link.download = fileName;
+      link.href = imageData;
+      link.click();
+    } catch (err) {
+      console.error('JPEG export hatası:', err);
+      setError('JPEG olarak dışa aktarma başarısız oldu.');
+    }
+  };
+
   const isLoading = isProfileLoading || isReportLoading;
 
   // JSX (Görünüm)
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-2xl font-semibold flex items-center gap-3">
           <Bug className="w-7 h-7 text-green-700" />
           Pestisit Kullanım Raporu
         </h2>
-        <button
-          onClick={exportToExcel}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-          disabled={isLoading || reportData.length === 0}
-        >
-          <Download size={20} />
-          Excel Olarak Aktar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={exportToJPEG}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+            disabled={isLoading || reportData.length === 0}
+          >
+            <ImageIcon size={20} />
+            JPEG
+          </button>
+          <button
+            onClick={exportToExcel}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+            disabled={isLoading || reportData.length === 0}
+          >
+            <Download size={20} />
+            Excel
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-4 space-y-4">
@@ -279,17 +317,59 @@ const PesticideUsageReport: React.FC = () => {
 
       {/* Rapor Tablosu */}
       {!isLoading && !error && (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div ref={reportRef} className="bg-white rounded-lg shadow-md overflow-hidden">
+          {/* Rapor Başlığı - Profesyonel Görünüm */}
+          <div className="p-8 bg-gradient-to-r from-green-50 to-blue-50 border-b-4 border-green-600">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <img
+                  src="/ilaclamatik-logo.png"
+                  alt="İlaçlamatik Logo"
+                  className="h-16 w-auto"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800">İlaçlamatik</h1>
+                  <p className="text-sm text-gray-600">Profesyonel Pest Kontrol Hizmetleri</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Rapor Tarihi</p>
+                <p className="text-lg font-semibold text-gray-800">
+                  {format(new Date(), 'dd/MM/yyyy', { locale: tr })}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-green-200 pt-4">
+              <h2 className="text-2xl font-bold text-green-800 mb-3 flex items-center gap-2">
+                <Bug className="w-6 h-6" />
+                BİYOSİDAL ÜRÜN KULLANIM RAPORU
+              </h2>
+
+              <div className="grid grid-cols-1 gap-2 text-sm">
+                <div>
+                  <span className="font-semibold text-gray-700">Rapor Dönemi:</span>
+                  <span className="ml-2 text-gray-900">
+                    {format(new Date(startDate), 'dd/MM/yyyy', { locale: tr })} - {format(new Date(endDate), 'dd/MM/yyyy', { locale: tr })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-green-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lokasyon</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün Adı</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Doz</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Miktar</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uygulayan</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Tarih</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Lokasyon</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Biyosidal Ürün</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Doz</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Miktar</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Uygulayan Operatör</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -300,30 +380,32 @@ const PesticideUsageReport: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  reportData.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  reportData.map((item, index) => (
+                    <tr key={item.id} className={`hover:bg-green-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
                         {format(new Date(item.visit_date), 'dd/MM/yyyy')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                         {item.branch_name || item.customer_name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                        {item.product_name}
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                          {item.product_name}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {item.dosage || '-'} 
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {item.dosage || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        <span className="font-semibold text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className="font-bold text-green-700 text-base">
                           {item.quantity !== null && item.quantity !== undefined ? item.quantity : '0'}
                         </span>
                         {' '}
-                        <span className="text-gray-500">
+                        <span className="text-gray-600 font-medium">
                           {item.unit || 'adet'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         {item.operator_name}
                       </td>
                     </tr>
@@ -332,6 +414,22 @@ const PesticideUsageReport: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {reportData.length > 0 && (
+            <div className="p-6 bg-gradient-to-r from-green-50 to-blue-50 border-t-2 border-green-600">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Toplam Kayıt Sayısı</p>
+                  <p className="text-2xl font-bold text-green-700">{reportData.length}</p>
+                </div>
+                <div className="text-right text-sm text-gray-600">
+                  <p>Bu rapor İlaçlamatik tarafından</p>
+                  <p>elektronik ortamda oluşturulmuştur.</p>
+                  <p className="mt-2 font-semibold">www.ilaclamatik.com</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
