@@ -109,6 +109,7 @@ import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
 import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm'; // NEW: Import OperatorWeeklyKmForm
 // YENİ EKLENEN RAPOR SAYFASI
 import PesticideUsageReport from './pages/PesticideUsageReport';
+import AdminPesticideReport from './pages/AdminPesticideReport';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -360,6 +361,8 @@ function App() {
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             {/* Monthly Visit Schedule */}
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
+            {/* Admin Pesticide Report */}
+            <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
           </Route>
           
         

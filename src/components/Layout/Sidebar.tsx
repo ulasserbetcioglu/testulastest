@@ -1,13 +1,13 @@
 // src/components/Layout/Sidebar.tsx
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { 
-    Menu, X, Warehouse, CalendarRange, ArrowRight, DollarSign, 
-    AlertCircle, FilePlus, Award, Calendar, BarChart2, CheckSquare, 
-    FileText, FileInput as FileInvoice, Grid, LogOut, LayoutDashboard, 
-    Users, Settings, UserCog, Route, Building, Home, CalendarClock, MapPin, 
+import {
+    Menu, X, Warehouse, CalendarRange, ArrowRight, DollarSign,
+    AlertCircle, FilePlus, Award, Calendar, BarChart2, CheckSquare,
+    FileText, FileInput as FileInvoice, Grid, LogOut, LayoutDashboard,
+    Users, Settings, UserCog, Route, Building, Home, CalendarClock, MapPin,
     ChevronsLeft, ChevronsRight, Mail, Package, MessageSquare, MailCheck, BarChart3, TrendingUp, PlusCircle, NotebookPen,
-    Wallet, ReceiptText, Image as ImageIcon, Clock as ClockIcon, Car // Yeni ikon eklendi
+    Wallet, ReceiptText, Image as ImageIcon, Clock as ClockIcon, Car, Bug // Yeni ikon eklendi
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
@@ -60,9 +60,10 @@ const menuCategories = [
       { name: 'Ücretli Malzemeler', path: '/ucretli-malzemeler', icon: <DollarSign size={20} /> },
       { name: 'Cari Satış Raporu', path: '/cari-satis-raporu', icon: <BarChart2 size={20} /> },
       // YENİ EKLENEN BAĞLANTI
-      { name: 'Yıllık Kar/Zarar', path: '/yillik-kar-zarar', icon: <TrendingUp size={20} /> }, 
+      { name: 'Yıllık Kar/Zarar', path: '/yillik-kar-zarar', icon: <TrendingUp size={20} /> },
       { name: 'Karlılık Analizi', path: '/karlilik-analizi', icon: <DollarSign size={20} /> },
       { name: 'Faaliyet Raporu Takip', path: '/faaliyet-rapor-takip', icon: <FileText size={20} /> },
+      { name: 'Pestisit Kullanım Raporu', path: '/pestisit-raporu', icon: <Bug size={20} /> },
       { name: 'Faturasız Müşteriler', path: '/faturasiz-musteriler', icon: <Wallet size={20} /> }, // YENİ EKLENEN BAĞLANTI
       { name: 'Tahsilat Makbuzları', path: '/admin/tahsilat-makbuzlari', icon: <ReceiptText size={20} /> }, // YENİ EKLENEN BAĞLANTI
       { name: 'Ziyaret Raporları', path: '/admin/ziyaret-raporlari', icon: <ImageIcon size={20} /> }, // NEW: Ziyaret Raporları
