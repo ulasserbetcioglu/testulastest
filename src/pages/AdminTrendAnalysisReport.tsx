@@ -562,7 +562,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Filtreler</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Müşteri *</label>
               <select
@@ -577,21 +577,22 @@ const AdminTrendAnalysisReport: React.FC = () => {
               </select>
             </div>
 
-            {filteredBranches.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Şube (Opsiyonel)</label>
-                <select
-                  value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Tüm Şubeler</option>
-                  {filteredBranches.map(b => (
-                    <option key={b.id} value={b.id}>{b.sube_adi}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Şube (Opsiyonel)</label>
+              <select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                disabled={!selectedCustomerId || filteredBranches.length === 0}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {!selectedCustomerId ? 'Önce müşteri seçin' : filteredBranches.length === 0 ? 'Şube yok' : 'Tüm Şubeler'}
+                </option>
+                {filteredBranches.map(b => (
+                  <option key={b.id} value={b.id}>{b.sube_adi}</option>
+                ))}
+              </select>
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Başlangıç Tarihi</label>
