@@ -256,8 +256,9 @@ const Sidebar = ({
           value={selectedOperator || ''}
           onChange={(e) => {
             const value = e.target.value;
-            alert(`Dropdown changed! Value: ${value}`);
-            onOperatorChange(value === '' ? null : value);
+            const newValue = value === '' ? null : value;
+            console.log('🟡 Operatör seçildi:', newValue);
+            onOperatorChange(newValue);
           }}
           className="w-full p-1 sm:p-2 border rounded text-[10px] sm:text-xs"
         >
@@ -577,12 +578,16 @@ const AdminCalendarPlanning = () => {
   // --- Olay Yöneticileri (Event Handlers) ---
 
   const handleEventDrop = async (item, date) => {
-    alert(`DROP! Type: ${item.type}, Operator: ${selectedOperator}, Admin: ${isAdmin}`);
+    console.log('🔵 DROP:', {
+      type: item.type,
+      operator: selectedOperator,
+      admin: isAdmin,
+      item: item
+    });
 
     try {
       // Admin kontrolü
       if (!isAdmin) {
-        alert('BLOCKED: Not admin!');
         toast.error('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız');
         return;
       }
@@ -590,13 +595,10 @@ const AdminCalendarPlanning = () => {
       // Operatör kontrolü (operatör sürükleme ve mevcut ziyaret taşıma hariç)
       if (item.type === 'customer' || item.type === 'branch') {
         if (!selectedOperator) {
-          alert('BLOCKED: No operator!');
           toast.error('Lütfen önce bir operatör seçin');
           return;
         }
       }
-
-      alert('Passed checks! Creating visit...');
 
       // Tarihi formatla
       const visitDate = new Date(
@@ -635,8 +637,6 @@ const AdminCalendarPlanning = () => {
       }
       // Durum 2: Yeni ziyaret ekleniyor
       else if (item.type === 'customer' || item.type === 'branch') {
-        alert('Case 2: Creating new visit!');
-
         const visitData = {
           customer_id: item.type === 'branch' ? item.customer_id : item.id,
           branch_id: item.type === 'branch' ? item.id : null,
@@ -645,13 +645,10 @@ const AdminCalendarPlanning = () => {
           visit_type: selectedVisitType
         };
 
-        alert(`Visit data: ${JSON.stringify(visitData)}`);
+        console.log('🟢 Creating visit:', visitData);
 
         await createVisit(visitData);
-        alert('Visit created! Now fetching...');
-
         await fetchData();
-        alert('Fetch done!');
 
         toast.success(`Ziyaret oluşturuldu: ${item.kisa_isim || item.sube_adi}`);
       }
