@@ -359,7 +359,8 @@ const CalendarGrid = ({
   currentDate,
   visits,
   onEventDrop,
-  onDeleteVisit
+  onDeleteVisit,
+  monthlySchedules
 }) => {
   const days = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
   const monthStart = startOfMonth(currentDate);
@@ -836,7 +837,118 @@ const AdminCalendarPlanning = () => {
             visits={visits}
             onEventDrop={handleEventDrop}
             onDeleteVisit={deleteVisit}
+            monthlySchedules={monthlySchedules}
           />
+
+          {/* Aylık Plan Özeti */}
+          {monthlySchedules.length > 0 && (
+            <div className="mt-6 bg-white rounded-lg shadow-md p-4">
+              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <User className="h-5 w-5 text-blue-600" />
+                Bu Ayın Ziyaret Planları
+              </h2>
+
+              {/* Operatör bazında gruplama */}
+              <div className="space-y-4">
+                {Object.entries(
+                  monthlySchedules.reduce((acc, schedule) => {
+                    const operatorName = schedule.operator?.name || 'Atanmamış';
+                    if (!acc[operatorName]) {
+                      acc[operatorName] = [];
+                    }
+                    acc[operatorName].push(schedule);
+                    return acc;
+                  }, {})
+                ).map(([operatorName, schedules]) => {
+                  // Bu operatörün yapılmış ziyaret sayısını hesapla
+                  const operatorSchedules = schedules;
+                  const totalRequired = operatorSchedules.reduce((sum, s) => sum + s.visits_required, 0);
+
+                  // Yapılmış ziyaretleri hesapla
+                  const completedCount = operatorSchedules.reduce((sum, schedule) => {
+                    const completed = visits.filter(v => {
+                      const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                      const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                      return matchesBranch || matchesCustomer;
+                    }).length;
+                    return sum + completed;
+                  }, 0);
+
+                  return (
+                    <div key={operatorName} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                            <User className="h-4 w-4 text-purple-600" />
+                          </div>
+                          <span className="font-semibold text-gray-800">{operatorName}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-gray-600">
+                            Toplam: <span className="font-semibold">{totalRequired}</span> ziyaret
+                          </span>
+                          <span className="text-sm">
+                            <span className="text-green-600 font-semibold">{completedCount}</span> /
+                            <span className="text-gray-600"> {totalRequired}</span>
+                          </span>
+                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full transition-all"
+                              style={{ width: `${totalRequired > 0 ? (completedCount / totalRequired) * 100 : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {operatorSchedules.map((schedule, idx) => {
+                          const customerName = schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim;
+                          const branchName = schedule.branch?.sube_adi;
+                          const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
+
+                          // Bu plan için yapılmış ziyaret sayısı
+                          const doneCount = visits.filter(v => {
+                            const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                            const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                            return matchesBranch || matchesCustomer;
+                          }).length;
+
+                          const progress = schedule.visits_required > 0 ? (doneCount / schedule.visits_required) * 100 : 0;
+                          const isComplete = doneCount >= schedule.visits_required;
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`p-2 rounded border ${
+                                isComplete ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
+                              }`}
+                            >
+                              <div className="text-xs font-medium text-gray-800 truncate" title={displayName}>
+                                {displayName}
+                              </div>
+                              <div className="flex items-center justify-between mt-1">
+                                <span className="text-xs text-gray-600">
+                                  {doneCount} / {schedule.visits_required}
+                                </span>
+                                <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                  <div
+                                    className={`h-1.5 rounded-full transition-all ${
+                                      isComplete ? 'bg-green-500' : 'bg-blue-500'
+                                    }`}
+                                    style={{ width: `${Math.min(progress, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </DndProvider>
