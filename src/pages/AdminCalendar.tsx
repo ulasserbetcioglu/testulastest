@@ -895,38 +895,171 @@ const AdminCalendar: React.FC = () => {
         </div>
       </div>
 
+      {/* Aylık Plan Özeti - Yapılmayanlar */}
+      {monthlySchedules.length > 0 && (
+        <div className="mt-6">
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <Users className="h-5 w-5 text-gray-400" />
+              Bu Ayın Ziyaret Planları ve Yapılmayanlar
+            </h3>
+
+            <div className="space-y-4">
+              {Object.entries(
+                monthlySchedules.reduce((acc: any, schedule: any) => {
+                  const operatorName = schedule.operator?.name || 'Atanmamış';
+                  if (!acc[operatorName]) {
+                    acc[operatorName] = [];
+                  }
+                  acc[operatorName].push(schedule);
+                  return acc;
+                }, {})
+              ).map(([operatorName, schedules]: [string, any]) => {
+                const operatorSchedules = schedules;
+                const totalRequired = operatorSchedules.reduce((sum: number, s: any) => sum + s.visits_required, 0);
+
+                const completedCount = operatorSchedules.reduce((sum: number, schedule: any) => {
+                  const completed = visits.filter((v: Visit) => {
+                    const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                    const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                    return matchesBranch || matchesCustomer;
+                  }).length;
+                  return sum + completed;
+                }, 0);
+
+                return (
+                  <div key={operatorName} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                          <User className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <span className="font-semibold text-gray-800">{operatorName}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-gray-600">
+                          Toplam: <span className="font-semibold">{totalRequired}</span> ziyaret
+                        </span>
+                        <span className="text-sm">
+                          <span className="text-green-600 font-semibold">{completedCount}</span> /
+                          <span className="text-gray-600"> {totalRequired}</span>
+                        </span>
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-green-500 h-2 rounded-full transition-all"
+                            style={{ width: `${totalRequired > 0 ? (completedCount / totalRequired) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {operatorSchedules.map((schedule: any, idx: number) => {
+                        const customerName = schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim;
+                        const branchName = schedule.branch?.sube_adi;
+                        const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
+
+                        const doneCount = visits.filter((v: Visit) => {
+                          const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                          const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                          return matchesBranch || matchesCustomer;
+                        }).length;
+
+                        const progress = schedule.visits_required > 0 ? (doneCount / schedule.visits_required) * 100 : 0;
+                        const isComplete = doneCount >= schedule.visits_required;
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-3 rounded border ${
+                              isComplete ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-200'
+                            }`}
+                          >
+                            <div className="text-sm font-medium text-gray-800 truncate" title={displayName}>
+                              {displayName}
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className={`text-xs font-semibold ${
+                                isComplete ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {doneCount} / {schedule.visits_required}
+                              </span>
+                              <div className="w-20 bg-gray-200 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full transition-all ${
+                                    isComplete ? 'bg-green-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${Math.min(progress, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                            {!isComplete && (
+                              <div className="mt-1 text-xs text-red-600">
+                                Kalan: {schedule.visits_required - doneCount} ziyaret
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bu Ay Ziyaret Planlanmamış */}
       <div className="mt-6">
-        <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2"><ClipboardX className="text-gray-400"/> Bu Ay Ziyaret Planlanmamış</h3>
         <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 space-y-6">
-            {inactiveItems.branches.length > 0 && (
-                <div>
-                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Şubeler ({inactiveItems.branches.length})</h4>
+          <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
+            <ClipboardX className="text-gray-400"/> Bu Ay Ziyaret Planlanmamış
+          </h3>
+
+          {(() => {
+            const scheduledBranchIds = new Set(monthlySchedules.filter((s: any) => s.branch_id).map((s: any) => s.branch_id));
+            const scheduledCustomerIds = new Set(monthlySchedules.filter((s: any) => s.customer_id && !s.branch_id).map((s: any) => s.customer_id));
+
+            const unscheduledBranches = branches.filter(b => !scheduledBranchIds.has(b.id) && !inactiveItems.branches.some(ib => ib.id === b.id));
+            const unscheduledCustomers = customers.filter(c => !scheduledCustomerIds.has(c.id) && !inactiveItems.customers.some(ic => ic.id === c.id));
+
+            const allUnscheduledBranches = [...inactiveItems.branches, ...unscheduledBranches];
+            const allUnscheduledCustomers = [...inactiveItems.customers, ...unscheduledCustomers];
+
+            return (
+              <>
+                {allUnscheduledBranches.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Şubeler ({allUnscheduledBranches.length})</h4>
                     <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                        {inactiveItems.branches.map(branch => (
-                            <li key={branch.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={`${branch.sube_adi} (${branch.customer?.kisa_isim || 'Müşteri Yok'})`}>
-                                <span className="font-medium">{branch.sube_adi}</span>
-                                <span className="text-gray-400 ml-1">({branch.customer?.kisa_isim || 'N/A'})</span>
-                            </li>
-                        ))}
+                      {allUnscheduledBranches.map(branch => (
+                        <li key={branch.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={`${branch.sube_adi} (${branch.customer?.kisa_isim || 'Müşteri Yok'})`}>
+                          <span className="font-medium">{branch.sube_adi}</span>
+                          <span className="text-gray-400 ml-1">({branch.customer?.kisa_isim || 'N/A'})</span>
+                        </li>
+                      ))}
                     </ul>
-                </div>
-            )}
-            {inactiveItems.customers.length > 0 && (
-                <div>
-                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Müşteriler ({inactiveItems.customers.length})</h4>
+                  </div>
+                )}
+                {allUnscheduledCustomers.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Müşteriler ({allUnscheduledCustomers.length})</h4>
                     <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                        {inactiveItems.customers.map(customer => (
-                            <li key={customer.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={customer.kisa_isim}>{customer.kisa_isim}</li>
-                        ))}
+                      {allUnscheduledCustomers.map(customer => (
+                        <li key={customer.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={customer.kisa_isim}>{customer.kisa_isim}</li>
+                      ))}
                     </ul>
-                </div>
-            )}
-            {inactiveItems.customers.length === 0 && inactiveItems.branches.length === 0 && (
-                <p className="text-center text-gray-400 py-4">
+                  </div>
+                )}
+                {allUnscheduledBranches.length === 0 && allUnscheduledCustomers.length === 0 && (
+                  <p className="text-center text-gray-400 py-4">
                     {selectedCustomer || selectedBranch ? 'Bu filtreleme için bu ay planlanmamış şube veya kayıt bulunmuyor.' : 'Bu ay için planlanmamış bir kayıt bulunmuyor.'}
-                </p>
-            )}
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -1138,119 +1271,6 @@ const AdminCalendar: React.FC = () => {
             <p className="text-center text-gray-400 py-4">Bu ay için ciro kaydı bulunmuyor.</p>
           )}
         </div>
-
-        {/* Aylık Plan Özeti - Yapılmayanlar */}
-        {monthlySchedules.length > 0 && (
-          <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-600" />
-              Bu Ayın Ziyaret Planları ve Yapılmayanlar
-            </h3>
-
-            <div className="space-y-4">
-              {Object.entries(
-                monthlySchedules.reduce((acc: any, schedule: any) => {
-                  const operatorName = schedule.operator?.name || 'Atanmamış';
-                  if (!acc[operatorName]) {
-                    acc[operatorName] = [];
-                  }
-                  acc[operatorName].push(schedule);
-                  return acc;
-                }, {})
-              ).map(([operatorName, schedules]: [string, any]) => {
-                const operatorSchedules = schedules;
-                const totalRequired = operatorSchedules.reduce((sum: number, s: any) => sum + s.visits_required, 0);
-
-                const completedCount = operatorSchedules.reduce((sum: number, schedule: any) => {
-                  const completed = visits.filter((v: Visit) => {
-                    const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
-                    const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
-                    return matchesBranch || matchesCustomer;
-                  }).length;
-                  return sum + completed;
-                }, 0);
-
-                return (
-                  <div key={operatorName} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                          <User className="h-4 w-4 text-purple-600" />
-                        </div>
-                        <span className="font-semibold text-gray-800">{operatorName}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-gray-600">
-                          Toplam: <span className="font-semibold">{totalRequired}</span> ziyaret
-                        </span>
-                        <span className="text-sm">
-                          <span className="text-green-600 font-semibold">{completedCount}</span> /
-                          <span className="text-gray-600"> {totalRequired}</span>
-                        </span>
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-green-500 h-2 rounded-full transition-all"
-                            style={{ width: `${totalRequired > 0 ? (completedCount / totalRequired) * 100 : 0}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {operatorSchedules.map((schedule: any, idx: number) => {
-                        const customerName = schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim;
-                        const branchName = schedule.branch?.sube_adi;
-                        const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
-
-                        const doneCount = visits.filter((v: Visit) => {
-                          const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
-                          const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
-                          return matchesBranch || matchesCustomer;
-                        }).length;
-
-                        const progress = schedule.visits_required > 0 ? (doneCount / schedule.visits_required) * 100 : 0;
-                        const isComplete = doneCount >= schedule.visits_required;
-
-                        return (
-                          <div
-                            key={idx}
-                            className={`p-3 rounded border ${
-                              isComplete ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-200'
-                            }`}
-                          >
-                            <div className="text-sm font-medium text-gray-800 truncate" title={displayName}>
-                              {displayName}
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <span className={`text-xs font-semibold ${
-                                isComplete ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {doneCount} / {schedule.visits_required}
-                              </span>
-                              <div className="w-20 bg-gray-200 rounded-full h-2">
-                                <div
-                                  className={`h-2 rounded-full transition-all ${
-                                    isComplete ? 'bg-green-500' : 'bg-red-500'
-                                  }`}
-                                  style={{ width: `${Math.min(progress, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                            {!isComplete && (
-                              <div className="mt-1 text-xs text-red-600">
-                                Kalan: {schedule.visits_required - doneCount} ziyaret
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
