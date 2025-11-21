@@ -3,7 +3,7 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { Search, Filter, Plus, X, ChevronLeft, ChevronRight, Calendar, Trash2, User, Download, FileImage, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -599,7 +599,7 @@ const AdminCalendarPlanning = () => {
         // Basitlik için silip yeniden oluşturuyoruz.
         
         // Önce sil
-        const { error: deleteError } = await supabase
+        const { error: deleteError } = await supabaseAdmin
           .from('visits')
           .delete()
           .eq('id', item.id);
@@ -642,7 +642,10 @@ const AdminCalendarPlanning = () => {
   };
 
   const createVisit = async (visitData) => {
-    const { data, error } = await supabase
+    // Admin için RLS bypass
+    const client = supabaseAdmin;
+
+    const { data, error } = await client
       .from('visits')
       .insert([{
         ...visitData,
@@ -660,7 +663,7 @@ const AdminCalendarPlanning = () => {
       return;
     }
     try {
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('visits')
         .delete()
         .eq('id', visitId);
