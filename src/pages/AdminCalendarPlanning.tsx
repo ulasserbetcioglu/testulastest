@@ -254,7 +254,11 @@ const Sidebar = ({
         </label>
         <select
           value={selectedOperator || ''}
-          onChange={(e) => onOperatorChange(e.target.value || null)}
+          onChange={(e) => {
+            const value = e.target.value;
+            alert(`Dropdown changed! Value: ${value}`);
+            onOperatorChange(value === '' ? null : value);
+          }}
           className="w-full p-1 sm:p-2 border rounded text-[10px] sm:text-xs"
         >
           <option value="">Operatör Seçin</option>
@@ -462,6 +466,11 @@ const AdminCalendarPlanning = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedVisitType, setSelectedVisitType] = useState('periyodik');
   const [selectedOperator, setSelectedOperator] = useState(null);
+
+  // Debug: selectedOperator değişikliklerini izle
+  useEffect(() => {
+    console.log('🔴 selectedOperator changed:', selectedOperator);
+  }, [selectedOperator]);
   const [isTransferring, setIsTransferring] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const calendarRef = useRef(null);
@@ -530,6 +539,7 @@ const AdminCalendarPlanning = () => {
         .eq('status', 'Açık')
         .order('name');
       if (operatorsError) throw operatorsError;
+      console.log('🟢 Operators loaded:', operatorsData);
       setOperators(operatorsData || []);
 
       // Ziyaretler (mevcut ay için)
