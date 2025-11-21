@@ -60,6 +60,7 @@ const AdminMonthlyVisitSchedule = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedScheduleIds, setSelectedScheduleIds] = useState<string[]>([]);
+  const [selectedOperatorFilter, setSelectedOperatorFilter] = useState<string>('');
 
   // Modal durumları
   const [showAddModal, setShowAddModal] = useState(false);
@@ -348,8 +349,22 @@ const AdminMonthlyVisitSchedule = () => {
 
   const filteredBranchesByCustomer = useMemo(() => {
     if (!formData.customer_id) return branches;
-    return branches.filter(b => b.customer_id === formData.customer_id);
-  }, [branches, formData.customer_id]);
+
+    const customerBranches = branches.filter(b => b.customer_id === formData.customer_id);
+
+    // Mevcut planlaması olan şubeleri çıkar
+    const scheduledBranchIds = new Set(
+      schedules
+        .filter(s =>
+          s.branch_id &&
+          formData.selectedMonths.includes(s.month) &&
+          (s.year === formData.year || !s.year)
+        )
+        .map(s => s.branch_id)
+    );
+
+    return customerBranches.filter(b => !scheduledBranchIds.has(b.id));
+  }, [branches, formData.customer_id, formData.selectedMonths, formData.year, schedules]);
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter(schedule => {
@@ -357,10 +372,16 @@ const AdminMonthlyVisitSchedule = () => {
       const branchName = schedule.branch?.sube_adi || '';
       const searchLower = searchTerm.toLowerCase();
 
-      return customerName.toLowerCase().includes(searchLower) ||
+      const matchesSearch = customerName.toLowerCase().includes(searchLower) ||
              branchName.toLowerCase().includes(searchLower);
+
+      const matchesOperator = !selectedOperatorFilter ||
+        schedule.operator_id === selectedOperatorFilter ||
+        (!schedule.operator_id && selectedOperatorFilter === 'unassigned');
+
+      return matchesSearch && matchesOperator;
     });
-  }, [schedules, searchTerm]);
+  }, [schedules, searchTerm, selectedOperatorFilter]);
 
   // Ay bazında gruplama
   const schedulesByMonth = useMemo(() => {
@@ -391,6 +412,18 @@ const AdminMonthlyVisitSchedule = () => {
               className="w-full pl-10 pr-4 py-2 border rounded-lg"
             />
           </div>
+
+          <select
+            value={selectedOperatorFilter}
+            onChange={(e) => setSelectedOperatorFilter(e.target.value)}
+            className="px-4 py-2 border rounded-lg"
+          >
+            <option value="">Tüm Operatörler</option>
+            <option value="unassigned">Atanmamış</option>
+            {operators.map(op => (
+              <option key={op.id} value={op.id}>{op.name}</option>
+            ))}
+          </select>
 
           <select
             value={selectedYear}
@@ -605,12 +638,24 @@ const AdminMonthlyVisitSchedule = () => {
                 <label className="block text-sm font-medium mb-2">Müşteri</label>
                 <select
                   value={formData.customer_id}
-                  onChange={(e) => setFormData({ ...formData, customer_id: e.target.value, branch_id: '' })}
+                  onChange={(e) => setFormData({ ...formData, customer_id: e.target.value, branch_id: '', selectedBranches: [] })}
                   disabled={editingSchedule !== null}
                   className="w-full px-3 py-2 border rounded-lg"
                 >
                   <option value="">Müşteri Seçin</option>
-                  {customers.map(c => (
+                  {customers.filter(c => {
+                    // Eğer customer bazında seçilirse ve bu müşterinin seçili aylarda planı varsa gösterme
+                    if (formData.type === 'customer' && formData.selectedMonths.length > 0) {
+                      const hasScheduleInSelectedMonths = schedules.some(s =>
+                        s.customer_id === c.id &&
+                        !s.branch_id &&
+                        formData.selectedMonths.includes(s.month) &&
+                        (s.year === formData.year || !s.year)
+                      );
+                      return !hasScheduleInSelectedMonths;
+                    }
+                    return true;
+                  }).map(c => (
                     <option key={c.id} value={c.id}>{c.kisa_isim}</option>
                   ))}
                 </select>
