@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, getDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase'; // Supabase yapılandırmanızın doğru olduğu varsayılmıştır
-import { Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, CheckSquare, DollarSign, TrendingUp, Users } from 'lucide-react'; // Users ikonu eklendi
+import { Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, CheckSquare, DollarSign, TrendingUp, Users } from 'lucide-react';
 import { toast } from 'sonner'; // Toast bildirimleri için sonner kütüphanesi
 
 // --- ARAYÜZLER (INTERFACES) ---
@@ -256,9 +256,10 @@ const AdminCalendar: React.FC = () => {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [monthlySchedules, setMonthlySchedules] = useState<any[]>([]);
   const [paidMaterialDetailsMap, setPaidMaterialDetailsMap] = useState<Map<string, MaterialDisplayItem[]>>(new Map());
   const [monthlyMaterialUsageSummary, setMonthlyMaterialUsageSummary] = useState<Map<string, CustomerMaterialSummary>>(new Map());
-  
+
   // Yeni State'ler
   const [customerPricingMap, setCustomerPricingMap] = useState<Map<string, CustomerPricing>>(new Map());
   const [branchPricingMap, setBranchPricingMap] = useState<Map<string, BranchPricing>>(new Map());
@@ -283,12 +284,21 @@ const AdminCalendar: React.FC = () => {
     const fetchInitialData = async () => {
       setLoading(true);
       try {
-        const [operatorData, customerData, branchData, customerPricingData, branchPricingData] = await Promise.all([
+        const currentMonth = currentDate.getMonth() + 1;
+        const currentYear = currentDate.getFullYear();
+
+        const [operatorData, customerData, branchData, customerPricingData, branchPricingData, schedulesData] = await Promise.all([
           supabase.from('operators').select('id, name').order('name'),
           supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
           supabase.from('branches').select('id, sube_adi, customer_id, latitude, longitude, customer:customer_id(kisa_isim)').order('sube_adi'),
           supabase.from('customer_pricing').select('id, customer_id, monthly_price, per_visit_price'),
-          supabase.from('branch_pricing').select('id, branch_id, monthly_price, per_visit_price')
+          supabase.from('branch_pricing').select('id, branch_id, monthly_price, per_visit_price'),
+          supabase.from('monthly_visit_schedules').select(`
+            *,
+            customer:customer_id(kisa_isim),
+            branch:branch_id(sube_adi, customer:customer_id(kisa_isim)),
+            operator:operator_id(name)
+          `).eq('month', currentMonth).or(`year.eq.${currentYear},year.is.null`)
         ]);
         
         if(operatorData.error) throw operatorData.error;
@@ -296,10 +306,12 @@ const AdminCalendar: React.FC = () => {
         if(branchData.error) throw branchData.error;
         if(customerPricingData.error) throw customerPricingData.error;
         if(branchPricingData.error) throw branchPricingData.error;
+        if(schedulesData.error) throw schedulesData.error;
 
         setOperators(operatorData.data || []);
         setCustomers(customerData.data || []);
         setBranches(branchData.data || []);
+        setMonthlySchedules(schedulesData.data || []);
 
         const cPricingMap = new Map<string, CustomerPricing>();
         (customerPricingData.data || []).forEach(cp => cPricingMap.set(cp.customer_id, cp));
@@ -317,7 +329,7 @@ const AdminCalendar: React.FC = () => {
       }
     };
     fetchInitialData();
-  }, []);
+  }, [currentDate]);
 
   useEffect(() => {
     setSelectedBranch('');
@@ -1126,6 +1138,119 @@ const AdminCalendar: React.FC = () => {
             <p className="text-center text-gray-400 py-4">Bu ay için ciro kaydı bulunmuyor.</p>
           )}
         </div>
+
+        {/* Aylık Plan Özeti - Yapılmayanlar */}
+        {monthlySchedules.length > 0 && (
+          <div className="mt-6 bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              Bu Ayın Ziyaret Planları ve Yapılmayanlar
+            </h3>
+
+            <div className="space-y-4">
+              {Object.entries(
+                monthlySchedules.reduce((acc: any, schedule: any) => {
+                  const operatorName = schedule.operator?.name || 'Atanmamış';
+                  if (!acc[operatorName]) {
+                    acc[operatorName] = [];
+                  }
+                  acc[operatorName].push(schedule);
+                  return acc;
+                }, {})
+              ).map(([operatorName, schedules]: [string, any]) => {
+                const operatorSchedules = schedules;
+                const totalRequired = operatorSchedules.reduce((sum: number, s: any) => sum + s.visits_required, 0);
+
+                const completedCount = operatorSchedules.reduce((sum: number, schedule: any) => {
+                  const completed = visits.filter((v: Visit) => {
+                    const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                    const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                    return matchesBranch || matchesCustomer;
+                  }).length;
+                  return sum + completed;
+                }, 0);
+
+                return (
+                  <div key={operatorName} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                          <User className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <span className="font-semibold text-gray-800">{operatorName}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-gray-600">
+                          Toplam: <span className="font-semibold">{totalRequired}</span> ziyaret
+                        </span>
+                        <span className="text-sm">
+                          <span className="text-green-600 font-semibold">{completedCount}</span> /
+                          <span className="text-gray-600"> {totalRequired}</span>
+                        </span>
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-green-500 h-2 rounded-full transition-all"
+                            style={{ width: `${totalRequired > 0 ? (completedCount / totalRequired) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {operatorSchedules.map((schedule: any, idx: number) => {
+                        const customerName = schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim;
+                        const branchName = schedule.branch?.sube_adi;
+                        const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
+
+                        const doneCount = visits.filter((v: Visit) => {
+                          const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                          const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                          return matchesBranch || matchesCustomer;
+                        }).length;
+
+                        const progress = schedule.visits_required > 0 ? (doneCount / schedule.visits_required) * 100 : 0;
+                        const isComplete = doneCount >= schedule.visits_required;
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-3 rounded border ${
+                              isComplete ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-200'
+                            }`}
+                          >
+                            <div className="text-sm font-medium text-gray-800 truncate" title={displayName}>
+                              {displayName}
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className={`text-xs font-semibold ${
+                                isComplete ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {doneCount} / {schedule.visits_required}
+                              </span>
+                              <div className="w-20 bg-gray-200 rounded-full h-2">
+                                <div
+                                  className={`h-2 rounded-full transition-all ${
+                                    isComplete ? 'bg-green-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${Math.min(progress, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                            {!isComplete && (
+                              <div className="mt-1 text-xs text-red-600">
+                                Kalan: {schedule.visits_required - doneCount} ziyaret
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
