@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
-// Sürükle-bırak öğe tipleri
+// Sürükle-bırak item türleri
 const ItemTypes = {
   CUSTOMER: 'customer',
   BRANCH: 'branch',
@@ -17,55 +17,7 @@ const ItemTypes = {
   OPERATOR: 'operator'
 };
 
-// --- Arayüz (Interface) Tanımları ---
-// Not: Bunlar JSX'te zorunlu değildir, ancak veri yapısını anlamak için faydalıdır.
-/*
-interface Customer {
-  id: string;
-  kisa_isim: string;
-}
-
-interface Branch {
-  id: string;
-  customer_id: string;
-  sube_adi: string;
-  customer?: {
-    kisa_isim: string;
-  };
-}
-
-interface Operator {
-  id: string;
-  name: string;
-  email: string;
-  status: string;
-}
-
-interface Visit {
-  id: string;
-  customer_id: string;
-  branch_id: string | null;
-  operator_id: string;
-  visit_date: string;
-  visit_type: string;
-  status: string;
-  customer: {
-    kisa_isim: string;
-  };
-  branch?: {
-    sube_adi: string;
-  } | null;
-  operator: {
-    name: string;
-  };
-}
-*/
-
-// --- 1. Sürükle-Bırak (DnD) Bileşenleri ---
-
-/**
- * Kenar çubuğundaki (Müşteri, Şube, Operatör) sürüklenebilir öğe
- */
+// Sürüklenebilir öğe komponenti
 const DraggableItem = ({ item, type }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: type === 'customer' ? ItemTypes.CUSTOMER :
@@ -74,7 +26,7 @@ const DraggableItem = ({ item, type }) => {
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
-  }));
+  }), [item, type]);
 
   let displayName = '';
   let bgColor = '';
@@ -104,9 +56,7 @@ const DraggableItem = ({ item, type }) => {
   );
 };
 
-/**
- * Takvim üzerindeki mevcut bir ziyareti temsil eden sürüklenebilir öğe
- */
+// Takvim üzerindeki ziyaret öğesi
 const DraggableVisit = ({ visit, onDelete }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.VISIT,
@@ -114,7 +64,7 @@ const DraggableVisit = ({ visit, onDelete }) => {
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
-  }));
+  }), [visit]);
 
   const displayName = `${visit.customer.kisa_isim}${visit.branch ? ` - ${visit.branch.sube_adi}` : ''}`;
 
@@ -149,9 +99,7 @@ const DraggableVisit = ({ visit, onDelete }) => {
   );
 };
 
-/**
- * Takvimdeki her bir gün hücresi (Bırakma alanı)
- */
+// Gün hücresi komponenti
 const DayCell = ({ date, onEventDrop, visits, onDeleteVisit }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: [ItemTypes.CUSTOMER, ItemTypes.BRANCH, ItemTypes.VISIT, ItemTypes.OPERATOR],
@@ -159,13 +107,11 @@ const DayCell = ({ date, onEventDrop, visits, onDeleteVisit }) => {
     collect: (monitor) => ({
       isOver: !!monitor.isOver(),
     }),
-  }));
+  }), [date, onEventDrop]);
 
-  // Bu güne ait ziyaretleri filtrele
   const dayVisits = visits.filter(visit => {
-    // visit_date formatı: "YYYY-MM-DD" - string olarak karşılaştır
-    const visitDateStr = visit.visit_date.split('T')[0]; // "2025-01-15"
-    const currentDateStr = format(date, 'yyyy-MM-dd'); // "2025-01-15"
+    const visitDateStr = visit.visit_date.split('T')[0];
+    const currentDateStr = format(date, 'yyyy-MM-dd');
     return visitDateStr === currentDateStr;
   });
 
@@ -189,12 +135,7 @@ const DayCell = ({ date, onEventDrop, visits, onDeleteVisit }) => {
   );
 };
 
-
-// --- 2. Ana Sayfa Bileşenleri ---
-
-/**
- * Sol Kenar Çubuğu (Filtreler ve Sürüklenebilir Listeler)
- */
+// Sol kenar çubuğu komponenti
 const Sidebar = ({
   showSidebar,
   searchTerm,
@@ -256,9 +197,7 @@ const Sidebar = ({
           value={selectedOperator || ''}
           onChange={(e) => {
             const value = e.target.value;
-            const newValue = value === '' ? null : value;
-            console.log('🟡 Operatör seçildi:', newValue);
-            onOperatorChange(newValue);
+            onOperatorChange(value === '' ? null : value);
           }}
           className="w-full p-1 sm:p-2 border rounded text-[10px] sm:text-xs"
         >
@@ -318,9 +257,7 @@ const Sidebar = ({
   );
 };
 
-/**
- * Takvimin Üst Başlığı (Navigasyon ve Dışa Aktarma)
- */
+// Takvim başlığı komponenti
 const CalendarHeader = ({
   onToggleSidebar,
   showSidebar,
@@ -380,9 +317,7 @@ const CalendarHeader = ({
   );
 };
 
-/**
- * Takvim Izgarası (Günler ve Ziyaretler)
- */
+// Takvim ızgarası komponenti
 const CalendarGrid = ({
   calendarRef,
   currentDate,
@@ -390,33 +325,28 @@ const CalendarGrid = ({
   onEventDrop,
   onDeleteVisit
 }) => {
-  // Takvim hesaplamaları
   const days = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Pazartesi'yi 0 (Pts) Pazar'ı 6 (Paz) olarak ayarla
   let firstDayOfMonth = getDay(monthStart) - 1; 
-  if (firstDayOfMonth === -1) firstDayOfMonth = 6; // Pazar (0) ise 6 yap
+  if (firstDayOfMonth === -1) firstDayOfMonth = 6;
 
   return (
     <>
       <div ref={calendarRef} className="bg-white rounded-lg shadow-md">
         <div className="grid grid-cols-7 gap-px bg-gray-200">
-          {/* Gün Başlıkları */}
           {days.map(day => (
             <div key={day} className="bg-gray-50 p-1 sm:p-2 text-center">
               <span className="text-[8px] sm:text-xs font-medium text-gray-500">{day}</span>
             </div>
           ))}
 
-          {/* Ayın başındaki boş günler */}
           {Array.from({ length: firstDayOfMonth }).map((_, index) => (
             <div key={`empty-${index}`} className="bg-gray-50 p-1 sm:p-2 min-h-[60px] sm:min-h-[100px]" />
           ))}
 
-          {/* Ayın günleri */}
           {monthDays.map(day => {
             const isCurrentDay = isToday(day);
             return (
@@ -441,7 +371,6 @@ const CalendarGrid = ({
         </div>
       </div>
       
-      {/* Yardım Metinleri */}
       <div className="mt-4 text-[8px] sm:text-xs text-gray-500">
         <p>• Önce bir operatör seçin, ardından müşteri veya şubeyi takvime sürükleyerek ziyaret oluşturabilirsiniz.</p>
         <p>• Mevcut ziyaretleri sürükleyerek başka bir güne taşıyabilirsiniz.</p>
@@ -451,11 +380,8 @@ const CalendarGrid = ({
   );
 };
 
-
-// --- 3. Ana Bileşen (Tüm Mantık ve State) ---
-
+// Ana komponent
 const AdminCalendarPlanning = () => {
-  // --- State Tanımları ---
   const [customers, setCustomers] = useState([]);
   const [branches, setBranches] = useState([]);
   const [operators, setOperators] = useState([]);
@@ -467,16 +393,10 @@ const AdminCalendarPlanning = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedVisitType, setSelectedVisitType] = useState('periyodik');
   const [selectedOperator, setSelectedOperator] = useState(null);
-
-  // Debug: selectedOperator değişikliklerini izle
-  useEffect(() => {
-    console.log('🔴 selectedOperator changed:', selectedOperator);
-  }, [selectedOperator]);
   const [isTransferring, setIsTransferring] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const calendarRef = useRef(null);
 
-  // --- useEffect Kancaları ---
   useEffect(() => {
     checkAdminAccess();
   }, []);
@@ -485,9 +405,8 @@ const AdminCalendarPlanning = () => {
     if (isAdmin) {
       fetchData();
     }
-  }, [isAdmin, currentDate, selectedOperator]); // currentDate veya selectedOperator değiştiğinde veriyi yeniden çek
+  }, [isAdmin, currentDate, selectedOperator]);
 
-  // --- Veri Çekme ve Yetki Fonksiyonları ---
   const checkAdminAccess = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -501,17 +420,15 @@ const AdminCalendarPlanning = () => {
       setError(err.message);
       console.error('Error checking admin access:', err);
     } finally {
-      setLoading(false); // Yetki kontrolü bitince yüklemeyi bitir
+      setLoading(false);
     }
   };
 
   const fetchData = async () => {
-    // Sadece admin ise ve yükleme zaten başlamadıysa veri çek
-    if (loading) return; 
+    if (loading) return;
     setLoading(true);
     
     try {
-      // Müşteriler
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('id, kisa_isim')
@@ -519,7 +436,6 @@ const AdminCalendarPlanning = () => {
       if (customersError) throw customersError;
       setCustomers(customersData || []);
 
-      // Şubeler
       const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
         .select('id, customer_id, sube_adi, customers(kisa_isim)')
@@ -533,17 +449,14 @@ const AdminCalendarPlanning = () => {
       })) || [];
       setBranches(transformedBranches);
       
-      // Operatörler
       const { data: operatorsData, error: operatorsError } = await supabase
         .from('operators')
         .select('id, name, email, status')
         .eq('status', 'Açık')
         .order('name');
       if (operatorsError) throw operatorsError;
-      console.log('🟢 Operators loaded:', operatorsData);
       setOperators(operatorsData || []);
 
-      // Ziyaretler (mevcut ay için)
       const firstDay = startOfMonth(currentDate);
       const lastDay = endOfMonth(currentDate);
 
@@ -575,24 +488,13 @@ const AdminCalendarPlanning = () => {
     }
   };
 
-  // --- Olay Yöneticileri (Event Handlers) ---
-
   const handleEventDrop = async (item, date) => {
-    console.log('🔵 DROP:', {
-      type: item.type,
-      operator: selectedOperator,
-      admin: isAdmin,
-      item: item
-    });
-
     try {
-      // Admin kontrolü
       if (!isAdmin) {
         toast.error('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız');
         return;
       }
 
-      // Operatör kontrolü (operatör sürükleme ve mevcut ziyaret taşıma hariç)
       if (item.type === 'customer' || item.type === 'branch') {
         if (!selectedOperator) {
           toast.error('Lütfen önce bir operatör seçin');
@@ -600,7 +502,6 @@ const AdminCalendarPlanning = () => {
         }
       }
 
-      // Tarihi formatla
       const visitDate = new Date(
         date.getFullYear(),
         date.getMonth(),
@@ -609,21 +510,13 @@ const AdminCalendarPlanning = () => {
       );
       const formattedDate = visitDate.toISOString().split('T')[0];
 
-      // Durum 1: Mevcut ziyaret taşınıyor
       if (item.type === 'visit') {
-        // Eski ziyareti sil ve yenisini oluştur (Taşıma = Sil + Ekle)
-        // Not: Bu, atomik bir işlem değildir. İdealde tek bir 'update' olmalı
-        // veya bir veritabanı fonksiyonu (transaction) kullanılmalı.
-        // Basitlik için silip yeniden oluşturuyoruz.
-        
-        // Önce sil
         const { error: deleteError } = await supabaseAdmin
           .from('visits')
           .delete()
           .eq('id', item.id);
         if (deleteError) throw deleteError;
 
-        // Sonra ekle
         await createVisit({
           customer_id: item.customer_id,
           branch_id: item.branch_id,
@@ -632,10 +525,9 @@ const AdminCalendarPlanning = () => {
           visit_type: item.visit_type || selectedVisitType
         });
 
-        await fetchData(); // Takvimi yenile
+        await fetchData();
         toast.success('Ziyaret başarıyla taşındı');
       }
-      // Durum 2: Yeni ziyaret ekleniyor
       else if (item.type === 'customer' || item.type === 'branch') {
         const visitData = {
           customer_id: item.type === 'branch' ? item.customer_id : item.id,
@@ -645,25 +537,21 @@ const AdminCalendarPlanning = () => {
           visit_type: selectedVisitType
         };
 
-        console.log('🟢 Creating visit:', visitData);
-
         await createVisit(visitData);
         await fetchData();
-
         toast.success(`Ziyaret oluşturuldu: ${item.kisa_isim || item.sube_adi}`);
       }
-      // Durum 3: Operatör sürükleniyor
       else if (item.type === 'operator') {
         setSelectedOperator(item.id);
         toast.success(`${item.name} seçildi. Şimdi müşteri veya şube sürükleyebilirsiniz.`);
       }
     } catch (err) {
       toast.error('Ziyaret oluşturulurken hata: ' + err.message);
+      console.error('Drop error:', err);
     }
   };
 
   const createVisit = async (visitData) => {
-    // Admin için RLS bypass
     const client = supabaseAdmin;
 
     const { data, error } = await client
@@ -679,7 +567,6 @@ const AdminCalendarPlanning = () => {
   };
 
   const deleteVisit = async (visitId) => {
-    // Silme onayı (Güvenlik için)
     if (!window.confirm('Bu ziyareti silmek istediğinizden emin misiniz?')) {
       return;
     }
@@ -691,7 +578,6 @@ const AdminCalendarPlanning = () => {
 
       if (error) throw error;
       
-      // Lokal state'i güncelle (tekrar fetch etmeye gerek kalmadan)
       setVisits(prevVisits => prevVisits.filter(visit => visit.id !== visitId));
       toast.success('Ziyaret silindi');
     } catch (err) {
@@ -716,7 +602,7 @@ const AdminCalendarPlanning = () => {
       const operatorVisits = visits.filter(visit => visit.operator_id === selectedOperator);
       
       const visitsByDayOfWeek = operatorVisits.reduce((acc, visit) => {
-        const dayOfWeek = getDay(new Date(visit.visit_date)); // Pazar = 0, Cmt = 6
+        const dayOfWeek = getDay(new Date(visit.visit_date));
         if (!acc[dayOfWeek]) acc[dayOfWeek] = [];
         acc[dayOfWeek].push(visit);
         return acc;
@@ -739,15 +625,13 @@ const AdminCalendarPlanning = () => {
         const dayOfWeek = parseInt(dayOfWeekStr);
         const targetDaysInNextMonth = nextMonthDaysMap[dayOfWeek] || [];
 
-        if (targetDaysInNextMonth.length === 0) continue; // Gelecek ay bu gün yoksa atla
+        if (targetDaysInNextMonth.length === 0) continue;
 
         for (const visit of dayVisits) {
-          // Orijinal ziyaretin ayın kaçıncı haftasında olduğunu bul
           const originalDate = new Date(visit.visit_date);
-          const weekOfMonth = Math.floor((originalDate.getDate() - 1) / 7); // 0-4 arası bir değer
+          const weekOfMonth = Math.floor((originalDate.getDate() - 1) / 7);
 
-          // Gelecek ayda ilgili haftaya denk gelen günü bul
-          const targetDay = targetDaysInNextMonth[weekOfMonth] || targetDaysInNextMonth[targetDaysInNextMonth.length - 1]; // Eğer o hafta yoksa, o ayın son ilgili gününü al
+          const targetDay = targetDaysInNextMonth[weekOfMonth] || targetDaysInNextMonth[targetDaysInNextMonth.length - 1];
 
           if (targetDay) {
             newVisitsPayload.push({
@@ -768,7 +652,7 @@ const AdminCalendarPlanning = () => {
         if (error) throw error;
       }
       
-      setCurrentDate(nextMonth); // Takvimi bir sonraki aya taşı
+      setCurrentDate(nextMonth);
       toast.success(`${createdCount} ziyaret bir sonraki aya aktarıldı`);
       
     } catch (err) {
@@ -778,8 +662,6 @@ const AdminCalendarPlanning = () => {
       setIsTransferring(false);
     }
   };
-
-  // --- Dışa Aktarma Fonksiyonları ---
 
   const exportToPDF = async () => {
     if (!calendarRef.current) return;
@@ -791,6 +673,7 @@ const AdminCalendarPlanning = () => {
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
       pdf.save(`Takvim_Planlama_${format(currentDate, 'MMMM_yyyy', { locale: tr })}.pdf`);
+      toast.success('PDF başarıyla indirildi');
     } catch (err) {
       console.error('PDF export error:', err);
       toast.error('PDF dışa aktarma hatası oluştu.');
@@ -805,13 +688,13 @@ const AdminCalendarPlanning = () => {
       link.download = `Takvim_Planlama_${format(currentDate, 'MMMM_yyyy', { locale: tr })}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
+      toast.success('Görüntü başarıyla indirildi');
     } catch (err) {
       console.error('Image export error:', err);
       toast.error('Görüntü dışa aktarma hatası oluştu.');
     }
   };
 
-  // --- Filtreleme (useMemo) ---
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => 
       customer.kisa_isim.toLowerCase().includes(searchTerm.toLowerCase())
@@ -834,7 +717,6 @@ const AdminCalendarPlanning = () => {
   
   const transferButtonDisabled = !selectedOperator || visits.filter(v => v.operator_id === selectedOperator).length === 0;
 
-  // --- Ana Render ---
   if (!isAdmin && !loading) {
      return <div className="p-4 text-red-500">{error || 'Bu sayfaya erişim yetkiniz bulunmamaktadır.'}</div>;
   }
@@ -846,7 +728,6 @@ const AdminCalendarPlanning = () => {
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex h-[calc(100vh-64px)]">
-        {/* Kenar Çubuğu */}
         <Sidebar
           showSidebar={showSidebar}
           searchTerm={searchTerm}
@@ -864,9 +745,7 @@ const AdminCalendarPlanning = () => {
           filteredBranches={filteredBranches}
         />
         
-        {/* Ana Takvim Alanı */}
         <div className="flex-1 p-2 sm:p-4 flex flex-col overflow-y-auto">
-          {/* Takvim Başlığı */}
           <CalendarHeader
             onToggleSidebar={() => setShowSidebar(!showSidebar)}
             showSidebar={showSidebar}
@@ -877,7 +756,6 @@ const AdminCalendarPlanning = () => {
             onExportImage={exportToImage}
           />
 
-          {/* Seçili Operatör Göstergesi */}
           {selectedOperator && (
             <div className="mb-4 p-3 bg-purple-100 border-2 border-purple-500 rounded-lg">
               <div className="flex items-center justify-between">
@@ -897,7 +775,6 @@ const AdminCalendarPlanning = () => {
             </div>
           )}
 
-          {/* Takvim Izgarası */}
           <CalendarGrid
             calendarRef={calendarRef}
             currentDate={currentDate}
