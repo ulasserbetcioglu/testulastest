@@ -100,7 +100,7 @@ const DraggableVisit = ({ visit, onDelete }) => {
 };
 
 // Gün hücresi komponenti
-const DayCell = ({ date, onEventDrop, visits, onDeleteVisit }) => {
+const DayCell = ({ date, onEventDrop, visits, onDeleteVisit, monthlySchedules }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: [ItemTypes.CUSTOMER, ItemTypes.BRANCH, ItemTypes.VISIT, ItemTypes.OPERATOR],
     drop: (item) => onEventDrop(item, date),
@@ -115,6 +115,19 @@ const DayCell = ({ date, onEventDrop, visits, onDeleteVisit }) => {
     return visitDateStr === currentDateStr;
   });
 
+  // Bu gün için planlanmış operatörleri bul (ziyareti olmayan)
+  const currentMonth = date.getMonth() + 1;
+  const scheduledOperators = monthlySchedules
+    .filter(s => s.month === currentMonth)
+    .filter(s => {
+      // Bu müşteri/şube için bugün ziyaret var mı?
+      const hasVisit = dayVisits.some(v =>
+        (s.branch_id && v.branch_id === s.branch_id) ||
+        (s.customer_id && v.customer_id === s.customer_id)
+      );
+      return !hasVisit && s.operator; // Ziyaret yoksa ve operatör varsa
+    });
+
   return (
     <div
       ref={drop}
@@ -123,12 +136,35 @@ const DayCell = ({ date, onEventDrop, visits, onDeleteVisit }) => {
       {dayVisits.length > 0 && (
         <div className="mt-0.5 space-y-0.5">
           {dayVisits.map(visit => (
-            <DraggableVisit 
-              key={visit.id} 
-              visit={visit} 
+            <DraggableVisit
+              key={visit.id}
+              visit={visit}
               onDelete={onDeleteVisit}
             />
           ))}
+        </div>
+      )}
+
+      {/* Planlanmış ama yapılmamış ziyaretler */}
+      {dayVisits.length === 0 && scheduledOperators.length > 0 && (
+        <div className="mt-0.5 space-y-0.5">
+          {scheduledOperators.slice(0, 3).map((schedule, idx) => (
+            <div
+              key={idx}
+              className="text-[6px] sm:text-[8px] p-0.5 rounded bg-gray-100 text-gray-600 truncate border border-dashed border-gray-300"
+              title={`${schedule.branch?.sube_adi || schedule.customer?.kisa_isim} - ${schedule.operator.name}`}
+            >
+              <div className="truncate">
+                {schedule.branch?.sube_adi || schedule.customer?.kisa_isim}
+              </div>
+              <div className="text-[5px] sm:text-[6px] text-purple-600 truncate">
+                👤 {schedule.operator.name}
+              </div>
+            </div>
+          ))}
+          {scheduledOperators.length > 3 && (
+            <div className="text-[6px] text-gray-400 text-center">+{scheduledOperators.length - 3}</div>
+          )}
         </div>
       )}
     </div>
@@ -359,11 +395,12 @@ const CalendarGrid = ({
                 <div className="text-[8px] sm:text-xs font-medium mb-0.5 sm:mb-1">
                   {format(day, 'd')}
                 </div>
-                <DayCell 
-                  date={day} 
+                <DayCell
+                  date={day}
                   onEventDrop={onEventDrop}
                   visits={visits}
                   onDeleteVisit={onDeleteVisit}
+                  monthlySchedules={monthlySchedules}
                 />
               </div>
             );
@@ -386,6 +423,7 @@ const AdminCalendarPlanning = () => {
   const [branches, setBranches] = useState([]);
   const [operators, setOperators] = useState([]);
   const [visits, setVisits] = useState([]);
+  const [monthlySchedules, setMonthlySchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -478,6 +516,23 @@ const AdminCalendarPlanning = () => {
       const { data: visitsData, error: visitsError } = await query;
       if (visitsError) throw visitsError;
       setVisits(visitsData || []);
+
+      // Aylık ziyaret planlarını çek
+      const currentMonth = currentDate.getMonth() + 1;
+      const currentYear = currentDate.getFullYear();
+      const { data: schedulesData, error: schedulesError } = await supabase
+        .from('monthly_visit_schedules')
+        .select(`
+          *,
+          customer:customer_id(kisa_isim),
+          branch:branch_id(sube_adi, customer:customer_id(kisa_isim)),
+          operator:operator_id(name)
+        `)
+        .eq('month', currentMonth)
+        .or(`year.eq.${currentYear},year.is.null`);
+
+      if (schedulesError) throw schedulesError;
+      setMonthlySchedules(schedulesData || []);
       
     } catch (err) {
       setError(err.message);

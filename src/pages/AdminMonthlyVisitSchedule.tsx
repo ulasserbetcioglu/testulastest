@@ -17,10 +17,17 @@ interface Branch {
   };
 }
 
+interface Operator {
+  id: string;
+  name: string;
+  email: string;
+}
+
 interface VisitSchedule {
   id: string;
   customer_id: string | null;
   branch_id: string | null;
+  operator_id: string | null;
   month: number;
   visits_required: number;
   year: number | null;
@@ -34,6 +41,9 @@ interface VisitSchedule {
       kisa_isim: string;
     };
   } | null;
+  operator?: {
+    name: string;
+  } | null;
 }
 
 const MONTH_NAMES = [
@@ -45,6 +55,7 @@ const AdminMonthlyVisitSchedule = () => {
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -58,6 +69,7 @@ const AdminMonthlyVisitSchedule = () => {
     type: 'branch' as 'customer' | 'branch',
     customer_id: '',
     branch_id: '',
+    operator_id: '',
     selectedMonths: [] as number[],
     visits_required: 1,
     year: new Date().getFullYear(),
@@ -72,7 +84,7 @@ const AdminMonthlyVisitSchedule = () => {
     try {
       setLoading(true);
 
-      const [schedulesRes, customersRes, branchesRes] = await Promise.all([
+      const [schedulesRes, customersRes, branchesRes, operatorsRes] = await Promise.all([
         supabase
           .from('monthly_visit_schedules')
           .select(`
@@ -81,7 +93,8 @@ const AdminMonthlyVisitSchedule = () => {
             branch:branch_id(
               sube_adi,
               customer:customer_id(kisa_isim)
-            )
+            ),
+            operator:operator_id(name)
           `)
           .or(`year.eq.${selectedYear},year.is.null`)
           .order('month', { ascending: true }),
@@ -97,16 +110,23 @@ const AdminMonthlyVisitSchedule = () => {
             customer_id,
             customer:customer_id(kisa_isim)
           `)
-          .order('sube_adi')
+          .order('sube_adi'),
+        supabase
+          .from('operators')
+          .select('id, name, email')
+          .eq('status', 'Açık')
+          .order('name')
       ]);
 
       if (schedulesRes.error) throw schedulesRes.error;
       if (customersRes.error) throw customersRes.error;
       if (branchesRes.error) throw branchesRes.error;
+      if (operatorsRes.error) throw operatorsRes.error;
 
       setSchedules(schedulesRes.data || []);
       setCustomers(customersRes.data || []);
       setBranches(branchesRes.data || []);
+      setOperators(operatorsRes.data || []);
     } catch (err) {
       toast.error('Veriler yüklenirken hata: ' + (err as Error).message);
     } finally {
@@ -120,6 +140,7 @@ const AdminMonthlyVisitSchedule = () => {
       type: 'branch',
       customer_id: '',
       branch_id: '',
+      operator_id: '',
       selectedMonths: [],
       visits_required: 1,
       year: selectedYear,
@@ -134,6 +155,7 @@ const AdminMonthlyVisitSchedule = () => {
       type: schedule.branch_id ? 'branch' : 'customer',
       customer_id: schedule.customer_id || '',
       branch_id: schedule.branch_id || '',
+      operator_id: schedule.operator_id || '',
       selectedMonths: [schedule.month],
       visits_required: schedule.visits_required,
       year: schedule.year || selectedYear,
@@ -163,6 +185,7 @@ const AdminMonthlyVisitSchedule = () => {
         const { error } = await supabase
           .from('monthly_visit_schedules')
           .update({
+            operator_id: formData.operator_id || null,
             visits_required: formData.visits_required,
             notes: formData.notes,
             year: formData.year
@@ -177,6 +200,7 @@ const AdminMonthlyVisitSchedule = () => {
         const records = formData.selectedMonths.map(month => ({
           customer_id: formData.type === 'customer' ? formData.customer_id : null,
           branch_id: formData.type === 'branch' ? formData.branch_id : null,
+          operator_id: formData.operator_id || null,
           month,
           visits_required: formData.visits_required,
           year: formData.year,
@@ -309,6 +333,7 @@ const AdminMonthlyVisitSchedule = () => {
                     <tr>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Müşteri</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Şube</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Operatör</th>
                       <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Ziyaret Sayısı</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Notlar</th>
                       <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">İşlemler</th>
@@ -322,6 +347,11 @@ const AdminMonthlyVisitSchedule = () => {
                         </td>
                         <td className="px-4 py-3 text-sm">
                           {schedule.branch?.sube_adi || 'Tüm Şubeler'}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                            {schedule.operator?.name || 'Atanmamış'}
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-center">
                           <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full font-semibold">
@@ -441,6 +471,23 @@ const AdminMonthlyVisitSchedule = () => {
                   </select>
                 </div>
               )}
+
+              {/* Operatör Seçimi */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Sorumlu Operatör</label>
+                <select
+                  value={formData.operator_id}
+                  onChange={(e) => setFormData({ ...formData, operator_id: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">Operatör Seçin (Opsiyonel)</option>
+                  {operators.map(op => (
+                    <option key={op.id} value={op.id}>
+                      {op.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {/* Ay Seçimi */}
               {!editingSchedule && (
