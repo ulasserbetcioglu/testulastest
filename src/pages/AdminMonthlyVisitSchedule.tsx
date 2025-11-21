@@ -69,11 +69,13 @@ const AdminMonthlyVisitSchedule = () => {
     type: 'branch' as 'customer' | 'branch',
     customer_id: '',
     branch_id: '',
+    selectedBranches: [] as string[],
     operator_id: '',
     selectedMonths: [] as number[],
     visits_required: 1,
     year: new Date().getFullYear(),
-    notes: ''
+    notes: '',
+    bulkMode: false
   });
 
   useEffect(() => {
@@ -140,11 +142,13 @@ const AdminMonthlyVisitSchedule = () => {
       type: 'branch',
       customer_id: '',
       branch_id: '',
+      selectedBranches: [],
       operator_id: '',
       selectedMonths: [],
       visits_required: 1,
       year: selectedYear,
-      notes: ''
+      notes: '',
+      bulkMode: false
     });
     setShowAddModal(true);
   };
@@ -155,11 +159,13 @@ const AdminMonthlyVisitSchedule = () => {
       type: schedule.branch_id ? 'branch' : 'customer',
       customer_id: schedule.customer_id || '',
       branch_id: schedule.branch_id || '',
+      selectedBranches: [],
       operator_id: schedule.operator_id || '',
       selectedMonths: [schedule.month],
       visits_required: schedule.visits_required,
       year: schedule.year || selectedYear,
-      notes: schedule.notes || ''
+      notes: schedule.notes || '',
+      bulkMode: false
     });
     setShowAddModal(true);
   };
@@ -167,11 +173,15 @@ const AdminMonthlyVisitSchedule = () => {
   const handleSave = async () => {
     try {
       // Validasyon
-      if (formData.type === 'branch' && !formData.branch_id) {
+      if (formData.bulkMode && formData.selectedBranches.length === 0) {
+        toast.error('Lütfen en az bir şube seçin');
+        return;
+      }
+      if (!formData.bulkMode && formData.type === 'branch' && !formData.branch_id) {
         toast.error('Lütfen bir şube seçin');
         return;
       }
-      if (formData.type === 'customer' && !formData.customer_id) {
+      if (!formData.bulkMode && formData.type === 'customer' && !formData.customer_id) {
         toast.error('Lütfen bir müşteri seçin');
         return;
       }
@@ -197,15 +207,37 @@ const AdminMonthlyVisitSchedule = () => {
       }
       // Yeni kayıt - seçili tüm aylar için
       else {
-        const records = formData.selectedMonths.map(month => ({
-          customer_id: formData.type === 'customer' ? formData.customer_id : null,
-          branch_id: formData.type === 'branch' ? formData.branch_id : null,
-          operator_id: formData.operator_id || null,
-          month,
-          visits_required: formData.visits_required,
-          year: formData.year,
-          notes: formData.notes
-        }));
+        const records: any[] = [];
+
+        // Toplu mod: Birden fazla şube için planlar oluştur
+        if (formData.bulkMode && formData.selectedBranches.length > 0) {
+          formData.selectedBranches.forEach(branchId => {
+            formData.selectedMonths.forEach(month => {
+              records.push({
+                customer_id: null,
+                branch_id: branchId,
+                operator_id: formData.operator_id || null,
+                month,
+                visits_required: formData.visits_required,
+                year: formData.year,
+                notes: formData.notes
+              });
+            });
+          });
+        } else {
+          // Tek kayıt modu
+          formData.selectedMonths.forEach(month => {
+            records.push({
+              customer_id: formData.type === 'customer' ? formData.customer_id : null,
+              branch_id: formData.type === 'branch' ? formData.branch_id : null,
+              operator_id: formData.operator_id || null,
+              month,
+              visits_required: formData.visits_required,
+              year: formData.year,
+              notes: formData.notes
+            });
+          });
+        }
 
         const { error } = await supabase
           .from('monthly_visit_schedules')
@@ -245,6 +277,31 @@ const AdminMonthlyVisitSchedule = () => {
       selectedMonths: prev.selectedMonths.includes(month)
         ? prev.selectedMonths.filter(m => m !== month)
         : [...prev.selectedMonths, month].sort((a, b) => a - b)
+    }));
+  };
+
+  const toggleBranch = (branchId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedBranches: prev.selectedBranches.includes(branchId)
+        ? prev.selectedBranches.filter(b => b !== branchId)
+        : [...prev.selectedBranches, branchId]
+    }));
+  };
+
+  const selectAllMonths = () => {
+    setFormData(prev => ({
+      ...prev,
+      selectedMonths: prev.selectedMonths.length === 12 ? [] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    }));
+  };
+
+  const selectAllBranches = () => {
+    setFormData(prev => ({
+      ...prev,
+      selectedBranches: prev.selectedBranches.length === filteredBranchesByCustomer.length
+        ? []
+        : filteredBranchesByCustomer.map(b => b.id)
     }));
   };
 
@@ -405,8 +462,31 @@ const AdminMonthlyVisitSchedule = () => {
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Tür Seçimi */}
+              {/* Toplu Ekleme Modu */}
               {!editingSchedule && (
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.bulkMode}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        bulkMode: e.target.checked,
+                        type: 'branch',
+                        branch_id: '',
+                        selectedBranches: []
+                      })}
+                      className="w-4 h-4"
+                    />
+                    <span className="font-medium text-blue-900">
+                      Toplu Ekleme Modu (Birden fazla şube için aynı planı oluştur)
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* Tür Seçimi */}
+              {!editingSchedule && !formData.bulkMode && (
                 <div>
                   <label className="block text-sm font-medium mb-2">Plan Türü</label>
                   <div className="flex gap-4">
@@ -452,8 +532,58 @@ const AdminMonthlyVisitSchedule = () => {
                 </select>
               </div>
 
-              {/* Şube Seçimi */}
-              {formData.type === 'branch' && (
+              {/* Şube Seçimi - Toplu Mod */}
+              {formData.bulkMode && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium">Şubeler (Çoklu Seçim)</label>
+                    <button
+                      type="button"
+                      onClick={selectAllBranches}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      {formData.selectedBranches.length === filteredBranchesByCustomer.length ? 'Tümünü Kaldır' : 'Tümünü Seç'}
+                    </button>
+                  </div>
+                  <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-gray-50">
+                    {filteredBranchesByCustomer.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        {formData.customer_id ? 'Bu müşteriye ait şube bulunamadı' : 'Lütfen önce bir müşteri seçin'}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredBranchesByCustomer.map(b => (
+                          <label
+                            key={b.id}
+                            className={`flex items-center p-2 rounded cursor-pointer transition-colors ${
+                              formData.selectedBranches.includes(b.id)
+                                ? 'bg-blue-100 border border-blue-300'
+                                : 'bg-white hover:bg-gray-100 border border-gray-200'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.selectedBranches.includes(b.id)}
+                              onChange={() => toggleBranch(b.id)}
+                              className="mr-3"
+                            />
+                            <span className="text-sm font-medium">{b.sube_adi}</span>
+                            <span className="text-xs text-gray-500 ml-2">({b.customer.kisa_isim})</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {formData.selectedBranches.length > 0 && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      {formData.selectedBranches.length} şube seçildi
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Şube Seçimi - Tekli Mod */}
+              {formData.type === 'branch' && !formData.bulkMode && (
                 <div>
                   <label className="block text-sm font-medium mb-2">Şube</label>
                   <select
@@ -492,7 +622,16 @@ const AdminMonthlyVisitSchedule = () => {
               {/* Ay Seçimi */}
               {!editingSchedule && (
                 <div>
-                  <label className="block text-sm font-medium mb-2">Aylar (Çoklu Seçim)</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium">Aylar (Çoklu Seçim)</label>
+                    <button
+                      type="button"
+                      onClick={selectAllMonths}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      {formData.selectedMonths.length === 12 ? 'Tümünü Kaldır' : 'Tüm Yıl Seç'}
+                    </button>
+                  </div>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {MONTH_NAMES.map((name, idx) => (
                       <label
@@ -513,6 +652,11 @@ const AdminMonthlyVisitSchedule = () => {
                       </label>
                     ))}
                   </div>
+                  {formData.selectedMonths.length > 0 && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      {formData.selectedMonths.length} ay seçildi
+                    </p>
+                  )}
                 </div>
               )}
 
