@@ -59,6 +59,7 @@ const AdminMonthlyVisitSchedule = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedScheduleIds, setSelectedScheduleIds] = useState<string[]>([]);
 
   // Modal durumları
   const [showAddModal, setShowAddModal] = useState(false);
@@ -271,6 +272,46 @@ const AdminMonthlyVisitSchedule = () => {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedScheduleIds.length === 0) {
+      toast.error('Lütfen en az bir plan seçin');
+      return;
+    }
+
+    if (!confirm(`${selectedScheduleIds.length} planı silmek istediğinizden emin misiniz?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('monthly_visit_schedules')
+        .delete()
+        .in('id', selectedScheduleIds);
+
+      if (error) throw error;
+      toast.success(`${selectedScheduleIds.length} plan silindi`);
+      setSelectedScheduleIds([]);
+      fetchData();
+    } catch (err) {
+      toast.error('Toplu silme hatası: ' + (err as Error).message);
+    }
+  };
+
+  const toggleScheduleSelection = (id: string) => {
+    setSelectedScheduleIds(prev =>
+      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAllSchedulesInMonth = (monthSchedules: VisitSchedule[]) => {
+    const monthIds = monthSchedules.map(s => s.id);
+    const allSelected = monthIds.every(id => selectedScheduleIds.includes(id));
+
+    if (allSelected) {
+      setSelectedScheduleIds(prev => prev.filter(id => !monthIds.includes(id)));
+    } else {
+      setSelectedScheduleIds(prev => [...new Set([...prev, ...monthIds])]);
+    }
+  };
+
   const toggleMonth = (month: number) => {
     setFormData(prev => ({
       ...prev,
@@ -369,6 +410,22 @@ const AdminMonthlyVisitSchedule = () => {
             Yeni Plan
           </button>
         </div>
+
+        {/* Toplu Silme Butonu */}
+        {selectedScheduleIds.length > 0 && (
+          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <span className="text-sm font-medium text-blue-900">
+              {selectedScheduleIds.length} plan seçildi
+            </span>
+            <button
+              onClick={handleBulkDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+            >
+              <Trash2 size={16} />
+              Seçilenleri Sil
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Ay Ay Gruplu Tablo */}
@@ -381,6 +438,17 @@ const AdminMonthlyVisitSchedule = () => {
               <span className="ml-auto text-sm text-gray-600">
                 {monthSchedules.length} plan
               </span>
+              {monthSchedules.length > 0 && (
+                <label className="flex items-center gap-2 cursor-pointer ml-4">
+                  <input
+                    type="checkbox"
+                    checked={monthSchedules.every(s => selectedScheduleIds.includes(s.id))}
+                    onChange={() => toggleAllSchedulesInMonth(monthSchedules)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-xs text-gray-700">Tümünü Seç</span>
+                </label>
+              )}
             </div>
 
             {monthSchedules.length > 0 ? (
@@ -388,6 +456,14 @@ const AdminMonthlyVisitSchedule = () => {
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b">
                     <tr>
+                      <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 w-12">
+                        <input
+                          type="checkbox"
+                          checked={monthSchedules.every(s => selectedScheduleIds.includes(s.id))}
+                          onChange={() => toggleAllSchedulesInMonth(monthSchedules)}
+                          className="w-4 h-4"
+                        />
+                      </th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Müşteri</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Şube</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Operatör</th>
@@ -398,7 +474,15 @@ const AdminMonthlyVisitSchedule = () => {
                   </thead>
                   <tbody className="divide-y">
                     {monthSchedules.map(schedule => (
-                      <tr key={schedule.id} className="hover:bg-gray-50">
+                      <tr key={schedule.id} className={`hover:bg-gray-50 ${selectedScheduleIds.includes(schedule.id) ? 'bg-blue-50' : ''}`}>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedScheduleIds.includes(schedule.id)}
+                            onChange={() => toggleScheduleSelection(schedule.id)}
+                            className="w-4 h-4"
+                          />
+                        </td>
                         <td className="px-4 py-3 text-sm">
                           {schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim || '-'}
                         </td>
