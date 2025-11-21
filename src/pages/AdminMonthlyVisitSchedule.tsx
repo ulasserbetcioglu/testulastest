@@ -1,72 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-// 'supabase' ve 'toast' importlarınızın doğru yapılandırıldığını varsayıyoruz.
-// Örnek olarak, bunları import ediyorum:
-// import { supabase } from '../lib/supabase';
-// import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
+import { Search, Plus, Edit2, Trash2, Save, X, Calendar } from 'lucide-react';
 
-// --- Mock Supabase & Toast (Gerçek kodunuzda bunları kaldırın) ---
-const supabase = {
-  from: (tableName) => {
-    // Mock data
-    const mockCustomers = [
-      { id: 'cust_1', kisa_isim: 'Büyük Market A.Ş.' },
-      { id: 'cust_2', kisa_isim: 'Restoran Zinciri' },
-      { id: 'cust_3', kisa_isim: 'Otel Grubu' },
-    ];
-    const mockBranches = [
-      { id: 'br_1', sube_adi: 'Merkez Şube', customer_id: 'cust_1', customer: { kisa_isim: 'Büyük Market A.Ş.' } },
-      { id: 'br_2', sube_adi: 'Kadıköy Şube', customer_id: 'cust_1', customer: { kisa_isim: 'Büyük Market A.Ş.' } },
-      { id: 'br_3', sube_adi: 'Taksim Restoran', customer_id: 'cust_2', customer: { kisa_isim: 'Restoran Zinciri' } },
-    ];
-    const mockSchedules = [
-      { id: 'sch_1', customer_id: null, branch_id: 'br_1', month: 1, visits_required: 2, year: new Date().getFullYear(), notes: 'Açılış denetimi', branch: { sube_adi: 'Merkez Şube', customer: { kisa_isim: 'Büyük Market A.Ş.' } } },
-      { id: 'sch_2', customer_id: null, branch_id: 'br_3', month: 1, visits_required: 1, year: new Date().getFullYear(), notes: null, branch: { sube_adi: 'Taksim Restoran', customer: { kisa_isim: 'Restoran Zinciri' } } },
-    ];
-    
-    // Return specific data based on table name
-    if (tableName === 'customers') {
-      return {
-        select: () => ({
-          order: () => Promise.resolve({ data: mockCustomers, error: null })
-        })
-      };
-    }
-    if (tableName === 'branches') {
-      return {
-        select: () => ({
-          order: () => Promise.resolve({ data: mockBranches, error: null })
-        })
-      };
-    }
-    if (tableName === 'monthly_visit_schedules') {
-      return {
-        select: () => ({
-          or: () => ({
-            order: () => Promise.resolve({ data: mockSchedules, error: null })
-          }),
-          update: () => Promise.resolve({ error: null }),
-          insert: () => Promise.resolve({ error: null }),
-          delete: () => Promise.resolve({ error: null }),
-          eq: () => Promise.resolve({ error: null }),
-        })
-      };
-    }
-    // Fallback
-    return {
-      select: () => ({ or: () => ({ order: () => Promise.resolve({ data: [], error: null }) }), order: () => Promise.resolve({ data: [], error: null }) }),
-      update: () => Promise.resolve({ error: null }), insert: () => Promise.resolve({ error: null }), delete: () => Promise.resolve({ error: null }), eq: () => Promise.resolve({ error: null }),
-    };
-  }
-};
-const toast = {
-  success: (message) => console.log(`SUCCESS: ${message}`),
-  error: (message) => console.error(`ERROR: ${message}`),
-};
-// --- Mock Supabase & Toast Sonu ---
-
-import { Search, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
-
-// Arayüz (Interface) tanımlamaları
 interface Customer {
   id: string;
   kisa_isim: string;
@@ -104,7 +40,6 @@ const MONTH_NAMES = [
   'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
   'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
 ];
-const ALL_MONTHS = MONTH_NAMES.map((name, index) => ({ id: index + 1, name }));
 
 const AdminMonthlyVisitSchedule = () => {
   const [schedules, setSchedules] = useState<VisitSchedule[]>([]);
@@ -115,27 +50,14 @@ const AdminMonthlyVisitSchedule = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Modal durumları
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showBulkAddModal, setShowBulkAddModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<VisitSchedule | null>(null);
 
   // Form verileri
-  const [editingSchedule, setEditingSchedule] = useState<VisitSchedule | null>(null);
-  
-  // Tekil düzenleme formu için
-  const [editFormData, setEditFormData] = useState({
-    type: 'customer' as 'customer' | 'branch',
+  const [formData, setFormData] = useState({
+    type: 'branch' as 'customer' | 'branch',
     customer_id: '',
     branch_id: '',
-    month: 1,
-    visits_required: 1,
-    year: new Date().getFullYear(),
-    notes: ''
-  });
-
-  // Toplu ekleme formu için
-  const [bulkFormData, setBulkFormData] = useState({
-    selectedCustomer: '',
-    selectedBranches: [] as string[],
     selectedMonths: [] as number[],
     visits_required: 1,
     year: new Date().getFullYear(),
@@ -192,69 +114,92 @@ const AdminMonthlyVisitSchedule = () => {
     }
   };
 
-  // --- TEKİL DÜZENLEME İŞLEVLERİ ---
-
-  const handleEditClick = (schedule: VisitSchedule) => {
-    setEditingSchedule(schedule);
-    setEditFormData({
-      type: schedule.customer_id ? 'customer' : 'branch',
-      customer_id: schedule.customer_id || '',
-      branch_id: schedule.branch_id || '',
-      month: schedule.month,
-      visits_required: schedule.visits_required,
-      year: schedule.year || new Date().getFullYear(),
-      notes: schedule.notes || ''
-    });
-    setShowEditModal(true);
-  };
-
-  const resetEditForm = () => {
+  const handleAddNew = () => {
     setEditingSchedule(null);
-    setEditFormData({
-      type: 'customer',
+    setFormData({
+      type: 'branch',
       customer_id: '',
       branch_id: '',
-      month: 1,
+      selectedMonths: [],
       visits_required: 1,
-      year: new Date().getFullYear(),
+      year: selectedYear,
       notes: ''
     });
+    setShowAddModal(true);
   };
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingSchedule) return;
+  const handleEdit = (schedule: VisitSchedule) => {
+    setEditingSchedule(schedule);
+    setFormData({
+      type: schedule.branch_id ? 'branch' : 'customer',
+      customer_id: schedule.customer_id || '',
+      branch_id: schedule.branch_id || '',
+      selectedMonths: [schedule.month],
+      visits_required: schedule.visits_required,
+      year: schedule.year || selectedYear,
+      notes: schedule.notes || ''
+    });
+    setShowAddModal(true);
+  };
 
+  const handleSave = async () => {
     try {
-      const payload = {
-        customer_id: editFormData.type === 'customer' ? editFormData.customer_id : null,
-        branch_id: editFormData.type === 'branch' ? editFormData.branch_id : null,
-        month: editFormData.month,
-        visits_required: editFormData.visits_required,
-        year: editFormData.year,
-        notes: editFormData.notes || null
-      };
+      // Validasyon
+      if (formData.type === 'branch' && !formData.branch_id) {
+        toast.error('Lütfen bir şube seçin');
+        return;
+      }
+      if (formData.type === 'customer' && !formData.customer_id) {
+        toast.error('Lütfen bir müşteri seçin');
+        return;
+      }
+      if (formData.selectedMonths.length === 0) {
+        toast.error('Lütfen en az bir ay seçin');
+        return;
+      }
 
-      const { error } = await supabase
-        .from('monthly_visit_schedules')
-        .update(payload)
-        .eq('id', editingSchedule.id);
+      // Güncelleme modu
+      if (editingSchedule) {
+        const { error } = await supabase
+          .from('monthly_visit_schedules')
+          .update({
+            visits_required: formData.visits_required,
+            notes: formData.notes,
+            year: formData.year
+          })
+          .eq('id', editingSchedule.id);
 
-      if (error) throw error;
-      toast.success('Plan güncellendi');
-      
-      setShowEditModal(false);
-      resetEditForm();
+        if (error) throw error;
+        toast.success('Plan güncellendi');
+      }
+      // Yeni kayıt - seçili tüm aylar için
+      else {
+        const records = formData.selectedMonths.map(month => ({
+          customer_id: formData.type === 'customer' ? formData.customer_id : null,
+          branch_id: formData.type === 'branch' ? formData.branch_id : null,
+          month,
+          visits_required: formData.visits_required,
+          year: formData.year,
+          notes: formData.notes
+        }));
+
+        const { error } = await supabase
+          .from('monthly_visit_schedules')
+          .insert(records);
+
+        if (error) throw error;
+        toast.success(`${records.length} aylık plan oluşturuldu`);
+      }
+
+      setShowAddModal(false);
       fetchData();
-
-    } catch (err: any) {
-      toast.error('Güncelleme başarısız: ' + err.message);
+    } catch (err) {
+      toast.error('Kayıt hatası: ' + (err as Error).message);
     }
   };
 
   const handleDelete = async (id: string) => {
-    // Gerçek uygulamada confirm() yerine özel bir modal kullanın
-    if (!window.confirm('Bu planı silmek istediğinizden emin misiniz?')) return;
+    if (!confirm('Bu planı silmek istediğinizden emin misiniz?')) return;
 
     try {
       const { error } = await supabase
@@ -265,565 +210,324 @@ const AdminMonthlyVisitSchedule = () => {
       if (error) throw error;
       toast.success('Plan silindi');
       fetchData();
-    } catch (err: any) {
-      toast.error('Silme işlemi başarısız: ' + err.message);
+    } catch (err) {
+      toast.error('Silme hatası: ' + (err as Error).message);
     }
   };
 
-
-  // --- TOPLU EKLEME İŞLEVLERİ ---
-
-  const handleBulkAddClick = () => {
-    resetBulkForm();
-    setShowBulkAddModal(true);
+  const toggleMonth = (month: number) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedMonths: prev.selectedMonths.includes(month)
+        ? prev.selectedMonths.filter(m => m !== month)
+        : [...prev.selectedMonths, month].sort((a, b) => a - b)
+    }));
   };
 
-  const resetBulkForm = () => {
-    setBulkFormData({
-      selectedCustomer: '',
-      selectedBranches: [],
-      selectedMonths: [],
-      visits_required: 1,
-      year: new Date().getFullYear(),
-      notes: ''
+  const filteredBranchesByCustomer = useMemo(() => {
+    if (!formData.customer_id) return branches;
+    return branches.filter(b => b.customer_id === formData.customer_id);
+  }, [branches, formData.customer_id]);
+
+  const filteredSchedules = useMemo(() => {
+    return schedules.filter(schedule => {
+      const customerName = schedule.customer?.kisa_isim || '';
+      const branchName = schedule.branch?.sube_adi || '';
+      const searchLower = searchTerm.toLowerCase();
+
+      return customerName.toLowerCase().includes(searchLower) ||
+             branchName.toLowerCase().includes(searchLower);
     });
-  };
+  }, [schedules, searchTerm]);
 
-  const handleBulkSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const { selectedBranches, selectedMonths, visits_required, year, notes } = bulkFormData;
-
-    if (selectedBranches.length === 0 || selectedMonths.length === 0) {
-      toast.error('Lütfen en az bir şube ve bir ay seçin.');
-      return;
+  // Ay bazında gruplama
+  const schedulesByMonth = useMemo(() => {
+    const grouped: { [key: number]: VisitSchedule[] } = {};
+    for (let i = 1; i <= 12; i++) {
+      grouped[i] = filteredSchedules.filter(s => s.month === i);
     }
+    return grouped;
+  }, [filteredSchedules]);
 
-    try {
-      const payloads = selectedBranches.flatMap(branchId =>
-        selectedMonths.map(month => ({
-          customer_id: null, // Sadece şube bazlı ekliyoruz
-          branch_id: branchId,
-          month: month,
-          visits_required: visits_required,
-          year: year,
-          notes: notes || null
-        }))
-      );
-
-      const { error } = await supabase
-        .from('monthly_visit_schedules')
-        .insert(payloads);
-
-      if (error) throw error;
-      toast.success(`${payloads.length} adet yeni plan eklendi`);
-
-      setShowBulkAddModal(false);
-      resetBulkForm();
-      fetchData();
-
-    } catch (err: any) {
-      toast.error('Toplu ekleme başarısız: ' + err.message);
-    }
-  };
-
-  // Toplu ekleme formu için filtrelenmiş şubeler
-  const filteredBranchesForBulkAdd = useMemo(() => {
-    if (!bulkFormData.selectedCustomer) return [];
-    return branches.filter(b => b.customer_id === bulkFormData.selectedCustomer);
-  }, [branches, bulkFormData.selectedCustomer]);
-
-
-  // Ana tablo için filtrelenmiş veriler
-  const filteredSchedules = schedules.filter(schedule => {
-    const searchLower = searchTerm.toLowerCase();
-    if (schedule.customer) {
-      return schedule.customer.kisa_isim.toLowerCase().includes(searchLower);
-    }
-    if (schedule.branch) {
-      return (
-        schedule.branch.sube_adi.toLowerCase().includes(searchLower) ||
-        schedule.branch.customer.kisa_isim.toLowerCase().includes(searchLower)
-      );
-    }
-    return false;
-  });
-
-  if (loading) return <div className="p-4">Yükleniyor...</div>;
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
+  }
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <h1 className="text-2xl font-bold">Aylık Ziyaret Planları</h1>
-        <button
-          onClick={handleBulkAddClick}
-          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={20} />
-          Yeni Toplu Plan Ekle
-        </button>
-      </div>
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-4">Aylık Ziyaret Planları</h1>
 
-      {/* Filtreleme Çubuğu */}
-      <div className="bg-white rounded-lg shadow p-4 space-y-4 md:space-y-0 md:flex md:gap-4">
-        <div className="flex-1 relative">
-          <input
-            type="text"
-            placeholder="Müşteri veya Şube Ara..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-        </div>
-        <div>
+        <div className="flex flex-col sm:flex-row gap-4 mb-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Müşteri veya şube ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border rounded-lg"
+            />
+          </div>
+
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="w-full md:w-auto px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 border rounded-lg"
           >
             {[2024, 2025, 2026, 2027].map(year => (
               <option key={year} value={year}>{year}</option>
             ))}
           </select>
+
+          <button
+            onClick={handleAddNew}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Plus size={20} />
+            Yeni Plan
+          </button>
         </div>
       </div>
 
-      {/* Ana Tablo */}
-      <div className="bg-white rounded-lg shadow overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Müşteri/Şube</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ay</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ziyaret Sayısı</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Yıl</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">İşlemler</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredSchedules.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
-                  Plan bulunamadı
-                </td>
-              </tr>
+      {/* Ay Ay Gruplu Tablo */}
+      <div className="space-y-6">
+        {Object.entries(schedulesByMonth).map(([month, monthSchedules]) => (
+          <div key={month} className="bg-white rounded-lg shadow">
+            <div className="bg-blue-50 px-4 py-3 border-b flex items-center gap-2">
+              <Calendar size={20} className="text-blue-600" />
+              <h2 className="font-semibold text-lg">{MONTH_NAMES[Number(month) - 1]}</h2>
+              <span className="ml-auto text-sm text-gray-600">
+                {monthSchedules.length} plan
+              </span>
+            </div>
+
+            {monthSchedules.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Müşteri</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Şube</th>
+                      <th className="px-4 py-3 text-center text-sm font-medium text-gray-700">Ziyaret Sayısı</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Notlar</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">İşlemler</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {monthSchedules.map(schedule => (
+                      <tr key={schedule.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm">
+                          {schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {schedule.branch?.sube_adi || 'Tüm Şubeler'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-center">
+                          <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full font-semibold">
+                            {schedule.visits_required}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {schedule.notes || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          <button
+                            onClick={() => handleEdit(schedule)}
+                            className="text-blue-600 hover:text-blue-800 mr-3"
+                            title="Düzenle"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(schedule.id)}
+                            className="text-red-600 hover:text-red-800"
+                            title="Sil"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              filteredSchedules.map((schedule) => (
-                <tr key={schedule.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">
-                      {schedule.customer
-                        ? schedule.customer.kisa_isim
-                        : schedule.branch?.customer.kisa_isim
-                      }
-                    </div>
-                    {schedule.branch && (
-                      <div className="text-sm text-gray-500">
-                        {schedule.branch.sube_adi}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-center text-sm">
-                    {MONTH_NAMES[schedule.month - 1]}
-                  </td>
-                  <td className="px-6 py-4 text-center text-sm font-semibold">
-                    {schedule.visits_required}
-                  </td>
-                  <td className="px-6 py-4 text-center text-sm">
-                    {schedule.year || 'Tüm yıllar'}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex justify-center gap-2">
-                      <button
-                        onClick={() => handleEditClick(schedule)}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="Düzenle"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(schedule.id)}
-                        className="text-red-600 hover:text-red-900"
-                        title="Sil"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              <div className="px-4 py-8 text-center text-gray-500">
+                Bu ay için plan bulunmuyor
+              </div>
             )}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
 
-      {/* --- TEKİL DÜZENLEME MODALI --- */}
-      {showEditModal && (
+      {/* Add/Edit Modal */}
+      {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Planı Düzenle</h2>
-              <button
-                onClick={() => {
-                  setShowEditModal(false);
-                  resetEditForm();
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b flex justify-between items-center">
+              <h2 className="text-xl font-bold">
+                {editingSchedule ? 'Planı Düzenle' : 'Yeni Plan Oluştur'}
+              </h2>
+              <button onClick={() => setShowAddModal(false)}>
                 <X size={24} />
               </button>
             </div>
-            
-            {/* Orijinal formunuz (düzenleme için) */}
-            <form onSubmit={handleEditSubmit} className="space-y-4">
+
+            <div className="p-6 space-y-4">
+              {/* Tür Seçimi */}
+              {!editingSchedule && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Plan Türü</label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="type"
+                        value="customer"
+                        checked={formData.type === 'customer'}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value as 'customer', branch_id: '' })}
+                        className="mr-2"
+                      />
+                      Müşteri Bazlı
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="type"
+                        value="branch"
+                        checked={formData.type === 'branch'}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value as 'branch' })}
+                        className="mr-2"
+                      />
+                      Şube Bazlı
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Müşteri Seçimi */}
               <div>
-                <label className="block text-sm font-medium mb-1">Tür</label>
+                <label className="block text-sm font-medium mb-2">Müşteri</label>
                 <select
-                  value={editFormData.type}
-                  onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value as 'customer' | 'branch' })}
-                  className="w-full p-2 border rounded-lg"
-                  required
+                  value={formData.customer_id}
+                  onChange={(e) => setFormData({ ...formData, customer_id: e.target.value, branch_id: '' })}
+                  disabled={editingSchedule !== null}
+                  className="w-full px-3 py-2 border rounded-lg"
                 >
-                  <option value="customer">Müşteri</option>
-                  <option value="branch">Şube</option>
+                  <option value="">Müşteri Seçin</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.kisa_isim}</option>
+                  ))}
                 </select>
               </div>
 
-              {editFormData.type === 'customer' ? (
+              {/* Şube Seçimi */}
+              {formData.type === 'branch' && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">Müşteri</label>
+                  <label className="block text-sm font-medium mb-2">Şube</label>
                   <select
-                    value={editFormData.customer_id}
-                    onChange={(e) => setEditFormData({ ...editFormData, customer_id: e.target.value })}
-                    className="w-full p-2 border rounded-lg"
-                    required
+                    value={formData.branch_id}
+                    onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
+                    disabled={editingSchedule !== null}
+                    className="w-full px-3 py-2 border rounded-lg"
                   >
-                    <option value="">Seçiniz</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.kisa_isim}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-medium mb-1">Şube</label>
-                  <select
-                    value={editFormData.branch_id}
-                    onChange={(e) => setEditFormData({ ...editFormData, branch_id: e.target.value })}
-                    className="w-full p-2 border rounded-lg"
-                    required
-                  >
-                    <option value="">Seçiniz</option>
-                    {branches.map(branch => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.customer.kisa_isim} - {branch.sube_adi}
+                    <option value="">Şube Seçin</option>
+                    {filteredBranchesByCustomer.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.sube_adi} ({b.customer.kisa_isim})
                       </option>
                     ))}
                   </select>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Ay Seçimi */}
+              {!editingSchedule && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">Ay</label>
-                  <select
-                    value={editFormData.month}
-                    onChange={(e) => setEditFormData({ ...editFormData, month: Number(e.target.value) })}
-                    className="w-full p-2 border rounded-lg"
-                    required
-                  >
-                    {MONTH_NAMES.map((name, index) => (
-                      <option key={index} value={index + 1}>{name}</option>
+                  <label className="block text-sm font-medium mb-2">Aylar (Çoklu Seçim)</label>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {MONTH_NAMES.map((name, idx) => (
+                      <label
+                        key={idx}
+                        className={`flex items-center justify-center p-2 border rounded cursor-pointer transition-colors ${
+                          formData.selectedMonths.includes(idx + 1)
+                            ? 'bg-blue-100 border-blue-500'
+                            : 'bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.selectedMonths.includes(idx + 1)}
+                          onChange={() => toggleMonth(idx + 1)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">{name}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Ziyaret Sayısı</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={editFormData.visits_required}
-                    onChange={(e) => setEditFormData({ ...editFormData, visits_required: Number(e.target.value) })}
-                    className="w-full p-2 border rounded-lg"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Yıl</label>
-                  <input
-                    type="number"
-                    min="2024" max="2030"
-                    value={editFormData.year}
-                    onChange={(e) => setEditFormData({ ...editFormData, year: Number(e.target.value) })}
-                    className="w-full p-2 border rounded-lg"
-                    required
-                  />
-                </div>
-              </div>
-
+              {/* Ziyaret Sayısı */}
               <div>
-                <label className="block text-sm font-medium mb-1">Notlar</label>
-                <textarea
-                  value={editFormData.notes}
-                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                  rows={3}
+                <label className="block text-sm font-medium mb-2">Aylık Ziyaret Sayısı</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  value={formData.visits_required}
+                  onChange={(e) => setFormData({ ...formData, visits_required: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border rounded-lg"
                 />
               </div>
 
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditModal(false);
-                    resetEditForm();
-                  }}
-                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                >
-                  İptal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  Kaydet
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- YENİ TOPLU EKLEME MODALI --- */}
-      {showBulkAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-3xl w-full max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4 flex-shrink-0">
-              <h2 className="text-xl font-bold">Yeni Toplu Plan Ekle</h2>
-              <button
-                onClick={() => setShowBulkAddModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleBulkSubmit} className="space-y-4 overflow-y-auto flex-grow">
-              {/* 1. Adım: Müşteri Seçimi */}
+              {/* Yıl */}
               <div>
-                <label className="block text-sm font-medium mb-1">1. Müşteri Seçin</label>
+                <label className="block text-sm font-medium mb-2">Yıl</label>
                 <select
-                  value={bulkFormData.selectedCustomer}
-                  onChange={(e) => setBulkFormData({ 
-                    ...bulkFormData, 
-                    selectedCustomer: e.target.value,
-                    selectedBranches: [] // Müşteri değiştiğinde şube seçimini sıfırla
-                  })}
-                  className="w-full p-2 border rounded-lg"
-                  required
+                  value={formData.year}
+                  onChange={(e) => setFormData({ ...formData, year: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border rounded-lg"
                 >
-                  <option value="">Müşteri Seçiniz...</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.kisa_isim}
-                    </option>
+                  {[2024, 2025, 2026, 2027].map(year => (
+                    <option key={year} value={year}>{year}</option>
                   ))}
                 </select>
               </div>
 
-              {/* 2. Adım: Şube Seçimi */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">
-                  2. Şubeleri Seçin
-                  {bulkFormData.selectedCustomer && ` (${filteredBranchesForBulkAdd.length} şube bulundu)`}
-                </label>
-                <div className="border rounded-lg p-2 max-h-48 overflow-y-auto space-y-1">
-                  {filteredBranchesForBulkAdd.length > 0 && (
-                    <CheckboxToggleAll
-                      options={filteredBranchesForBulkAdd}
-                      selected={bulkFormData.selectedBranches}
-                      onChange={(selected) => setBulkFormData({...bulkFormData, selectedBranches: selected})}
-                      labelKey="sube_adi"
-                    />
-                  )}
-                  {filteredBranchesForBulkAdd.map(branch => (
-                    <Checkbox
-                      key={branch.id}
-                      id={`branch-${branch.id}`}
-                      label={branch.sube_adi}
-                      checked={bulkFormData.selectedBranches.includes(branch.id)}
-                      onChange={(checked) => {
-                        setBulkFormData(prev => ({
-                          ...prev,
-                          selectedBranches: checked
-                            ? [...prev.selectedBranches, branch.id]
-                            : prev.selectedBranches.filter(id => id !== branch.id)
-                        }))
-                      }}
-                    />
-                  ))}
-                  {!bulkFormData.selectedCustomer && (
-                    <p className="text-sm text-gray-500 p-2">Lütfen önce bir müşteri seçin.</p>
-                  )}
-                  {bulkFormData.selectedCustomer && filteredBranchesForBulkAdd.length === 0 && (
-                     <p className="text-sm text-gray-500 p-2">Bu müşteriye ait şube bulunamadı.</p>
-                  )}
-                </div>
-              </div>
-
-              {/* 3. Adım: Ay Seçimi */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">3. Ayları Seçin</label>
-                 <div className="border rounded-lg p-2 max-h-48 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-1">
-                   <CheckboxToggleAll
-                      options={ALL_MONTHS}
-                      selected={bulkFormData.selectedMonths}
-                      onChange={(selected) => setBulkFormData({...bulkFormData, selectedMonths: selected.map(Number)})}
-                      labelKey="name"
-                    />
-                   {ALL_MONTHS.map(month => (
-                     <Checkbox
-                        key={month.id}
-                        id={`month-${month.id}`}
-                        label={month.name}
-                        checked={bulkFormData.selectedMonths.includes(month.id)}
-                        onChange={(checked) => {
-                          setBulkFormData(prev => ({
-                            ...prev,
-                            selectedMonths: checked
-                              ? [...prev.selectedMonths, month.id]
-                              : prev.selectedMonths.filter(id => id !== month.id)
-                          }))
-                        }}
-                     />
-                   ))}
-                 </div>
-              </div>
-              
-              {/* 4. Adım: Ziyaret Sayısı, Yıl ve Notlar */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">4. Ziyaret Sayısı</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={bulkFormData.visits_required}
-                    onChange={(e) => setBulkFormData({ ...bulkFormData, visits_required: Number(e.target.value) })}
-                    className="w-full p-2 border rounded-lg"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">5. Yıl</label>
-                  <input
-                    type="number"
-                    min="2024" max="2030"
-                    value={bulkFormData.year}
-                    onChange={(e) => setBulkFormData({ ...bulkFormData, year: Number(e.target.value) })}
-                    className="w-full p-2 border rounded-lg"
-                    required
-                  />
-                </div>
-              </div>
-
+              {/* Notlar */}
               <div>
-                <label className="block text-sm font-medium mb-1">6. Notlar (Tümüne uygulanır)</label>
+                <label className="block text-sm font-medium mb-2">Notlar</label>
                 <textarea
-                  value={bulkFormData.notes}
-                  onChange={(e) => setBulkFormData({ ...bulkFormData, notes: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                  rows={2}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="Opsiyonel notlar..."
                 />
               </div>
+            </div>
 
-              {/* Form Butonları */}
-              <div className="flex justify-end gap-2 pt-4 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowBulkAddModal(false)}
-                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                >
-                  İptal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  Toplu Ekle
-                </button>
-              </div>
-            </form>
+            <div className="p-6 border-t flex justify-end gap-3">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSave}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                <Save size={20} />
+                Kaydet
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
-  );
-};
-
-// --- YARDIMCI BİLEŞENLER (Checkbox) ---
-
-interface CheckboxProps {
-  id: string;
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-const Checkbox: React.FC<CheckboxProps> = ({ id, label, checked, onChange }) => (
-  <label
-    htmlFor={id}
-    className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer"
-  >
-    <input
-      id={id}
-      type="checkbox"
-      checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
-      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-    />
-    <span className="text-sm select-none">{label}</span>
-  </label>
-);
-
-interface CheckboxToggleAllProps {
-  options: { id: string | number; [key: string]: any }[];
-  selected: (string | number)[];
-  onChange: (selected: (string | number)[]) => void;
-  labelKey: string;
-}
-
-const CheckboxToggleAll: React.FC<CheckboxToggleAllProps> = ({ options, selected, onChange, labelKey }) => {
-  const allSelected = options.length > 0 && options.length === selected.length;
-  
-  const handleToggle = () => {
-    if (allSelected) {
-      onChange([]); // Hepsini kaldır
-    } else {
-      onChange(options.map(opt => opt.id)); // Hepsini seç
-    }
-  };
-  
-  return (
-    <label
-      className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer font-medium text-blue-600 border-b border-gray-200"
-    >
-      <input
-        type="checkbox"
-        checked={allSelected}
-        onChange={handleToggle}
-        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-      />
-      <span className="text-sm select-none">
-        {allSelected ? 'Tümünü Kaldır' : 'Tümünü Seç'}
-      </span>
-    </label>
   );
 };
 
