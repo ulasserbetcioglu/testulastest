@@ -567,28 +567,22 @@ const AdminCalendarPlanning = () => {
   // --- Olay Yöneticileri (Event Handlers) ---
 
   const handleEventDrop = async (item, date) => {
-    console.log('=== DROP EVENT START ===');
-    console.log('Item dropped:', item);
-    console.log('Date:', date);
-    console.log('Selected operator:', selectedOperator);
-    console.log('Selected visit type:', selectedVisitType);
-    console.log('Is admin:', isAdmin);
-
     try {
+      // Admin kontrolü
       if (!isAdmin) {
-        console.log('BLOCKED: Not admin');
         toast.error('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız');
         return;
       }
 
-      // Yeni ziyaretler için operatör seçili olmalı (operatör sürüklemesi hariç)
-      if (!selectedOperator && item.type !== 'visit' && item.type !== 'operator') {
-        console.log('BLOCKED: No operator selected');
-        toast.error('Lütfen önce bir operatör seçin');
-        return;
+      // Operatör kontrolü (operatör sürükleme ve mevcut ziyaret taşıma hariç)
+      if (item.type === 'customer' || item.type === 'branch') {
+        if (!selectedOperator) {
+          toast.error('Lütfen önce bir operatör seçin');
+          return;
+        }
       }
 
-      // Saat dilimi sorunlarını önlemek için tarihi ayarla (Öğlen 12)
+      // Tarihi formatla
       const visitDate = new Date(
         date.getFullYear(),
         date.getMonth(),
@@ -597,12 +591,8 @@ const AdminCalendarPlanning = () => {
       );
       const formattedDate = visitDate.toISOString().split('T')[0];
 
-      console.log('Passed all checks, processing drop...');
-      console.log('Formatted date:', formattedDate);
-
       // Durum 1: Mevcut ziyaret taşınıyor
       if (item.type === 'visit') {
-        console.log('Case 1: Moving existing visit');
         // Eski ziyareti sil ve yenisini oluştur (Taşıma = Sil + Ekle)
         // Not: Bu, atomik bir işlem değildir. İdealde tek bir 'update' olmalı
         // veya bir veritabanı fonksiyonu (transaction) kullanılmalı.
@@ -629,15 +619,6 @@ const AdminCalendarPlanning = () => {
       }
       // Durum 2: Yeni ziyaret ekleniyor
       else if (item.type === 'customer' || item.type === 'branch') {
-        console.log('Case 2: Creating new visit for customer/branch');
-
-        // Operatör seçilmiş mi kontrol et
-        if (!selectedOperator) {
-          console.log('BLOCKED in case 2: No operator selected');
-          toast.error('Lütfen önce bir operatör seçin veya sürükleyin');
-          return;
-        }
-
         const visitData = {
           customer_id: item.type === 'branch' ? item.customer_id : item.id,
           branch_id: item.type === 'branch' ? item.id : null,
@@ -646,43 +627,30 @@ const AdminCalendarPlanning = () => {
           visit_type: selectedVisitType
         };
 
-        console.log('Visit data to create:', visitData);
         await createVisit(visitData);
-        console.log('Create visit completed, now fetching data...');
-        await fetchData(); // Takvimi yenile
-        console.log('Fetch data completed');
+        await fetchData();
         toast.success(`Ziyaret oluşturuldu: ${item.kisa_isim || item.sube_adi}`);
       }
-      // Durum 3: Operatör sürükleniyor (Sadece seçili operatörü ayarla)
+      // Durum 3: Operatör sürükleniyor
       else if (item.type === 'operator') {
-        console.log('Case 3: Operator dragged');
         setSelectedOperator(item.id);
         toast.success(`${item.name} seçildi. Şimdi müşteri veya şube sürükleyebilirsiniz.`);
       }
-      else {
-        console.log('WARNING: Unknown item type:', item.type);
-      }
     } catch (err) {
-      toast.error('Ziyaret işlenirken bir hata oluştu: ' + err.message);
-      console.error('Visit drop error:', err);
+      toast.error('Ziyaret oluşturulurken hata: ' + err.message);
     }
   };
 
   const createVisit = async (visitData) => {
-    console.log('Creating visit with data:', visitData);
     const { data, error } = await supabase
       .from('visits')
       .insert([{
         ...visitData,
-        status: 'planned' // Yeni ziyaretler her zaman 'planlandı' olarak başlar
+        status: 'planned'
       }])
       .select();
 
-    if (error) {
-      console.error('Visit creation error:', error);
-      throw error;
-    }
-    console.log('Visit created successfully:', data);
+    if (error) throw error;
     return data;
   };
 
@@ -884,7 +852,27 @@ const AdminCalendarPlanning = () => {
             onExportPDF={exportToPDF}
             onExportImage={exportToImage}
           />
-          
+
+          {/* Seçili Operatör Göstergesi */}
+          {selectedOperator && (
+            <div className="mb-4 p-3 bg-purple-100 border-2 border-purple-500 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <User className="h-5 w-5 text-purple-700" />
+                  <span className="font-semibold text-purple-900">
+                    Seçili Operatör: {operators.find(op => op.id === selectedOperator)?.name || 'Bilinmeyen'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedOperator(null)}
+                  className="text-purple-700 hover:text-purple-900 text-sm underline"
+                >
+                  Temizle
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Takvim Izgarası */}
           <CalendarGrid
             calendarRef={calendarRef}
