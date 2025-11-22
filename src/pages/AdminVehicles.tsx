@@ -2,10 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Search, Car, Wrench, Download, Loader2 } from 'lucide-react'; // Loader2 eklendi
+import { Plus, Edit, Trash2, Search, Car, Wrench, Download, Loader2 } from 'lucide-react';
 import AddVehicleModal from '../components/Vehicles/AddVehicleModal';
 import EditVehicleModal from '../components/Vehicles/EditVehicleModal';
 import MaintenanceModal from '../components/Vehicles/MaintenanceModal';
+import WeeklyKmChart from '../components/Vehicles/WeeklyKmChart';
 import * as XLSX from 'xlsx';
 
 interface Vehicle {
@@ -141,6 +142,10 @@ const AdminVehicles: React.FC = () => {
           </button>
         </div>
       </header>
+
+      <div className="mb-8">
+        <WeeklyKmChart />
+      </div>
 
       <div className="bg-white p-4 rounded-xl shadow-lg mb-6">
         <div className="relative">
