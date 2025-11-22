@@ -86,17 +86,27 @@ const AdminMonthlyVisitSchedule = () => {
     try {
       setLoading(true);
 
+      // Debug için
+      console.log('🔍 Fetching data for year:', selectedYear);
+
       const [schedulesRes, customersRes, branchesRes, operatorsRes] = await Promise.all([
         supabase
           .from('monthly_visit_schedules')
           .select(`
-            *,
-            customer:customer_id(kisa_isim),
-            branch:branch_id(
+            id,
+            customer_id,
+            branch_id,
+            operator_id,
+            month,
+            visits_required,
+            year,
+            notes,
+            customers!monthly_visit_schedules_customer_id_fkey(kisa_isim),
+            branches!monthly_visit_schedules_branch_id_fkey(
               sube_adi,
-              customer:customer_id(kisa_isim)
+              customers!branches_customer_id_fkey(kisa_isim)
             ),
-            operator:operator_id(name)
+            operators!monthly_visit_schedules_operator_id_fkey(name)
           `)
           .or(`year.eq.${selectedYear},year.is.null`)
           .order('month', { ascending: true }),
@@ -110,7 +120,7 @@ const AdminMonthlyVisitSchedule = () => {
             id,
             sube_adi,
             customer_id,
-            customer:customer_id(kisa_isim)
+            customers!branches_customer_id_fkey(kisa_isim)
           `)
           .order('sube_adi'),
         supabase
@@ -120,14 +130,64 @@ const AdminMonthlyVisitSchedule = () => {
           .order('name')
       ]);
 
-      if (schedulesRes.error) throw schedulesRes.error;
-      if (customersRes.error) throw customersRes.error;
-      if (branchesRes.error) throw branchesRes.error;
-      if (operatorsRes.error) throw operatorsRes.error;
+      if (schedulesRes.error) {
+        console.error('❌ Schedules error:', schedulesRes.error);
+        throw schedulesRes.error;
+      }
+      if (customersRes.error) {
+        console.error('❌ Customers error:', customersRes.error);
+        throw customersRes.error;
+      }
+      if (branchesRes.error) {
+        console.error('❌ Branches error:', branchesRes.error);
+        throw branchesRes.error;
+      }
+      if (operatorsRes.error) {
+        console.error('❌ Operators error:', operatorsRes.error);
+        throw operatorsRes.error;
+      }
 
-      setSchedules(schedulesRes.data || []);
+      // Debug: Raw data
+      console.log('📊 Raw schedules data:', schedulesRes.data);
+      console.log('📊 Total schedules found:', schedulesRes.data?.length);
+
+      // Transform the data to match expected structure
+      const transformedSchedules = (schedulesRes.data || []).map(schedule => ({
+        id: schedule.id,
+        customer_id: schedule.customer_id,
+        branch_id: schedule.branch_id,
+        operator_id: schedule.operator_id,
+        month: schedule.month,
+        visits_required: schedule.visits_required,
+        year: schedule.year,
+        notes: schedule.notes,
+        customer: schedule.customers ? { kisa_isim: schedule.customers.kisa_isim } : null,
+        branch: schedule.branches ? {
+          sube_adi: schedule.branches.sube_adi,
+          customer: schedule.branches.customers ? {
+            kisa_isim: schedule.branches.customers.kisa_isim
+          } : { kisa_isim: '' }
+        } : null,
+        operator: schedule.operators ? { name: schedule.operators.name } : null
+      }));
+
+      console.log('✅ Transformed schedules:', transformedSchedules);
+      console.log('✅ Schedules by month:', transformedSchedules.reduce((acc, s) => {
+        acc[s.month] = (acc[s.month] || 0) + 1;
+        return acc;
+      }, {}));
+
+      setSchedules(transformedSchedules);
       setCustomers(customersRes.data || []);
-      setBranches(branchesRes.data || []);
+      
+      const transformedBranches = (branchesRes.data || []).map(branch => ({
+        id: branch.id,
+        sube_adi: branch.sube_adi,
+        customer_id: branch.customer_id,
+        customer: branch.customers ? { kisa_isim: branch.customers.kisa_isim } : { kisa_isim: '' }
+      }));
+      
+      setBranches(transformedBranches);
       setOperators(operatorsRes.data || []);
     } catch (err) {
       toast.error('Veriler yüklenirken hata: ' + (err as Error).message);
