@@ -116,13 +116,12 @@ const AdminMonthlyVisitSchedule = () => {
             operators!monthly_visit_schedules_operator_id_fkey(name)
           `)
           .or(`year.eq.${selectedYear},year.is.null`)
-          .order('month', { ascending: true })
-          .limit(5000), // DÜZELTME: Varsayılan limit artırıldı
-        supabase.from('customers').select('id, kisa_isim').order('kisa_isim').limit(2000),
+          .order('month', { ascending: true }),
+        supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
         supabase.from('branches').select(`
             id, sube_adi, customer_id,
             customers!branches_customer_id_fkey(kisa_isim)
-          `).order('sube_adi').limit(2000),
+          `).order('sube_adi'),
         supabase.from('operators').select('id, name, email').eq('status', 'Açık').order('name')
       ]);
 
@@ -551,10 +550,8 @@ const AdminMonthlyVisitSchedule = () => {
       </div>
 
       <div className="space-y-8">
-        {/* DÜZELTME: Object.entries yerine MONTH_NAMES ile sıralı ve garantili döngü */}
-        {MONTH_NAMES.map((monthName, index) => {
-          const month = index + 1;
-          const monthSchedules = schedulesByMonth[month] || []; // Veri yoksa boş array
+        {Object.entries(schedulesByMonth).map(([monthStr, monthSchedules]) => {
+          const month = Number(monthStr);
           const unscheduledList = getUnscheduledBranchesForMonth(month);
           
           // Toggle durumları
@@ -570,7 +567,7 @@ const AdminMonthlyVisitSchedule = () => {
                     <Calendar size={20} className="text-blue-600" />
                   </div>
                   <div>
-                    <h2 className="font-bold text-lg text-gray-800">{monthName}</h2>
+                    <h2 className="font-bold text-lg text-gray-800">{MONTH_NAMES[month - 1]}</h2>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-green-600 font-medium">{monthSchedules.length} Planlı</span>
                       <span className="text-gray-300">|</span>
