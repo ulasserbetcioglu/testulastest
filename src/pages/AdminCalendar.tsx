@@ -273,6 +273,7 @@ const AdminCalendar: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [checkedStatusFilter, setCheckedStatusFilter] = useState<string>('all');
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
+  const [scheduleCompletionFilter, setScheduleCompletionFilter] = useState<'incomplete' | 'complete' | 'all'>('incomplete');
   const calendarRef = useRef<HTMLDivElement>(null);
 
   const filteredBranches = useMemo(() => {
@@ -899,10 +900,45 @@ const AdminCalendar: React.FC = () => {
       {monthlySchedules.length > 0 && (
         <div className="mt-6">
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-            <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              <Users className="h-5 w-5 text-gray-400" />
-              Bu Ayın Ziyaret Planları ve Yapılmayanlar
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-700 flex items-center gap-2">
+                <Users className="h-5 w-5 text-gray-400" />
+                Bu Ayın Ziyaret Planları ve Yapılmayanlar
+              </h3>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setScheduleCompletionFilter('incomplete')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    scheduleCompletionFilter === 'incomplete'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Tamamlanmayanlar
+                </button>
+                <button
+                  onClick={() => setScheduleCompletionFilter('complete')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    scheduleCompletionFilter === 'complete'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Tamamlananlar
+                </button>
+                <button
+                  onClick={() => setScheduleCompletionFilter('all')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    scheduleCompletionFilter === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Tümü
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-4">
               {Object.entries(
@@ -916,9 +952,27 @@ const AdminCalendar: React.FC = () => {
                 }, {})
               ).map(([operatorName, schedules]: [string, any]) => {
                 const operatorSchedules = schedules;
-                const totalRequired = operatorSchedules.reduce((sum: number, s: any) => sum + s.visits_required, 0);
 
-                const completedCount = operatorSchedules.reduce((sum: number, schedule: any) => {
+                // Filtreleme uygula
+                const filteredOperatorSchedules = operatorSchedules.filter((schedule: any) => {
+                  const doneCount = visits.filter((v: Visit) => {
+                    const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                    const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                    return matchesBranch || matchesCustomer;
+                  }).length;
+                  const isComplete = doneCount >= schedule.visits_required;
+
+                  if (scheduleCompletionFilter === 'complete') return isComplete;
+                  if (scheduleCompletionFilter === 'incomplete') return !isComplete;
+                  return true;
+                });
+
+                // Eğer filtreleme sonrası hiç plan kalmadıysa bu operatörü gösterme
+                if (filteredOperatorSchedules.length === 0) return null;
+
+                const totalRequired = filteredOperatorSchedules.reduce((sum: number, s: any) => sum + s.visits_required, 0);
+
+                const completedCount = filteredOperatorSchedules.reduce((sum: number, schedule: any) => {
                   const completed = visits.filter((v: Visit) => {
                     const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
                     const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
@@ -954,7 +1008,7 @@ const AdminCalendar: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {operatorSchedules.map((schedule: any, idx: number) => {
+                      {filteredOperatorSchedules.map((schedule: any, idx: number) => {
                         const customerName = schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim;
                         const branchName = schedule.branch?.sube_adi;
                         const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
