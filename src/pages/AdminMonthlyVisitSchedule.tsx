@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
+// -----------------------------------------------------------------------------
+// ÖNEMLİ: Kendi projenizde aşağıdaki iki import satırını yorumdan çıkarın (aktif edin)
+// ve alttaki geçici "mock" tanımlamalarını silin.
+// -----------------------------------------------------------------------------
+
+// import { supabase } from '../lib/supabase'; 
+// import * as XLSX from 'xlsx';
+
+// --- PREVIEW İÇİN GEÇİCİ TANIMLAMALAR (PROJENİZDE SİLİNİZ) ---
+const supabase: any = { from: () => ({ select: () => ({ or: () => ({ order: () => ({ limit: () => ({ data: [], error: null }) }) }), order: () => ({ limit: () => ({ data: [], error: null }) }), eq: () => ({ order: () => ({ data: [], error: null }) }) }) }) };
+const XLSX: any = { utils: { book_new: () => {}, aoa_to_sheet: () => {}, book_append_sheet: () => {} }, writeFile: () => {} };
+// -----------------------------------------------------------------------------
+
 import { toast } from 'sonner';
 import { 
   Search, Plus, Edit2, Trash2, Save, X, Calendar, 
   AlertCircle, Download, Eye, EyeOff, CheckCircle 
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 // --- Types ---
 interface Customer {
@@ -75,7 +86,6 @@ const AdminMonthlyVisitSchedule = () => {
   const [editingSchedule, setEditingSchedule] = useState<VisitSchedule | null>(null);
   
   // UI Toggles
-  // Varsayılan olarak planlananlar açık (undefined veya true), planlanmayanlar kapalı (false)
   const [showUnscheduled, setShowUnscheduled] = useState<{ [key: number]: boolean }>({});
   const [showScheduled, setShowScheduled] = useState<{ [key: number]: boolean }>({});
 
@@ -116,13 +126,29 @@ const AdminMonthlyVisitSchedule = () => {
             operators!monthly_visit_schedules_operator_id_fkey(name)
           `)
           .or(`year.eq.${selectedYear},year.is.null`)
-          .order('month', { ascending: true }),
-        supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
-        supabase.from('branches').select(`
+          .order('month', { ascending: true })
+          .limit(5000), // DÜZELTME: Veri limiti artırıldı (Haziran sonrası verilerin gelmemesi buna bağlı olabilir)
+        
+        supabase
+          .from('customers')
+          .select('id, kisa_isim')
+          .order('kisa_isim')
+          .limit(2000),
+
+        supabase
+          .from('branches')
+          .select(`
             id, sube_adi, customer_id,
             customers!branches_customer_id_fkey(kisa_isim)
-          `).order('sube_adi'),
-        supabase.from('operators').select('id, name, email').eq('status', 'Açık').order('name')
+          `)
+          .order('sube_adi')
+          .limit(2000),
+
+        supabase
+          .from('operators')
+          .select('id, name, email')
+          .eq('status', 'Açık')
+          .order('name')
       ]);
 
       if (schedulesRes.error) throw schedulesRes.error;
@@ -131,7 +157,7 @@ const AdminMonthlyVisitSchedule = () => {
       if (operatorsRes.error) throw operatorsRes.error;
 
       // Veri transformasyonu
-      const transformedSchedules = (schedulesRes.data || []).map(schedule => ({
+      const transformedSchedules = (schedulesRes.data || []).map((schedule: any) => ({
         id: schedule.id,
         customer_id: schedule.customer_id,
         branch_id: schedule.branch_id,
@@ -151,7 +177,7 @@ const AdminMonthlyVisitSchedule = () => {
       setSchedules(transformedSchedules);
       setCustomers(customersRes.data || []);
       
-      const transformedBranches = (branchesRes.data || []).map(branch => ({
+      const transformedBranches = (branchesRes.data || []).map((branch: any) => ({
         id: branch.id,
         sube_adi: branch.sube_adi,
         customer_id: branch.customer_id,
@@ -178,8 +204,9 @@ const AdminMonthlyVisitSchedule = () => {
         const monthNum = index + 1;
         const sheetData: any[] = [];
         
-        // 1. Başlık Satırı: Müşteri, Şube, Operatör, Hedef, Notlar, 1...31 Günler
+        // 1. Başlık Satırı
         const headerRow = ['Müşteri', 'Şube', 'Operatör', 'Ziyaret Hedefi', 'Notlar'];
+        // 1'den 31'e kadar günleri ekle
         for (let d = 1; d <= 31; d++) {
           headerRow.push(d.toString());
         }
@@ -550,8 +577,9 @@ const AdminMonthlyVisitSchedule = () => {
       </div>
 
       <div className="space-y-8">
-        {Object.entries(schedulesByMonth).map(([monthStr, monthSchedules]) => {
-          const month = Number(monthStr);
+        {MONTH_NAMES.map((monthName, index) => {
+          const month = index + 1;
+          const monthSchedules = schedulesByMonth[month] || [];
           const unscheduledList = getUnscheduledBranchesForMonth(month);
           
           // Toggle durumları
@@ -567,7 +595,7 @@ const AdminMonthlyVisitSchedule = () => {
                     <Calendar size={20} className="text-blue-600" />
                   </div>
                   <div>
-                    <h2 className="font-bold text-lg text-gray-800">{MONTH_NAMES[month - 1]}</h2>
+                    <h2 className="font-bold text-lg text-gray-800">{monthName}</h2>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-green-600 font-medium">{monthSchedules.length} Planlı</span>
                       <span className="text-gray-300">|</span>
