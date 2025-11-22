@@ -955,6 +955,8 @@ const AdminCalendar: React.FC = () => {
 
                 // Filtreleme uygula
                 const filteredOperatorSchedules = operatorSchedules.filter((schedule: any) => {
+                  // Tüm operatörlerin yaptığı ziyaretleri say (yardım ziyaretleri dahil)
+                  // Operatör kontrolü yapılmaz, sadece müşteri/şube eşleşmesi aranır
                   const doneCount = visits.filter((v: Visit) => {
                     const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
                     const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
@@ -973,6 +975,7 @@ const AdminCalendar: React.FC = () => {
                 const totalRequired = filteredOperatorSchedules.reduce((sum: number, s: any) => sum + s.visits_required, 0);
 
                 const completedCount = filteredOperatorSchedules.reduce((sum: number, schedule: any) => {
+                  // Tüm operatörlerin yaptığı ziyaretleri say (yardım ziyaretleri dahil)
                   const completed = visits.filter((v: Visit) => {
                     const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
                     const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
@@ -1013,6 +1016,7 @@ const AdminCalendar: React.FC = () => {
                         const branchName = schedule.branch?.sube_adi;
                         const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
 
+                        // Tüm operatörlerin yaptığı ziyaretleri say (yardım ziyaretleri dahil)
                         const doneCount = visits.filter((v: Visit) => {
                           const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
                           const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
