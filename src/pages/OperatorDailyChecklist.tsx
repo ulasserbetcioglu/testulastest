@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { localAuth } from '../lib/localAuth';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Calendar, CheckCircle, Clock, X, AlertTriangle, MapPin, Eye } from 'lucide-react';
@@ -44,13 +43,13 @@ const OperatorDailyChecklist: React.FC = () => {
 
   const fetchOperatorId = async () => {
     try {
-      const opId = await localAuth.getCurrentOperatorId();
-      if (!opId) throw new Error('Kullanıcı bulunamadı');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Kullanıcı bulunamadı');
 
       const { data, error } = await supabase
         .from('operators')
         .select('id')
-        .eq('id', opId)
+        .eq('auth_id', user.id)
         .single();
 
       if (error) throw error;

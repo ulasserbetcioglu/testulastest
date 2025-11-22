@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { localAuth } from '../lib/localAuth';
 import { Search, Filter, Calendar, Eye, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
@@ -67,13 +66,13 @@ const OperatorPaidMaterials: React.FC = () => {
 
   const fetchOperatorId = async () => {
     try {
-      const opId = await localAuth.getCurrentOperatorId();
-      if (!opId) throw new Error('Kullanıcı bulunamadı');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Kullanıcı bulunamadı');
 
       const { data, error } = await supabase
         .from('operators')
         .select('id')
-        .eq('id', opId)
+        .eq('auth_id', user.id)
         .single();
 
       if (error) throw error;

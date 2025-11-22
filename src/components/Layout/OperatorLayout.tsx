@@ -6,7 +6,6 @@ import OperatorSidebar from './OperatorSidebar';
 import MobileNavMenu from './MobileNavMenu';
 import MandatoryWeeklyKmModal from '../Operator/MandatoryWeeklyKmModal';
 import { supabase } from '../../lib/supabase';
-import { localAuth } from '../../lib/localAuth';
 
 const OperatorLayout: React.FC = () => {
   const [operatorId, setOperatorId] = useState<string | null>(null);
@@ -18,15 +17,13 @@ const OperatorLayout: React.FC = () => {
     const fetchOperatorId = async () => {
       setLoadingOperatorId(true);
       try {
-        const opId = await localAuth.getCurrentOperatorId();
-
-        if (opId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
           const { data: opData, error: opError } = await supabase
             .from('operators')
             .select('id, name')
-            .eq('id', opId)
+            .eq('auth_id', user.id)
             .single();
-
           if (opError) throw opError;
           setOperatorId(opData.id);
           setOperatorName(opData.name);

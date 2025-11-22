@@ -185,10 +185,6 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
             setUserRole('branch');
             setLoading(false);
             return;
-          } else if (localSession.type === 'operator') {
-            setUserRole('operator');
-            setLoading(false);
-            return;
           }
         }
 

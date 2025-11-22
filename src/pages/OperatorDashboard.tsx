@@ -1,7 +1,6 @@
 // src/pages/OperatorDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { localAuth } from '../lib/localAuth';
 import { Bug, Users, FileText, Calendar, DollarSign, TrendingUp, TrendingDown, Loader2, MapPin, Building } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, startOfWeek, isSameDay } from 'date-fns'; // isSameDay ve startOfWeek eklendi
@@ -100,12 +99,18 @@ const OperatorDashboard: React.FC = () => {
   useEffect(() => {
     const fetchOperatorId = async () => {
       try {
-        const opId = await localAuth.getCurrentOperatorId();
-        if (opId) {
-          setOperatorId(opId);
-          console.log('Operator ID fetched in Dashboard:', opId);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: opData, error: opError } = await supabase
+            .from('operators')
+            .select('id')
+            .eq('auth_id', user.id)
+            .single();
+          if (opError) throw opError;
+          setOperatorId(opData.id);
+          console.log('Operator ID fetched in Dashboard:', opData.id); // LOG
         } else {
-          console.log('Kullanıcı oturumu bulunamadı.');
+          console.log('Kullanıcı oturumu bulunamadı.'); // LOG
         }
       } catch (err) {
         console.error("Operatör ID çekilirken hata:", err);

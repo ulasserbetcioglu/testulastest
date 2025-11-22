@@ -1,7 +1,6 @@
 // src/pages/OperatorQuickNotes.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { localAuth } from '../lib/localAuth';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Save, X, Loader2, NotebookPen } from 'lucide-react';
 import { format } from 'date-fns'; // Add this import
@@ -29,22 +28,23 @@ const OperatorQuickNotes: React.FC = () => {
   useEffect(() => {
     const fetchOperatorId = async () => {
       try {
-        const opId = await localAuth.getCurrentOperatorId();
-        if (!opId) throw new Error('Kullanıcı bulunamadı');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Kullanıcı bulunamadı');
 
-        setCurrentUserId(opId);
+        setCurrentUserId(user.id); // Kullanıcının auth.uid() değerini kaydet
 
         const { data: opData, error: opError } = await supabase
           .from('operators')
           .select('id')
-          .eq('id', opId)
-          .maybeSingle();
+          .eq('auth_id', user.id)
+          .maybeSingle(); // maybeSingle kullanarak kayıt yoksa hata fırlatmasını engelleriz
 
         if (opError && opError.code !== 'PGRST116') throw opError;
         if (opData) {
           setOperatorId(opData.id);
         } else {
           // Operatör kaydı yoksa, notları çekmeye çalışmayız.
+          // Bu durumda, operatörün kendi notları olmayacaktır.
           setLoading(false);
         }
       } catch (err: any) {

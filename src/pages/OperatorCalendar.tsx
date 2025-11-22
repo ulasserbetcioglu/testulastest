@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isToday, addWeeks, subWeeks, startOfMonth, endOfMonth, isSameDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
-import { localAuth } from '../lib/localAuth';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, MapPin, User, Building } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -83,13 +82,13 @@ const OperatorCalendar: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const opId = await localAuth.getCurrentOperatorId();
-      if (!opId) throw new Error('Kullanıcı bulunamadı');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Kullanıcı bulunamadı');
 
       const { data: operatorData, error: operatorError } = await supabase
         .from('operators')
-        .select('id, name')
-        .eq('id', opId)
+        .select('id, name, auth_id')
+        .eq('auth_id', user.id)
         .single();
 
       if (operatorError) throw operatorError;

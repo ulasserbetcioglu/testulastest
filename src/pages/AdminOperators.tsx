@@ -55,7 +55,7 @@ const AdminOperators: React.FC = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('operators')
-        .select('*, total_leave_days')
+        .select('*, total_leave_days') // ✅ MODIFIED: Select total_leave_days
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -287,10 +287,9 @@ const AdminOperators: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operatör Bilgileri</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İletişim</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giriş Bilgileri</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Erişim İzinleri</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İzin Günü</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Toplam İzin Günü</th> {/* ✅ MODIFIED: New column header */}
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
               </tr>
             </thead>
@@ -303,16 +302,6 @@ const AdminOperators: React.FC = () => {
                     {operator.phone && <div className="flex items-center text-sm text-gray-500 mt-1"><Phone size={16} className="text-gray-400 mr-2" />{operator.phone}</div>}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-xs text-gray-600 mb-1">
-                      <span className="font-semibold">Email:</span>
-                      <span className="ml-1 font-mono bg-gray-100 px-2 py-1 rounded">{operator.email || '-'}</span>
-                    </div>
-                    <div className="text-xs text-gray-600">
-                      <span className="font-semibold">Şifre:</span>
-                      <span className="ml-1 font-mono bg-yellow-50 px-2 py-1 rounded border border-yellow-200">{operator.password_hash || '-'}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
                     <div className="text-sm text-gray-700 max-w-xs truncate" title={getAssignedCustomersText(operator)}><Users size={16} className="text-gray-400 mr-2 inline-block" />{getAssignedCustomersText(operator)}</div>
                     <div className="text-sm text-gray-500 mt-1 max-w-xs truncate" title={getAssignedBranchesText(operator)}><Building size={16} className="text-gray-400 mr-2 inline-block" />{getAssignedBranchesText(operator)}</div>
                   </td>
@@ -322,11 +311,11 @@ const AdminOperators: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {operator.total_leave_days !== undefined ? operator.total_leave_days : '-'} gün
+                    {operator.total_leave_days !== undefined ? operator.total_leave_days : '-'} gün {/* ✅ MODIFIED: Display total_leave_days */}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button onClick={() => handleEdit(operator.id)} className="text-blue-600 hover:text-blue-900 p-1" title="Düzenle"><Edit2 size={18} /></button>
-                    <button onClick={() => handleDelete(operator.id)} className="text-red-600 hover:text-red-900 p-1 ml-2" title="Sil"><Trash2 size={18} /></button>
+                    <button onClick={() => handleEdit(operator.id)} className="text-blue-600 hover:text-blue-900 p-1"><Edit2 size={18} /></button>
+                    <button onClick={() => handleDelete(operator.id)} className="text-red-600 hover:text-red-900 p-1 ml-2"><Trash2 size={18} /></button>
                   </td>
                 </tr>
               ))}

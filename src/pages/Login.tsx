@@ -9,7 +9,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loginType, setLoginType] = useState<'admin' | 'customer' | 'branch' | 'operator'>('admin');
+  const [loginType, setLoginType] = useState<'admin' | 'customer' | 'branch'>('admin');
 
   useEffect(() => {
     const checkSession = async () => {
@@ -49,14 +49,6 @@ const Login: React.FC = () => {
         }
         if (session) {
           window.location.href = '/branch';
-        }
-      } else if (loginType === 'operator') {
-        const { session, error } = await localAuth.signInOperator(email, password);
-        if (error) {
-          throw new Error(error);
-        }
-        if (session) {
-          window.location.href = '/operator';
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -105,33 +97,22 @@ const Login: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Giriş Tipi
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex space-x-4">
               <button
                 type="button"
                 onClick={() => setLoginType('admin')}
-                className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   loginType === 'admin'
                     ? 'bg-green-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => setLoginType('operator')}
-                className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  loginType === 'operator'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Operatör
+                Admin/Operatör
               </button>
               <button
                 type="button"
                 onClick={() => setLoginType('customer')}
-                className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   loginType === 'customer'
                     ? 'bg-green-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -142,7 +123,7 @@ const Login: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setLoginType('branch')}
-                className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   loginType === 'branch'
                     ? 'bg-green-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
