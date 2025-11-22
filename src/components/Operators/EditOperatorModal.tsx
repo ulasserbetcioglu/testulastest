@@ -31,11 +31,12 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     adSoyad: '',
     telefon: '',
     email: '',
+    password: '',
     durum: 'Açık',
     isSubOperator: false,
     assignedCustomers: [] as string[],
     assignedBranches: [] as string[],
-    totalLeaveDays: 0 // ✅ MODIFIED: Add totalLeaveDays
+    totalLeaveDays: 0
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +69,7 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     try {
       const { data, error } = await supabase
         .from('operators')
-        .select('*, total_leave_days') // ✅ MODIFIED: Select total_leave_days
+        .select('*, total_leave_days')
         .eq('id', operatorId)
         .single();
 
@@ -78,11 +79,12 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
         adSoyad: data.name,
         telefon: data.phone || '',
         email: data.email,
+        password: data.password_hash || '',
         durum: data.status,
         isSubOperator: data.assigned_customers !== null || data.assigned_branches !== null,
         assignedCustomers: data.assigned_customers || [],
         assignedBranches: data.assigned_branches || [],
-        totalLeaveDays: data.total_leave_days || 0 // ✅ MODIFIED: Set totalLeaveDays
+        totalLeaveDays: data.total_leave_days || 0
       });
     } catch (err: any) {
       setError(err.message);
@@ -120,14 +122,17 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     setSuccess(false);
 
     try {
-      // Update operator record
       const operatorData: any = {
         name: formData.adSoyad,
         phone: formData.telefon,
         email: formData.email,
         status: formData.durum,
-        total_leave_days: formData.totalLeaveDays // ✅ MODIFIED: Include totalLeaveDays
+        total_leave_days: formData.totalLeaveDays
       };
+
+      if (formData.password) {
+        operatorData.password_hash = formData.password;
+      }
 
       // Add assigned customers and branches if this is a sub-operator
       if (formData.isSubOperator) {
@@ -265,6 +270,20 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
                   readOnly
                 />
                 <p className="mt-1 text-sm text-gray-500">E-posta adresi değiştirilemez</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Şifre
+                </label>
+                <input
+                  type="text"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500 font-mono"
+                  placeholder="Yeni şifre girin (boş bırakılırsa değişmez)"
+                />
+                <p className="mt-1 text-sm text-gray-500">Şifreyi değiştirmek için yeni şifre girin</p>
               </div>
 
               <div>
