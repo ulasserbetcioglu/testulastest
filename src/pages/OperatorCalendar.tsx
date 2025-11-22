@@ -9,6 +9,8 @@ interface Visit {
   id: string;
   visit_date: string;
   status: 'planned' | 'completed' | 'cancelled';
+  customer_id: string;
+  branch_id: string | null;
   customer: { kisa_isim: string } | null;
   branch: { sube_adi: string; latitude?: number; longitude?: number } | null;
   operator: { name: string } | null;
@@ -24,7 +26,12 @@ interface MonthlySchedule {
   year: number;
   visits_required: number;
   customer?: { kisa_isim: string } | null;
-  branch?: { sube_adi: string } | null;
+  branch?: {
+    sube_adi: string;
+    customer_id: string;
+    customer?: { kisa_isim: string } | null;
+  } | null;
+  operator?: { name: string } | null;
 }
 
 interface Operator {
@@ -96,7 +103,7 @@ const OperatorCalendar: React.FC = () => {
         supabase
           .from('visits')
           .select(`
-            id, visit_date, status, visit_type,
+            id, visit_date, status, visit_type, customer_id, branch_id,
             customer:customer_id(kisa_isim),
             branch:branch_id(sube_adi, latitude, longitude),
             operator:operator_id(name)
@@ -110,7 +117,8 @@ const OperatorCalendar: React.FC = () => {
           .select(`
             id, customer_id, branch_id, operator_id, month, year, visits_required,
             customer:customer_id(kisa_isim),
-            branch:branch_id(sube_adi)
+            branch:branch_id(sube_adi, customer_id, customer:customer_id(kisa_isim)),
+            operator:operator_id(name)
           `)
           .eq('operator_id', operatorData.id)
           .eq('month', currentDate.getMonth() + 1)
@@ -145,9 +153,9 @@ const OperatorCalendar: React.FC = () => {
     return monthlySchedules.map(schedule => {
       const completed = visits.filter(v => {
         if (schedule.branch_id) {
-          return v.branch?.sube_adi === schedule.branch?.sube_adi && v.status === 'completed';
+          return v.branch_id === schedule.branch_id && v.status === 'completed';
         } else {
-          return v.customer?.kisa_isim === schedule.customer?.kisa_isim && v.status === 'completed';
+          return v.customer_id === schedule.customer_id && !v.branch_id && v.status === 'completed';
         }
       }).length;
 
@@ -219,9 +227,10 @@ const OperatorCalendar: React.FC = () => {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {scheduleProgress.map(schedule => {
+                const customerName = schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim || 'Bilinmeyen Müşteri';
                 const displayName = schedule.branch
-                  ? `${schedule.customer?.kisa_isim} - ${schedule.branch.sube_adi}`
-                  : schedule.customer?.kisa_isim || 'Bilinmeyen';
+                  ? `${customerName} - ${schedule.branch.sube_adi}`
+                  : customerName;
                 const percentage = (schedule.completed / schedule.visits_required) * 100;
                 const isComplete = schedule.completed >= schedule.visits_required;
 
