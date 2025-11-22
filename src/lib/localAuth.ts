@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 export interface LocalSession {
-  type: 'customer' | 'branch';
+  type: 'customer' | 'branch' | 'operator';
   id: string;
   email: string;
   name: string;
@@ -94,9 +94,48 @@ export const localAuth = {
     localStorage.removeItem(SESSION_KEY);
   },
 
+  async signInOperator(email: string, password: string): Promise<{ session: LocalSession | null; error: string | null }> {
+    try {
+      const { data: operator, error } = await supabase
+        .from('operators')
+        .select('id, email, name, password_hash')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (error) {
+        return { session: null, error: 'Giriş yapılırken hata oluştu' };
+      }
+
+      if (!operator) {
+        return { session: null, error: 'E-posta veya parola hatalı' };
+      }
+
+      if (!operator.password_hash || operator.password_hash !== password) {
+        return { session: null, error: 'E-posta veya parola hatalı' };
+      }
+
+      const session: LocalSession = {
+        type: 'operator',
+        id: operator.id,
+        email: operator.email,
+        name: operator.name,
+      };
+
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      return { session, error: null };
+    } catch (err) {
+      return { session: null, error: 'Beklenmeyen bir hata oluştu' };
+    }
+  },
+
   isCustomerOrBranch(): boolean {
     const session = this.getSession();
     return session !== null && (session.type === 'customer' || session.type === 'branch');
+  },
+
+  isOperator(): boolean {
+    const session = this.getSession();
+    return session !== null && session.type === 'operator';
   },
 
   async getCurrentCustomerId(): Promise<string | null> {
@@ -133,5 +172,23 @@ export const localAuth = {
       .maybeSingle();
 
     return branchData?.id || null;
+  },
+
+  async getCurrentOperatorId(): Promise<string | null> {
+    const localSession = this.getSession();
+    if (localSession && localSession.type === 'operator') {
+      return localSession.id;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: operatorData } = await supabase
+      .from('operators')
+      .select('id')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    return operatorData?.id || null;
   }
 };
