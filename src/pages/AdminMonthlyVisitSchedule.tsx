@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Search, Plus, Edit2, Trash2, Save, X, Calendar } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Save, X, Calendar, AlertCircle } from 'lucide-react';
 
 interface Customer {
   id: string;
@@ -62,11 +62,9 @@ const AdminMonthlyVisitSchedule = () => {
   const [selectedScheduleIds, setSelectedScheduleIds] = useState<string[]>([]);
   const [selectedOperatorFilter, setSelectedOperatorFilter] = useState<string>('');
 
-  // Modal durumları
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<VisitSchedule | null>(null);
 
-  // Form verileri
   const [formData, setFormData] = useState({
     type: 'branch' as 'customer' | 'branch',
     customer_id: '',
@@ -174,7 +172,6 @@ const AdminMonthlyVisitSchedule = () => {
 
   const handleSave = async () => {
     try {
-      // Validasyon
       if (formData.bulkMode && formData.selectedBranches.length === 0) {
         toast.error('Lütfen en az bir şube seçin');
         return;
@@ -192,7 +189,6 @@ const AdminMonthlyVisitSchedule = () => {
         return;
       }
 
-      // Güncelleme modu
       if (editingSchedule) {
         const { error } = await supabase
           .from('monthly_visit_schedules')
@@ -206,12 +202,9 @@ const AdminMonthlyVisitSchedule = () => {
 
         if (error) throw error;
         toast.success('Plan güncellendi');
-      }
-      // Yeni kayıt - seçili tüm aylar için
-      else {
+      } else {
         const records: any[] = [];
 
-        // Toplu mod: Birden fazla şube için planlar oluştur
         if (formData.bulkMode && formData.selectedBranches.length > 0) {
           formData.selectedBranches.forEach(branchId => {
             formData.selectedMonths.forEach(month => {
@@ -227,7 +220,6 @@ const AdminMonthlyVisitSchedule = () => {
             });
           });
         } else {
-          // Tek kayıt modu
           formData.selectedMonths.forEach(month => {
             records.push({
               customer_id: formData.type === 'customer' ? formData.customer_id : null,
@@ -339,20 +331,27 @@ const AdminMonthlyVisitSchedule = () => {
   };
 
   const selectAllBranches = () => {
+    const availableBranches = getAvailableBranches();
     setFormData(prev => ({
       ...prev,
-      selectedBranches: prev.selectedBranches.length === filteredBranchesByCustomer.length
+      selectedBranches: prev.selectedBranches.length === availableBranches.length
         ? []
-        : filteredBranchesByCustomer.map(b => b.id)
+        : availableBranches.map(b => b.id)
     }));
   };
 
-  const filteredBranchesByCustomer = useMemo(() => {
+  // DÜZELTME: Şube listesini daha akıllı filtreleme
+  const getAvailableBranches = () => {
     if (!formData.customer_id) return branches;
 
     const customerBranches = branches.filter(b => b.customer_id === formData.customer_id);
 
-    // Mevcut planlaması olan şubeleri çıkar
+    // Eğer hiç ay seçilmemişse tüm şubeleri göster
+    if (formData.selectedMonths.length === 0) {
+      return customerBranches;
+    }
+
+    // Seçili aylarda zaten planı olan şubeleri bul
     const scheduledBranchIds = new Set(
       schedules
         .filter(s =>
@@ -363,8 +362,19 @@ const AdminMonthlyVisitSchedule = () => {
         .map(s => s.branch_id)
     );
 
-    return customerBranches.filter(b => !scheduledBranchIds.has(b.id));
-  }, [branches, formData.customer_id, formData.selectedMonths, formData.year, schedules]);
+    // Her şubeyi kontrol et ve durumunu ekle
+    return customerBranches.map(branch => ({
+      ...branch,
+      hasSchedule: scheduledBranchIds.has(branch.id),
+      scheduledMonths: schedules
+        .filter(s =>
+          s.branch_id === branch.id &&
+          formData.selectedMonths.includes(s.month) &&
+          (s.year === formData.year || !s.year)
+        )
+        .map(s => MONTH_NAMES[s.month - 1])
+    }));
+  };
 
   const filteredSchedules = useMemo(() => {
     return schedules.filter(schedule => {
@@ -383,7 +393,6 @@ const AdminMonthlyVisitSchedule = () => {
     });
   }, [schedules, searchTerm, selectedOperatorFilter]);
 
-  // Ay bazında gruplama
   const schedulesByMonth = useMemo(() => {
     const grouped: { [key: number]: VisitSchedule[] } = {};
     for (let i = 1; i <= 12; i++) {
@@ -395,6 +404,8 @@ const AdminMonthlyVisitSchedule = () => {
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
   }
+
+  const availableBranches = getAvailableBranches();
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
@@ -444,7 +455,6 @@ const AdminMonthlyVisitSchedule = () => {
           </button>
         </div>
 
-        {/* Toplu Silme Butonu */}
         {selectedScheduleIds.length > 0 && (
           <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
             <span className="text-sm font-medium text-blue-900">
@@ -461,7 +471,6 @@ const AdminMonthlyVisitSchedule = () => {
         )}
       </div>
 
-      {/* Ay Ay Gruplu Tablo */}
       <div className="space-y-6">
         {Object.entries(schedulesByMonth).map(([month, monthSchedules]) => (
           <div key={month} className="bg-white rounded-lg shadow">
@@ -565,7 +574,6 @@ const AdminMonthlyVisitSchedule = () => {
         ))}
       </div>
 
-      {/* Add/Edit Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -579,7 +587,6 @@ const AdminMonthlyVisitSchedule = () => {
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Toplu Ekleme Modu */}
               {!editingSchedule && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -602,7 +609,6 @@ const AdminMonthlyVisitSchedule = () => {
                 </div>
               )}
 
-              {/* Tür Seçimi */}
               {!editingSchedule && !formData.bulkMode && (
                 <div>
                   <label className="block text-sm font-medium mb-2">Plan Türü</label>
@@ -633,7 +639,6 @@ const AdminMonthlyVisitSchedule = () => {
                 </div>
               )}
 
-              {/* Müşteri Seçimi */}
               <div>
                 <label className="block text-sm font-medium mb-2">Müşteri</label>
                 <select
@@ -644,7 +649,6 @@ const AdminMonthlyVisitSchedule = () => {
                 >
                   <option value="">Müşteri Seçin</option>
                   {customers.filter(c => {
-                    // Eğer customer bazında seçilirse ve bu müşterinin seçili aylarda planı varsa gösterme
                     if (formData.type === 'customer' && formData.selectedMonths.length > 0) {
                       const hasScheduleInSelectedMonths = schedules.some(s =>
                         s.customer_id === c.id &&
@@ -661,96 +665,18 @@ const AdminMonthlyVisitSchedule = () => {
                 </select>
               </div>
 
-              {/* Şube Seçimi - Toplu Mod */}
-              {formData.bulkMode && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium">Şubeler (Çoklu Seçim)</label>
-                    <button
-                      type="button"
-                      onClick={selectAllBranches}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      {formData.selectedBranches.length === filteredBranchesByCustomer.length ? 'Tümünü Kaldır' : 'Tümünü Seç'}
-                    </button>
-                  </div>
-                  <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-gray-50">
-                    {filteredBranchesByCustomer.length === 0 ? (
-                      <p className="text-sm text-gray-500 text-center py-4">
-                        {formData.customer_id ? 'Bu müşteriye ait şube bulunamadı' : 'Lütfen önce bir müşteri seçin'}
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {filteredBranchesByCustomer.map(b => (
-                          <label
-                            key={b.id}
-                            className={`flex items-center p-2 rounded cursor-pointer transition-colors ${
-                              formData.selectedBranches.includes(b.id)
-                                ? 'bg-blue-100 border border-blue-300'
-                                : 'bg-white hover:bg-gray-100 border border-gray-200'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={formData.selectedBranches.includes(b.id)}
-                              onChange={() => toggleBranch(b.id)}
-                              className="mr-3"
-                            />
-                            <span className="text-sm font-medium">{b.sube_adi}</span>
-                            <span className="text-xs text-gray-500 ml-2">({b.customer.kisa_isim})</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {formData.selectedBranches.length > 0 && (
-                    <p className="text-xs text-gray-600 mt-1">
-                      {formData.selectedBranches.length} şube seçildi
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Şube Seçimi - Tekli Mod */}
-              {formData.type === 'branch' && !formData.bulkMode && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">Şube</label>
-                  <select
-                    value={formData.branch_id}
-                    onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
-                    disabled={editingSchedule !== null}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  >
-                    <option value="">Şube Seçin</option>
-                    {filteredBranchesByCustomer.map(b => (
-                      <option key={b.id} value={b.id}>
-                        {b.sube_adi} ({b.customer.kisa_isim})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Operatör Seçimi */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Sorumlu Operatör</label>
-                <select
-                  value={formData.operator_id}
-                  onChange={(e) => setFormData({ ...formData, operator_id: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg"
-                >
-                  <option value="">Operatör Seçin (Opsiyonel)</option>
-                  {operators.map(op => (
-                    <option key={op.id} value={op.id}>
-                      {op.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Ay Seçimi */}
+              {/* Ay Seçimi - ÖNCELİK: Önce ay seçilmeli */}
               {!editingSchedule && (
-                <div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2 mb-3">
+                    <AlertCircle size={20} className="text-yellow-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-900">Önce Ay Seçin</p>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        Şube listesi, seçtiğiniz aylarda planı olmayan şubeleri gösterecektir
+                      </p>
+                    </div>
+                  </div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium">Aylar (Çoklu Seçim)</label>
                     <button
@@ -782,14 +708,129 @@ const AdminMonthlyVisitSchedule = () => {
                     ))}
                   </div>
                   {formData.selectedMonths.length > 0 && (
-                    <p className="text-xs text-gray-600 mt-1">
+                    <p className="text-xs text-gray-600 mt-2">
                       {formData.selectedMonths.length} ay seçildi
                     </p>
                   )}
                 </div>
               )}
 
-              {/* Ziyaret Sayısı */}
+              {formData.bulkMode && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium">Şubeler (Çoklu Seçim)</label>
+                    {availableBranches.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={selectAllBranches}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        {formData.selectedBranches.length === availableBranches.length ? 'Tümünü Kaldır' : 'Tümünü Seç'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="border rounded-lg p-3 max-h-64 overflow-y-auto bg-gray-50">
+                    {availableBranches.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        {!formData.customer_id 
+                          ? 'Lütfen önce bir müşteri seçin'
+                          : formData.selectedMonths.length === 0
+                          ? 'Lütfen önce ay seçin'
+                          : 'Bu müşteriye ait ve seçili aylarda planı olmayan şube bulunamadı'}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {availableBranches.map((b: any) => (
+                          <label
+                            key={b.id}
+                            className={`flex items-start p-2 rounded cursor-pointer transition-colors ${
+                              formData.selectedBranches.includes(b.id)
+                                ? 'bg-blue-100 border border-blue-300'
+                                : b.hasSchedule
+                                ? 'bg-orange-50 border border-orange-200 opacity-75'
+                                : 'bg-white hover:bg-gray-100 border border-gray-200'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.selectedBranches.includes(b.id)}
+                              onChange={() => toggleBranch(b.id)}
+                              className="mr-3 mt-1"
+                              disabled={b.hasSchedule}
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{b.sube_adi}</span>
+                                <span className="text-xs text-gray-500">({b.customer.kisa_isim})</span>
+                              </div>
+                              {b.hasSchedule && b.scheduledMonths && b.scheduledMonths.length > 0 && (
+                                <div className="flex items-center gap-1 mt-1">
+                                  <AlertCircle size={12} className="text-orange-600" />
+                                  <span className="text-xs text-orange-700">
+                                    Zaten planlanmış: {b.scheduledMonths.join(', ')}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {formData.selectedBranches.length > 0 && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      {formData.selectedBranches.length} şube seçildi
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {formData.type === 'branch' && !formData.bulkMode && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Şube</label>
+                  <select
+                    value={formData.branch_id}
+                    onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
+                    disabled={editingSchedule !== null}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="">Şube Seçin</option>
+                    {availableBranches
+                      .filter((b: any) => !b.hasSchedule)
+                      .map((b: any) => (
+                        <option key={b.id} value={b.id}>
+                          {b.sube_adi} ({b.customer.kisa_isim})
+                        </option>
+                      ))}
+                  </select>
+                  {formData.customer_id && formData.selectedMonths.length > 0 && 
+                   availableBranches.filter((b: any) => !b.hasSchedule).length === 0 && (
+                    <div className="mt-2 flex items-start gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <AlertCircle size={16} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-orange-700">
+                        Bu müşterinin tüm şubelerinin seçili aylarda zaten planı var
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Sorumlu Operatör</label>
+                <select
+                  value={formData.operator_id}
+                  onChange={(e) => setFormData({ ...formData, operator_id: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">Operatör Seçin (Opsiyonel)</option>
+                  {operators.map(op => (
+                    <option key={op.id} value={op.id}>
+                      {op.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium mb-2">Aylık Ziyaret Sayısı</label>
                 <input
@@ -802,7 +843,6 @@ const AdminMonthlyVisitSchedule = () => {
                 />
               </div>
 
-              {/* Yıl */}
               <div>
                 <label className="block text-sm font-medium mb-2">Yıl</label>
                 <select
@@ -816,7 +856,6 @@ const AdminMonthlyVisitSchedule = () => {
                 </select>
               </div>
 
-              {/* Notlar */}
               <div>
                 <label className="block text-sm font-medium mb-2">Notlar</label>
                 <textarea
