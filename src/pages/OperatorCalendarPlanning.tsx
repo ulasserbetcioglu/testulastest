@@ -4,6 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { Search, Filter, Plus, X, ChevronLeft, ChevronRight, Calendar, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -198,17 +199,18 @@ const OperatorCalendarPlanning: React.FC = () => {
 
   const checkUserRole = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Kullanıcı bulunamadı');
+      const opId = await localAuth.getCurrentOperatorId();
+      if (!opId) throw new Error('Kullanıcı bulunamadı');
 
-      // Check if admin
-      setIsAdmin(user.email === 'admin@ilaclamatik.com');
+      // Check if admin (local session)
+      const localSession = localAuth.getSession();
+      setIsAdmin(localSession?.email === 'admin@ilaclamatik.com');
 
       // Get operator ID and assigned entities
       const { data: operatorData, error: operatorError } = await supabase
         .from('operators')
         .select('id, assigned_customers, assigned_branches')
-        .eq('auth_id', user.id)
+        .eq('id', opId)
         .single();
 
       if (operatorError) throw operatorError;

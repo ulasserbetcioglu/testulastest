@@ -1,6 +1,7 @@
 // src/pages/OperatorCollectionReceipt.tsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { supabase } from '../lib/supabase'; // Supabase yapılandırmanızın doğru olduğu varsayılmıştır
+import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth'; // Supabase yapılandırmanızın doğru olduğu varsayılmıştır
 import { toast } from 'sonner'; // Toast bildirimleri için sonner kütüphanesi
 import { Loader2, DollarSign, Calendar as CalendarIcon, User, Building, ReceiptText, Eye, Download, Plus, Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
@@ -181,14 +182,14 @@ const OperatorCollectionReceipt: React.FC = () => {
     setError(null);
     try {
       // 1. Mevcut kullanıcıyı al
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Kullanıcı bulunamadı. Lütfen giriş yapın.');
+      const opId = await localAuth.getCurrentOperatorId();
+      if (!opId) throw new Error('Kullanıcı bulunamadı. Lütfen giriş yapın.');
 
       // 2. Kullanıcının operatör ID'sini ve atamalarını al
       const { data: operatorData, error: operatorError } = await supabase
         .from('operators')
         .select('id, auth_id, assigned_customers, assigned_branches') // assigned_customers ve assigned_branches seçildi
-        .eq('auth_id', user.id)
+        .eq('id', opId)
         .single();
 
       if (operatorError) throw operatorError;
