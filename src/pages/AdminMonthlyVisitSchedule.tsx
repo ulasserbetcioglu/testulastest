@@ -75,7 +75,6 @@ const AdminMonthlyVisitSchedule = () => {
   const [editingSchedule, setEditingSchedule] = useState<VisitSchedule | null>(null);
   
   // UI Toggles
-  // Varsayılan olarak planlananlar açık (undefined veya true), planlanmayanlar kapalı (false)
   const [showUnscheduled, setShowUnscheduled] = useState<{ [key: number]: boolean }>({});
   const [showScheduled, setShowScheduled] = useState<{ [key: number]: boolean }>({});
 
@@ -102,9 +101,16 @@ const AdminMonthlyVisitSchedule = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Veritabanından verileri çek
-      const [schedulesRes, customersRes, branchesRes, operatorsRes] = await Promise.all([
-        supabase
+      
+      // Tüm kayıtları çekmek için pagination kullan
+      let allSchedules: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      let hasMore = true;
+
+      // Schedules'ı sayfalama ile çek
+      while (hasMore) {
+        const schedulesRes = await supabase
           .from('monthly_visit_schedules')
           .select(`
             id, customer_id, branch_id, operator_id, month, visits_required, year, notes,
@@ -116,7 +122,24 @@ const AdminMonthlyVisitSchedule = () => {
             operators!monthly_visit_schedules_operator_id_fkey(name)
           `)
           .or(`year.eq.${selectedYear},year.is.null`)
-          .order('month', { ascending: true }),
+          .order('month', { ascending: true })
+          .range(from, from + batchSize - 1);
+
+        if (schedulesRes.error) throw schedulesRes.error;
+        
+        const batch = schedulesRes.data || [];
+        allSchedules = [...allSchedules, ...batch];
+        
+        // Eğer dönen kayıt sayısı batchSize'dan azsa, daha fazla kayıt yok demektir
+        if (batch.length < batchSize) {
+          hasMore = false;
+        } else {
+          from += batchSize;
+        }
+      }
+
+      // Diğer verileri çek
+      const [customersRes, branchesRes, operatorsRes] = await Promise.all([
         supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
         supabase.from('branches').select(`
             id, sube_adi, customer_id,
@@ -125,13 +148,12 @@ const AdminMonthlyVisitSchedule = () => {
         supabase.from('operators').select('id, name, email').eq('status', 'Açık').order('name')
       ]);
 
-      if (schedulesRes.error) throw schedulesRes.error;
       if (customersRes.error) throw customersRes.error;
       if (branchesRes.error) throw branchesRes.error;
       if (operatorsRes.error) throw operatorsRes.error;
 
       // Veri transformasyonu
-      const transformedSchedules = (schedulesRes.data || []).map(schedule => ({
+      const transformedSchedules = allSchedules.map(schedule => ({
         id: schedule.id,
         customer_id: schedule.customer_id,
         branch_id: schedule.branch_id,
