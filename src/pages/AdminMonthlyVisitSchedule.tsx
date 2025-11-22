@@ -153,10 +153,16 @@ const AdminMonthlyVisitSchedule = () => {
       // Simulate API Delay
       await new Promise(resolve => setTimeout(resolve, 800));
 
+      // In a real app, you would use:
+      // const { data, error } = await supabase.from('...').select(...);
+      
       // Using mock data for preview stability
       setCustomers(MOCK_CUSTOMERS);
       setBranches(MOCK_BRANCHES);
       setOperators(MOCK_OPERATORS);
+      // Schedules are managed in state for this demo since we can't persist to DB
+      // In real app: setSchedules(fetchedSchedules);
+
     } catch (err) {
       toast.error('Veriler yüklenirken hata: ' + (err as Error).message);
     } finally {
@@ -164,7 +170,7 @@ const AdminMonthlyVisitSchedule = () => {
     }
   };
 
-  // --- Excel Export Logic (UPDATED: Calendar View) ---
+  // --- Excel Export Logic ---
   const handleExportExcel = () => {
     if (!window.XLSX) {
       toast.error('Excel kütüphanesi henüz yüklenmedi, lütfen birkaç saniye bekleyin.');
@@ -172,101 +178,94 @@ const AdminMonthlyVisitSchedule = () => {
     }
 
     try {
-      const wb = window.XLSX.utils.book_new();
-      let hasData = false;
+      let exportData: any[] = [];
 
-      // Her ay için ayrı bir sekme (Sheet) oluştur
-      MONTH_NAMES.forEach((monthName, index) => {
-        const monthNum = index + 1;
-        const sheetData: any[] = [];
-        
-        // 1. Başlık Satırı: Müşteri, Şube, Operatör, Hedef, 1...31 Günler
-        const headerRow = ['Müşteri', 'Şube', 'Operatör', 'Ziyaret Hedefi', 'Notlar'];
-        // 1'den 31'e kadar günleri ekle
-        for (let d = 1; d <= 31; d++) {
-          headerRow.push(d.toString());
-        }
-        sheetData.push(headerRow);
+      // Tüm şubeler üzerinden döngü kuruyoruz
+      branches.forEach(branch => {
+        // Şube arama filtresine uyuyor mu?
+        const matchesSearch = branch.sube_adi.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              branch.customer.kisa_isim.toLowerCase().includes(searchTerm.toLowerCase());
 
-        // 2. Veri Satırları: Tüm şubeleri dön
-        branches.forEach(branch => {
-          // Arama filtresi kontrolü
-          const matchesSearch = branch.sube_adi.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                branch.customer.kisa_isim.toLowerCase().includes(searchTerm.toLowerCase());
-          if (!matchesSearch) return;
+        if (!matchesSearch) return;
 
-          // Planı bul
+        const rowData: any = {
+          'Müşteri': branch.customer.kisa_isim,
+          'Şube': branch.sube_adi,
+        };
+
+        let hasDataForOperatorFilter = false;
+        let totalVisits = 0;
+
+        // Ayları sütun olarak ekle
+        MONTH_NAMES.forEach((monthName, index) => {
+          const monthNum = index + 1;
+          
+          // Bu şube ve ay için bir plan var mı?
           const schedule = schedules.find(s => 
             s.branch_id === branch.id && 
             s.month === monthNum &&
             (s.year === selectedYear || !s.year)
           );
 
-          // Operatör filtresi kontrolü
-          let showRow = true;
-          if (selectedOperatorFilter) {
-            if (selectedOperatorFilter === 'unassigned') {
-              if (schedule?.operator_id) showRow = false;
-            } else {
-              if (schedule?.operator_id !== selectedOperatorFilter) showRow = false;
+          if (schedule) {
+            // Operatör filtresi kontrolü
+            if (selectedOperatorFilter) {
+               if (selectedOperatorFilter === 'unassigned') {
+                 if (schedule.operator_id) {
+                   rowData[monthName] = ''; 
+                   return;
+                 }
+               } else if (schedule.operator_id !== selectedOperatorFilter) {
+                 rowData[monthName] = ''; 
+                 return;
+               }
             }
+            
+            // Filtre geçtiyse veya filtre yoksa
+            hasDataForOperatorFilter = true;
+
+            const opName = schedule.operator?.name || 'Atanmamış';
+            rowData[monthName] = `${schedule.visits_required} Ziyaret (${opName})`;
+            totalVisits += schedule.visits_required;
+          } else {
+            rowData[monthName] = 'Planlanmadı'; 
           }
-          // Eğer operatör seçiliyse ve plan yoksa (yani o operatörün işi yoksa), gösterme.
-          // Ancak "Tüm Operatörler" seçiliyse planlanmamış şubeleri de listede gösterelim ki eksikler görülsün.
-          if (selectedOperatorFilter && !schedule) showRow = false;
-
-          if (!showRow) return;
-
-          hasData = true;
-
-          // Satırı oluştur
-          const row = [
-            branch.customer.kisa_isim,
-            branch.sube_adi,
-            schedule?.operator?.name || (schedule ? 'Atanmamış' : '-'), // Plan varsa ama op yoksa Atanmamış, Plan yoksa tire
-            schedule ? schedule.visits_required : 0,
-            schedule?.notes || ''
-          ];
-
-          // Günler için boş hücreler ekle (Excel'de elle doldurmak için)
-          for (let d = 1; d <= 31; d++) {
-            row.push('');
-          }
-
-          sheetData.push(row);
         });
 
-        // Eğer bu ay için veri varsa sayfayı oluştur
-        if (sheetData.length > 1) {
-          const ws = window.XLSX.utils.aoa_to_sheet(sheetData);
+        rowData['Toplam Ziyaret'] = totalVisits;
 
-          // Sütun genişlikleri
-          const colWidths = [
-            { wch: 20 }, // Müşteri
-            { wch: 25 }, // Şube
-            { wch: 15 }, // Operatör
-            { wch: 12 }, // Hedef
-            { wch: 20 }, // Notlar
-          ];
-          // Gün sütunları için dar genişlik (yaklaşık 3-4 karakter)
-          for (let d = 1; d <= 31; d++) {
-            colWidths.push({ wch: 3 });
-          }
-          ws['!cols'] = colWidths;
-
-          window.XLSX.utils.book_append_sheet(wb, ws, monthName);
+        // Eğer operatör filtresi aktifse ve bu satırda o operatöre ait hiç veri yoksa, satırı ekleme
+        if (selectedOperatorFilter && !hasDataForOperatorFilter) {
+          return;
         }
+
+        exportData.push(rowData);
       });
 
-      if (!hasData) {
-        toast.warning('Dışa aktarılacak veri bulunamadı (Filtrelerinizi kontrol edin).');
+      if (exportData.length === 0) {
+        toast.warning('Dışa aktarılacak veri bulunamadı.');
         return;
       }
+
+      // Excel oluşturma
+      const wb = window.XLSX.utils.book_new();
+      const ws = window.XLSX.utils.json_to_sheet(exportData);
+
+      // Sütun genişliklerini ayarla
+      const colWidths = [
+        { wch: 20 }, // Müşteri
+        { wch: 30 }, // Şube
+        ...MONTH_NAMES.map(() => ({ wch: 25 })), // Aylar
+        { wch: 15 } // Toplam
+      ];
+      ws['!cols'] = colWidths;
+
+      window.XLSX.utils.book_append_sheet(wb, ws, `${selectedYear}_Ziyaret_Plani`);
       
       // Dosyayı indir
-      const fileName = `Ziyaret_Takvimi_${selectedYear}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      const fileName = `Ziyaret_Plani_${selectedYear}_${new Date().toISOString().slice(0,10)}.xlsx`;
       window.XLSX.writeFile(wb, fileName);
-      toast.success('Takvim formatında Excel oluşturuldu');
+      toast.success('Excel dosyası oluşturuldu');
 
     } catch (error) {
       console.error('Export error:', error);
@@ -467,7 +466,8 @@ const AdminMonthlyVisitSchedule = () => {
 
   // --- Unscheduled Logic ---
   const getUnscheduledBranchesForMonth = (month: number) => {
-    // O ay için planlanmış şube ID'leri
+    // O ay için planlanmış şube ID'leri (Filtrelerden bağımsız, genel veri içinden bakıyoruz)
+    // Sadece mevcut yıl için bakıyoruz.
     const scheduledBranchIds = new Set(
       schedules
         .filter(s => s.month === month && (s.year === selectedYear || !s.year) && s.branch_id)
@@ -475,6 +475,7 @@ const AdminMonthlyVisitSchedule = () => {
     );
 
     return branches.filter(b => {
+      // Arama terimi varsa ona da uysun
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = b.sube_adi.toLowerCase().includes(searchLower) || 
                             b.customer.kisa_isim.toLowerCase().includes(searchLower);
@@ -499,7 +500,7 @@ const AdminMonthlyVisitSchedule = () => {
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
             >
               <Download size={18} />
-              Excel (Takvim)
+              Excel İndir
             </button>
             <button
               onClick={handleAddNew}
