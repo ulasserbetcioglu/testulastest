@@ -8,7 +8,7 @@ import {
     Users, Settings, UserCog, Route, Building, Home, CalendarClock, MapPin,
     ChevronsLeft, ChevronsRight, Mail, Package, MessageSquare, MailCheck, 
     BarChart3, TrendingUp, PlusCircle, NotebookPen, Wallet, ReceiptText, 
-    Image as ImageIcon, Clock as ClockIcon, Car, Bug
+    Image as ImageIcon, Clock as ClockIcon, Car, Bug, Database // Database ikonu eklendi
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
@@ -42,6 +42,8 @@ const menuCategories = [
       { name: 'Takvim', path: '/takvim', icon: <Calendar size={20} /> },
       { name: 'Takvim Planlama', path: '/takvim-planlama', icon: <CalendarRange size={20} /> },
       { name: 'Aylık Ziyaret Planı', path: '/admin/monthly-visit-schedule', icon: <CalendarClock size={20} /> },
+      // YENİ EKLENEN MENÜ ÖGESİ
+      { name: 'Ziyaret Veri Girişi', path: '/admin/visit-data-entry', icon: <CheckSquare size={20} /> },
       { name: 'Şube Lokasyon', path: '/sube-lokasyon', icon: <MapPin size={20} /> },
       { name: 'Ziyaret Raporları', path: '/admin/ziyaret-raporlari', icon: <ImageIcon size={20} /> },
     ]
