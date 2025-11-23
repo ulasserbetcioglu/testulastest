@@ -112,7 +112,6 @@ import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
 import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm';
 import PesticideUsageReport from './pages/PesticideUsageReport';
 import AdminPesticideReport from './pages/AdminPesticideReport';
-// YENİ EKLENEN: Müşteri Şubelerim Sayfası
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -415,10 +414,12 @@ function App() {
             <Route path="sertifikalar" element={<CustomerCertificates />} />
             <Route path="bildirimler" element={<Notifications />} />
             <Route path="malzemeler" element={<CustomerPaidMaterials />} />
-            <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
             <Route path="teklifler" element={<Offers />} />
+            {/* YENİ PESTİSİT RAPORU ROTASI */}
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
+            {/* MODÜL RAPORLARI */}
             <Route path="modul-raporlari" element={<CustomerModuleReports />} />
+            {/* TREND ANALİZ ROTASI - TEK VE DOĞRU TANIM */}
             <Route path="trend-analizi" element={<CustomerTrendAnalysis />} />
             <Route path="trend-raporlari" element={<CustomerTrendReports />} />
             <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
@@ -442,6 +443,7 @@ function App() {
             <Route path="malzemeler" element={<BranchPaidMaterials />} />
             <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
             <Route path="teklifler" element={<Offers />} />
+            {/* YENİ PESTİSİT RAPORU ROTASI */}
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
             <Route path="trend-raporlari" element={<CustomerTrendReports />} />
             <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
