@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, FileText, AlertTriangle, CheckCircle, X, User, Building, Loader2, ArrowRight } from 'lucide-react';
+// DÜZELTME 1: BarChart3 yerine BarChart kullanıldı (Versiyon uyumsuzluğunu önlemek için)
+import { Calendar, Clock, FileText, AlertTriangle, CheckCircle, X, User, Building, Loader2, ArrowRight, BarChart } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, isValid } from 'date-fns'; // isValid eklendi
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
 
@@ -24,17 +25,28 @@ interface CorrectiveAction {
   branch: { sube_adi: string } | null;
 }
 
+interface MonthlyPlan {
+  month: number;
+  total_required: number;
+}
+
 interface DashboardData {
   customerName: string;
   upcomingVisits: Visit[];
   recentVisits: Visit[];
   openActions: CorrectiveAction[];
+  monthlyPlans: MonthlyPlan[];
   stats: {
     totalBranches: number;
     openActionCount: number;
     nextVisitDate: string | null;
   };
 }
+
+const MONTH_NAMES = [
+  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+];
 
 // --- YARDIMCI BİLEŞENLER ---
 
@@ -55,7 +67,7 @@ const VisitCard: React.FC<{ visit: Visit }> = ({ visit }) => {
     planned: { icon: Clock, color: 'text-yellow-500', text: 'Planlandı' },
     completed: { icon: CheckCircle, color: 'text-green-500', text: 'Tamamlandı' },
     cancelled: { icon: X, color: 'text-red-500', text: 'İptal Edildi' },
-  }[visit.status];
+  }[visit.status] || { icon: Clock, color: 'text-gray-500', text: 'Bilinmiyor' }; // Fallback eklendi
 
   const Icon = statusConfig.icon;
 
@@ -66,7 +78,11 @@ const VisitCard: React.FC<{ visit: Visit }> = ({ visit }) => {
       </div>
       <div>
         <p className="font-bold text-gray-800">{visit.branch?.sube_adi || 'Genel Merkez'}</p>
-        <p className="text-sm text-gray-500">{format(new Date(visit.visit_date), 'dd MMMM yyyy, HH:mm', { locale: tr })}</p>
+        <p className="text-sm text-gray-500">
+            {isValid(new Date(visit.visit_date)) 
+                ? format(new Date(visit.visit_date), 'dd MMMM yyyy, HH:mm', { locale: tr })
+                : 'Tarih Hatası'}
+        </p>
         <p className="text-xs text-gray-400 mt-1">Operatör: {visit.operator?.name || 'Atanmadı'}</p>
       </div>
     </div>
@@ -78,7 +94,10 @@ const ActionCard: React.FC<{ action: CorrectiveAction }> = ({ action }) => {
         kritik: { text: 'Kritik', color: 'bg-red-100 text-red-700' },
         major: { text: 'Majör', color: 'bg-orange-100 text-orange-700' },
         minor: { text: 'Minör', color: 'bg-yellow-100 text-yellow-700' },
-    }[action.non_compliance_type];
+    }[action.non_compliance_type] || { text: 'Belirsiz', color: 'bg-gray-100 text-gray-700' }; // Fallback
+
+    const dateObj = new Date(action.due_date);
+    const isValidDate = isValid(dateObj);
 
     return (
         <div className="flex items-start gap-4 p-4 border-l-4 border-red-500 bg-red-50 rounded-r-lg">
@@ -89,7 +108,10 @@ const ActionCard: React.FC<{ action: CorrectiveAction }> = ({ action }) => {
                     <p className="font-bold text-gray-800">{action.branch?.sube_adi || 'Genel Merkez'}</p>
                 </div>
                 <p className="text-sm text-gray-600">
-                    Son Tarih: <span className="font-semibold">{format(new Date(action.due_date), 'dd MMMM yyyy', { locale: tr })}</span> ({formatDistanceToNow(new Date(action.due_date), { locale: tr, addSuffix: true })})
+                    Son Tarih: <span className="font-semibold">
+                        {isValidDate ? format(dateObj, 'dd MMMM yyyy', { locale: tr }) : 'Tarih Yok'}
+                    </span> 
+                    {isValidDate && ` (${formatDistanceToNow(dateObj, { locale: tr, addSuffix: true })})`}
                 </p>
             </div>
         </div>
@@ -116,21 +138,20 @@ const CustomerDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      console.log("CustomerDashboard: Veri çekme başladı...");
       try {
-        // Check for local session first (for customer/branch login)
         const localSession = localAuth.getSession();
         let customerId: string;
         let customerName: string;
 
         if (localSession && localSession.type === 'customer') {
-          // Use local session data
           customerId = localSession.id;
           customerName = localSession.name;
         } else {
-          // Fall back to Supabase auth (for admin/operator)
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
 
@@ -138,7 +159,7 @@ const CustomerDashboard: React.FC = () => {
             .from('customers')
             .select('id, kisa_isim')
             .eq('auth_id', user.id)
-            .single();
+            .maybeSingle(); // single() yerine maybeSingle() daha güvenli
 
           if (customerError || !customerData) throw new Error('Müşteri bilgileri alınamadı.');
           customerId = customerData.id;
@@ -146,28 +167,51 @@ const CustomerDashboard: React.FC = () => {
         }
 
         const today = new Date().toISOString();
+        const currentYear = new Date().getFullYear();
         
+        // Şubeleri çek
+        const { data: branches } = await supabase.from('branches').select('id').eq('customer_id', customerId);
+        const branchIds = branches?.map(b => b.id) || [];
+
+        // Query'leri güvenli hale getir
         const [
           upcomingVisitsRes,
           recentVisitsRes,
           openActionsRes,
-          branchesRes
+          branchesRes,
+          monthlyPlansRes
         ] = await Promise.all([
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).eq('status', 'planned').gte('visit_date', today).order('visit_date').limit(5),
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).in('status', ['completed', 'cancelled']).order('visit_date', { ascending: false }).limit(5),
           supabase.from('corrective_actions').select(`id, non_compliance_type, status, due_date, branch:branch_id(sube_adi)`).eq('customer_id', customerId).in('status', ['open', 'in_progress']).order('due_date'),
-          supabase.from('branches').select('id', { count: 'exact' }).eq('customer_id', customerId)
+          supabase.from('branches').select('id', { count: 'exact' }).eq('customer_id', customerId),
+          supabase.from('monthly_visit_schedules')
+            .select('month, visits_required, branch_id, customer_id')
+            .eq('year', currentYear)
+            .or(`customer_id.eq.${customerId}${branchIds.length > 0 ? `,branch_id.in.(${branchIds.join(',')})` : ''}`)
         ]);
         
-        const errors = [upcomingVisitsRes.error, recentVisitsRes.error, openActionsRes.error, branchesRes.error];
+        const errors = [upcomingVisitsRes.error, recentVisitsRes.error, openActionsRes.error, branchesRes.error, monthlyPlansRes.error];
         const firstError = errors.find(e => e);
-        if (firstError) throw firstError;
+        if (firstError) {
+            console.error("Veri çekme hatası:", firstError);
+            throw firstError;
+        }
+
+        // Aylık planları işle
+        const aggregatedPlans = Array.from({ length: 12 }, (_, i) => {
+            const monthNum = i + 1;
+            const plansForMonth = monthlyPlansRes.data?.filter(p => p.month === monthNum) || [];
+            const total = plansForMonth.reduce((sum, p) => sum + (p.visits_required || 0), 0);
+            return { month: monthNum, total_required: total };
+        });
 
         setData({
           customerName: customerName,
           upcomingVisits: upcomingVisitsRes.data || [],
           recentVisits: recentVisitsRes.data || [],
           openActions: openActionsRes.data || [],
+          monthlyPlans: aggregatedPlans,
           stats: {
             totalBranches: branchesRes.count || 0,
             openActionCount: openActionsRes.data?.length || 0,
@@ -176,6 +220,8 @@ const CustomerDashboard: React.FC = () => {
         });
 
       } catch (err: any) {
+        console.error("Dashboard Yükleme Hatası:", err);
+        setError(err.message);
         toast.error(`Veriler yüklenirken hata: ${err.message}`);
       } finally {
         setLoading(false);
@@ -186,7 +232,26 @@ const CustomerDashboard: React.FC = () => {
   }, []);
 
   if (loading) return <div className="p-8"><SkeletonLoader /></div>;
-  if (!data) return <div className="p-8 text-center text-red-500">Müşteri verileri yüklenemedi.</div>;
+  
+  if (error) return (
+    <div className="p-8 text-center flex flex-col items-center justify-center h-64">
+        <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+        <h3 className="text-lg font-bold text-gray-800">Bir hata oluştu</h3>
+        <p className="text-gray-600">{error}</p>
+        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Sayfayı Yenile
+        </button>
+    </div>
+  );
+
+  if (!data) return <div className="p-8 text-center text-red-500">Müşteri verileri bulunamadı.</div>;
+
+  // Tarih kontrolü için güvenli yardımcı fonksiyon
+  const getFormattedNextVisit = (dateStr: string | null) => {
+      if (!dateStr) return 'Planlanmadı';
+      const d = new Date(dateStr);
+      return isValid(d) ? format(d, 'dd MMM yyyy', { locale: tr }) : 'Hatalı Tarih';
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
@@ -198,7 +263,36 @@ const CustomerDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
         <StatCard title="Toplam Şube Sayısı" value={data.stats.totalBranches} icon={<Building size={24} />} />
         <StatCard title="Açık DÖF Sayısı" value={data.stats.openActionCount} icon={<AlertTriangle size={24} />} />
-        <StatCard title="Sonraki Ziyaret" value={data.stats.nextVisitDate ? format(new Date(data.stats.nextVisitDate), 'dd MMM yyyy', { locale: tr }) : 'Planlanmadı'} icon={<Calendar size={24} />} />
+        <StatCard title="Sonraki Ziyaret" value={getFormattedNextVisit(data.stats.nextVisitDate)} icon={<Calendar size={24} />} />
+      </div>
+
+      {/* Aylık Ziyaret Hedefleri Tablosu */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg mb-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <BarChart className="text-blue-600" />
+            {new Date().getFullYear()} Yılı Ziyaret Planı
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {data.monthlyPlans.map((plan) => {
+                const isCurrent = plan.month === (new Date().getMonth() + 1);
+                return (
+                    <div 
+                        key={plan.month} 
+                        className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center transition-all ${
+                            isCurrent ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-100 shadow-md' : 'bg-gray-50 border-gray-100'
+                        } ${plan.total_required > 0 ? 'hover:border-blue-200' : 'opacity-60'}`}
+                    >
+                        <span className={`text-sm font-medium mb-1 ${isCurrent ? 'text-blue-700' : 'text-gray-500'}`}>
+                            {MONTH_NAMES[plan.month - 1]}
+                        </span>
+                        <span className={`text-2xl font-bold ${plan.total_required > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
+                            {plan.total_required}
+                        </span>
+                        <span className="text-xs text-gray-400">Ziyaret</span>
+                    </div>
+                );
+            })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -246,4 +340,3 @@ const CustomerDashboard: React.FC = () => {
 };
 
 export default CustomerDashboard;
-
