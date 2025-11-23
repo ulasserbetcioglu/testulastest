@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-// DÜZELTME 1: BarChart3 yerine BarChart kullanıldı (Versiyon uyumsuzluğunu önlemek için)
 import { Calendar, Clock, FileText, AlertTriangle, CheckCircle, X, User, Building, Loader2, ArrowRight, BarChart } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
-import { format, formatDistanceToNow, isValid } from 'date-fns'; // isValid eklendi
+import { format, formatDistanceToNow, isValid } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
 
@@ -67,7 +66,7 @@ const VisitCard: React.FC<{ visit: Visit }> = ({ visit }) => {
     planned: { icon: Clock, color: 'text-yellow-500', text: 'Planlandı' },
     completed: { icon: CheckCircle, color: 'text-green-500', text: 'Tamamlandı' },
     cancelled: { icon: X, color: 'text-red-500', text: 'İptal Edildi' },
-  }[visit.status] || { icon: Clock, color: 'text-gray-500', text: 'Bilinmiyor' }; // Fallback eklendi
+  }[visit.status] || { icon: Clock, color: 'text-gray-500', text: 'Bilinmiyor' };
 
   const Icon = statusConfig.icon;
 
@@ -94,7 +93,7 @@ const ActionCard: React.FC<{ action: CorrectiveAction }> = ({ action }) => {
         kritik: { text: 'Kritik', color: 'bg-red-100 text-red-700' },
         major: { text: 'Majör', color: 'bg-orange-100 text-orange-700' },
         minor: { text: 'Minör', color: 'bg-yellow-100 text-yellow-700' },
-    }[action.non_compliance_type] || { text: 'Belirsiz', color: 'bg-gray-100 text-gray-700' }; // Fallback
+    }[action.non_compliance_type] || { text: 'Belirsiz', color: 'bg-gray-100 text-gray-700' };
 
     const dateObj = new Date(action.due_date);
     const isValidDate = isValid(dateObj);
@@ -142,7 +141,6 @@ const CustomerDashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      console.log("CustomerDashboard: Veri çekme başladı...");
       try {
         const localSession = localAuth.getSession();
         let customerId: string;
@@ -159,7 +157,7 @@ const CustomerDashboard: React.FC = () => {
             .from('customers')
             .select('id, kisa_isim')
             .eq('auth_id', user.id)
-            .maybeSingle(); // single() yerine maybeSingle() daha güvenli
+            .maybeSingle();
 
           if (customerError || !customerData) throw new Error('Müşteri bilgileri alınamadı.');
           customerId = customerData.id;
@@ -169,11 +167,26 @@ const CustomerDashboard: React.FC = () => {
         const today = new Date().toISOString();
         const currentYear = new Date().getFullYear();
         
-        // Şubeleri çek
+        // 1. Şubeleri çek
         const { data: branches } = await supabase.from('branches').select('id').eq('customer_id', customerId);
         const branchIds = branches?.map(b => b.id) || [];
 
-        // Query'leri güvenli hale getir
+        // 2. Verileri paralel çek
+        let plansQuery = supabase.from('monthly_visit_schedules')
+            .select('month, visits_required, branch_id, customer_id');
+        
+        // Yıl filtresi: Seçili yıl VEYA null (her yıl geçerli)
+        plansQuery = plansQuery.or(`year.eq.${currentYear},year.is.null`);
+
+        // Müşteri veya Şube sahipliği filtresi
+        if (branchIds.length > 0) {
+            // URL uzunluğunu aşmamak için in filtresini dikkatli kullanın
+            // Eğer çok fazla şube varsa, bu logic backend function'a taşınmalıdır.
+            plansQuery = plansQuery.or(`customer_id.eq.${customerId},branch_id.in.(${branchIds.join(',')})`);
+        } else {
+            plansQuery = plansQuery.eq('customer_id', customerId);
+        }
+
         const [
           upcomingVisitsRes,
           recentVisitsRes,
@@ -185,23 +198,21 @@ const CustomerDashboard: React.FC = () => {
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).in('status', ['completed', 'cancelled']).order('visit_date', { ascending: false }).limit(5),
           supabase.from('corrective_actions').select(`id, non_compliance_type, status, due_date, branch:branch_id(sube_adi)`).eq('customer_id', customerId).in('status', ['open', 'in_progress']).order('due_date'),
           supabase.from('branches').select('id', { count: 'exact' }).eq('customer_id', customerId),
-          supabase.from('monthly_visit_schedules')
-            .select('month, visits_required, branch_id, customer_id')
-            .eq('year', currentYear)
-            .or(`customer_id.eq.${customerId}${branchIds.length > 0 ? `,branch_id.in.(${branchIds.join(',')})` : ''}`)
+          plansQuery
         ]);
         
-        const errors = [upcomingVisitsRes.error, recentVisitsRes.error, openActionsRes.error, branchesRes.error, monthlyPlansRes.error];
-        const firstError = errors.find(e => e);
+        const firstError = [upcomingVisitsRes, recentVisitsRes, openActionsRes, branchesRes, monthlyPlansRes].find(r => r.error)?.error;
         if (firstError) {
             console.error("Veri çekme hatası:", firstError);
             throw firstError;
         }
 
-        // Aylık planları işle
+        // Aylık planları işle (monthlyPlansRes.data null olabilir kontrolü)
+        const rawPlans = monthlyPlansRes.data || [];
+        
         const aggregatedPlans = Array.from({ length: 12 }, (_, i) => {
             const monthNum = i + 1;
-            const plansForMonth = monthlyPlansRes.data?.filter(p => p.month === monthNum) || [];
+            const plansForMonth = rawPlans.filter(p => p.month === monthNum);
             const total = plansForMonth.reduce((sum, p) => sum + (p.visits_required || 0), 0);
             return { month: monthNum, total_required: total };
         });
@@ -246,7 +257,6 @@ const CustomerDashboard: React.FC = () => {
 
   if (!data) return <div className="p-8 text-center text-red-500">Müşteri verileri bulunamadı.</div>;
 
-  // Tarih kontrolü için güvenli yardımcı fonksiyon
   const getFormattedNextVisit = (dateStr: string | null) => {
       if (!dateStr) return 'Planlanmadı';
       const d = new Date(dateStr);
