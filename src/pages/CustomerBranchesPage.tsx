@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Phone, Mail, Building, ChevronDown, ChevronUp, Package, Calendar, Layout, TrendingUp, Loader2 } from 'lucide-react';
+import { 
+  MapPin, Phone, Mail, Building, ChevronDown, ChevronUp, 
+  Package, Calendar, Layout, TrendingUp, Loader2, 
+  AlertCircle, Bug, FileText 
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
 import type { Branch } from '../types';
@@ -7,23 +11,31 @@ import BranchEquipment from '../components/Branches/BranchEquipment';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
-// --- Mock Component for Floor Plan (Replace with actual component if available) ---
+// --- Mock/Placeholder Bileşenler ---
 const BranchFloorPlanView = ({ branchId }: { branchId: string }) => (
-  <div className="p-4 text-center text-gray-500 bg-white border rounded-lg">
+  <div className="p-6 text-center text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg">
     <Layout className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-    <p>Kroki görüntüleme modülü ({branchId})</p>
+    <p>Bu şube için kroki yüklenmemiştir.</p>
   </div>
 );
 
-// --- Mock Component for Trend Analysis (Replace with actual component if available) ---
 const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => (
-  <div className="p-4 text-center text-gray-500 bg-white border rounded-lg">
+  <div className="p-6 text-center text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg">
     <TrendingUp className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-    <p>Trend analiz grafikleri ({branchId})</p>
+    <p>Trend analizi verileri hazırlanıyor ({branchId})</p>
   </div>
 );
 
-// --- Component for Branch Visits ---
+const BranchPesticideUsageView = ({ branchId }: { branchId: string }) => (
+  <div className="p-6 text-center text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg">
+    <Bug className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+    <p>Bu şube için pestisit kullanım raporu bulunamadı.</p>
+  </div>
+);
+
+// --- Alt Bileşenler (Listeler) ---
+
+// 1. Ziyaret Listesi
 const BranchVisitsList = ({ branchId }: { branchId: string }) => {
   const [visits, setVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +55,6 @@ const BranchVisitsList = ({ branchId }: { branchId: string }) => {
   }, [branchId]);
 
   if (loading) return <div className="p-4 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto"/></div>;
-
   if (visits.length === 0) return <div className="p-4 text-center text-gray-500">Kayıtlı ziyaret bulunmuyor.</div>;
 
   return (
@@ -71,13 +82,108 @@ const BranchVisitsList = ({ branchId }: { branchId: string }) => {
   );
 };
 
+// 2. DÖF Listesi
+const BranchCorrectiveActionsList = ({ branchId }: { branchId: string }) => {
+  const [actions, setActions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchActions = async () => {
+      const { data } = await supabase
+        .from('corrective_actions')
+        .select('*')
+        .eq('branch_id', branchId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      setActions(data || []);
+      setLoading(false);
+    };
+    fetchActions();
+  }, [branchId]);
+
+  if (loading) return <div className="p-4 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto"/></div>;
+  if (actions.length === 0) return <div className="p-4 text-center text-gray-500">Kayıtlı DÖF bulunmuyor.</div>;
+
+  return (
+    <div className="space-y-2">
+      {actions.map((action) => (
+        <div key={action.id} className="flex justify-between items-center p-3 bg-white border rounded-lg hover:bg-gray-50">
+          <div className="flex items-center gap-3">
+            <AlertCircle className={`w-4 h-4 ${action.status === 'closed' ? 'text-green-500' : 'text-red-500'}`} />
+            <div>
+              <p className="font-medium text-sm text-gray-900">{action.title || 'DÖF Kaydı'}</p>
+              <p className="text-xs text-gray-500">
+                {format(new Date(action.created_at), 'dd MMM yyyy', { locale: tr })}
+              </p>
+            </div>
+          </div>
+          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+            action.status === 'closed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {action.status === 'closed' ? 'Kapalı' : 'Açık'}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// 3. Malzeme Kullanımı Listesi
+const BranchMaterialUsageList = ({ branchId }: { branchId: string }) => {
+  const [sales, setSales] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSales = async () => {
+      // Not: paid_material_sales tablosu şube bazlı satışları tutar
+      const { data } = await supabase
+        .from('paid_material_sales')
+        .select('*, paid_material_sale_items(quantity, unit_price)')
+        .eq('branch_id', branchId)
+        .order('sale_date', { ascending: false })
+        .limit(5);
+      setSales(data || []);
+      setLoading(false);
+    };
+    fetchSales();
+  }, [branchId]);
+
+  if (loading) return <div className="p-4 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto"/></div>;
+  if (sales.length === 0) return <div className="p-4 text-center text-gray-500">Malzeme kullanım/satış kaydı bulunmuyor.</div>;
+
+  return (
+    <div className="space-y-2">
+      {sales.map((sale) => (
+        <div key={sale.id} className="flex justify-between items-center p-3 bg-white border rounded-lg hover:bg-gray-50">
+          <div className="flex items-center gap-3">
+            <Package className="w-4 h-4 text-blue-500" />
+            <div>
+              <p className="font-medium text-sm text-gray-900">
+                {format(new Date(sale.sale_date), 'dd MMMM yyyy', { locale: tr })}
+              </p>
+              <p className="text-xs text-gray-500">
+                {sale.paid_material_sale_items?.length || 0} kalem ürün
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-gray-700">
+            {sale.total_amount?.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// --- Ana Sayfa Bileşeni ---
+
 const CustomerBranchesPage: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // State to track which branch is expanded and which tab is active within that branch
-  // Format: { branchId: 'equipment' | 'visits' | 'floorplan' | 'trends' | null }
+  // Hangi sekmenin aktif olduğunu tutan state
+  // Format: { branchId: 'equipment' | 'visits' | 'floorplan' | 'trends' | 'dof' | 'materials' | 'pesticides' | null }
   const [activeTabState, setActiveTabState] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
@@ -125,7 +231,7 @@ const CustomerBranchesPage: React.FC = () => {
   const toggleTab = (branchId: string, tabName: string) => {
     setActiveTabState(prev => ({
       ...prev,
-      [branchId]: prev[branchId] === tabName ? null : tabName // Toggle off if same tab clicked
+      [branchId]: prev[branchId] === tabName ? null : tabName
     }));
   };
 
@@ -148,7 +254,7 @@ const CustomerBranchesPage: React.FC = () => {
 
             return (
               <div key={branch.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-                {/* Branch Header Info */}
+                {/* Şube Başlık Bilgileri */}
                 <div className="p-6">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                     <div className="flex items-center gap-3">
@@ -178,80 +284,97 @@ const CustomerBranchesPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Action Tabs Bar */}
+                {/* Sekme (Tab) Butonları */}
                 <div className="bg-gray-50 px-4 py-2 border-t border-gray-200 flex flex-wrap gap-2">
+                  
+                  {/* Ekipmanlar */}
                   <button
                     onClick={() => toggleTab(branch.id, 'equipment')}
                     className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                      activeTab === 'equipment' 
-                        ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' 
-                        : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                      activeTab === 'equipment' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:bg-white hover:text-gray-900'
                     }`}
                   >
-                    <Package size={16} />
-                    Ekipmanlar
+                    <Package size={16} /> Ekipmanlar
                     {activeTab === 'equipment' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
 
+                  {/* Ziyaretler */}
                   <button
                     onClick={() => toggleTab(branch.id, 'visits')}
                     className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                      activeTab === 'visits' 
-                        ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' 
-                        : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                      activeTab === 'visits' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:bg-white hover:text-gray-900'
                     }`}
                   >
-                    <Calendar size={16} />
-                    Ziyaretler
+                    <Calendar size={16} /> Ziyaretler
                     {activeTab === 'visits' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
 
+                  {/* DÖF */}
+                  <button
+                    onClick={() => toggleTab(branch.id, 'dof')}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      activeTab === 'dof' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                    }`}
+                  >
+                    <AlertCircle size={16} /> DÖF
+                    {activeTab === 'dof' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+
+                  {/* Malzeme Kullanımı */}
+                  <button
+                    onClick={() => toggleTab(branch.id, 'materials')}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      activeTab === 'materials' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                    }`}
+                  >
+                    <FileText size={16} /> Malzeme
+                    {activeTab === 'materials' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+
+                  {/* Pestisit Kullanımı */}
+                  <button
+                    onClick={() => toggleTab(branch.id, 'pesticides')}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      activeTab === 'pesticides' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                    }`}
+                  >
+                    <Bug size={16} /> Pestisit
+                    {activeTab === 'pesticides' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+
+                  {/* Kroki */}
                   <button
                     onClick={() => toggleTab(branch.id, 'floorplan')}
                     className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                      activeTab === 'floorplan' 
-                        ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' 
-                        : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                      activeTab === 'floorplan' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:bg-white hover:text-gray-900'
                     }`}
                   >
-                    <Layout size={16} />
-                    Kroki
+                    <Layout size={16} /> Kroki
                     {activeTab === 'floorplan' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
 
+                  {/* Trend Analiz */}
                   <button
                     onClick={() => toggleTab(branch.id, 'trends')}
                     className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                      activeTab === 'trends' 
-                        ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' 
-                        : 'text-gray-600 hover:bg-white hover:text-gray-900'
+                      activeTab === 'trends' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-600 hover:bg-white hover:text-gray-900'
                     }`}
                   >
-                    <TrendingUp size={16} />
-                    Trend Analiz
+                    <TrendingUp size={16} /> Trend Analiz
                     {activeTab === 'trends' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
                 </div>
 
-                {/* Content Area (Conditional Rendering based on active tab) */}
+                {/* İçerik Alanı */}
                 {activeTab && (
                   <div className="border-t border-gray-200 p-4 bg-gray-50/30 animate-in fade-in slide-in-from-top-2 duration-200">
-                    {activeTab === 'equipment' && (
-                      /* BranchId ve ReadOnly mode prop'u eklendi (eğer BranchEquipment destekliyorsa) 
-                         Not: BranchEquipment componentinizde 'readonly' veya 'hideAddButton' prop'u yoksa,
-                         isAdmin kontrolü zaten butonları gizleyecektir çünkü müşteri admin değildir.
-                         Ancak garanti olsun diye admin check'i component içinde zaten var. */
-                      <BranchEquipment branchId={branch.id} />
-                    )}
-                    {activeTab === 'visits' && (
-                      <BranchVisitsList branchId={branch.id} />
-                    )}
-                    {activeTab === 'floorplan' && (
-                      <BranchFloorPlanView branchId={branch.id} />
-                    )}
-                    {activeTab === 'trends' && (
-                      <BranchTrendAnalysisView branchId={branch.id} />
-                    )}
+                    {activeTab === 'equipment' && <BranchEquipment branchId={branch.id} />}
+                    {activeTab === 'visits' && <BranchVisitsList branchId={branch.id} />}
+                    {activeTab === 'dof' && <BranchCorrectiveActionsList branchId={branch.id} />}
+                    {activeTab === 'materials' && <BranchMaterialUsageList branchId={branch.id} />}
+                    {activeTab === 'pesticides' && <BranchPesticideUsageView branchId={branch.id} />}
+                    {activeTab === 'floorplan' && <BranchFloorPlanView branchId={branch.id} />}
+                    {activeTab === 'trends' && <BranchTrendAnalysisView branchId={branch.id} />}
                   </div>
                 )}
               </div>
