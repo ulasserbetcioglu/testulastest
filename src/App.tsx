@@ -4,7 +4,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { BarChart2 } from 'lucide-react';
-// ✅ DÜZELTME: Dosya yolları, App.tsx'in konumuna göre düzeltildi.
 import { AuthProvider } from './components/Auth/AuthProvider';
 import Layout from './components/Layout/Layout';
 import OperatorLayout from './components/Layout/OperatorLayout';
@@ -89,32 +88,32 @@ import SiparisOlusturma from './pages/SiparisOlusturma';
 import HizmetYonetimi from './pages/HizmetYonetimi';
 import TeklifGoruntule from './pages/TeklifGoruntule';
 import TekliflerListesi from './pages/TekliflerListesi';
-import IsletmeKesif from './components/IsletmeKesif'; // Dosya yolunu kendi projenize göre güncelleyin
+import IsletmeKesif from './components/IsletmeKesif';
 import ModulRaporGoruntuleme from './pages/ModulRaporGoruntuleme';
 import RaporSecVeGoruntule from './pages/RaporSecVeGoruntule';
 import GenelRaporGoruntuleme from './pages/GenelRaporGoruntuleme';
 import BilgilendirimePazarlama from './pages/BilgilendirimePazarlama';
 import EpostaPazarlama from './pages/EpostaPazarlama';
 import { supabase } from './lib/supabase';
-// YENİ EKLENEN IMPORT
 import YillikKarZararRaporu from './pages/YillikKarZararRaporu';
 import ProfitabilityAnalysis from './pages/ProfitabilityAnalysis';
-import BulkVisitImport from './pages/BulkVisitImport'; // Import the new component
+import BulkVisitImport from './pages/BulkVisitImport';
 import AdminBranches from './pages/AdminBranches'; 
-import OperatorQuickNotes from './pages/OperatorQuickNotes'; // Import the new component
-import AdminQuickNotes from './pages/AdminQuickNotes'; // Import the new AdminQuickNotes component
-import UnbilledCustomers from './pages/UnbilledCustomers'; // YENİ: Faturasız Müşteriler sayfasını import edin
-import AdminCollectionReceipts from './pages/AdminCollectionReceipts'; // YENİ: AdminCollectionReceipts sayfasını import edin
-import AdminVisitReports from './pages/AdminVisitReports'; // NEW: Import AdminVisitReports
-import AdminOperatorShifts from './pages/AdminOperatorShifts'; // NEW: Import AdminOperatorShifts
-import ProtectedReportViewer from './components/ProtectedReportViewer'; // ✅ YENİ: ProtectedReportViewer import edildi
-import AdminOperatorLeaves from './pages/AdminOperatorLeaves'; // NEW: Import AdminOperatorLeaves
-import AdminVehicles from './pages/AdminVehicles'; // NEW: Import AdminVehicles
+import OperatorQuickNotes from './pages/OperatorQuickNotes';
+import AdminQuickNotes from './pages/AdminQuickNotes';
+import UnbilledCustomers from './pages/UnbilledCustomers';
+import AdminCollectionReceipts from './pages/AdminCollectionReceipts';
+import AdminVisitReports from './pages/AdminVisitReports';
+import AdminOperatorShifts from './pages/AdminOperatorShifts';
+import ProtectedReportViewer from './components/ProtectedReportViewer';
+import AdminOperatorLeaves from './pages/AdminOperatorLeaves';
+import AdminVehicles from './pages/AdminVehicles';
 import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
-import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm'; // NEW: Import OperatorWeeklyKmForm
-// YENİ EKLENEN RAPOR SAYFASI
+import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm';
 import PesticideUsageReport from './pages/PesticideUsageReport';
 import AdminPesticideReport from './pages/AdminPesticideReport';
+// YENİ EKLENEN: Müşteri Şubelerim Sayfası
+import CustomerBranchesPage from './pages/CustomerBranchesPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -273,7 +272,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
-          {/* ✅ YENİ ROTA: Korumalı rapor görüntüleyici */}
+          {/* Korumalı rapor görüntüleyici */}
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
           
           {/* Admin Routes */}
@@ -311,7 +310,7 @@ function App() {
             <Route path="operatorler" element={<AdminOperators />} />
             <Route path="kullanicilar" element={<AdminUsers />} />      
             <Route path="operator-mesafeleri" element={<AdminOperatorDistances />} />
-            <Route path="subeler" element={<AdminBranches />} /> {/* NEW: Admin Branches Page */}
+            <Route path="subeler" element={<AdminBranches />} /> 
             <Route path="sube-fiyatlandirma" element={<AdminBranchPricing />} />
             <Route path="fatura-export" element={<AdminRoute><InvoiceExport /></AdminRoute>} />
             <Route path="faaliyet-rapor-takip" element={<ActivityReportsTracking />} />
@@ -323,7 +322,6 @@ function App() {
             <Route path="rota-optimizasyonu" element={<RouteOptimizationPage />} />
             <Route path="canli-harita" element={<LiveTrackingMap />} />
             <Route path="cari-satis-raporu" element={<CariSatisRaporu />} />
-            {/* YENİ EKLENEN ROTA */}
             <Route path="yillik-kar-zarar" element={<YillikKarZararRaporu />} />
             <Route path="karlilik-analizi" element={<ProfitabilityAnalysis />} />
             <Route path="moduller/uv-lamba-raporu" element={<UvLampReport />} />
@@ -348,30 +346,18 @@ function App() {
             <Route path="hizmet-pazarlama" element={<BilgilendirimePazarlama />} />
             <Route path="eposta-pazarlama" element={<EpostaPazarlama />} />
             <Route path="isletme-kesif" element={<IsletmeKesif />} />
-            {/* NEW ADMIN ROUTE FOR BULK VISIT IMPORT */}
             <Route path="bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
-            {/* NEW ADMIN ROUTE FOR QUICK NOTES */}
             <Route path="hizli-notlar" element={<AdminRoute><AdminQuickNotes /></AdminRoute>} />
-            {/* YENİ: Faturasız Müşteriler Sayfası */}
             <Route path="faturasiz-musteriler" element={<AdminRoute><UnbilledCustomers /></AdminRoute>} />
-            {/* YENİ: Admin Tahsilat Makbuzları Sayfası */}
             <Route path="admin/tahsilat-makbuzlari" element={<AdminRoute><AdminCollectionReceipts /></AdminRoute>} />
-            {/* NEW: Admin Visit Reports Page */}
             <Route path="admin/ziyaret-raporlari" element={<AdminRoute><AdminVisitReports /></AdminRoute>} />
-            {/* NEW: Admin Operator Shifts Page */}
             <Route path="admin/mesai-cizelgeleri" element={<AdminRoute><AdminOperatorShifts /></AdminRoute>} />
-            {/* NEW: Admin Operator Leaves Page */}
             <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
-            {/* NEW: Admin Vehicles Page */}
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
-            {/* Monthly Visit Schedule */}
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
-            {/* Admin Pesticide Report */}
             <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
           </Route>
           
-        
-
           {/* Operator Routes */}
           <Route
             path="/operator/*"
@@ -405,8 +391,8 @@ function App() {
             <Route path="ekipman-pazarlama" element={<EkipmanPazarlama />} />
             <Route path="hizmet-pazarlama" element={<HizmetPazarlama />} />
             <Route path="tahsilat-makbuzu" element={<OperatorCollectionReceipt />} />
-            <Route path="hizli-notlar" element={<OperatorQuickNotes />} /> {/* NEW: Quick Notes Route */}
-            <Route path="weekly-km" element={<OperatorWeeklyKmForm />} /> {/* NEW: Operator Weekly KM Form */}
+            <Route path="hizli-notlar" element={<OperatorQuickNotes />} />
+            <Route path="weekly-km" element={<OperatorWeeklyKmForm />} />
           </Route>
 
           {/* Customer Routes */}
@@ -419,6 +405,8 @@ function App() {
             }
           >
             <Route index element={<CustomerDashboard />} />
+            {/* YENİ EKLENEN ROTA: Şubelerim */}
+            <Route path="subeler" element={<CustomerBranchesPage />} />
             <Route path="modules" element={<Modules />} />
             <Route path="takvim" element={<CustomerCalendar />} />
             <Route path="ziyaretler" element={<CustomerVisits />} />
@@ -429,9 +417,7 @@ function App() {
             <Route path="malzemeler" element={<CustomerPaidMaterials />} />
             <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
             <Route path="teklifler" element={<Offers />} />
-            {/* YENİ PESTİSİT RAPORU ROTASI */}
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
-            {/* MODÜL RAPORLARI */}
             <Route path="modul-raporlari" element={<CustomerModuleReports />} />
             <Route path="trend-analizi" element={<CustomerTrendAnalysis />} />
             <Route path="trend-raporlari" element={<CustomerTrendReports />} />
@@ -456,7 +442,6 @@ function App() {
             <Route path="malzemeler" element={<BranchPaidMaterials />} />
             <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
             <Route path="teklifler" element={<Offers />} />
-            {/* YENİ PESTİSİT RAPORU ROTASI */}
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
             <Route path="trend-raporlari" element={<CustomerTrendReports />} />
             <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
