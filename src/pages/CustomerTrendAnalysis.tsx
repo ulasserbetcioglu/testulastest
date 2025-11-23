@@ -42,15 +42,6 @@ interface VisitStats {
   cancelled_visits: number;
 }
 
-interface EquipmentCheckData {
-  equipment_name: string;
-  total_checks: number;
-  ok_count: number;
-  issue_count: number;
-  missing_count: number;
-  effectiveness_rate: number;
-}
-
 interface MonthlyTrend {
   month: string;
   visits: number;
@@ -146,7 +137,7 @@ const CustomerTrendAnalysis: React.FC = () => {
         fetchVisitStats(),
         fetchMonthlyTrends(),
         fetchBiocidalProducts(),
-        fetchEquipmentTypeActivities() // Yeni eklenen detaylı analiz
+        fetchEquipmentTypeActivities()
       ]);
       toast.success('Analiz güncellendi');
     } catch (error) {
@@ -157,12 +148,11 @@ const CustomerTrendAnalysis: React.FC = () => {
     }
   };
 
-  // Sayfa yüklendiğinde veya filtreler değiştiğinde çalıştır (Otomatik güncelleme isteğe bağlıdır, burada butona bağladık ama useEffect ile de tetiklenebilir)
   useEffect(() => {
     if (customerId) {
       handleGenerateReport();
     }
-  }, [customerId, selectedBranchId, dateRange.from, dateRange.to]); // Filtreler değişince otomatik yenile
+  }, [customerId, selectedBranchId, dateRange.from, dateRange.to]);
 
   // --- Veri Çekme Fonksiyonları ---
 
@@ -289,9 +279,11 @@ const CustomerTrendAnalysis: React.FC = () => {
       }
 
       // 2. Ekipman Tanımlarını Çek (Tip ve Özellikleri öğrenmek için)
+      // DÜZELTME: 'id' alanını da çekiyoruz, çünkü visits tablosunda veriler id ile eşleşiyor.
       const { data: equipmentData, error: eqError } = await supabase
         .from('branch_equipment')
         .select(`
+          id,
           equipment_code,
           equipment:equipment_id ( name, type, properties ),
           branch:branch_id ( sube_adi )
@@ -310,23 +302,27 @@ const CustomerTrendAnalysis: React.FC = () => {
         .eq('status', 'completed');
 
       // 4. Hesaplama Mantığı
-      // Her bir ekipman kodu için toplam aktiviteleri topla
+      // Her bir ekipman ID'si için toplam aktiviteleri topla
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>(); // Ortalama hesabı için
 
       visitsData?.forEach(visit => {
         if (visit.equipment_checks) {
-          Object.entries(visit.equipment_checks).forEach(([code, checkData]: [string, any]) => {
-            if (!activityMap.has(code)) activityMap.set(code, {});
-            // Ziyaret sayısını takip et
-            visitCountMap.set(code, (visitCountMap.get(code) || 0) + 1);
+          // DÜZELTME: equipment_checks içindeki anahtarlar branch_equipment.id'dir (UUID)
+          Object.entries(visit.equipment_checks).forEach(([eqId, checkData]: [string, any]) => {
+            if (!activityMap.has(eqId)) activityMap.set(eqId, {});
+            visitCountMap.set(eqId, (visitCountMap.get(eqId) || 0) + 1);
 
-            const activity = activityMap.get(code)!;
+            const activity = activityMap.get(eqId)!;
             if (checkData && typeof checkData === 'object') {
               // Sayısal değerleri topla (örn: catch_count, consumption, activity_level vb.)
               Object.entries(checkData).forEach(([key, value]) => {
+                // 'true' boolean değerlerini 1 olarak say, sayıları olduğu gibi topla
                 if (typeof value === 'number') {
                   activity[key] = (activity[key] || 0) + value;
+                } else if (value === true || value === 'true') {
+                   // Boolean aktiviteler (örn: aktivite var mı?) için sayım yap
+                   activity[key] = (activity[key] || 0) + 1;
                 }
               });
             }
@@ -343,7 +339,6 @@ const CustomerTrendAnalysis: React.FC = () => {
         
         const group = typeGroups.get(type)!;
         group.equipments.push(item);
-        // Özellik tanımlarını al (grafik etiketleri için)
         if (item.equipment?.properties) group.properties = item.equipment.properties;
       });
 
@@ -362,23 +357,24 @@ const CustomerTrendAnalysis: React.FC = () => {
         const propertyKeys: string[] = [];
         const propertyLabels: Record<string, string> = {};
 
-        // Hangi özellikler sayısal ve grafik çizilebilir?
         if (group.properties) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
-            if (value.type === 'number') {
+            // Sayısal veya Boolean (sayılabilir) özellikleri grafiğe dahil et
+            if (value.type === 'number' || value.type === 'boolean') {
               propertyKeys.push(key);
               propertyLabels[key] = value.label || key;
             }
           });
         }
 
-        if (propertyKeys.length === 0) return; // Sayısal verisi olmayan türleri geç
+        if (propertyKeys.length === 0) return; 
 
         const activities: EquipmentTypeActivity[] = [];
 
         group.equipments.forEach((eq: any) => {
-          const rawTotals = activityMap.get(eq.equipment_code) || {};
-          const visitCount = visitCountMap.get(eq.equipment_code) || 1; // Bölme hatası olmasın diye min 1
+          // DÜZELTME: Eşleşmeyi UUID (eq.id) üzerinden yapıyoruz
+          const rawTotals = activityMap.get(eq.id) || {};
+          const visitCount = visitCountMap.get(eq.id) || 1;
 
           const activityRow: EquipmentTypeActivity = {
             equipment_code: eq.equipment_code,
@@ -386,25 +382,27 @@ const CustomerTrendAnalysis: React.FC = () => {
             branch_name: eq.branch?.sube_adi || '',
           };
 
+          let hasActivity = false;
           propertyKeys.forEach(key => {
             const totalVal = rawTotals[key] || 0;
-            // Görünüm moduna göre Toplam veya Ortalama
             activityRow[key] = chartViewMode === 'total' 
               ? totalVal 
               : Number((totalVal / visitCount).toFixed(1));
+            
+            if (totalVal > 0) hasActivity = true;
           });
 
-          // Sadece aktivitesi olanları veya tümünü ekle (tercihen aktivitesi olanlar)
-          if (Object.keys(rawTotals).length > 0) {
-             activities.push(activityRow);
-          }
+          // Sadece aktivitesi olan ekipmanları veya tümünü gösterme tercihi
+          // Burada tümünü gösteriyoruz ama değerler 0 olabilir
+          activities.push(activityRow);
         });
 
-        if (activities.length > 0) {
+        // Sadece verisi olan grupları ekle
+        if (activities.some(a => propertyKeys.some(k => Number(a[k]) > 0))) {
           resultData.push({
             type,
             type_label: typeLabels[type] || type,
-            activities,
+            activities: activities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)), // Koda göre sırala
             propertyKeys,
             propertyLabels
           });
@@ -418,7 +416,6 @@ const CustomerTrendAnalysis: React.FC = () => {
     }
   };
 
-  // Resim olarak indirme
   const handleExportImage = async () => {
     if (!reportRef.current) return;
     setGenerating(true);
@@ -572,8 +569,8 @@ const CustomerTrendAnalysis: React.FC = () => {
                 </div>
               </div>
 
-              {/* EKİPMAN TÜRÜ BAZLI AKTİVİTE ANALİZİ (YENİ) */}
-              {equipmentTypeData.length > 0 && (
+              {/* EKİPMAN TÜRÜ BAZLI AKTİVİTE ANALİZİ (DÜZELTİLDİ) */}
+              {equipmentTypeData.length > 0 ? (
                 <div className="mb-10">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-purple-500 pl-3">
@@ -613,7 +610,10 @@ const CustomerTrendAnalysis: React.FC = () => {
                               <Tooltip 
                                 contentStyle={{fontSize: '12px'}}
                                 formatter={(value: number, name: string) => [value, typeData.propertyLabels[name] || name]}
-                                labelFormatter={(label) => `Ekipman: ${label}`}
+                                labelFormatter={(label) => {
+                                  const eq = typeData.activities.find(a => a.equipment_code === label);
+                                  return `Ekipman: ${label} (${eq?.branch_name})`;
+                                }}
                               />
                               <Legend />
                               {typeData.propertyKeys.map((key, kIdx) => (
@@ -631,6 +631,10 @@ const CustomerTrendAnalysis: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+              ) : (
+                <div className="mb-10 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center text-gray-500">
+                  Ekipman aktivite verisi bulunamadı veya özellikler sayısal değil.
                 </div>
               )}
 
