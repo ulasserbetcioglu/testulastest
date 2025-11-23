@@ -113,6 +113,8 @@ import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm';
 import PesticideUsageReport from './pages/PesticideUsageReport';
 import AdminPesticideReport from './pages/AdminPesticideReport';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
+// YENİ IMPORT
+import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -186,7 +188,7 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           }
         }
 
-        const { data: { user } = {} } = await supabase.auth.getUser();
+        const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           setLoading(false);
           return;
@@ -355,6 +357,9 @@ function App() {
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
+            
+            {/* YENİ EKLENEN ADMIN ROUTE */}
+            <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />
           </Route>
           
           {/* Operator Routes */}
@@ -404,7 +409,6 @@ function App() {
             }
           >
             <Route index element={<CustomerDashboard />} />
-            {/* YENİ EKLENEN ROTA: Şubelerim */}
             <Route path="subeler" element={<CustomerBranchesPage />} />
             <Route path="modules" element={<Modules />} />
             <Route path="takvim" element={<CustomerCalendar />} />
@@ -415,11 +419,8 @@ function App() {
             <Route path="bildirimler" element={<Notifications />} />
             <Route path="malzemeler" element={<CustomerPaidMaterials />} />
             <Route path="teklifler" element={<Offers />} />
-            {/* YENİ PESTİSİT RAPORU ROTASI */}
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
-            {/* MODÜL RAPORLARI */}
             <Route path="modul-raporlari" element={<CustomerModuleReports />} />
-            {/* TREND ANALİZ ROTASI - TEK VE DOĞRU TANIM */}
             <Route path="trend-analizi" element={<CustomerTrendAnalysis />} />
             <Route path="trend-raporlari" element={<CustomerTrendReports />} />
             <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
@@ -443,7 +444,6 @@ function App() {
             <Route path="malzemeler" element={<BranchPaidMaterials />} />
             <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
             <Route path="teklifler" element={<Offers />} />
-            {/* YENİ PESTİSİT RAPORU ROTASI */}
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
             <Route path="trend-raporlari" element={<CustomerTrendReports />} />
             <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
