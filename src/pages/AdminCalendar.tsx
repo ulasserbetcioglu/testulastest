@@ -59,14 +59,6 @@ interface Branch {
   longitude?: number;
 }
 
-interface PaidMaterialSale {
-  id: string;
-  visit_id: string;
-  customer_id: string;
-  branch_id: string | null;
-  total_amount: number;
-}
-
 interface MaterialDisplayItem {
   material_name: string;
   quantity: number;
@@ -570,12 +562,10 @@ const AdminCalendar: React.FC = () => {
     }
   };
 
-  // --- HESAPLAMA FONKSİYONU ---
   const calculateScheduleEstimatedRevenue = (schedule: any) => {
     let revenue = 0;
     const count = schedule.visits_required || 0;
 
-    // 1. Şube Fiyatlandırması
     if (schedule.branch_id) {
       const bp = branchPricingMap.get(schedule.branch_id);
       if (bp) {
@@ -584,8 +574,6 @@ const AdminCalendar: React.FC = () => {
       }
     }
 
-    // 2. Müşteri Fiyatlandırması
-    // customer_id yoksa, şubeden bulmaya çalış
     let cId = schedule.customer_id;
     if (!cId && schedule.branch_id) {
       const b = branches.find(br => br.id === schedule.branch_id);
@@ -595,42 +583,12 @@ const AdminCalendar: React.FC = () => {
     if (cId) {
       const cp = customerPricingMap.get(cId);
       if (cp) {
-        // Planlar için genellikle ziyaret başı ücret üzerinden hesaplama yapılır
         if (cp.per_visit_price && cp.per_visit_price > 0) return cp.per_visit_price * count;
       }
     }
 
     return 0;
   };
-
-  const inactiveItems = useMemo(() => {
-    if (loading) return { customers: [], branches: [] };
-
-    const visitedBranchIds = new Set(visits.map(v => v.branch_id).filter(Boolean));
-    const visitedCustomerIds = new Set(visits.map(v => v.customer_id).filter(Boolean));
-    
-    const unvisitedBranches = branches.filter(branch => {
-      const matchesCustomerFilter = !selectedCustomer || branch.customer_id === selectedCustomer;
-      const matchesBranchFilter = !selectedBranch || branch.id === selectedBranch;
-      return matchesCustomerFilter && matchesBranchFilter && !visitedBranchIds.has(branch.id);
-    });
-    
-    const unvisitedCustomers = customers.filter(customer => {
-      const matchesCustomerFilter = !selectedCustomer || customer.id === selectedCustomer;
-      if (!matchesCustomerFilter) return false;
-
-      const hasDirectVisit = visitedCustomerIds.has(customer.id);
-      if (hasDirectVisit) return false;
-
-      const customerBranches = branches.filter(branch => branch.customer_id === customer.id);
-      const hasVisitedAnyBranch = customerBranches.some(branch => visitedBranchIds.has(branch.id));
-      if (hasVisitedAnyBranch) return false;
-
-      return true;
-    });
-    
-    return { customers: unvisitedCustomers, branches: unvisitedBranches };
-  }, [visits, customers, branches, loading, selectedCustomer, selectedBranch]);
 
   const daysOfWeek = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
   const monthStart = startOfMonth(currentDate);
@@ -953,9 +911,7 @@ const AdminCalendar: React.FC = () => {
 
                 const totalRequired = filteredOperatorSchedules.reduce((sum: number, s: any) => sum + s.visits_required, 0);
 
-                // --- HESAPLAMA EKLENDİ ---
                 const totalEstimatedRevenue = filteredOperatorSchedules.reduce((sum: number, s: any) => sum + calculateScheduleEstimatedRevenue(s), 0);
-                // ------------------------
 
                 const completedCount = filteredOperatorSchedules.reduce((sum: number, schedule: any) => {
                   const completed = visits.filter((v: Visit) => {
@@ -975,13 +931,11 @@ const AdminCalendar: React.FC = () => {
                         </div>
                         <span className="font-semibold text-gray-800">{operatorName}</span>
                         
-                        {/* --- CİRO GÖSTERİMİ EKLENDİ --- */}
                         {totalEstimatedRevenue > 0 && (
                           <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
                             (Tahmini: {totalEstimatedRevenue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 })})
                           </span>
                         )}
-                        {/* ----------------------------- */}
 
                       </div>
                       <div className="flex items-center gap-3">
@@ -1068,40 +1022,50 @@ const AdminCalendar: React.FC = () => {
             const scheduledBranchIds = new Set(monthlySchedules.filter((s: any) => s.branch_id).map((s: any) => s.branch_id));
             const scheduledCustomerIds = new Set(monthlySchedules.filter((s: any) => s.customer_id && !s.branch_id).map((s: any) => s.customer_id));
 
-            const unscheduledBranches = branches.filter(b => !scheduledBranchIds.has(b.id) && !inactiveItems.branches.some(ib => ib.id === b.id));
-            const unscheduledCustomers = customers.filter(c => !scheduledCustomerIds.has(c.id) && !inactiveItems.customers.some(ic => ic.id === c.id));
+            // Sadece bu ay planı OLMAYANLARI filtrele (eski 'inactive' mantığı kaldırıldı)
+            const unplannedBranches = branches.filter(b => {
+              if (selectedCustomer && b.customer_id !== selectedCustomer) return false;
+              if (selectedBranch && b.id !== selectedBranch) return false;
+              return !scheduledBranchIds.has(b.id);
+            });
 
-            const allUnscheduledBranches = [...inactiveItems.branches, ...unscheduledBranches];
-            const allUnscheduledCustomers = [...inactiveItems.customers, ...unscheduledCustomers];
+            const unplannedCustomers = customers.filter(c => {
+               if (selectedCustomer && c.id !== selectedCustomer) return false;
+               return !scheduledCustomerIds.has(c.id);
+            });
 
             return (
               <>
-                {allUnscheduledBranches.length > 0 && (
+                {unplannedBranches.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Şubeler ({allUnscheduledBranches.length})</h4>
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                      {allUnscheduledBranches.map(branch => (
-                        <li key={branch.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={`${branch.sube_adi} (${branch.customer?.kisa_isim || 'Müşteri Yok'})`}>
-                          <span className="font-medium">{branch.sube_adi}</span>
-                          <span className="text-gray-400 ml-1">({branch.customer?.kisa_isim || 'N/A'})</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Şubeler ({unplannedBranches.length})</h4>
+                    <div className="max-h-60 overflow-y-auto border rounded-md p-2">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {unplannedBranches.map(branch => (
+                            <li key={branch.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={`${branch.sube_adi} (${branch.customer?.kisa_isim || 'Müşteri Yok'})`}>
+                            <span className="font-medium">{branch.sube_adi}</span>
+                            <span className="text-gray-400 ml-1">({branch.customer?.kisa_isim || 'N/A'})</span>
+                            </li>
+                        ))}
+                        </ul>
+                    </div>
                   </div>
                 )}
-                {allUnscheduledCustomers.length > 0 && (
+                {unplannedCustomers.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Müşteriler ({allUnscheduledCustomers.length})</h4>
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                      {allUnscheduledCustomers.map(customer => (
-                        <li key={customer.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={customer.kisa_isim}>{customer.kisa_isim}</li>
-                      ))}
-                    </ul>
+                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Müşteriler ({unplannedCustomers.length})</h4>
+                    <div className="max-h-60 overflow-y-auto border rounded-md p-2">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {unplannedCustomers.map(customer => (
+                            <li key={customer.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={customer.kisa_isim}>{customer.kisa_isim}</li>
+                        ))}
+                        </ul>
+                    </div>
                   </div>
                 )}
-                {allUnscheduledBranches.length === 0 && allUnscheduledCustomers.length === 0 && (
+                {unplannedBranches.length === 0 && unplannedCustomers.length === 0 && (
                   <p className="text-center text-gray-400 py-4">
-                    {selectedCustomer || selectedBranch ? 'Bu filtreleme için bu ay planlanmamış şube veya kayıt bulunmuyor.' : 'Bu ay için planlanmamış bir kayıt bulunmuyor.'}
+                    {selectedCustomer || selectedBranch ? 'Bu filtreleme için bu ay planlanmamış şube veya kayıt bulunmuyor.' : 'Harika! Bu ay tüm aktif kayıtlar planlanmış.'}
                   </p>
                 )}
               </>
