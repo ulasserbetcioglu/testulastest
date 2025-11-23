@@ -141,6 +141,7 @@ const CustomerDashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      console.log("CustomerDashboard: Veri çekme başladı...");
       try {
         const localSession = localAuth.getSession();
         let customerId: string;
@@ -167,50 +168,45 @@ const CustomerDashboard: React.FC = () => {
         const today = new Date().toISOString();
         const currentYear = new Date().getFullYear();
         
-        // 1. Şubeleri çek
-        const { data: branches } = await supabase.from('branches').select('id').eq('customer_id', customerId);
-        const branchIds = branches?.map(b => b.id) || [];
+        console.log("Fetching data for Customer ID:", customerId);
 
-        // 2. Diğer verileri çek
+        // Tüm verileri paralel çek
         const [
           upcomingVisitsRes,
           recentVisitsRes,
           openActionsRes,
           branchesRes,
-          // Planlar: Müşteri bazlı
-          customerPlansRes,
-          // Planlar: Şube bazlı (Eğer şube varsa)
-          branchPlansRes
+          plansRes
         ] = await Promise.all([
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).eq('status', 'planned').gte('visit_date', today).order('visit_date').limit(5),
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).in('status', ['completed', 'cancelled']).order('visit_date', { ascending: false }).limit(5),
           supabase.from('corrective_actions').select(`id, non_compliance_type, status, due_date, branch:branch_id(sube_adi)`).eq('customer_id', customerId).in('status', ['open', 'in_progress']).order('due_date'),
           supabase.from('branches').select('id', { count: 'exact' }).eq('customer_id', customerId),
           
-          // Müşteri genel planı
+          // PLAN SORGUSU (DÜZELTİLDİ):
+          // Artık veritabanında customer_id dolu olduğu için sadece bunu sorgulamak yeterli.
+          // Ayrıca hem bu yılı hem de "her yıl (null)" olan kayıtları getiriyoruz.
           supabase.from('monthly_visit_schedules')
             .select('month, visits_required')
             .eq('customer_id', customerId)
-            .or(`year.eq.${currentYear},year.is.null`),
-
-          // Şube bazlı planlar (Varsa)
-          branchIds.length > 0 
-            ? supabase.from('monthly_visit_schedules')
-                .select('month, visits_required')
-                .in('branch_id', branchIds)
-                .or(`year.eq.${currentYear},year.is.null`)
-            : Promise.resolve({ data: [], error: null })
+            .or(`year.eq.${currentYear},year.is.null`)
         ]);
         
-        const firstError = [upcomingVisitsRes, recentVisitsRes, openActionsRes, branchesRes, customerPlansRes].find(r => r.error)?.error;
-        if (firstError) throw firstError;
+        const firstError = [upcomingVisitsRes, recentVisitsRes, openActionsRes, branchesRes, plansRes].find(r => r.error)?.error;
+        if (firstError) {
+            console.error("Veri çekme hatası:", firstError);
+            throw firstError;
+        }
 
-        // 3. Planları Birleştir ve Hesapla
-        const allPlans = [...(customerPlansRes.data || []), ...(branchPlansRes.data || [])];
-        
+        // Plan verilerini işle
+        const rawPlans = plansRes.data || [];
+        console.log("Çekilen Ham Plan Verisi:", rawPlans); // Debug için
+
         const aggregatedPlans = Array.from({ length: 12 }, (_, i) => {
             const monthNum = i + 1;
-            const plansForMonth = allPlans.filter(p => p.month === monthNum);
+            // O aya ait tüm kayıtları bul (hem şube hem müşteri genel kayıtları)
+            const plansForMonth = rawPlans.filter(p => p.month === monthNum);
+            // Topla
             const total = plansForMonth.reduce((sum, p) => sum + (p.visits_required || 0), 0);
             return { month: monthNum, total_required: total };
         });
@@ -231,6 +227,7 @@ const CustomerDashboard: React.FC = () => {
       } catch (err: any) {
         console.error("Dashboard Yükleme Hatası:", err);
         setError(err.message);
+        toast.error(`Veriler yüklenirken hata: ${err.message}`);
       } finally {
         setLoading(false);
       }
