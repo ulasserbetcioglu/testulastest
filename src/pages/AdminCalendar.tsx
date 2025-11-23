@@ -1,28 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, getDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { supabase } from '../lib/supabase'; // Supabase yapılandırmanızın doğru olduğu varsayılmıştır
+import { supabase } from '../lib/supabase';
 import { Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, CheckSquare, DollarSign, TrendingUp, Users } from 'lucide-react';
-import { toast } from 'sonner'; // Toast bildirimleri için sonner kütüphanesi
+import { toast } from 'sonner';
 
 // --- ARAYÜZLER (INTERFACES) ---
-// Not: Arayüzlerde değişiklik yapmaya gerek yok, mevcut halleriyle çalışacaktır.
 interface Visit {
   id: string;
   customer_id: string;
   branch_id: string | null;
   customer: { kisa_isim: string } | null;
   branch: { sube_adi: string; latitude?: number; longitude?: number; } | null;
-  operator: { name: string; id: string } | null; // operator id eklendi
+  operator: { name: string; id: string } | null;
   visit_date: string;
   status: 'planned' | 'completed' | 'cancelled';
   visit_type: string | string[];
   is_checked: boolean;
-  // Yeni eklenenler
-  total_visit_revenue?: number; // Toplam ziyaret geliri (malzeme + servis)
-  material_sales_revenue?: number; // Sadece malzeme satış geliri
-  service_per_visit_revenue?: number; // Sadece ziyaret başına servis geliri
-  // Supabase'den gelen nested veriler için
+  total_visit_revenue?: number;
+  material_sales_revenue?: number;
+  service_per_visit_revenue?: number;
   paid_material_sales?: Array<{
     id: string;
     total_amount: number;
@@ -70,19 +67,6 @@ interface PaidMaterialSale {
   total_amount: number;
 }
 
-interface PaidMaterialSaleItem {
-  sale_id: string;
-  product_id: string;
-  quantity: number;
-  unit_price?: number;
-}
-
-interface ProductDetail {
-  id: string;
-  name: string;
-  unit_type?: string;
-}
-
 interface MaterialDisplayItem {
   material_name: string;
   quantity: number;
@@ -116,7 +100,6 @@ interface CustomerMaterialSummary {
   branches_summary: Map<string, BranchMaterialSummary>;
 }
 
-// Yeni Arayüzler
 interface CustomerPricing {
   id: string;
   customer_id: string;
@@ -138,7 +121,6 @@ interface OperatorRevenueSummary {
   daily_revenue_breakdown: Map<string, { total_daily_revenue: number; visit_count: number }>;
 }
 
-// Yeni eklenen arayüz
 interface AggregatedRevenueItem {
   id: string;
   name: string;
@@ -233,7 +215,6 @@ const VisitDetailModal: React.FC<{ visit: Visit | null; onClose: () => void; pai
           )}
           <div className="flex items-center gap-3"><input type="checkbox" checked={visit.is_checked} readOnly className="form-checkbox h-4 w-4 text-green-500 rounded-sm" /> <strong>Kontrol Edildi:</strong> {visit.is_checked ? 'Evet' : 'Hayır'}</div>
           
-          {/* Yeni Ciro Detayları */}
           {visit.total_visit_revenue !== undefined && (
             <div className="flex items-center gap-3"><DollarSign className="w-5 h-5 text-gray-400" /> <strong>Toplam Ziyaret Cirosu:</strong> {visit.total_visit_revenue.toFixed(2)} TL</div>
           )}
@@ -249,7 +230,6 @@ const VisitDetailModal: React.FC<{ visit: Visit | null; onClose: () => void; pai
   );
 };
 
-
 const AdminCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -260,7 +240,6 @@ const AdminCalendar: React.FC = () => {
   const [paidMaterialDetailsMap, setPaidMaterialDetailsMap] = useState<Map<string, MaterialDisplayItem[]>>(new Map());
   const [monthlyMaterialUsageSummary, setMonthlyMaterialUsageSummary] = useState<Map<string, CustomerMaterialSummary>>(new Map());
 
-  // Yeni State'ler
   const [customerPricingMap, setCustomerPricingMap] = useState<Map<string, CustomerPricing>>(new Map());
   const [branchPricingMap, setBranchPricingMap] = useState<Map<string, BranchPricing>>(new Map());
   const [operatorRevenueSummary, setOperatorRevenueSummary] = useState<Map<string, OperatorRevenueSummary>>(new Map());
@@ -336,14 +315,12 @@ const AdminCalendar: React.FC = () => {
     setSelectedBranch('');
   }, [selectedCustomer]);
 
-  // --- YENİLENMİŞ VE GÜÇLENDİRİLMİŞ VERİ ÇEKME FONKSİYONU ---
   const fetchVisits = useCallback(async () => {
     setLoading(true);
     setError(null);
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
 
-    // 1. Ziyaretleri ve ilişkili tüm malzeme verilerini TEK BİR SORGUIDA çek
     let visitsQuery = supabase
       .from('visits')
       .select(`
@@ -365,7 +342,6 @@ const AdminCalendar: React.FC = () => {
       .gte('visit_date', start.toISOString())
       .lte('visit_date', end.toISOString());
 
-    // Filtreleri uygula
     if (selectedOperator) visitsQuery = visitsQuery.eq('operator_id', selectedOperator);
     if (selectedStatus) visitsQuery = visitsQuery.eq('status', selectedStatus);
     if (selectedCustomer) visitsQuery = visitsQuery.eq('customer_id', selectedCustomer);
@@ -386,7 +362,6 @@ const AdminCalendar: React.FC = () => {
       return;
     }
     
-    // Calculate monthly visit counts for customers and branches
     const customerMonthlyVisitCounts = new Map<string, number>();
     const branchMonthlyVisitCounts = new Map<string, number>();
 
@@ -399,7 +374,6 @@ const AdminCalendar: React.FC = () => {
       }
     });
 
-    // Calculate distributed monthly revenue per visit
     const distributedCustomerMonthlyRevenuePerVisit = new Map<string, number>();
     customerPricingMap.forEach((pricing, customerId) => {
       if (pricing.monthly_price && pricing.monthly_price > 0) {
@@ -407,7 +381,7 @@ const AdminCalendar: React.FC = () => {
         if (visitCount > 0) {
           distributedCustomerMonthlyRevenuePerVisit.set(customerId, pricing.monthly_price / visitCount);
         } else {
-          distributedCustomerMonthlyRevenuePerVisit.set(customerId, 0); // No visits, no revenue distributed
+          distributedCustomerMonthlyRevenuePerVisit.set(customerId, 0); 
         }
       }
     });
@@ -419,30 +393,27 @@ const AdminCalendar: React.FC = () => {
         if (visitCount > 0) {
           distributedBranchMonthlyRevenuePerVisit.set(branchId, pricing.monthly_price / visitCount);
         } else {
-          distributedBranchMonthlyRevenuePerVisit.set(branchId, 0); // No visits, no revenue distributed
+          distributedBranchMonthlyRevenuePerVisit.set(branchId, 0); 
         }
       }
     });
 
-
-    // 2. Gelen iç içe veriyi işleyerek map'leri oluştur
     const visitMaterialsMap = new Map<string, MaterialDisplayItem[]>();
     const monthlySummaryMap = new Map<string, CustomerMaterialSummary>();
     const newOperatorRevenueSummary = new Map<string, OperatorRevenueSummary>();
-    const processedVisits: Visit[] = []; // Augmented visits for state
+    const processedVisits: Visit[] = []; 
 
     (visitsData || []).forEach(visit => {
       let materialSalesRevenue = 0;
       (visit.paid_material_sales || []).forEach(sale => {
           materialSalesRevenue += sale.total_amount || 0;
 
-          // Müşteri özetini hazırla
           if (!monthlySummaryMap.has(sale.customer_id)) {
             monthlySummaryMap.set(sale.customer_id, {
               customer_id: sale.customer_id,
               customer_name: visit.customer?.kisa_isim || 'Bilinmeyen Müşteri',
               total_sales_amount: 0,
-              total_visits_with_sales: 0, // Bu daha sonra ayarlanacak
+              total_visits_with_sales: 0, 
               materials_breakdown: {},
               branches_summary: new Map()
             });
@@ -450,14 +421,13 @@ const AdminCalendar: React.FC = () => {
           const customerSummary = monthlySummaryMap.get(sale.customer_id)!;
           customerSummary.total_sales_amount += sale.total_amount || 0;
 
-          // Şube özetini hazırla
           if (sale.branch_id) {
             if (!customerSummary.branches_summary.has(sale.branch_id)) {
               customerSummary.branches_summary.set(sale.branch_id, {
                 branch_id: sale.branch_id,
                 branch_name: visit.branch?.sube_adi || 'Bilinmeyen Şube',
                 total_sales_amount: 0,
-                total_visits_with_sales: 0, // Bu daha sonra ayarlanacak
+                total_visits_with_sales: 0,
                 materials_breakdown: {}
               });
             }
@@ -465,12 +435,10 @@ const AdminCalendar: React.FC = () => {
             branchSummary.total_sales_amount += sale.total_amount || 0;
           }
 
-          // Satış kalemlerini işle
           (sale.paid_material_sale_items || []).forEach(item => {
             const product = item.paid_products;
             if (!product) return;
 
-            // Ziyaret detayları için `visitMaterialsMap`'i doldur
             if (!visitMaterialsMap.has(visit.id)) {
               visitMaterialsMap.set(visit.id, []);
             }
@@ -482,14 +450,12 @@ const AdminCalendar: React.FC = () => {
 
             const itemTotalAmount = item.quantity * (item.unit_price || 0);
 
-            // Müşteri geneli malzeme dökümünü güncelle
             if (!customerSummary.materials_breakdown[product.name]) {
               customerSummary.materials_breakdown[product.name] = { total_quantity: 0, unit_type: product.unit_type, total_item_amount: 0 };
             }
             customerSummary.materials_breakdown[product.name].total_quantity += item.quantity;
             customerSummary.materials_breakdown[product.name].total_item_amount += itemTotalAmount;
             
-            // Şube bazında malzeme dökümünü güncelle
             if (sale.branch_id) {
               const branchSummary = customerSummary.branches_summary.get(sale.branch_id)!;
               if (!branchSummary.materials_breakdown[product.name]) {
@@ -501,16 +467,13 @@ const AdminCalendar: React.FC = () => {
           });
       });
 
-      // Ziyaret başına fiyatlandırma (per_visit_price)
       let servicePerVisitRevenue = 0;
       
-      // Check for distributed monthly revenue first (branch then customer)
       if (visit.branch_id && distributedBranchMonthlyRevenuePerVisit.has(visit.branch_id)) {
         servicePerVisitRevenue = distributedBranchMonthlyRevenuePerVisit.get(visit.branch_id) || 0;
       } else if (visit.customer_id && distributedCustomerMonthlyRevenuePerVisit.has(visit.customer_id)) {
         servicePerVisitRevenue = distributedCustomerMonthlyRevenuePerVisit.get(visit.customer_id) || 0;
       } else {
-        // Fallback to per_visit_price if no monthly distribution applies
         if (visit.branch_id) {
           const branchPricing = branchPricingMap.get(visit.branch_id);
           if (branchPricing?.per_visit_price) {
@@ -527,15 +490,13 @@ const AdminCalendar: React.FC = () => {
       
       const totalVisitRevenue = materialSalesRevenue + servicePerVisitRevenue;
 
-      // Augment the visit object with calculated revenues
       processedVisits.push({
         ...visit,
         total_visit_revenue: totalVisitRevenue,
         material_sales_revenue: materialSalesRevenue,
         service_per_visit_revenue: servicePerVisitRevenue,
-      } as Visit); // Cast to Visit to satisfy the type, as we're adding optional properties
+      } as Visit);
 
-      // Operatör ciro özetini güncelle
       if (visit.operator?.id && visit.operator?.name) {
         const operatorId = visit.operator.id;
         const operatorName = visit.operator.name;
@@ -561,7 +522,6 @@ const AdminCalendar: React.FC = () => {
       }
     });
     
-    // Malzeme satışı yapılan ziyaret sayılarını hesapla
     monthlySummaryMap.forEach(customerSummary => {
         const visitsWithSales = new Set<string>();
         customerSummary.branches_summary.forEach(branchSummary => {
@@ -577,8 +537,7 @@ const AdminCalendar: React.FC = () => {
         customerSummary.total_visits_with_sales = visitsWithSales.size;
     });
 
-    // 3. State'leri güncelle
-    setVisits(processedVisits); // Use the augmented visits
+    setVisits(processedVisits);
     setPaidMaterialDetailsMap(visitMaterialsMap);
     setMonthlyMaterialUsageSummary(monthlySummaryMap);
     setOperatorRevenueSummary(newOperatorRevenueSummary);
@@ -609,6 +568,39 @@ const AdminCalendar: React.FC = () => {
     } else {
       toast.success("Ziyaret onay durumu güncellendi.");
     }
+  };
+
+  // --- HESAPLAMA FONKSİYONU ---
+  const calculateScheduleEstimatedRevenue = (schedule: any) => {
+    let revenue = 0;
+    const count = schedule.visits_required || 0;
+
+    // 1. Şube Fiyatlandırması
+    if (schedule.branch_id) {
+      const bp = branchPricingMap.get(schedule.branch_id);
+      if (bp) {
+        if (bp.monthly_price && bp.monthly_price > 0) return bp.monthly_price;
+        if (bp.per_visit_price && bp.per_visit_price > 0) return bp.per_visit_price * count;
+      }
+    }
+
+    // 2. Müşteri Fiyatlandırması
+    // customer_id yoksa, şubeden bulmaya çalış
+    let cId = schedule.customer_id;
+    if (!cId && schedule.branch_id) {
+      const b = branches.find(br => br.id === schedule.branch_id);
+      cId = b?.customer_id;
+    }
+
+    if (cId) {
+      const cp = customerPricingMap.get(cId);
+      if (cp) {
+        // Planlar için genellikle ziyaret başı ücret üzerinden hesaplama yapılır
+        if (cp.per_visit_price && cp.per_visit_price > 0) return cp.per_visit_price * count;
+      }
+    }
+
+    return 0;
   };
 
   const inactiveItems = useMemo(() => {
@@ -652,7 +644,6 @@ const AdminCalendar: React.FC = () => {
     { text: 'İptal Edildi', color: 'bg-orange-500' },
   ];
 
-  // Yeni eklenen useMemo: Aylık Ciro Özeti
   const monthlyRevenueSummary = useMemo(() => {
     const customerSummary = new Map<string, AggregatedRevenueItem>();
     const branchSummary = new Map<string, AggregatedRevenueItem>();
@@ -664,7 +655,6 @@ const AdminCalendar: React.FC = () => {
       const serviceRevenue = visit.service_per_visit_revenue || 0;
       const totalRevenue = visit.total_visit_revenue || 0;
 
-      // Müşteri bazında toplama
       if (customerId) {
         if (!customerSummary.has(customerId)) {
           customerSummary.set(customerId, {
@@ -683,7 +673,6 @@ const AdminCalendar: React.FC = () => {
         entry.visits += 1;
       }
 
-      // Şube bazında toplama
       if (branchId) {
         if (!branchSummary.has(branchId)) {
           branchSummary.set(branchId, {
@@ -707,14 +696,13 @@ const AdminCalendar: React.FC = () => {
       customer: Array.from(customerSummary.values()).sort((a, b) => b.total - a.total),
       branch: Array.from(branchSummary.values()).sort((a, b) => b.total - a.total)
     };
-  }, [visits]); // 'visits' state'i güncellendiğinde yeniden hesapla
+  }, [visits]);
 
-  // Toplam aylık ciro
   const totalMonthlyRevenue = useMemo(() => {
     return monthlyRevenueSummary.customer.reduce((sum, item) => sum + item.total, 0);
   }, [monthlyRevenueSummary]);
 
-  if (loading && !visits.length) return ( // İlk yüklemede göster
+  if (loading && !visits.length) return (
     <div className="flex justify-center items-center h-screen bg-gray-50">
       <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
       <span className="ml-3 text-lg text-gray-700">Veriler Yükleniyor...</span>
@@ -802,7 +790,6 @@ const AdminCalendar: React.FC = () => {
               <div key={day.toString()} className={`relative p-2 border-r border-b border-gray-200 min-h-[120px] sm:min-h-[150px] ${isToday(day) ? 'bg-blue-50 ring-2 ring-blue-300' : 'hover:bg-gray-50'}`}>
                 <time dateTime={format(day, 'yyyy-MM-dd')} className={`text-sm ${isToday(day) ? 'font-bold text-blue-700' : 'text-gray-500'}`}>{format(day, 'd')}</time>
                 
-                {/* Daily Operator Revenue Display */}
                 <div className="mt-1 mb-2 space-y-0.5">
                   {Array.from(operatorRevenueSummary.values()).map(opSummary => {
                     const dailyBreakdown = opSummary.daily_revenue_breakdown.get(formattedDay);
@@ -843,7 +830,6 @@ const AdminCalendar: React.FC = () => {
                               Malzeme: {materialList}
                             </span>
                           )}
-                          {/* Display revenue here */}
                           {(visit.total_visit_revenue || 0) > 0 && (
                             <div className="flex items-center gap-1 mt-0.5 text-white text-xs opacity-90">
                               <DollarSign size={10} />
@@ -872,7 +858,6 @@ const AdminCalendar: React.FC = () => {
         </div>
       </div>
       
-      {/* Toplam Ciro Kutusu */}
       <div className="mt-4 p-4 bg-white rounded-xl shadow-lg border border-gray-200 flex justify-between items-center">
         <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <DollarSign className="text-green-600" />
@@ -883,7 +868,6 @@ const AdminCalendar: React.FC = () => {
         </span>
       </div>
 
-      {/* Durum Göstergesi */}
       <div className="mt-4 p-4 bg-white rounded-xl shadow-lg border border-gray-200">
         <h3 className="font-semibold text-gray-700 mb-2">Durum Göstergesi</h3>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
@@ -896,7 +880,6 @@ const AdminCalendar: React.FC = () => {
         </div>
       </div>
 
-      {/* Aylık Plan Özeti - Yapılmayanlar */}
       {monthlySchedules.length > 0 && (
         <div className="mt-6">
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
@@ -953,10 +936,7 @@ const AdminCalendar: React.FC = () => {
               ).map(([operatorName, schedules]: [string, any]) => {
                 const operatorSchedules = schedules;
 
-                // Filtreleme uygula
                 const filteredOperatorSchedules = operatorSchedules.filter((schedule: any) => {
-                  // Tüm operatörlerin yaptığı ziyaretleri say (yardım ziyaretleri dahil)
-                  // Operatör kontrolü yapılmaz, sadece müşteri/şube eşleşmesi aranır
                   const doneCount = visits.filter((v: Visit) => {
                     const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
                     const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
@@ -969,13 +949,15 @@ const AdminCalendar: React.FC = () => {
                   return true;
                 });
 
-                // Eğer filtreleme sonrası hiç plan kalmadıysa bu operatörü gösterme
                 if (filteredOperatorSchedules.length === 0) return null;
 
                 const totalRequired = filteredOperatorSchedules.reduce((sum: number, s: any) => sum + s.visits_required, 0);
 
+                // --- HESAPLAMA EKLENDİ ---
+                const totalEstimatedRevenue = filteredOperatorSchedules.reduce((sum: number, s: any) => sum + calculateScheduleEstimatedRevenue(s), 0);
+                // ------------------------
+
                 const completedCount = filteredOperatorSchedules.reduce((sum: number, schedule: any) => {
-                  // Tüm operatörlerin yaptığı ziyaretleri say (yardım ziyaretleri dahil)
                   const completed = visits.filter((v: Visit) => {
                     const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
                     const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
@@ -992,6 +974,15 @@ const AdminCalendar: React.FC = () => {
                           <User className="h-4 w-4 text-purple-600" />
                         </div>
                         <span className="font-semibold text-gray-800">{operatorName}</span>
+                        
+                        {/* --- CİRO GÖSTERİMİ EKLENDİ --- */}
+                        {totalEstimatedRevenue > 0 && (
+                          <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
+                            (Tahmini: {totalEstimatedRevenue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 })})
+                          </span>
+                        )}
+                        {/* ----------------------------- */}
+
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-gray-600">
@@ -1016,7 +1007,6 @@ const AdminCalendar: React.FC = () => {
                         const branchName = schedule.branch?.sube_adi;
                         const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
 
-                        // Tüm operatörlerin yaptığı ziyaretleri say (yardım ziyaretleri dahil)
                         const doneCount = visits.filter((v: Visit) => {
                           const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
                           const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
@@ -1068,7 +1058,6 @@ const AdminCalendar: React.FC = () => {
         </div>
       )}
 
-      {/* Bu Ay Ziyaret Planlanmamış */}
       <div className="mt-6">
         <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 space-y-6">
           <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
@@ -1121,7 +1110,6 @@ const AdminCalendar: React.FC = () => {
         </div>
       </div>
 
-      {/* Aylık Malzeme Kullanım Özeti */}
       <div className="mt-6">
         <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
           <Tag className="text-gray-400"/> Aylık Malzeme Kullanım Özeti
@@ -1180,7 +1168,6 @@ const AdminCalendar: React.FC = () => {
         </div>
       </div>
 
-      {/* Operatör Ciro Özeti Bölümü */}
       <div className="mt-6">
         <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
           <TrendingUp className="text-gray-400"/> Operatör Ciro Özeti ({format(currentDate, 'MMMM yyyy', { locale: tr })})
@@ -1223,13 +1210,11 @@ const AdminCalendar: React.FC = () => {
         </div>
       </div>
 
-      {/* Yeni Aylık Ciro Özeti Tablosu */}
       <div className="mt-6">
         <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
           <DollarSign className="text-gray-400"/> Aylık Ciro Özeti ({format(currentDate, 'MMMM yyyy', { locale: tr })})
         </h3>
         <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 space-y-6">
-          {/* Müşteri Bazında Ciro */}
           {monthlyRevenueSummary.customer.length > 0 && (
             <div>
               <h4 className="font-semibold text-gray-600 mb-3 flex items-center gap-2"><Users size={18}/> Müşteri Bazında Ciro</h4>
@@ -1277,7 +1262,6 @@ const AdminCalendar: React.FC = () => {
             </div>
           )}
 
-          {/* Şube Bazında Ciro */}
           {monthlyRevenueSummary.branch.length > 0 && (
             <div className="mt-8">
               <h4 className="font-semibold text-gray-600 mb-3 flex items-center gap-2"><Building size={18}/> Şube Bazında Ciro</h4>
