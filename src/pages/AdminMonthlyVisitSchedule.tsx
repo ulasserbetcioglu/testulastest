@@ -39,26 +39,11 @@ interface VisitSchedule {
   notes: string | null;
   customer?: {
     kisa_isim: string;
-    // Müşteri fiyatlandırması (Genel tarife için)
-    customer_pricing?: {
-      monthly_price: number | null;
-      per_visit_price: number | null;
-    }[]; 
   } | null;
   branch?: {
     sube_adi: string;
-    // Şube fiyatlandırması (Öncelikli)
-    branch_pricing?: {
-      monthly_price: number | null;
-      per_visit_price: number | null;
-    }[];
     customer: {
       kisa_isim: string;
-      // Şube üzerinden erişilen müşteri fiyatı
-      customer_pricing?: {
-        monthly_price: number | null;
-        per_visit_price: number | null;
-      }[];
     };
   } | null;
   operator?: {
@@ -129,17 +114,10 @@ const AdminMonthlyVisitSchedule = () => {
           .from('monthly_visit_schedules')
           .select(`
             id, customer_id, branch_id, operator_id, month, visits_required, year, notes,
-            customers!monthly_visit_schedules_customer_id_fkey(
-              kisa_isim,
-              customer_pricing(monthly_price, per_visit_price)
-            ),
+            customers!monthly_visit_schedules_customer_id_fkey(kisa_isim),
             branches!monthly_visit_schedules_branch_id_fkey(
               sube_adi,
-              branch_pricing(monthly_price, per_visit_price),
-              customers!branches_customer_id_fkey(
-                kisa_isim,
-                customer_pricing(monthly_price, per_visit_price)
-              )
+              customers!branches_customer_id_fkey(kisa_isim)
             ),
             operators!monthly_visit_schedules_operator_id_fkey(name)
           `)
@@ -184,17 +162,10 @@ const AdminMonthlyVisitSchedule = () => {
         visits_required: schedule.visits_required,
         year: schedule.year,
         notes: schedule.notes,
-        customer: schedule.customers ? { 
-          kisa_isim: schedule.customers.kisa_isim,
-          customer_pricing: schedule.customers.customer_pricing
-        } : null,
+        customer: schedule.customers ? { kisa_isim: schedule.customers.kisa_isim } : null,
         branch: schedule.branches ? {
           sube_adi: schedule.branches.sube_adi,
-          branch_pricing: schedule.branches.branch_pricing,
-          customer: schedule.branches.customers ? { 
-            kisa_isim: schedule.branches.customers.kisa_isim,
-            customer_pricing: schedule.branches.customers.customer_pricing
-          } : { kisa_isim: '' }
+          customer: schedule.branches.customers ? { kisa_isim: schedule.branches.customers.kisa_isim } : { kisa_isim: '' }
         } : null,
         operator: schedule.operators ? { name: schedule.operators.name } : null
       }));
@@ -216,48 +187,6 @@ const AdminMonthlyVisitSchedule = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // --- Revenue Calculation Helper ---
-  const calculateEstimatedRevenue = (schedule: VisitSchedule) => {
-    let revenue = 0;
-
-    // 1. Şube Fiyatlandırması Kontrolü (En Yüksek Öncelik)
-    const branchPrice = schedule.branch?.branch_pricing?.[0]; // Genelde array döner, ilkini alırız
-    
-    if (branchPrice) {
-      if (branchPrice.monthly_price && branchPrice.monthly_price > 0) {
-        // Aylık sabit ücret varsa direkt onu al
-        revenue = branchPrice.monthly_price;
-      } else if (branchPrice.per_visit_price && branchPrice.per_visit_price > 0) {
-        // Ziyaret başı ücret * Ziyaret Sayısı
-        revenue = branchPrice.per_visit_price * schedule.visits_required;
-      }
-    } 
-    
-    // 2. Şube fiyatı yoksa, Müşteri Fiyatlandırması Kontrolü
-    if (revenue === 0) {
-      // Şube üzerinden gelen müşteri fiyatı veya direkt müşteri planı ise oradaki fiyat
-      const customerPrice = schedule.branch?.customer?.customer_pricing?.[0] || schedule.customer?.customer_pricing?.[0];
-
-      if (customerPrice) {
-        if (customerPrice.per_visit_price && customerPrice.per_visit_price > 0) {
-          revenue = customerPrice.per_visit_price * schedule.visits_required;
-        }
-      }
-    }
-
-    return revenue;
-  };
-
-  // Para birimi formatlayıcı
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('tr-TR', {
-      style: 'currency',
-      currency: 'TRY',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
   };
 
   // --- Excel Export Logic (Takvim Görünümü) ---
@@ -746,30 +675,15 @@ const AdminMonthlyVisitSchedule = () => {
                                 <div className="text-xs text-gray-500">{schedule.customer?.kisa_isim || schedule.branch?.customer?.kisa_isim}</div>
                               </td>
                               <td className="px-4 py-3">
-                                <div className="flex flex-col">
-                                  {schedule.operator ? (
-                                    <span className="inline-flex items-center w-fit px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                      {schedule.operator.name}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center w-fit px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                      Atanmamış
-                                    </span>
-                                  )}
-                                  
-                                  {(() => {
-                                    const revenue = calculateEstimatedRevenue(schedule);
-                                    if (revenue > 0) {
-                                      return (
-                                        <span className="text-xs text-green-600 font-medium mt-1 flex items-center gap-1">
-                                          <span className="text-gray-400">Tahmini:</span>
-                                          {formatCurrency(revenue)}
-                                        </span>
-                                      );
-                                    }
-                                    return null;
-                                  })()}
-                                </div>
+                                {schedule.operator ? (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {schedule.operator.name}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    Atanmamış
+                                  </span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span className="font-bold text-gray-700">{schedule.visits_required}</span>
