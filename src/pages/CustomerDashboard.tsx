@@ -171,48 +171,46 @@ const CustomerDashboard: React.FC = () => {
         const { data: branches } = await supabase.from('branches').select('id').eq('customer_id', customerId);
         const branchIds = branches?.map(b => b.id) || [];
 
-        // 2. Verileri paralel çek
-        let plansQuery = supabase.from('monthly_visit_schedules')
-            .select('month, visits_required, branch_id, customer_id');
-        
-        // Yıl filtresi: Seçili yıl VEYA null (her yıl geçerli)
-        plansQuery = plansQuery.or(`year.eq.${currentYear},year.is.null`);
-
-        // Müşteri veya Şube sahipliği filtresi
-        if (branchIds.length > 0) {
-            // URL uzunluğunu aşmamak için in filtresini dikkatli kullanın
-            // Eğer çok fazla şube varsa, bu logic backend function'a taşınmalıdır.
-            plansQuery = plansQuery.or(`customer_id.eq.${customerId},branch_id.in.(${branchIds.join(',')})`);
-        } else {
-            plansQuery = plansQuery.eq('customer_id', customerId);
-        }
-
+        // 2. Diğer verileri çek
         const [
           upcomingVisitsRes,
           recentVisitsRes,
           openActionsRes,
           branchesRes,
-          monthlyPlansRes
+          // Planlar: Müşteri bazlı
+          customerPlansRes,
+          // Planlar: Şube bazlı (Eğer şube varsa)
+          branchPlansRes
         ] = await Promise.all([
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).eq('status', 'planned').gte('visit_date', today).order('visit_date').limit(5),
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).in('status', ['completed', 'cancelled']).order('visit_date', { ascending: false }).limit(5),
           supabase.from('corrective_actions').select(`id, non_compliance_type, status, due_date, branch:branch_id(sube_adi)`).eq('customer_id', customerId).in('status', ['open', 'in_progress']).order('due_date'),
           supabase.from('branches').select('id', { count: 'exact' }).eq('customer_id', customerId),
-          plansQuery
+          
+          // Müşteri genel planı
+          supabase.from('monthly_visit_schedules')
+            .select('month, visits_required')
+            .eq('customer_id', customerId)
+            .or(`year.eq.${currentYear},year.is.null`),
+
+          // Şube bazlı planlar (Varsa)
+          branchIds.length > 0 
+            ? supabase.from('monthly_visit_schedules')
+                .select('month, visits_required')
+                .in('branch_id', branchIds)
+                .or(`year.eq.${currentYear},year.is.null`)
+            : Promise.resolve({ data: [], error: null })
         ]);
         
-        const firstError = [upcomingVisitsRes, recentVisitsRes, openActionsRes, branchesRes, monthlyPlansRes].find(r => r.error)?.error;
-        if (firstError) {
-            console.error("Veri çekme hatası:", firstError);
-            throw firstError;
-        }
+        const firstError = [upcomingVisitsRes, recentVisitsRes, openActionsRes, branchesRes, customerPlansRes].find(r => r.error)?.error;
+        if (firstError) throw firstError;
 
-        // Aylık planları işle (monthlyPlansRes.data null olabilir kontrolü)
-        const rawPlans = monthlyPlansRes.data || [];
+        // 3. Planları Birleştir ve Hesapla
+        const allPlans = [...(customerPlansRes.data || []), ...(branchPlansRes.data || [])];
         
         const aggregatedPlans = Array.from({ length: 12 }, (_, i) => {
             const monthNum = i + 1;
-            const plansForMonth = rawPlans.filter(p => p.month === monthNum);
+            const plansForMonth = allPlans.filter(p => p.month === monthNum);
             const total = plansForMonth.reduce((sum, p) => sum + (p.visits_required || 0), 0);
             return { month: monthNum, total_required: total };
         });
@@ -233,7 +231,6 @@ const CustomerDashboard: React.FC = () => {
       } catch (err: any) {
         console.error("Dashboard Yükleme Hatası:", err);
         setError(err.message);
-        toast.error(`Veriler yüklenirken hata: ${err.message}`);
       } finally {
         setLoading(false);
       }
