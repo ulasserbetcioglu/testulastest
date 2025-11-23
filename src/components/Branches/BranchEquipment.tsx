@@ -32,13 +32,13 @@ const BranchEquipment: React.FC<BranchEquipmentProps> = ({ branchId, customerId 
 
   const checkAdminAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    // Sadece admin emaili ile giriş yapanlar admin sayılır
     setIsAdmin(user?.email === 'admin@ilaclamatik.com');
   };
 
   const fetchEquipment = async () => {
     try {
       if (branchId) {
-        // If branchId is provided, fetch equipment directly for that branch
         const { data, error } = await supabase
           .from('branch_equipment')
           .select(`
@@ -53,7 +53,6 @@ const BranchEquipment: React.FC<BranchEquipmentProps> = ({ branchId, customerId 
         if (error) throw error;
         setEquipment(data || []);
       } else if (customerId) {
-        // For customer's equipment, first get the branches
         const { data: branches, error: branchError } = await supabase
           .from('branches')
           .select('id')
@@ -116,7 +115,7 @@ const BranchEquipment: React.FC<BranchEquipmentProps> = ({ branchId, customerId 
   if (loading) return <div>Yükleniyor...</div>;
   if (error) return <div>Hata: {error}</div>;
 
-  // Group equipment by department
+  // Ekipmanları departmana göre grupla
   const groupedEquipment = equipment.reduce((acc, eq) => {
     if (!acc[eq.department]) {
       acc[eq.department] = [];
@@ -129,7 +128,8 @@ const BranchEquipment: React.FC<BranchEquipmentProps> = ({ branchId, customerId 
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Ekipmanlar</h2>
-        {branchId && (
+        {/* Sadece Admin ise ve branchId varsa Ekle butonunu göster */}
+        {branchId && isAdmin && (
           <button
             onClick={() => setIsAddModalOpen(true)}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -153,7 +153,7 @@ const BranchEquipment: React.FC<BranchEquipmentProps> = ({ branchId, customerId 
                 {items.map((item) => (
                   <div key={item.id} className="flex justify-between items-center p-3 bg-white rounded shadow-sm">
                     <div>
-                      <div className="font-medium">{item.equipment.name}</div>
+                      <div className="font-medium">{item.equipment?.name || 'İsimsiz Ekipman'}</div>
                       <div className="text-sm text-gray-500">Kod: {item.equipment_code}</div>
                     </div>
                     {isAdmin && (
