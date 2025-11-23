@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
-import { Search, Filter, Calendar, Download, Eye, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Download, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -18,10 +18,10 @@ interface PaidMaterialSale {
   sale_date: string;
   items: {
     id: string;
-    product_id: string; // Admin kodundan eklendi
+    product_id: string;
     product: {
       name: string;
-    };
+    } | null;
     quantity: number;
     unit_price: number;
     total_price: number;
@@ -34,6 +34,12 @@ interface PaidMaterialSale {
   notes?: string;
   visit_id?: string;
   visit?: {
+    id: string;
+    visit_date: string;
+    visit_type: string;
+    report_number: string;
+    status: string;
+    notes: string;
     operator: {
       name: string;
     } | null;
@@ -61,13 +67,13 @@ const CustomerPaidMaterials: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 500); // 500ms gecikme
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [totalCount, setTotalCount] = useState(0); // Toplam kayıt sayısı
+  const [totalCount, setTotalCount] = useState(0);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedSale, setSelectedSale] = useState<PaidMaterialSale | null>(null);
@@ -80,7 +86,6 @@ const CustomerPaidMaterials: React.FC = () => {
     fetchCustomerId();
   }, []);
 
-  // Müşteri ID'si, filtreler veya sayfa değiştiğinde veriyi çek
   useEffect(() => {
     if (customerId) {
       fetchSales();
@@ -106,6 +111,7 @@ const CustomerPaidMaterials: React.FC = () => {
       const from = (currentPage - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
 
+      // DÜZELTME: 'paid_products' tablosu kullanıldı
       let query = supabase
         .from('paid_material_sales')
         .select(`
@@ -132,12 +138,12 @@ const CustomerPaidMaterials: React.FC = () => {
           items:paid_material_sale_items(
             id,
             product_id,
-            product:product_id!paid_products ( name ),
+            product:paid_products ( name ),
             quantity,
             unit_price,
             total_price
           )
-        `, { count: 'exact' }) // Toplam kayıt sayısı için 'exact'
+        `, { count: 'exact' })
         .eq('customer_id', customerId)
         .order('sale_date', { ascending: false })
         .range(from, to);
@@ -150,30 +156,37 @@ const CustomerPaidMaterials: React.FC = () => {
       } else {
         const [year, month] = selectedMonth.split('-').map(Number);
         const startOfMonth = new Date(year, month - 1, 1).toISOString();
-        const endOfMonth = new Date(year, month, 1); // Bir sonraki ayın 1'i
-        endOfMonth.setDate(endOfMonth.getDate() - 1); // Bir önceki gün (ayın son günü)
-        endOfMonth.setHours(23, 59, 59, 999); // Günün sonu
+        const endOfMonth = new Date(year, month, 1);
+        endOfMonth.setDate(endOfMonth.getDate() - 1);
+        endOfMonth.setHours(23, 59, 59, 999);
         query = query.gte('sale_date', startOfMonth).lte('sale_date', endOfMonth.toISOString());
       }
 
-      // Arama Filtresi (Şube adı VEYA Ürün adı)
+      // Arama Filtresi
       if (debouncedSearchTerm) {
-        query = query.or(
-          `branch:branch_id.sube_adi.ilike.%${debouncedSearchTerm}%,items.product:product_id.name.ilike.%${debouncedSearchTerm}%`
-        );
+        // Şube adına göre filtreleme
+        query = query.or(`branch_id.in.(select id from branches where sube_adi ilike '%${debouncedSearchTerm}%')`);
       }
       
-      // --- SORGULAMA ---
       const { data, error, count } = await query;
 
       if (error) throw error;
       
-      setSales(data || []);
+      // Tip dönüşümü güvenliği
+      const formattedData: PaidMaterialSale[] = (data || []).map((sale: any) => ({
+        ...sale,
+        items: sale.items?.map((item: any) => ({
+          ...item,
+          product: item.product // Artık paid_products tablosundan gelen veriyi alacak
+        })) || []
+      }));
+
+      setSales(formattedData);
       setTotalCount(count || 0);
 
     } catch (err: any) {
-      setError(err.message);
       console.error("Satışlar çekilirken hata:", err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -189,7 +202,7 @@ const CustomerPaidMaterials: React.FC = () => {
   const handleDateRangeChange = (start: string, end: string) => {
     setStartDate(start);
     setEndDate(end);
-    setCurrentPage(1); // Filtre değiştiğinde 1. sayfaya dön
+    setCurrentPage(1);
   };
 
   const handleViewDetails = (sale: PaidMaterialSale) => {
@@ -198,10 +211,8 @@ const CustomerPaidMaterials: React.FC = () => {
   };
 
   const handleViewVisit = async (visitId: string) => {
-    // Zaten 'sale' objesi içinde 'visit' verisi geliyor, tekrar çekmeye gerek yok.
     const sale = sales.find(s => s.visit_id === visitId);
     if (sale && sale.visit) {
-        // Ziyaretin şube adını da ekleyelim (satıştan alarak)
         setSelectedVisit({
             ...sale.visit,
             branch: sale.branch
@@ -215,10 +226,9 @@ const CustomerPaidMaterials: React.FC = () => {
   // --- EXCEL AKTARIMI ---
   const exportToExcel = () => {
     const data = sales.map(sale => {
-      // Ürünleri "Ürün Adı (X adet), Ürün Adı 2 (Y adet)" formatına getir
       const itemsString = sale.items
         .map(item => `${item.product?.name || 'Bilinmeyen'} (${item.quantity} adet)`)
-        .join('\n'); // Excel'de alt satıra geçmesi için \n
+        .join('\n');
 
       return {
         'Tarih': format(new Date(sale.sale_date), 'dd.MM.yyyy', { locale: tr }),
@@ -234,22 +244,19 @@ const CustomerPaidMaterials: React.FC = () => {
 
     const ws = XLSX.utils.json_to_sheet(data);
 
-    // Sütun genişliklerini ayarla
     ws['!cols'] = [
-      { wch: 12 }, // Tarih
-      { wch: 25 }, // Müşteri
-      { wch: 25 }, // Şube
-      { wch: 40 }, // Ürünler
-      { wch: 15 }, // Tutar
-      { wch: 15 }, // Durum
-      { wch: 15 }, // Fatura No
-      { wch: 20 }  // Operatör
+      { wch: 12 }, 
+      { wch: 25 }, 
+      { wch: 25 }, 
+      { wch: 40 }, 
+      { wch: 15 }, 
+      { wch: 15 }, 
+      { wch: 15 }, 
+      { wch: 20 }  
     ];
 
-    // Ürünler sütununda metni kaydır (wrap text)
-    // Bu, `\n` karakterinin çalışması için gereklidir.
     Object.keys(ws).forEach(cellAddress => {
-      if (cellAddress.startsWith('D') && cellAddress !== 'D1') { // D sütunu (Ürünler)
+      if (cellAddress.startsWith('D') && cellAddress !== 'D1') {
         if(ws[cellAddress].v) {
           ws[cellAddress].s = { alignment: { wrapText: true, vertical: "top" } };
         }
@@ -261,21 +268,14 @@ const CustomerPaidMaterials: React.FC = () => {
     XLSX.writeFile(wb, `malzeme_satislar_${selectedMonth}.xlsx`);
   };
 
-  // --- DURUM GÖSTERGELERİ ---
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending':
-        return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">Beklemede</span>;
-      case 'approved':
-        return <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Onaylandı</span>;
-      case 'rejected':
-        return <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Reddedildi</span>;
-      case 'invoiced':
-        return <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">Faturalandı</span>;
-      case 'paid':
-        return <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Ödendi</span>;
-      default:
-        return null;
+      case 'pending': return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">Beklemede</span>;
+      case 'approved': return <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Onaylandı</span>;
+      case 'rejected': return <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Reddedildi</span>;
+      case 'invoiced': return <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">Faturalandı</span>;
+      case 'paid': return <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Ödendi</span>;
+      default: return null;
     }
   };
   
@@ -290,7 +290,6 @@ const CustomerPaidMaterials: React.FC = () => {
     }
   };
 
-  // --- SAYFALAMA ---
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
   const renderPageNumbers = () => {
@@ -305,7 +304,6 @@ const CustomerPaidMaterials: React.FC = () => {
         startPage = Math.max(1, endPage - maxPagesToShow + 1);
     }
     
-    // Önceki Butonu
     pageNumbers.push(
       <button
         key="prev"
@@ -317,7 +315,6 @@ const CustomerPaidMaterials: React.FC = () => {
       </button>
     );
 
-    // Sayfa Numaraları
     if (startPage > 1) {
       pageNumbers.push(<button key={1} onClick={() => handlePageChange(1)} className="p-2 w-10 h-10 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">1</button>);
       if (startPage > 2) {
@@ -344,7 +341,6 @@ const CustomerPaidMaterials: React.FC = () => {
       pageNumbers.push(<button key={totalPages} onClick={() => handlePageChange(totalPages)} className="p-2 w-10 h-10 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">{totalPages}</button>);
     }
 
-    // Sonraki Butonu
     pageNumbers.push(
       <button
         key="next"
@@ -361,8 +357,7 @@ const CustomerPaidMaterials: React.FC = () => {
 
   // --- RENDER ---
 
-  // Yükleme Durumu
-  if (loading && sales.length === 0) { // Sadece ilk yüklemede tam ekran göster
+  if (loading && sales.length === 0) {
     return (
         <div className="flex items-center justify-center h-64">
             <RefreshCw size={32} className="text-gray-500 animate-spin" />
@@ -371,7 +366,6 @@ const CustomerPaidMaterials: React.FC = () => {
     );
   }
 
-  // Hata Durumu
   if (error) {
     return (
         <div className="p-6 bg-red-50 border border-red-200 rounded-lg text-center">
@@ -381,7 +375,7 @@ const CustomerPaidMaterials: React.FC = () => {
             <button
                 onClick={() => {
                     setError(null);
-                    fetchCustomerId(); // Her şeyi yeniden başlat
+                    fetchCustomerId();
                 }}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 mx-auto"
             >
@@ -392,7 +386,6 @@ const CustomerPaidMaterials: React.FC = () => {
     );
   }
 
-  // Ana İçerik
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
@@ -407,14 +400,12 @@ const CustomerPaidMaterials: React.FC = () => {
         </button>
       </div>
 
-      {/* --- Filtreleme Alanı --- */}
       <div className="bg-white rounded-lg shadow p-4">
-        {/* Arama ve Ay */}
         <div className="flex flex-col md:flex-row gap-4 mb-4">
           <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Şube veya Ürün Ara..."
+              placeholder="Şube Ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -431,13 +422,12 @@ const CustomerPaidMaterials: React.FC = () => {
               value={selectedMonth}
               onChange={(e) => {
                 setSelectedMonth(e.target.value)
-                handleDateRangeChange('', '') // Tarih aralığını temizle
+                handleDateRangeChange('', '')
               }}
             />
           </div>
         </div>
         
-        {/* Tarih Aralığı */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Tarih Aralığı (Dönemi geçersiz kılar)
@@ -454,14 +444,13 @@ const CustomerPaidMaterials: React.FC = () => {
               type="date"
               className="w-full sm:w-1/2 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               value={endDate}
-              onChange={(e) => handleDateRangeChange(startDate, e.targe.value)}
+              onChange={(e) => handleDateRangeChange(startDate, e.target.value)}
               placeholder="Bitiş Tarihi"
             />
           </div>
         </div>
       </div>
 
-      {/* --- Satış Tablosu --- */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -549,7 +538,6 @@ const CustomerPaidMaterials: React.FC = () => {
         </div>
       </div>
 
-      {/* --- Sayfalama Kontrolleri --- */}
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row justify-between items-center pt-4">
           <div className="text-sm text-gray-500 mb-2 sm:mb-0">
@@ -561,8 +549,6 @@ const CustomerPaidMaterials: React.FC = () => {
         </div>
       )}
 
-
-      {/* --- Ziyaret Detay Modalı --- */}
       {showVisitModal && selectedVisit && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
           <div className="bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100">
@@ -615,7 +601,6 @@ const CustomerPaidMaterials: React.FC = () => {
         </div>
       )}
 
-      {/* --- Satış Detay Modalı --- */}
       {showDetailsModal && selectedSale && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-100">
@@ -672,7 +657,6 @@ const CustomerPaidMaterials: React.FC = () => {
                 )}
               </div>
 
-              {/* Satış Kalemleri */}
               <div className="mb-6">
                 <h4 className="font-medium text-gray-800 mb-3 pb-2 border-b">Satış Kalemleri</h4>
                 <div className="overflow-x-auto border rounded-lg">
@@ -705,7 +689,6 @@ const CustomerPaidMaterials: React.FC = () => {
                 </div>
               </div>
 
-              {/* Notlar */}
               {selectedSale.notes && (
                 <div className="mb-6">
                   <h4 className="font-medium text-gray-800 mb-3 pb-2 border-b">Notlar</h4>
