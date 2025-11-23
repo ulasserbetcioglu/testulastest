@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, FileText, AlertTriangle, CheckCircle, X, User, Building, Loader2, ArrowRight } from 'lucide-react';
+import { Calendar, Clock, FileText, AlertTriangle, CheckCircle, X, User, Building, Loader2, ArrowRight, BarChart3 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -24,17 +24,28 @@ interface CorrectiveAction {
   branch: { sube_adi: string } | null;
 }
 
+interface MonthlyPlan {
+  month: number;
+  total_required: number;
+}
+
 interface DashboardData {
   customerName: string;
   upcomingVisits: Visit[];
   recentVisits: Visit[];
   openActions: CorrectiveAction[];
+  monthlyPlans: MonthlyPlan[];
   stats: {
     totalBranches: number;
     openActionCount: number;
     nextVisitDate: string | null;
   };
 }
+
+const MONTH_NAMES = [
+  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+];
 
 // --- YARDIMCI BİLEŞENLER ---
 
@@ -120,17 +131,14 @@ const CustomerDashboard: React.FC = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        // Check for local session first (for customer/branch login)
         const localSession = localAuth.getSession();
         let customerId: string;
         let customerName: string;
 
         if (localSession && localSession.type === 'customer') {
-          // Use local session data
           customerId = localSession.id;
           customerName = localSession.name;
         } else {
-          // Fall back to Supabase auth (for admin/operator)
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
 
@@ -146,28 +154,48 @@ const CustomerDashboard: React.FC = () => {
         }
 
         const today = new Date().toISOString();
+        const currentYear = new Date().getFullYear();
         
+        // Şubeleri çek (Aylık plan sorgusu için gerekli)
+        const { data: branches } = await supabase.from('branches').select('id').eq('customer_id', customerId);
+        const branchIds = branches?.map(b => b.id) || [];
+
         const [
           upcomingVisitsRes,
           recentVisitsRes,
           openActionsRes,
-          branchesRes
+          branchesRes,
+          monthlyPlansRes
         ] = await Promise.all([
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).eq('status', 'planned').gte('visit_date', today).order('visit_date').limit(5),
           supabase.from('visits').select(`id, visit_date, status, branch:branch_id(sube_adi), operator:operator_id(name)`).eq('customer_id', customerId).in('status', ['completed', 'cancelled']).order('visit_date', { ascending: false }).limit(5),
           supabase.from('corrective_actions').select(`id, non_compliance_type, status, due_date, branch:branch_id(sube_adi)`).eq('customer_id', customerId).in('status', ['open', 'in_progress']).order('due_date'),
-          supabase.from('branches').select('id', { count: 'exact' }).eq('customer_id', customerId)
+          supabase.from('branches').select('id', { count: 'exact' }).eq('customer_id', customerId),
+          // Aylık planları çek (Müşteriye doğrudan bağlı veya şubelerine bağlı planlar)
+          supabase.from('monthly_visit_schedules')
+            .select('month, visits_required, branch_id, customer_id')
+            .eq('year', currentYear)
+            .or(`customer_id.eq.${customerId}${branchIds.length > 0 ? `,branch_id.in.(${branchIds.join(',')})` : ''}`)
         ]);
         
-        const errors = [upcomingVisitsRes.error, recentVisitsRes.error, openActionsRes.error, branchesRes.error];
+        const errors = [upcomingVisitsRes.error, recentVisitsRes.error, openActionsRes.error, branchesRes.error, monthlyPlansRes.error];
         const firstError = errors.find(e => e);
         if (firstError) throw firstError;
+
+        // Aylık planları işle (Ay bazında toplam sayıları hesapla)
+        const aggregatedPlans = Array.from({ length: 12 }, (_, i) => {
+            const monthNum = i + 1;
+            const plansForMonth = monthlyPlansRes.data?.filter(p => p.month === monthNum) || [];
+            const total = plansForMonth.reduce((sum, p) => sum + (p.visits_required || 0), 0);
+            return { month: monthNum, total_required: total };
+        });
 
         setData({
           customerName: customerName,
           upcomingVisits: upcomingVisitsRes.data || [],
           recentVisits: recentVisitsRes.data || [],
           openActions: openActionsRes.data || [],
+          monthlyPlans: aggregatedPlans,
           stats: {
             totalBranches: branchesRes.count || 0,
             openActionCount: openActionsRes.data?.length || 0,
@@ -199,6 +227,36 @@ const CustomerDashboard: React.FC = () => {
         <StatCard title="Toplam Şube Sayısı" value={data.stats.totalBranches} icon={<Building size={24} />} />
         <StatCard title="Açık DÖF Sayısı" value={data.stats.openActionCount} icon={<AlertTriangle size={24} />} />
         <StatCard title="Sonraki Ziyaret" value={data.stats.nextVisitDate ? format(new Date(data.stats.nextVisitDate), 'dd MMM yyyy', { locale: tr }) : 'Planlanmadı'} icon={<Calendar size={24} />} />
+      </div>
+
+      {/* Aylık Ziyaret Hedefleri Tablosu */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg mb-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <BarChart3 className="text-blue-600" />
+            {new Date().getFullYear()} Yılı Ziyaret Planı
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {data.monthlyPlans.map((plan) => {
+                const isPast = plan.month < (new Date().getMonth() + 1);
+                const isCurrent = plan.month === (new Date().getMonth() + 1);
+                return (
+                    <div 
+                        key={plan.month} 
+                        className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center transition-all ${
+                            isCurrent ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-100 shadow-md' : 'bg-gray-50 border-gray-100'
+                        } ${plan.total_required > 0 ? 'hover:border-blue-200' : 'opacity-60'}`}
+                    >
+                        <span className={`text-sm font-medium mb-1 ${isCurrent ? 'text-blue-700' : 'text-gray-500'}`}>
+                            {MONTH_NAMES[plan.month - 1]}
+                        </span>
+                        <span className={`text-2xl font-bold ${plan.total_required > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
+                            {plan.total_required}
+                        </span>
+                        <span className="text-xs text-gray-400">Ziyaret</span>
+                    </div>
+                );
+            })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
