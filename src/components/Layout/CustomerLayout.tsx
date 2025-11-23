@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
-import { useAuth } from '../Auth/AuthProvider'; // Gerçek import
-import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp, Bug, Layers } from 'lucide-react';
-import { supabase } from '../../lib/supabase'; // Gerçek import
-import { localAuth } from '../../lib/localAuth'; // Gerçek import
+import { useAuth } from '../Auth/AuthProvider';
+// Building ikonu importlara eklendi
+import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp, Bug, Layers, Building } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { localAuth } from '../../lib/localAuth';
 
 const CustomerLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -49,6 +50,8 @@ const CustomerLayout: React.FC = () => {
 
   const navItems = [
     { path: '/customer', icon: <Home size={20} />, name: 'Ana Sayfa' },
+    // YENİ EKLENEN: Şubelerim Linki
+    { path: '/customer/subeler', icon: <Building size={20} />, name: 'Şubelerim' },
     { path: '/customer/ziyaretler', icon: <FileText size={20} />, name: 'Ziyaretler' },
     { path: '/customer/takvim', icon: <Calendar size={20} />, name: 'Takvim' },
     { path: '/customer/dof', icon: <AlertCircle size={20} />, name: 'DÖF' },
