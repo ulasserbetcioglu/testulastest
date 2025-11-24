@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertCircle, Loader2, History } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -20,6 +20,48 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
   const [endKm, setEndKm] = useState('');
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fetchingLastKm, setFetchingLastKm] = useState(false);
+  const [isFirstEntry, setIsFirstEntry] = useState(true); // İlk kayıt mı kontrolü
+
+  // Modal açıldığında son km bilgisini çek
+  useEffect(() => {
+    if (isOpen && operatorId) {
+      fetchLastKmData();
+    }
+  }, [isOpen, operatorId]);
+
+  const fetchLastKmData = async () => {
+    setFetchingLastKm(true);
+    try {
+      // Operatörün en son girdiği kaydı bul (yıla ve haftaya göre tersten sırala)
+      const { data, error } = await supabase
+        .from('operator_weekly_km')
+        .select('end_km')
+        .eq('operator_id', operatorId)
+        .order('year', { ascending: false })
+        .order('week_number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        // Önceki kayıt varsa, onun Bitiş KM'si bu haftanın Başlangıç KM'sidir.
+        setStartKm(data.end_km.toString());
+        setIsFirstEntry(false); // Artık ilk kayıt değil, input kilitlenecek
+      } else {
+        // Kayıt yoksa manuel girişe izin ver
+        setStartKm('');
+        setIsFirstEntry(true);
+      }
+    } catch (err) {
+      console.error('Son KM çekme hatası:', err);
+      // Hata durumunda manuel girişe izin verelim ki işlem tıkanmasın
+      setIsFirstEntry(true);
+    } finally {
+      setFetchingLastKm(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -40,7 +82,7 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
     }
 
     if (end <= start) {
-      toast.error('Bitiş km\'si başlangıç km\'sinden büyük olmalıdır');
+      toast.error('O anki KM, Önceki KM\'den büyük olmalıdır');
       return;
     }
 
@@ -102,7 +144,7 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
             <p className="font-semibold mb-1">📅 Haftalık Bildirim</p>
-            <p>Her pazartesi günü haftalık km bilgilerinizi girmeniz gerekmektedir.</p>
+            <p>Lütfen aracınızın güncel kilometre bilgisini giriniz.</p>
           </div>
 
           <div>
@@ -113,28 +155,45 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
               type="text"
               value={operatorName}
               disabled
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
             />
           </div>
 
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Hafta Başı KM <span className="text-red-500">*</span>
+              Önceki KM (Hafta Başı)
             </label>
-            <input
-              type="number"
-              step="0.1"
-              value={startKm}
-              onChange={(e) => setStartKm(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Örn: 15000"
-            />
+            <div className="relative">
+              <input
+                type="number"
+                step="0.1"
+                value={startKm}
+                onChange={(e) => setStartKm(e.target.value)}
+                required
+                disabled={!isFirstEntry} // İlk kayıt değilse düzenlenemez
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                  !isFirstEntry 
+                    ? 'bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed' 
+                    : 'border-gray-300 bg-white'
+                }`}
+                placeholder={fetchingLastKm ? "Veri çekiliyor..." : "Önceki KM"}
+              />
+              {!isFirstEntry && !fetchingLastKm && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <History size={16} />
+                </div>
+              )}
+            </div>
+            {!isFirstEntry && (
+              <p className="text-xs text-gray-500 mt-1">
+                * Önceki haftanın kapanış kilometresidir, değiştirilemez.
+              </p>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Hafta Sonu KM <span className="text-red-500">*</span>
+              O Anki KM (Hafta Sonu) <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -142,16 +201,17 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
               value={endKm}
               onChange={(e) => setEndKm(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-medium text-gray-900"
               placeholder="Örn: 15500"
+              autoFocus
             />
           </div>
 
           {showTotal && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-blue-900">Haftalık Toplam:</span>
-                <span className="text-lg font-bold text-blue-900">{totalKm.toFixed(1)} km</span>
+                <span className="text-sm font-medium text-blue-900">Haftalık Yapılan Yol:</span>
+                <span className="text-xl font-bold text-blue-700">{totalKm.toFixed(1)} km</span>
               </div>
             </div>
           )}
@@ -165,7 +225,7 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
                 className="mt-1 h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
               />
               <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                Girdiğim km bilgilerinin doğru olduğunu ve haftalık kayıtlarımı kontrol ettiğimi onaylıyorum.
+                Girdiğim km bilgilerinin doğru olduğunu beyan ederim.
                 <span className="text-red-500 font-semibold"> *</span>
               </span>
             </label>
@@ -173,16 +233,16 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
 
           <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-600">
             <p className="font-semibold mb-1">⚠️ Önemli Bilgi:</p>
-            <p>Bu formu onaylamadan sayfayı kapatamazsınız. Lütfen bilgilerinizi eksiksiz doldurun.</p>
+            <p>Bu formu onaylamadan sayfayı kapatamazsınız. Lütfen güncel kilometre bilgisini giriniz.</p>
           </div>
 
           <button
             type="submit"
-            disabled={loading || !isConfirmed}
+            disabled={loading || !isConfirmed || fetchingLastKm}
             className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-all ${
-              loading || !isConfirmed
+              loading || !isConfirmed || fetchingLastKm
                 ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
+                : 'bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-md hover:shadow-lg'
             }`}
           >
             {loading ? (
