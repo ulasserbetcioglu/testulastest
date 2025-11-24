@@ -160,18 +160,26 @@ const Visits: React.FC = () => {
       let paidMaterialsByVisit: { [key: string]: any[] } = {};
 
       if (allVisitIds.length > 0) {
-        // --- DÜZELTME: 'product:paid_products' kullanıldı ---
+        // --- DÜZELTME: Belirgin FK ismi kullanıldı ---
         const { data: materialsData, error: materialsError } = await supabase
           .from('paid_material_sales')
-          .select('visit_id, items:paid_material_sale_items(product:paid_products(name), quantity)')
+          .select(`
+            visit_id, 
+            items:paid_material_sale_items(
+              quantity,
+              product:paid_products!paid_material_sale_items_product_id_fkey(name)
+            )
+          `)
           .in('visit_id', allVisitIds);
           
-        if (materialsError) throw materialsError;
-
-        paidMaterialsByVisit = (materialsData || []).reduce((acc, sale) => {
-          acc[sale.visit_id] = (sale.items as any[]) || [];
-          return acc;
-        }, {} as { [key: string]: any[] });
+        if (materialsError) {
+            console.warn("Malzeme verisi çekilemedi (Olası yetki veya ilişki hatası):", materialsError.message);
+        } else {
+            paidMaterialsByVisit = (materialsData || []).reduce((acc, sale) => {
+            acc[sale.visit_id] = (sale.items as any[]) || [];
+            return acc;
+            }, {} as { [key: string]: any[] });
+        }
       }
 
       const allEnhancedVisits = (allVisitsData || []).map(visit => ({
@@ -331,19 +339,27 @@ const Visits: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'planned': return 'bg-yellow-100 text-yellow-800';
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'planned':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'planned': return 'Planlandı';
-      case 'completed': return 'Tamamlandı';
-      case 'cancelled': return 'İptal Edildi';
-      default: return status;
+      case 'planned':
+        return 'Planlandı';
+      case 'completed':
+        return 'Tamamlandı';
+      case 'cancelled':
+        return 'İptal Edildi';
+      default:
+        return status;
     }
   };
 
@@ -381,8 +397,6 @@ const Visits: React.FC = () => {
     </div>
   );
 
-  const totalPages = Math.ceil(totalVisits / visitsPerPage);
-
   if (loading && overdueVisits.length === 0 && todayVisits.length === 0 && completedVisits.length === 0 && futureAndCancelledVisits.length === 0) {
     return <div className="p-4 text-center"><Loader2 className="animate-spin text-red-600" size={32} /></div>;
   }
@@ -412,6 +426,7 @@ const Visits: React.FC = () => {
       )}
 
       <div className="space-y-4">
+        
         {overdueVisits.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-red-600 mb-2 flex items-center gap-2">
