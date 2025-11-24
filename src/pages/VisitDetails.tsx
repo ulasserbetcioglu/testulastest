@@ -1,4 +1,3 @@
-// src/pages/VisitDetails.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -50,7 +49,6 @@ interface Visit {
   report_photo_file_path?: string;
 }
 
-// ✅ DÜZELTME: Orijinal dosyanızdaki gibi 'biocidal_products' tablosunu kullanır
 interface BiocidalProduct {
   id: string;
   name: string;
@@ -75,7 +73,6 @@ interface PaidMaterialItem {
   total_price: number;
 }
 
-// Biyosidal kullanım state'i için arayüz
 interface BiocidalUsageItem {
   productId: string;
   quantity: string;
@@ -121,7 +118,7 @@ const densityOptions = [
   { id: 'istila', label: 'İstila' }
 ];
 
-// ... (AddEquipmentModal bileşeni - Değişiklik yok) ...
+// --- AddEquipmentModal Bileşeni ---
 const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, branchId, onSave }) => {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -223,9 +220,7 @@ const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, 
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-xl font-semibold">Ekipman Ekle</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <XCloseIcon size={24} />
           </button>
         </div>
 
@@ -329,7 +324,7 @@ const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, 
   );
 };
 
-
+// --- Ana VisitDetails Bileşeni ---
 const VisitDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -349,7 +344,6 @@ const VisitDetails: React.FC = () => {
   const [endTime, setEndTime] = useState('');
   const [reportNumber, setReportNumber] = useState('');
 
-  // Biyosidal state'i yeni arayüze göre güncellendi
   const [biocidalUsage, setBiocidalUsage] = useState<BiocidalUsageItem[]>([
     { productId: '', quantity: '', dosage: '', unit: '' }
   ]);
@@ -376,7 +370,7 @@ const VisitDetails: React.FC = () => {
 
   useEffect(() => {
     fetchVisitDetails();
-    fetchBiocidalProducts(); // Orijinal fonksiyon
+    fetchBiocidalProducts(); 
     fetchOperatorId();
   }, [id]);
 
@@ -387,6 +381,56 @@ const VisitDetails: React.FC = () => {
       setBranchEquipment([]);
     }
   }, [visit]);
+
+  // --- OTOMATİK DOLDURMA MANTIĞI BURADA ---
+  // Şube ekipmanları yüklendiğinde, eğer kontrol verisi boşsa varsayılanları ata
+  useEffect(() => {
+    if (branchEquipment.length > 0) {
+      setEquipmentChecks(prevChecks => {
+        const newChecks = { ...prevChecks };
+        let hasChanges = false;
+
+        branchEquipment.forEach(item => {
+          // Ekipman özellikleri varsa
+          if (item.equipment.properties) {
+            // Eğer bu ekipman için henüz bir kayıt yoksa oluştur
+            if (!newChecks[item.id]) {
+              newChecks[item.id] = {};
+              hasChanges = true;
+            }
+
+            // Her bir özelliği kontrol et
+            Object.entries(item.equipment.properties).forEach(([key, prop]) => {
+              // Eğer özellik boşsa (undefined, null veya boş string) varsayılanı ata
+              if (newChecks[item.id][key] === undefined || newChecks[item.id][key] === null || newChecks[item.id][key] === '') {
+                
+                if (prop.type === 'boolean') {
+                  newChecks[item.id][key] = 'false'; // Varsayılan: Hayır (Sorun Yok)
+                } else if (prop.type === 'number') {
+                  newChecks[item.id][key] = 0; // Varsayılan: 0
+                } else {
+                  // String tipler için akıllı varsayılanlar
+                  const lowerKey = key.toLowerCase();
+                  if (lowerKey.includes('tüketim') || lowerKey.includes('consumption')) {
+                      newChecks[item.id][key] = 'Yok';
+                  } else if (lowerKey.includes('durum') || lowerKey.includes('status')) {
+                      newChecks[item.id][key] = 'Sorunsuz';
+                  } else if (lowerKey.includes('aktivite') || lowerKey.includes('activity')) {
+                      newChecks[item.id][key] = 'Yok';
+                  } else {
+                      newChecks[item.id][key] = 'Yok';
+                  }
+                }
+                hasChanges = true;
+              }
+            });
+          }
+        });
+
+        return hasChanges ? newChecks : prevChecks;
+      });
+    }
+  }, [branchEquipment]); // branchEquipment yüklendiğinde veya değiştiğinde çalışır
 
   useEffect(() => {
     if (operatorId) {
@@ -409,7 +453,6 @@ const VisitDetails: React.FC = () => {
     }
   }, [isEditMode, previousPaidMaterials]);
 
-  // ... (calculateDistanceFromPrevious, fetchOperatorId) ...
   const calculateDistanceFromPrevious = () => {
     if (
       visit?.branch?.latitude && 
@@ -447,8 +490,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-
-  // 'paid_products' tablosunu çeker
   const fetchPaidProducts = async () => {
     try {
       const { data, error } = await supabase
@@ -487,6 +528,7 @@ const VisitDetails: React.FC = () => {
 
       if (error) throw error;
       
+      // Önceki ziyareti bulma mantığı (mesafe hesabı için)
       if (data) {
         const { data: operatorData } = await supabase
           .from('operators')
@@ -560,10 +602,9 @@ const VisitDetails: React.FC = () => {
         setReportPhotoPreview(data.report_photo_url);
       }
 
-      // Düzenleme modunda ücretli ve biyosidal verileri çek
       if (data?.status === 'completed') {
         fetchPreviousPaidMaterials(id);
-        fetchPreviousBiocidalUsage(id); // Biyosidal verileri çeken fonksiyon
+        fetchPreviousBiocidalUsage(id);
       }
     } catch (err: any) {
       setError(err.message);
@@ -600,7 +641,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // Düzenleme modunda eski biyosidal verilerini çeker
   const fetchPreviousBiocidalUsage = async (visitId: string) => {
     try {
       const { data, error } = await supabase
@@ -624,7 +664,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // ... (fetchBranchEquipment - Değişiklik yok) ...
   const fetchBranchEquipment = async (branchId: string) => {
     try {
       const { data: branchEquipmentData, error: branchEquipmentError } = await supabase
@@ -679,7 +718,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // ✅ DÜZELTME: Biyosidal ürünleri 'biocidal_products' tablosundan çeker
   const fetchBiocidalProducts = async () => {
     try {
       const { data, error } = await supabase
@@ -695,7 +733,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // ... (handleEquipmentCheckChange, handlePestTypeChange, handleVisitTypeChange - Değişiklik yok) ...
   const handleEquipmentCheckChange = (equipmentId: string, field: string, value: any) => {
     setEquipmentChecks(prev => ({
       ...prev,
@@ -724,7 +761,6 @@ const VisitDetails: React.FC = () => {
     });
   };
 
-  // Biyosidal state handler'ı 'dosage' ve 'unit'i içerecek şekilde güncellendi
   const handleBiocidalChange = (index: number, field: 'productId' | 'quantity' | 'dosage' | 'unit', value: string) => {
     const newBiocidalUsage = [...biocidalUsage];
     newBiocidalUsage[index] = {
@@ -732,7 +768,6 @@ const VisitDetails: React.FC = () => {
       [field]: value
     };
 
-    // Eğer ürün seçimi değiştiyse, birimi otomatik doldur
     if (field === 'productId') {
       const product = biocidalProducts.find(p => p.id === value);
       newBiocidalUsage[index].unit = product?.unit_type || 'adet';
@@ -741,7 +776,6 @@ const VisitDetails: React.FC = () => {
     setBiocidalUsage(newBiocidalUsage);
   };
 
-  // Yeni eklenen satır 'dosage' ve 'unit' içeriyor
   const addBiocidalProduct = () => {
     setBiocidalUsage([...biocidalUsage, { productId: '', quantity: '', dosage: '', unit: '' }]);
   };
@@ -754,7 +788,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // ... (handlePaidProductChange, addPaidProduct, removePaidProduct, updateOperatorStock, savePaidMaterialSale - Değişiklik yok) ...
   const handlePaidProductChange = (index: number, field: 'productId' | 'quantity', value: string) => {
     const newPaidProductUsage = [...paidProductUsage];
     newPaidProductUsage[index] = {
@@ -911,12 +944,9 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-
-  // Biyosidal verilerini 'biocidal_products_usage' tablosuna kaydeder
   const saveBiocidalUsage = async () => {
     if (!id || !operatorId || !visit) return;
 
-    // Düzenleme modundaysak, bu ziyarete ait eski kayıtları sil
     if (isEditMode) {
       const { error: deleteError } = await supabase
         .from('biocidal_products_usage')
@@ -956,7 +986,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // ... (handlePhotoChange, clearPhoto - Değişiklik yok) ...
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) {
       setReportPhotoFile(null);
@@ -973,7 +1002,6 @@ const VisitDetails: React.FC = () => {
     setReportPhotoFile(null);
     setReportPhotoPreview(null);
   };
-
 
   const saveVisit = async () => {
     if (!reportNumber) {
@@ -1000,7 +1028,6 @@ const VisitDetails: React.FC = () => {
     try {
       setLoading(true);
       
-      // 1. Rapor fotoğrafı yükleme
       let uploadedPhotoUrl: string | null = visit?.report_photo_url || null;
       let uploadedPhotoFilePath: string | null = visit?.report_photo_file_path || null;
 
@@ -1024,7 +1051,6 @@ const VisitDetails: React.FC = () => {
         uploadedPhotoFilePath = null;
       }
 
-      // Notları hazırla
       let updatedNotes = notes;
       if (showPaidVisitAmount && paidVisitAmount) {
         updatedNotes = `Ücretli ziyaret tutarı: ${paidVisitAmount} TL\n\n${notes}`;
@@ -1032,7 +1058,6 @@ const VisitDetails: React.FC = () => {
       
       const visitTypeValue = selectedVisitTypes.length > 0 ? selectedVisitTypes[0] : null;
       
-      // 2. 'visits' tablosunu güncelle
       const { data, error } = await supabase
         .from('visits')
         .update({
@@ -1050,17 +1075,14 @@ const VisitDetails: React.FC = () => {
 
       if (error) throw error;
       
-      // 3. Ücretli ürünleri kaydet (veya güncelle)
       if (!noPaidProductsUsed) {
         await savePaidMaterialSale();
       } else if (isEditMode && existingSaleId) {
         await supabase.from('paid_material_sales').delete().eq('id', existingSaleId);
       }
 
-      // 4. Biyosidal ürünleri kaydet (veya güncelle)
       await saveBiocidalUsage();
 
-      // 5. E-posta gönder
       if (sendEmailNotification && visit) {
         try {
           const recipientEmails = await getRecipientEmails(
@@ -1090,7 +1112,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // ... (handleAddEquipment, handleEquipmentAdded, groupedEquipment - Değişiklik yok) ...
   const handleAddEquipment = () => {
     if (visit?.branch?.id) {
       setShowAddEquipmentModal(true);
@@ -1113,6 +1134,12 @@ const VisitDetails: React.FC = () => {
     return acc;
   }, {} as Record<string, BranchEquipment[]>);
 
+  const XCloseIcon = ({ size }: { size?: number }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+      </svg>
+  );
 
   if (loading) return <div>Yükleniyor...</div>;
   if (error) return <div>Hata: {error}</div>;
@@ -1120,7 +1147,6 @@ const VisitDetails: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4">
-      {/* ... (Header bölümü - Değişiklik yok) ... */}
       <div className="mb-6">
         <div className="text-sm text-gray-500">
           {new Date(visit.visit_date).toLocaleString('tr-TR', {
@@ -1161,7 +1187,6 @@ const VisitDetails: React.FC = () => {
         )}
       </div>
 
-      {/* ... (Ekipmanlar bölümü - Değişiklik yok) ... */}
       {visit.branch && (
         <div className="bg-white rounded-lg shadow-md mb-6">
           <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg flex justify-between items-center">
@@ -1212,7 +1237,6 @@ const VisitDetails: React.FC = () => {
                                       onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)}
                                       className="border rounded p-1"
                                     >
-                                      <option value="">Seçiniz</option>
                                       <option value="true">Evet</option>
                                       <option value="false">Hayır</option>
                                     </select>
@@ -1250,7 +1274,7 @@ const VisitDetails: React.FC = () => {
         </div>
       )}
 
-      {/* ... (Ziyaret Türü, Hedef Zararlılar, Yoğunluk bölümleri - Değişiklik yok) ... */}
+      {/* ... (Ziyaret Türü, Hedef Zararlılar, Yoğunluk bölümleri - Değişiklik yok, önceki kodun aynısı) ... */}
       <div className="bg-white rounded-lg shadow-md mb-6">
         <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
           <h2 className="font-medium">Ziyaret Türü</h2>
@@ -1325,7 +1349,7 @@ const VisitDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* ✅ GÜNCELLENDİ: Biyosidal Ürünler bölümü (Doz/Birim eklendi) */}
+      {/* Biyosidal ve Ücretli Ürünler, Notlar, Saat, Rapor No, Resim, E-posta, Kaydet - (Önceki kodun aynısı) */}
       {biocidalUsage.map((item, index) => (
         <div key={`biocidal-${index}`} className="bg-white rounded-lg shadow-md mb-6">
           <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg flex justify-between items-center">
@@ -1351,7 +1375,6 @@ const VisitDetails: React.FC = () => {
                   className="w-full p-2 border rounded"
                 >
                   <option value="">Seçiniz...</option>
-                  {/* 'biocidal_products' tablosundan çekilen veriler */}
                   {biocidalProducts.map(product => (
                     <option key={product.id} value={product.id}>
                       {product.name}
@@ -1359,63 +1382,39 @@ const VisitDetails: React.FC = () => {
                   ))}
                 </select>
               </div>
-              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Miktar
+                    Miktar / Doz
                   </label>
-                  <input 
-                    type="text" 
-                    value={item.quantity}
-                    onChange={(e) => handleBiocidalChange(index, 'quantity', e.target.value)}
-                    className="w-full p-2 border rounded" 
-                    placeholder="örn: 1.5"
-                  />
+                  <div className="flex">
+                    <input 
+                      type="text" 
+                      value={item.quantity}
+                      onChange={(e) => handleBiocidalChange(index, 'quantity', e.target.value)}
+                      className="w-full p-2 border rounded-l" 
+                    />
+                    <span className="bg-gray-100 p-2 border border-l-0 rounded-r">
+                      {biocidalProducts.find(p => p.id === item.productId)?.unit_type || 'birim'}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Birim
-                  </label>
-                  <input 
-                    type="text" 
-                    value={item.unit} // State'den 'unit' alınıyor
-                    onChange={(e) => handleBiocidalChange(index, 'unit', e.target.value)}
-                    className="w-full p-2 border rounded bg-gray-50" 
-                    placeholder="örn: lt, ml, gr"
-                  />
-                </div>
+                {index === biocidalUsage.length - 1 && (
+                  <div className="flex items-end">
+                    <button 
+                      onClick={addBiocidalProduct}
+                      className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center"
+                    >
+                      <Plus size={16} className="mr-1" /> Ürün Ekle
+                    </button>
+                  </div>
+                )}
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Doz
-                </label>
-                <input 
-                  type="text" 
-                  value={item.dosage} // State'den 'dosage' alınıyor
-                  onChange={(e) => handleBiocidalChange(index, 'dosage', e.target.value)}
-                  className="w-full p-2 border rounded" 
-                  placeholder="örn: 10ml / 1L Su"
-                />
-              </div>
-
-              {index === biocidalUsage.length - 1 && (
-                <div className="flex items-end">
-                  <button 
-                    onClick={addBiocidalProduct}
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center"
-                  >
-                    <Plus size={16} className="mr-1" /> Biyosidal Ekle
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
       ))}
 
-      {/* ... (Ücretli Ürünler bölümü - Değişiklik yok) ... */}
       <div className="bg-white rounded-lg shadow-md mb-6">
         <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
           <h2 className="font-medium">Ücretli Ürünler</h2>
@@ -1520,7 +1519,6 @@ const VisitDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* ... (Notlar, Açıklamalar, Saatler, Rapor No, Fotoğraf, E-posta ve Kaydet Butonu - Değişiklik yok) ... */}
       <div className="bg-white rounded-lg shadow-md mb-6">
         <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
           <h2 className="font-medium">Notlar (Sadece Operatör Görür)</h2>
@@ -1619,7 +1617,7 @@ const VisitDetails: React.FC = () => {
                 onClick={clearPhoto}
                 className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
               >
-                <CloseIcon size={16} />
+                <XCloseIcon size={16} />
               </button>
             </div>
           )}
