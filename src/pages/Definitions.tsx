@@ -110,12 +110,21 @@ const DefinitionItemCard: React.FC<{
   onDelete: (itemId: string, tableName: string) => void;
   onCancelNew: (itemId: string) => void;
   onAddProperty: (itemId: string) => void;
-  onDeleteProperty: (itemId: string, propertyKey: string) => void;
+  // onDeleteProperty prop'unu kaldırdık veya kullanmayacağız, çünkü lokal state'i güncelleyeceğiz
   isAdmin: boolean;
-}> = ({ item, category, onUpdate, onDelete, onCancelNew, onAddProperty, onDeleteProperty, isAdmin }) => {
+}> = ({ item, category, onUpdate, onDelete, onCancelNew, onAddProperty, isAdmin }) => {
   const [isEditing, setIsEditing] = useState(item.isNew || false);
   const [loading, setLoading] = useState(false);
   const [editedItem, setEditedItem] = useState<DefinitionItem>(item);
+
+  // Parent'tan gelen item değişirse (örneğin yeni özellik eklendiğinde) local state'i güncelle
+  useEffect(() => {
+    // Sadece özellikler değiştiyse ve biz düzenleme modundaysak özellikleri güncelle
+    // Bu, yeni özellik eklendiğinde inputların kaybolmamasını sağlar
+    if (JSON.stringify(item.properties) !== JSON.stringify(editedItem.properties)) {
+        setEditedItem(prev => ({ ...prev, properties: item.properties }));
+    }
+  }, [item.properties]);
 
   const handleSave = async () => {
     if (!editedItem.name) {
@@ -139,6 +148,15 @@ const DefinitionItemCard: React.FC<{
 
   const handleChange = (field: keyof DefinitionItem, value: any) => {
     setEditedItem(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Özelliği LOCAL state'den silen fonksiyon (Düzeltme burada)
+  const handleDeletePropertyLocal = (keyToDelete: string) => {
+    setEditedItem(prev => {
+        const newProperties = { ...prev.properties };
+        delete newProperties[keyToDelete];
+        return { ...prev, properties: newProperties };
+    });
   };
 
   return (
@@ -175,7 +193,15 @@ const DefinitionItemCard: React.FC<{
                 {editedItem.properties && Object.entries(editedItem.properties).map(([key, prop]) => (
                     <div key={key} className="flex justify-between items-center text-sm bg-gray-100 p-2 rounded">
                         <span>{prop.label} <span className="text-gray-400">({prop.type})</span></span>
-                        {isEditing && (<button onClick={() => onDeleteProperty(item.id, key)} className="text-red-500 hover:text-red-700"><Trash2 size={14}/></button>)}
+                        {isEditing && (
+                            <button 
+                                onClick={() => handleDeletePropertyLocal(key)} 
+                                className="text-red-500 hover:text-red-700"
+                                title="Özelliği Sil"
+                            >
+                                <Trash2 size={14}/>
+                            </button>
+                        )}
                     </div>
                 ))}
                 {(!editedItem.properties || Object.keys(editedItem.properties).length === 0) && (
@@ -407,21 +433,7 @@ const Definitions: React.FC = () => {
     }));
   };
 
-  const handleDeleteProperty = (itemId: string, propertyKey: string) => {
-    setCategories(prev => prev.map(cat => {
-      if (cat.id !== 'equipment') return cat;
-      return {
-        ...cat,
-        items: cat.items.map(item => {
-          if (item.id === itemId && item.properties) {
-            const { [propertyKey]: _, ...rest } = item.properties;
-            return { ...item, properties: rest };
-          }
-          return item;
-        })
-      };
-    }));
-  };
+  // handleDeleteProperty artık kullanılmıyor, DefinitionItemCard içinde lokal hallediliyor.
 
   const currentCategory = categories.find(cat => cat.id === selectedCategory);
   
@@ -482,7 +494,6 @@ const Definitions: React.FC = () => {
                       onDelete={() => confirmDeleteItem(item.id, currentCategory.table)}
                       onCancelNew={handleCancelNewItem}
                       onAddProperty={handleAddProperty}
-                      onDeleteProperty={handleDeleteProperty}
                       isAdmin={isAdmin}
                     />
                   ))}
@@ -503,7 +514,6 @@ const Definitions: React.FC = () => {
                             onDelete={() => confirmDeleteItem(item.id, currentCategory.table)}
                             onCancelNew={handleCancelNewItem}
                             onAddProperty={() => {}}
-                            onDeleteProperty={() => {}}
                             isAdmin={isAdmin}
                             />
                         ))}
