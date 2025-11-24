@@ -112,6 +112,7 @@ import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
 import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm';
 import PesticideUsageReport from './pages/PesticideUsageReport';
 import AdminPesticideReport from './pages/AdminPesticideReport';
+import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
 // YENİ IMPORT
 import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
@@ -356,6 +357,7 @@ function App() {
             <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
+            <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
             <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
             
             {/* YENİ EKLENEN ADMIN ROUTE */}
