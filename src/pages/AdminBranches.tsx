@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Search, Plus, Edit2, Trash2, Building, Users, MapPin } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Building, Users, MapPin, Layout } from 'lucide-react'; // Layout ikonu eklendi
 import { useNavigate } from 'react-router-dom';
 import AddBranchModal from '../components/Customers/AddBranchModal';
 import EditBranchModal from '../components/Customers/EditBranchModal';
@@ -199,8 +199,22 @@ const AdminBranches: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end gap-2">
-                          <button onClick={() => handleEdit(branch)} className="text-blue-600 hover:text-blue-900" title="Düzenle"><Edit2 size={16} /></button>
-                          <button onClick={() => handleDelete(branch.id)} className="text-red-600 hover:text-red-900" title="Sil"><Trash2 size={16} /></button>
+                          
+                          {/* Kroki Butonu (Yeni Eklendi) */}
+                          <button 
+                            onClick={() => navigate(`/subeler/kroki-duzenle?branch_id=${branch.id}`)} 
+                            className="text-purple-600 hover:text-purple-900 p-1 rounded hover:bg-purple-50" 
+                            title="Kroki Çiz / Düzenle"
+                          >
+                            <Layout size={18} />
+                          </button>
+
+                          <button onClick={() => handleEdit(branch)} className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50" title="Düzenle">
+                            <Edit2 size={18} />
+                          </button>
+                          <button onClick={() => handleDelete(branch.id)} className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50" title="Sil">
+                            <Trash2 size={18} />
+                          </button>
                         </div>
                       </td>
                     </tr>
