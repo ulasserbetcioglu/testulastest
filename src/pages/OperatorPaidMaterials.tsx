@@ -106,7 +106,7 @@ const OperatorPaidMaterials: React.FC = () => {
       
       const visitIds = visits.map(v => v.id);
       
-      // --- DÜZELTME: 'product:paid_products' kullanıldı ---
+      // --- DÜZELTME: 'product:paid_products' ve FK ismi kullanıldı ---
       const { data, error } = await supabase
         .from('paid_material_sales')
         .select(`
@@ -124,7 +124,7 @@ const OperatorPaidMaterials: React.FC = () => {
           items:paid_material_sale_items (
             id,
             product_id,
-            product:paid_products (name), 
+            product:paid_products!paid_material_sale_items_product_id_fkey(name), 
             quantity
           )
         `)
