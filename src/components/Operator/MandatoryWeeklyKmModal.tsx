@@ -21,9 +21,8 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetchingLastKm, setFetchingLastKm] = useState(false);
-  const [isFirstEntry, setIsFirstEntry] = useState(true); // İlk kayıt mı kontrolü
+  const [isFirstEntry, setIsFirstEntry] = useState(true);
 
-  // Modal açıldığında son km bilgisini çek
   useEffect(() => {
     if (isOpen && operatorId) {
       fetchLastKmData();
@@ -33,30 +32,47 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
   const fetchLastKmData = async () => {
     setFetchingLastKm(true);
     try {
-      // Operatörün en son girdiği kaydı bul (yıla ve haftaya göre tersten sırala)
-      const { data, error } = await supabase
+      // 1. Önce bu hafta için zaten bir kayıt var mı diye bakalım (Varsa onu getir)
+      const now = new Date();
+      const weekNumber = getWeekNumber(now);
+      const year = now.getFullYear();
+
+      const { data: currentWeekData } = await supabase
         .from('operator_weekly_km')
-        .select('end_km')
+        .select('*')
         .eq('operator_id', operatorId)
-        .order('year', { ascending: false })
-        .order('week_number', { ascending: false })
-        .limit(1)
+        .eq('year', year)
+        .eq('week_number', weekNumber)
         .maybeSingle();
 
-      if (error) throw error;
-
-      if (data) {
-        // Önceki kayıt varsa, onun Bitiş KM'si bu haftanın Başlangıç KM'sidir.
-        setStartKm(data.end_km.toString());
-        setIsFirstEntry(false); // Artık ilk kayıt değil, input kilitlenecek
+      if (currentWeekData) {
+        // Eğer bu hafta zaten kayıt girilmişse, o değerleri doldur
+        setStartKm(currentWeekData.start_km.toString());
+        setEndKm(currentWeekData.end_km.toString());
+        setIsFirstEntry(false); // Düzenleme modunda aç
       } else {
-        // Kayıt yoksa manuel girişe izin ver
-        setStartKm('');
-        setIsFirstEntry(true);
+        // 2. Bu hafta kayıt yoksa, geçen haftanın bitiş kilometresini çek
+        const { data: lastData } = await supabase
+          .from('operator_weekly_km')
+          .select('end_km')
+          .eq('operator_id', operatorId)
+          // Mevcut haftadan öncekileri ara
+          .or(`year.lt.${year},and(year.eq.${year},week_number.lt.${weekNumber})`)
+          .order('year', { ascending: false })
+          .order('week_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastData) {
+          setStartKm(lastData.end_km.toString());
+          setIsFirstEntry(false);
+        } else {
+          setStartKm('');
+          setIsFirstEntry(true);
+        }
       }
     } catch (err) {
-      console.error('Son KM çekme hatası:', err);
-      // Hata durumunda manuel girişe izin verelim ki işlem tıkanmasın
+      console.error('Veri çekme hatası:', err);
       setIsFirstEntry(true);
     } finally {
       setFetchingLastKm(false);
@@ -93,27 +109,58 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
       const weekNumber = getWeekNumber(now);
       const year = now.getFullYear();
 
-      const { error } = await supabase
+      // Mevcut kaydı kontrol et (Güncelleme mi Ekleme mi?)
+      const { data: existingRecord } = await supabase
         .from('operator_weekly_km')
-        .insert({
-          operator_id: operatorId,
-          week_number: weekNumber,
-          year: year,
-          start_km: start,
-          end_km: end,
-          total_km: end - start,
-          submitted_at: now.toISOString(),
-        });
+        .select('id')
+        .eq('operator_id', operatorId)
+        .eq('year', year)
+        .eq('week_number', weekNumber)
+        .maybeSingle();
+
+      let error;
+      
+      if (existingRecord) {
+        // Güncelleme (Update)
+        const { error: updateError } = await supabase
+          .from('operator_weekly_km')
+          .update({
+            start_km: start,
+            end_km: end,
+            total_km: end - start,
+            submitted_at: now.toISOString(),
+          })
+          .eq('id', existingRecord.id);
+        error = updateError;
+      } else {
+        // Yeni Kayıt (Insert)
+        const { error: insertError } = await supabase
+          .from('operator_weekly_km')
+          .insert({
+            operator_id: operatorId,
+            week_number: weekNumber,
+            year: year,
+            start_km: start,
+            end_km: end,
+            total_km: end - start,
+            submitted_at: now.toISOString(),
+          });
+        error = insertError;
+      }
 
       if (error) throw error;
 
+      // LocalStorage'a kaydet ki sürekli sormasın
       localStorage.setItem(`km_entry_${operatorId}_${year}_${weekNumber}`, 'completed');
 
-      toast.success('Haftalık km bilgisi kaydedildi');
+      toast.success('Haftalık km bilgisi başarıyla kaydedildi');
+      
+      // Modal'ı kapat
       onSuccess();
-    } catch (err) {
+
+    } catch (err: any) {
       console.error('KM kayıt hatası:', err);
-      toast.error('Kayıt sırasında hata oluştu');
+      toast.error(`Kayıt başarısız: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -170,7 +217,7 @@ const MandatoryWeeklyKmModal: React.FC<MandatoryWeeklyKmModalProps> = ({
                 value={startKm}
                 onChange={(e) => setStartKm(e.target.value)}
                 required
-                disabled={!isFirstEntry} // İlk kayıt değilse düzenlenemez
+                disabled={!isFirstEntry}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
                   !isFirstEntry 
                     ? 'bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed' 
