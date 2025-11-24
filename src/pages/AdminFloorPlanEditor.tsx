@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Save, Square, MousePointer, Move, Trash2, ArrowLeft, Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { 
+  Save, Square, MousePointer, Move, Trash2, ArrowLeft, 
+  Maximize2, ZoomIn, ZoomOut, Type, DoorOpen, LayoutTemplate, 
+  Plus, Layers 
+} from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface Equipment {
@@ -12,13 +16,21 @@ interface Equipment {
 
 interface FloorPlanElement {
   id: string;
-  type: 'wall' | 'room' | 'door';
+  type: 'wall' | 'room' | 'door' | 'window' | 'text';
   x: number;
   y: number;
   width: number;
   height: number;
-  color: string;
+  text?: string; // Metin içeriği veya oda adı
+  fontSize?: number;
   rotation: number;
+}
+
+interface FloorPlan {
+  id: string;
+  title: string;
+  elements: FloorPlanElement[];
+  equipment_positions: Record<string, { x: number, y: number }>;
 }
 
 const AdminFloorPlanEditor: React.FC = () => {
@@ -28,36 +40,38 @@ const AdminFloorPlanEditor: React.FC = () => {
 
   // Veriler
   const [equipments, setEquipments] = useState<Equipment[]>([]);
-  const [elements, setElements] = useState<FloorPlanElement[]>([]);
-  const [equipmentPositions, setEquipmentPositions] = useState<Record<string, { x: number, y: number }>>({});
+  const [plans, setPlans] = useState<FloorPlan[]>([]);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   
   // Editör Durumu
   const [loading, setLoading] = useState(true);
-  const [selectedTool, setSelectedTool] = useState<'select' | 'wall' | 'room'>('select');
+  const [selectedTool, setSelectedTool] = useState<'select' | 'wall' | 'room' | 'door' | 'window' | 'text'>('select');
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
 
-  // Sürükleme ve Boyutlandırma Durumları
+  // Sürükleme/Boyutlandırma
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const [elementStartPos, setElementStartPos] = useState({ x: 0, y: 0, w: 0, h: 0 });
-  const [draggedEquipmentId, setDraggedEquipmentId] = useState<string | null>(null); // Sidebar'dan sürüklenen
+  const [draggedEquipmentId, setDraggedEquipmentId] = useState<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Aktif plan verisi
+  const currentPlan = plans.find(p => p.id === currentPlanId);
 
   useEffect(() => {
     if (branchId) fetchData();
   }, [branchId]);
 
-  // Klavye Olayları (Silme vb.)
+  // Klavye kısayolları (Silme)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedElementId) {
-          // Seçili duvar/oda sil
-          setElements(prev => prev.filter(el => el.id !== selectedElementId));
-          setSelectedElementId(null);
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElementId) {
+        // Aktif inputta değilse sil (metin düzenlerken silmesin diye)
+        if (document.activeElement?.tagName !== 'INPUT') {
+            handleDeleteSelected();
         }
       }
     };
@@ -67,21 +81,38 @@ const AdminFloorPlanEditor: React.FC = () => {
 
   const fetchData = async () => {
     try {
+      // Ekipmanları çek
       const { data: eqData } = await supabase
         .from('branch_equipment')
         .select('id, equipment_code, equipment:equipment_id(name, type)')
         .eq('branch_id', branchId);
       setEquipments(eqData || []);
 
+      // Krokileri çek
       const { data: planData } = await supabase
         .from('branch_floor_plans')
         .select('*')
         .eq('branch_id', branchId)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
-      if (planData) {
-        setElements(planData.elements || []);
-        setEquipmentPositions(planData.equipment_positions || {});
+      if (planData && planData.length > 0) {
+        setPlans(planData.map(p => ({
+            id: p.id,
+            title: p.title || 'Kat 1',
+            elements: p.elements || [],
+            equipment_positions: p.equipment_positions || {}
+        })));
+        setCurrentPlanId(planData[0].id);
+      } else {
+        // Hiç plan yoksa varsayılan bir tane oluştur (state'de)
+        const newId = 'temp-new';
+        setPlans([{
+            id: newId,
+            title: 'Zemin Kat',
+            elements: [],
+            equipment_positions: {}
+        }]);
+        setCurrentPlanId(newId);
       }
     } catch (error) {
       console.error('Veri hatası:', error);
@@ -90,204 +121,230 @@ const AdminFloorPlanEditor: React.FC = () => {
     }
   };
 
-  // --- FARE OLAYLARI (MOUSE EVENTS) ---
+  // --- GÜNCELLEME YARDIMCILARI ---
+  const updateCurrentPlan = (updates: Partial<FloorPlan>) => {
+    setPlans(prev => prev.map(p => p.id === currentPlanId ? { ...p, ...updates } : p));
+  };
 
-  // 1. Canvas veya Eleman Üzerine Basma
+  const updateElements = (newElements: FloorPlanElement[]) => {
+    updateCurrentPlan({ elements: newElements });
+  };
+
+  const updatePositions = (newPositions: Record<string, { x: number, y: number }>) => {
+    updateCurrentPlan({ equipment_positions: newPositions });
+  };
+
+  // --- FARE OLAYLARI ---
   const handleMouseDown = (e: React.MouseEvent, elementId?: string, isResizeHandle = false, equipmentId?: string) => {
-    if (selectedTool !== 'select') return;
+    if (selectedTool !== 'select' || !currentPlan) return;
 
-    // Eğer bir ekipmana tıklandıysa
     if (equipmentId) {
        e.stopPropagation();
        setIsDragging(true);
-       setDraggedEquipmentId(equipmentId); // Mevcut ekipmanı taşıma modu
-       // Başlangıç pozisyonunu kaydet (offset hesabı için gerekirse eklenebilir)
+       setDraggedEquipmentId(equipmentId);
        return;
     }
 
-    // Eğer bir yapı elemanına (duvar/oda) tıklandıysa
     if (elementId) {
       e.stopPropagation();
       setSelectedElementId(elementId);
       
-      const el = elements.find(e => e.id === elementId);
+      const el = currentPlan.elements.find(e => e.id === elementId);
       if (!el) return;
 
       setDragStartPos({ x: e.clientX, y: e.clientY });
       setElementStartPos({ x: el.x, y: el.y, w: el.width, h: el.height });
 
-      if (isResizeHandle) {
-        setIsResizing(true);
-      } else {
-        setIsDragging(true);
-      }
+      if (isResizeHandle) setIsResizing(true);
+      else setIsDragging(true);
     } else {
-      // Boşluğa tıklandı, seçimi kaldır
       setSelectedElementId(null);
     }
   };
 
-  // 2. Fare Hareketi (Sürükleme/Boyutlandırma)
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!svgRef.current) return;
+    if (!svgRef.current || !currentPlan) return;
 
-    // A) Sidebar'dan yeni ekipman sürükleniyorsa (HTML5 Drag API kullanır, buraya düşmez)
-    // B) Canvas içindeki mevcut ekipman taşınıyorsa
+    // Ekipman Taşıma
     if (isDragging && draggedEquipmentId) {
       const rect = svgRef.current.getBoundingClientRect();
       const x = (e.clientX - rect.left) / scale;
       const y = (e.clientY - rect.top) / scale;
       
-      setEquipmentPositions(prev => ({
-        ...prev,
+      updatePositions({
+        ...currentPlan.equipment_positions,
         [draggedEquipmentId]: { x: Math.round(x), y: Math.round(y) }
-      }));
+      });
       return;
     }
 
-    // C) Yapı elemanı taşınıyor veya boyutlandırılıyor
+    // Eleman Taşıma/Boyutlandırma
     if (selectedElementId) {
       const dx = (e.clientX - dragStartPos.x) / scale;
       const dy = (e.clientY - dragStartPos.y) / scale;
 
       if (isDragging) {
-        setElements(prev => prev.map(el => 
-          el.id === selectedElementId 
-            ? { ...el, x: elementStartPos.x + dx, y: elementStartPos.y + dy } 
-            : el
+        updateElements(currentPlan.elements.map(el => 
+          el.id === selectedElementId ? { ...el, x: elementStartPos.x + dx, y: elementStartPos.y + dy } : el
         ));
       } else if (isResizing) {
-        setElements(prev => prev.map(el => 
-          el.id === selectedElementId 
-            ? { ...el, width: Math.max(20, elementStartPos.w + dx), height: Math.max(20, elementStartPos.h + dy) } 
-            : el
+        updateElements(currentPlan.elements.map(el => 
+          el.id === selectedElementId ? { ...el, width: Math.max(20, elementStartPos.w + dx), height: Math.max(20, elementStartPos.h + dy) } : el
         ));
       }
     }
   };
 
-  // 3. Fareyi Bırakma
   const handleMouseUp = () => {
     setIsDragging(false);
     setIsResizing(false);
-    setDraggedEquipmentId(null); // Ekipman taşıma bitti
+    setDraggedEquipmentId(null);
   };
 
-  // --- YENİ EKLEME FONKSİYONLARI ---
-
-  const addElement = (type: 'wall' | 'room') => {
+  // --- ARAÇLAR ---
+  const addElement = (type: FloorPlanElement['type']) => {
+    if (!currentPlan) return;
+    
     const newEl: FloorPlanElement = {
       id: Date.now().toString(),
       type,
       x: 100, y: 100,
-      width: type === 'wall' ? 200 : 150,
-      height: type === 'wall' ? 20 : 150,
-      color: type === 'wall' ? '#374151' : '#f3f4f6',
+      width: type === 'wall' ? 200 : type === 'text' ? 100 : 120,
+      height: type === 'wall' ? 10 : type === 'text' ? 30 : 120,
+      text: type === 'text' ? 'Metin' : type === 'room' ? 'Oda Adı' : '',
+      fontSize: 14,
       rotation: 0
     };
-    setElements([...elements, newEl]);
+
+    if (type === 'door') { newEl.width = 40; newEl.height = 10; }
+    if (type === 'window') { newEl.width = 40; newEl.height = 10; }
+
+    updateElements([...currentPlan.elements, newEl]);
     setSelectedElementId(newEl.id);
     setSelectedTool('select');
   };
 
-  // --- HTML5 DRAG & DROP (Sidebar'dan Canvas'a) ---
-  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
-  
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const eqId = e.dataTransfer.getData('equipmentId');
-    if (!eqId || !svgRef.current) return;
+    if (!eqId || !svgRef.current || !currentPlan) return;
 
     const rect = svgRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / scale;
     const y = (e.clientY - rect.top) / scale;
 
-    setEquipmentPositions(prev => ({
-      ...prev,
+    updatePositions({
+      ...currentPlan.equipment_positions,
       [eqId]: { x: Math.round(x), y: Math.round(y) }
-    }));
+    });
   };
 
-  // --- KAYDETME ---
   const handleSave = async () => {
-    if (!branchId) return;
+    if (!branchId || !currentPlan) return;
     try {
-      const { error } = await supabase
-        .from('branch_floor_plans')
-        .upsert({
+      const planToSave = {
           branch_id: branchId,
-          elements,
-          equipment_positions: equipmentPositions,
+          title: currentPlan.title,
+          elements: currentPlan.elements,
+          equipment_positions: currentPlan.equipment_positions,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'branch_id' });
+      };
 
-      if (error) throw error;
+      if (currentPlan.id.startsWith('temp-')) {
+          // Insert new
+          const { data, error } = await supabase.from('branch_floor_plans').insert(planToSave).select().single();
+          if (error) throw error;
+          // Update local ID
+          setPlans(prev => prev.map(p => p.id === currentPlanId ? { ...p, id: data.id } : p));
+          setCurrentPlanId(data.id);
+      } else {
+          // Update existing
+          const { error } = await supabase
+            .from('branch_floor_plans')
+            .update(planToSave)
+            .eq('id', currentPlan.id);
+          if (error) throw error;
+      }
+
       toast.success('Kroki kaydedildi!');
     } catch (err: any) {
       toast.error('Hata: ' + err.message);
     }
   };
 
-  // --- SİLME ---
+  const handleAddNewPlan = async () => {
+      const title = prompt('Yeni kat adı (örn: 1. Kat):');
+      if (!title) return;
+
+      const newPlan: FloorPlan = {
+          id: `temp-${Date.now()}`,
+          title,
+          elements: [],
+          equipment_positions: {}
+      };
+      
+      setPlans([...plans, newPlan]);
+      setCurrentPlanId(newPlan.id);
+  };
+
   const handleDeleteSelected = () => {
-     if (selectedElementId) {
-        setElements(prev => prev.filter(el => el.id !== selectedElementId));
+     if (selectedElementId && currentPlan) {
+        updateElements(currentPlan.elements.filter(el => el.id !== selectedElementId));
         setSelectedElementId(null);
      }
   };
 
   const handleRemoveEquipment = (eqId: string) => {
-    const newPos = { ...equipmentPositions };
+    if (!currentPlan) return;
+    const newPos = { ...currentPlan.equipment_positions };
     delete newPos[eqId];
-    setEquipmentPositions(newPos);
+    updatePositions(newPos);
   };
+
+  const selectedElement = currentPlan?.elements.find(el => el.id === selectedElementId);
 
   if (loading) return <div className="flex justify-center items-center h-screen">Yükleniyor...</div>;
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100 overflow-hidden" onMouseUp={handleMouseUp} onMouseMove={handleMouseMove}>
-      {/* Toolbar */}
-      <div className="bg-white border-b px-6 py-3 flex justify-between items-center shadow-sm z-20">
+    <div className="h-screen flex flex-col bg-gray-100" onMouseUp={handleMouseUp} onMouseMove={handleMouseMove}>
+      {/* Üst Toolbar */}
+      <div className="bg-white border-b px-4 py-3 flex justify-between items-center shadow-sm z-20">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full"><ArrowLeft size={20}/></button>
-          <h1 className="font-bold text-lg text-gray-800">Kroki Düzenleyici</h1>
           
-          <div className="h-8 w-px bg-gray-200 mx-2"></div>
-          
-          <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
-            <button 
-              onClick={() => setSelectedTool('select')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${selectedTool === 'select' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:bg-gray-200'}`}
-            >
-              <MousePointer size={16} /> Seç
-            </button>
-            <button 
-              onClick={() => addElement('wall')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium text-gray-600 hover:bg-white hover:shadow transition-all"
-            >
-              <div className="w-4 h-1 bg-current"></div> Duvar Ekle
-            </button>
-            <button 
-              onClick={() => addElement('room')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium text-gray-600 hover:bg-white hover:shadow transition-all"
-            >
-              <Square size={16} /> Oda Ekle
-            </button>
+          {/* Kat Seçimi */}
+          <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
+              <select 
+                value={currentPlanId || ''} 
+                onChange={(e) => setCurrentPlanId(e.target.value)}
+                className="bg-transparent border-none text-sm font-semibold focus:ring-0 cursor-pointer py-1 pl-2 pr-8"
+              >
+                  {plans.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+              <button onClick={handleAddNewPlan} className="p-1 hover:bg-white rounded text-blue-600" title="Yeni Kat Ekle"><Plus size={16}/></button>
           </div>
 
-          <div className="flex items-center gap-2 ml-4">
-             <button onClick={() => setScale(s => Math.max(0.5, s - 0.1))} className="p-2 rounded hover:bg-gray-200"><ZoomOut size={16}/></button>
-             <span className="text-xs font-mono w-12 text-center">{Math.round(scale * 100)}%</span>
-             <button onClick={() => setScale(s => Math.min(2, s + 0.1))} className="p-2 rounded hover:bg-gray-200"><ZoomIn size={16}/></button>
+          <div className="h-8 w-px bg-gray-200 mx-2"></div>
+          
+          {/* Araçlar */}
+          <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
+            <button onClick={() => setSelectedTool('select')} className={`p-2 rounded ${selectedTool === 'select' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:bg-gray-200'}`} title="Seç"><MousePointer size={18} /></button>
+            <button onClick={() => addElement('wall')} className={`p-2 rounded hover:bg-white hover:shadow text-gray-600`} title="Duvar"><div className="w-4 h-1 bg-current"></div></button>
+            <button onClick={() => addElement('room')} className={`p-2 rounded hover:bg-white hover:shadow text-gray-600`} title="Oda"><Square size={18} /></button>
+            <button onClick={() => addElement('door')} className={`p-2 rounded hover:bg-white hover:shadow text-gray-600`} title="Kapı"><DoorOpen size={18} /></button>
+            <button onClick={() => addElement('window')} className={`p-2 rounded hover:bg-white hover:shadow text-gray-600`} title="Pencere"><LayoutTemplate size={18} /></button>
+            <button onClick={() => addElement('text')} className={`p-2 rounded hover:bg-white hover:shadow text-gray-600`} title="Metin"><Type size={18} /></button>
+          </div>
+
+          {/* Zoom */}
+          <div className="flex items-center gap-1 ml-2 bg-gray-100 rounded-lg p-1">
+             <button onClick={() => setScale(s => Math.max(0.5, s - 0.1))} className="p-1.5 hover:bg-white rounded"><ZoomOut size={14}/></button>
+             <span className="text-xs w-8 text-center">{Math.round(scale * 100)}%</span>
+             <button onClick={() => setScale(s => Math.min(2, s + 0.1))} className="p-1.5 hover:bg-white rounded"><ZoomIn size={14}/></button>
           </div>
         </div>
 
         <div className="flex gap-2">
-          {selectedElementId && (
-             <button onClick={handleDeleteSelected} className="bg-red-50 text-red-600 px-4 py-2 rounded hover:bg-red-100 flex items-center gap-2 border border-red-200">
-               <Trash2 size={18} /> Sil
-             </button>
-          )}
           <button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded flex items-center gap-2 hover:bg-blue-700 shadow-sm">
             <Save size={18} /> Kaydet
           </button>
@@ -295,70 +352,52 @@ const AdminFloorPlanEditor: React.FC = () => {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar - Ekipmanlar */}
-        <div className="w-72 bg-white border-r overflow-y-auto flex flex-col z-10 shadow-lg">
-          <div className="p-4 border-b bg-gray-50">
-            <h3 className="font-bold text-gray-700">Ekipman Listesi</h3>
-            <p className="text-xs text-gray-500 mt-1">Yerleştirmek için krokiye sürükleyin.</p>
-          </div>
-          <div className="flex-1 p-3 space-y-2 overflow-y-auto">
+        {/* Sol Sidebar - Ekipmanlar */}
+        <div className="w-64 bg-white border-r flex flex-col z-10 shadow-lg">
+          <div className="p-3 border-b bg-gray-50 text-xs font-bold text-gray-500 uppercase">Ekipman Listesi</div>
+          <div className="flex-1 p-2 space-y-2 overflow-y-auto">
             {equipments.map(eq => {
-              const isPlaced = !!equipmentPositions[eq.id];
+              // Ekipman bu katta yerleştirilmiş mi?
+              const isPlacedThisPlan = !!currentPlan?.equipment_positions[eq.id];
+              // Ekipman başka bir katta yerleştirilmiş mi? (Opsiyonel kontrol)
+              const isPlacedOther = plans.some(p => p.id !== currentPlanId && p.equipment_positions[eq.id]);
+
               return (
                 <div 
                   key={eq.id}
-                  draggable={!isPlaced}
+                  draggable={!isPlacedThisPlan}
                   onDragStart={(e) => e.dataTransfer.setData('equipmentId', eq.id)}
-                  className={`p-3 rounded-lg border text-sm flex justify-between items-center transition-all ${
-                    isPlaced 
-                      ? 'bg-green-50 border-green-200 opacity-70' 
-                      : 'bg-white border-gray-200 cursor-grab active:cursor-grabbing hover:border-blue-400 hover:shadow-md'
+                  className={`p-2 rounded border text-xs flex justify-between items-center ${
+                    isPlacedThisPlan ? 'bg-green-50 border-green-200 opacity-70' : 
+                    isPlacedOther ? 'bg-yellow-50 border-yellow-200' :
+                    'bg-white hover:border-blue-400 cursor-grab'
                   }`}
                 >
                   <div>
-                    <div className="font-bold text-gray-800">{eq.equipment_code}</div>
-                    <div className="text-xs text-gray-500">{eq.equipment.name}</div>
+                    <div className="font-bold">{eq.equipment_code}</div>
+                    <div className="text-gray-500 truncate w-32">{eq.equipment.name}</div>
+                    {isPlacedOther && <div className="text-[10px] text-yellow-600">Başka katta</div>}
                   </div>
-                  {isPlaced ? (
-                    <button 
-                      onClick={() => handleRemoveEquipment(eq.id)}
-                      className="text-red-500 hover:bg-red-100 p-1.5 rounded transition-colors"
-                      title="Krokiden Kaldır"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                  {isPlacedThisPlan ? (
+                    <button onClick={() => handleRemoveEquipment(eq.id)} className="text-red-500 hover:bg-red-100 p-1 rounded"><Trash2 size={14} /></button>
                   ) : (
                     <Move size={14} className="text-gray-400" />
                   )}
                 </div>
               );
             })}
-            {equipments.length === 0 && (
-              <div className="text-center p-4 text-gray-400 text-sm">Bu şubeye ait ekipman bulunamadı.</div>
-            )}
           </div>
         </div>
 
         {/* Canvas Alanı */}
-        <div className="flex-1 bg-gray-100 overflow-auto relative flex justify-center items-center p-10">
+        <div className="flex-1 bg-gray-100 overflow-auto relative flex justify-center items-center p-10" onMouseDown={() => setSelectedElementId(null)}>
           <div 
             className="bg-white shadow-2xl relative transition-transform origin-center"
-            style={{ 
-              width: 1000, 
-              height: 800,
-              transform: `scale(${scale})`
-            }}
-            onDragOver={handleDragOver}
+            style={{ width: 1000, height: 800, transform: `scale(${scale})` }}
+            onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
-            onMouseDown={(e) => handleMouseDown(e)} // Boşluğa tıklamayı algıla
           >
-            <svg 
-              ref={svgRef}
-              width="100%" 
-              height="100%" 
-              className="w-full h-full"
-              style={{ cursor: selectedTool === 'select' ? 'default' : 'crosshair' }}
-            >
+            <svg ref={svgRef} width="100%" height="100%" className="w-full h-full">
               <defs>
                 <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
                   <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#f0f0f0" strokeWidth="1"/>
@@ -366,69 +405,101 @@ const AdminFloorPlanEditor: React.FC = () => {
               </defs>
               <rect width="100%" height="100%" fill="url(#grid)" pointerEvents="none" />
 
-              {/* Elemanlar (Odalar/Duvarlar) */}
-              {elements.map((el) => (
+              {/* Elemanlar */}
+              {currentPlan?.elements.map((el) => (
                 <g 
                   key={el.id}
                   transform={`translate(${el.x}, ${el.y})`}
                   onMouseDown={(e) => handleMouseDown(e, el.id)}
                   style={{ cursor: 'move' }}
                 >
-                  <rect 
-                    width={el.width} 
-                    height={el.height} 
-                    fill={el.type === 'wall' ? '#374151' : '#ffffff'}
-                    fillOpacity={el.type === 'room' ? 0.5 : 1}
-                    stroke={selectedElementId === el.id ? '#2563eb' : (el.type === 'room' ? '#9ca3af' : 'none')}
-                    strokeWidth={selectedElementId === el.id ? 2 : 1}
-                    rx={2}
-                  />
-                  {/* Oda Etiketi */}
-                  {el.type === 'room' && (
-                    <text x={5} y={20} fontSize="12" fill="#6b7280" pointerEvents="none">Oda</text>
+                  {/* ŞEKİLLER */}
+                  {el.type === 'wall' && <rect width={el.width} height={el.height} fill="#333" rx={2} />}
+                  {el.type === 'room' && <rect width={el.width} height={el.height} fill="#f8fafc" stroke="#94a3b8" strokeWidth="2" />}
+                  {el.type === 'door' && <rect width={el.width} height={el.height} fill="#a16207" rx={2} />}
+                  {el.type === 'window' && <rect width={el.width} height={el.height} fill="#bae6fd" stroke="#0ea5e9" strokeWidth="2" />}
+                  
+                  {/* METİNLER */}
+                  {(el.type === 'text' || el.type === 'room') && (
+                     <text 
+                        x={el.type === 'text' ? 0 : 5} 
+                        y={el.type === 'text' ? 20 : 20} 
+                        fontSize={el.fontSize || 14} 
+                        fontWeight={el.type === 'room' ? 'bold' : 'normal'}
+                        fill="#4b5563" 
+                        style={{ userSelect: 'none' }}
+                     >
+                        {el.text || (el.type === 'room' ? 'Oda' : 'Metin')}
+                     </text>
                   )}
                   
-                  {/* Yeniden Boyutlandırma Tutacağı (Sadece seçiliyse göster) */}
+                  {/* Seçim Çerçevesi */}
                   {selectedElementId === el.id && (
-                    <circle 
-                      cx={el.width} cy={el.height} r={6} 
-                      fill="white" stroke="#2563eb" strokeWidth="2"
-                      style={{ cursor: 'nwse-resize' }}
-                      onMouseDown={(e) => handleMouseDown(e, el.id, true)}
-                    />
+                    <>
+                        <rect x="-2" y="-2" width={el.width + 4} height={el.height + 4} fill="none" stroke="#2563eb" strokeDasharray="4" />
+                        <circle cx={el.width} cy={el.height} r={5} fill="#2563eb" style={{ cursor: 'nwse-resize' }} onMouseDown={(e) => handleMouseDown(e, el.id, true)} />
+                    </>
                   )}
                 </g>
               ))}
 
               {/* Ekipmanlar */}
-              {Object.entries(equipmentPositions).map(([eqId, pos]) => {
+              {currentPlan && Object.entries(currentPlan.equipment_positions).map(([eqId, pos]) => {
                 const eqInfo = equipments.find(e => e.id === eqId);
-                const isSelected = false; // Ekipman seçimi eklenebilir
-
                 return (
-                  <g 
-                    key={eqId} 
-                    transform={`translate(${pos.x}, ${pos.y})`} 
-                    onMouseDown={(e) => handleMouseDown(e, undefined, false, eqId)}
-                    style={{ cursor: 'grab' }}
-                  >
-                    <circle r="14" fill="#3b82f6" stroke="white" strokeWidth="2" className="shadow-sm" />
-                    <text y="4" x="0" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" pointerEvents="none">
-                      {eqInfo?.equipment_code.substring(0, 2)}
-                    </text>
-                    <text y="28" x="0" textAnchor="middle" fill="#1f2937" fontSize="10" fontWeight="600" className="select-none" pointerEvents="none">
+                  <g key={eqId} transform={`translate(${pos.x}, ${pos.y})`} onMouseDown={(e) => handleMouseDown(e, undefined, false, eqId)} style={{ cursor: 'grab' }}>
+                    <circle r="10" fill="#2563eb" stroke="white" strokeWidth="2" className="shadow-sm" />
+                    <text y="22" x="0" textAnchor="middle" fill="#1f2937" fontSize="10" fontWeight="bold" className="select-none pointer-events-none">
                       {eqInfo?.equipment_code}
                     </text>
                   </g>
                 );
               })}
             </svg>
-            
-            <div className="absolute top-2 left-2 text-xs text-gray-400 pointer-events-none bg-white/80 p-1 rounded">
-              Kroki Alanı: 1000x800px
-            </div>
           </div>
         </div>
+
+        {/* Sağ Sidebar - Özellikler (Sadece bir eleman seçiliyse) */}
+        {selectedElement && (
+            <div className="w-64 bg-white border-l p-4 shadow-lg z-10">
+                <h3 className="font-bold text-gray-700 text-sm mb-4 pb-2 border-b">Özellikler</h3>
+                
+                <div className="space-y-4">
+                    {(selectedElement.type === 'text' || selectedElement.type === 'room') && (
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Etiket / Metin</label>
+                            <input 
+                                type="text" 
+                                value={selectedElement.text || ''} 
+                                onChange={(e) => updateElements(currentPlan!.elements.map(el => el.id === selectedElementId ? { ...el, text: e.target.value } : el))}
+                                className="w-full p-2 border rounded text-sm"
+                            />
+                        </div>
+                    )}
+                     
+                    {(selectedElement.type === 'text' || selectedElement.type === 'room') && (
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Yazı Boyutu</label>
+                            <input 
+                                type="number" 
+                                value={selectedElement.fontSize || 14} 
+                                onChange={(e) => updateElements(currentPlan!.elements.map(el => el.id === selectedElementId ? { ...el, fontSize: Number(e.target.value) } : el))}
+                                className="w-full p-2 border rounded text-sm"
+                            />
+                        </div>
+                    )}
+
+                    <div>
+                        <button 
+                           onClick={handleDeleteSelected}
+                           className="w-full bg-red-50 text-red-600 py-2 rounded flex items-center justify-center gap-2 hover:bg-red-100"
+                        >
+                            <Trash2 size={16} /> Sil
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
     </div>
   );
