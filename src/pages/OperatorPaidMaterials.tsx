@@ -90,7 +90,6 @@ const OperatorPaidMaterials: React.FC = () => {
         throw new Error('Operatör ID bulunamadı');
       }
       
-      // First get visits for this operator
       const { data: visits, error: visitsError } = await supabase
         .from('visits')
         .select('id')
@@ -107,7 +106,7 @@ const OperatorPaidMaterials: React.FC = () => {
       
       const visitIds = visits.map(v => v.id);
       
-      // Then fetch sales related to these visits
+      // --- DÜZELTME: 'product:paid_products' kullanıldı ---
       const { data, error } = await supabase
         .from('paid_material_sales')
         .select(`
@@ -125,7 +124,7 @@ const OperatorPaidMaterials: React.FC = () => {
           items:paid_material_sale_items (
             id,
             product_id,
-            product:product_id (name),
+            product:paid_products (name), 
             quantity
           )
         `)
@@ -134,7 +133,6 @@ const OperatorPaidMaterials: React.FC = () => {
       
       if (error) throw error;
       
-      // Auto-approve pending sales if enabled
       if (autoApprove) {
         const pendingSales = (data || []).filter(sale => sale.status === 'pending');
         
@@ -144,14 +142,12 @@ const OperatorPaidMaterials: React.FC = () => {
             .update({ status: 'approved' })
             .eq('id', sale.id);
             
-          // Update the status in the local data
           sale.status = 'approved';
         }
       }
       
       setSales(data || []);
       
-      // Generate monthly reports
       generateMonthlyReports(data || []);
     } catch (err: any) {
       setError(err.message);
@@ -161,12 +157,10 @@ const OperatorPaidMaterials: React.FC = () => {
     }
   };
 
-  // Generate monthly reports for each branch
   const generateMonthlyReports = (salesData: PaidMaterialSale[]) => {
     const reports: MonthlyReport[] = [];
     const branchMonthMap: Record<string, Record<string, boolean>> = {};
 
-    // Group sales by branch and month
     salesData.forEach(sale => {
       const date = new Date(sale.sale_date);
       const month = format(date, 'MMMM', { locale: tr });
@@ -174,11 +168,9 @@ const OperatorPaidMaterials: React.FC = () => {
       const monthYear = `${month}-${year}`;
       const branchKey = `${sale.branch_id}-${monthYear}`;
 
-      // Check if we already have a report for this branch and month
       if (!branchMonthMap[branchKey]) {
         branchMonthMap[branchKey] = { processed: true };
 
-        // Find all sales for this branch in this month
         const branchSales = salesData.filter(s => {
           const sDate = new Date(s.sale_date);
           return s.branch_id === sale.branch_id && 
@@ -186,10 +178,8 @@ const OperatorPaidMaterials: React.FC = () => {
                  sDate.getFullYear() === date.getFullYear();
         });
 
-        // Count unique visits
         const uniqueVisits = new Set(branchSales.map(s => s.visit_id).filter(Boolean)).size;
 
-        // Aggregate items
         const itemsMap: Record<string, {
           product_id: string;
           product_name: string;
@@ -209,7 +199,6 @@ const OperatorPaidMaterials: React.FC = () => {
           });
         });
 
-        // Create report
         reports.push({
           branch_id: sale.branch_id,
           branch_name: sale.branch.sube_adi,
@@ -232,25 +221,20 @@ const OperatorPaidMaterials: React.FC = () => {
   };
 
   const exportMonthlyReportToExcel = (report: MonthlyReport) => {
-    // Prepare data for export
     const reportData = [
-      // Header row with report info
       {
         'Müşteri': report.customer_name,
         'Şube': report.branch_name,
         'Dönem': `${report.month} ${report.year}`,
         'Ziyaret Sayısı': report.visit_count
       },
-      // Empty row for spacing
       {},
-      // Column headers for items
       {
         'Malzeme Adı': 'Malzeme Adı',
         'Toplam Miktar': 'Toplam Miktar'
       }
     ];
 
-    // Add items to report data
     report.items.forEach(item => {
       reportData.push({
         'Malzeme Adı': item.product_name,
@@ -258,41 +242,33 @@ const OperatorPaidMaterials: React.FC = () => {
       });
     });
 
-    // Create worksheet
     const worksheet = XLSX.utils.json_to_sheet(reportData, { skipHeader: true });
 
-    // Set column widths
     const columnWidths = [
-      { wch: 40 }, // Malzeme Adı
-      { wch: 15 }  // Toplam Miktar
+      { wch: 40 },
+      { wch: 15 }
     ];
     worksheet['!cols'] = columnWidths;
 
-    // Create workbook
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Aylık Rapor');
 
-    // Generate filename
     const filename = `${report.branch_name.replace(/\s+/g, '_')}_${report.month}_${report.year}_Rapor.xlsx`;
 
-    // Export to file
     XLSX.writeFile(workbook, filename);
   };
 
-  // Filter monthly reports
   const filteredMonthlyReports = monthlyReports.filter(report => {
     const matchesSearch = 
       report.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.branch_name.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Filter by selected month (yyyy-MM format)
     const reportMonth = `${report.year}-${String(new Date(Date.parse(`${report.month} 1, ${report.year}`)).getMonth() + 1).padStart(2, '0')}`;
     const matchesMonth = !selectedMonth || reportMonth === selectedMonth;
     
     return matchesSearch && matchesMonth;
   });
 
-  // Filter sales
   const filteredSales = sales.filter(sale => {
     const matchesSearch = 
       sale.customer.kisa_isim.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -344,7 +320,6 @@ const OperatorPaidMaterials: React.FC = () => {
         </div>
       </div>
 
-      {/* Auto-approve toggle */}
       <div className="bg-white rounded-lg shadow p-4">
         <div className="flex items-center">
           <input
@@ -442,7 +417,6 @@ const OperatorPaidMaterials: React.FC = () => {
         </div>
       </div>
 
-      {/* Sale Details Modal */}
       {showDetailsModal && selectedSale && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -482,7 +456,6 @@ const OperatorPaidMaterials: React.FC = () => {
                 </div>
               </div>
 
-              {/* Items */}
               <div className="mb-6">
                 <h4 className="font-medium text-gray-800 mb-3 pb-2 border-b">Kullanılan Malzemeler</h4>
                 <div className="overflow-x-auto">
