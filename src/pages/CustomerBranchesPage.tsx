@@ -16,12 +16,7 @@ import {
 
 // --- Interfaces ---
 interface EquipmentCheck {
-  status: string;
-  activity?: boolean;
-  consumption?: string;
-  count?: number;
-  description?: string;
-  [key: string]: any;
+  [key: string]: any; // Dinamik özellikler için
 }
 
 interface Visit {
@@ -74,9 +69,8 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
         if (!monthlyStats[monthKey]) {
           monthlyStats[monthKey] = {
             month: monthKey,
-            kemirgen_aktivite: 0,
-            ucan_sayim: 0,
-            yuruyen_aktivite: 0,
+            aktivite_sayisi: 0, // Genel aktivite (Kemirgen vb.)
+            yakalama_sayisi: 0, // Sayısal yakalamalar (Sinek vb.)
             kontrol_sayisi: 0
           };
         }
@@ -85,15 +79,26 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
           Object.values(visit.equipment_checks).forEach((check: any) => {
              monthlyStats[monthKey].kontrol_sayisi++;
              
-             // Aktivite Sayımları
-             if (check.activity === true || check.activity === 'true') {
-               monthlyStats[monthKey].kemirgen_aktivite++;
+             // Dinamik Aktivite Kontrolü:
+             // İçinde 'activity', 'durum', 'status' vb. geçen ve olumlu olanları veya 'true' olanları say
+             const isActivity = Object.entries(check).some(([key, val]) => {
+               if (key === 'activity' || key === 'aktivite') {
+                  return val === true || val === 'true' || val === 'var' || val === 'evet';
+               }
+               return false;
+             });
+
+             if (isActivity) {
+               monthlyStats[monthKey].aktivite_sayisi++;
              }
              
-             // Sinek Sayımları (EFC)
-             if (check.count && typeof check.count === 'number') {
-               monthlyStats[monthKey].ucan_sayim += check.count;
-             }
+             // Dinamik Sayım Kontrolü:
+             // Değeri sayı olan ve anahtarında 'count', 'sayi', 'adet' geçenleri topla
+             Object.entries(check).forEach(([key, val]) => {
+               if (typeof val === 'number' && (key.includes('count') || key.includes('sayi') || key.includes('adet'))) {
+                  monthlyStats[monthKey].yakalama_sayisi += val;
+               }
+             });
           });
         }
       });
@@ -123,7 +128,7 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
         {/* Aktivite Grafiği */}
         <div className="bg-white p-4 rounded-lg border shadow-sm">
           <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <ActivityIcon className="w-4 h-4 text-blue-500" /> Kemirgen Aktivite Trendi
+            <ActivityIcon className="w-4 h-4 text-blue-500" /> Zararlı Aktivite Trendi
           </h4>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -132,16 +137,17 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
                 <XAxis dataKey="month" style={{ fontSize: '12px' }} />
                 <YAxis allowDecimals={false} style={{ fontSize: '12px' }} />
                 <Tooltip />
-                <Bar dataKey="kemirgen_aktivite" name="Aktivite Sayısı" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={40} />
+                <Legend />
+                <Bar dataKey="aktivite_sayisi" name="Aktivite Tespitleri" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={40} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* EFC Sayım Grafiği */}
+        {/* Yakalama Grafiği */}
         <div className="bg-white p-4 rounded-lg border shadow-sm">
           <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <Bug className="w-4 h-4 text-green-500" /> Uçan Haşere (EFC) Sayımları
+            <Bug className="w-4 h-4 text-green-500" /> Toplam Yakalama (EFC/Kapan)
           </h4>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -151,7 +157,7 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
                 <YAxis style={{ fontSize: '12px' }} />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="ucan_sayim" name="Toplam Yakalama" stroke="#10B981" strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="yakalama_sayisi" name="Canlı Sayısı" stroke="#10B981" strokeWidth={3} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -161,7 +167,7 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
   );
 };
 
-// --- 2. EKİPMAN AKTİVİTE GÖRÜNTÜLEYİCİ ---
+// --- 2. EKİPMAN AKTİVİTE GÖRÜNTÜLEYİCİ (DİNAMİK LİSTE) ---
 const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [equipments, setEquipments] = useState<Equipment[]>([]);
@@ -192,11 +198,10 @@ const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
         .eq('branch_id', branchId)
         .eq('status', 'completed')
         .order('visit_date', { ascending: false })
-        .limit(10); // Son 10 ziyaret
+        .limit(15); // Son 15 ziyaret
 
       setVisits(visitData || []);
       
-      // Varsayılan olarak en son ziyareti seç
       if (visitData && visitData.length > 0) {
         setSelectedVisitId(visitData[0].id);
       }
@@ -220,6 +225,21 @@ const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
 
   if (loading) return <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" /></div>;
 
+  // Yardımcı: Özellik değerini formatla
+  const formatValue = (key: string, val: any) => {
+    if (val === true || val === 'true') return 'Evet / Var';
+    if (val === false || val === 'false') return 'Hayır / Yok';
+    return val;
+  };
+
+  // Yardımcı: İkon veya renk belirle (aktivite varsa kırmızı)
+  const isAlert = (checkData: any) => {
+    if (!checkData) return false;
+    return Object.values(checkData).some(val => 
+      val === true || val === 'true' || val === 'var' || val === 'problem' || val === 'issue'
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Ziyaret Seçimi */}
@@ -230,7 +250,9 @@ const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
           </div>
           <div>
             <h4 className="font-bold text-blue-900">Ziyaret Bazlı Ekipman Raporu</h4>
-            <p className="text-xs text-blue-700">Hangi tarihteki kontrolleri görmek istediğinizi seçin.</p>
+            <p className="text-xs text-blue-700">
+              {selectedVisit ? `Seçili: ${format(parseISO(selectedVisit.visit_date), 'dd MMMM yyyy', { locale: tr })}` : 'Lütfen ziyaret seçin'}
+            </p>
           </div>
         </div>
         
@@ -238,19 +260,19 @@ const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
           <select 
             value={selectedVisitId} 
             onChange={(e) => setSelectedVisitId(e.target.value)}
-            className="w-full p-2.5 text-sm border-blue-200 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+            className="w-full p-2.5 text-sm border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
           >
             {visits.length === 0 && <option>Tamamlanmış ziyaret yok</option>}
             {visits.map(v => (
               <option key={v.id} value={v.id}>
-                {format(parseISO(v.visit_date), 'dd MMMM yyyy', { locale: tr })} - {v.operator?.name}
+                {format(parseISO(v.visit_date), 'dd.MM.yyyy')} - {v.operator?.name}
               </option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* Ekipman Listesi ve Durumları */}
+      {/* Ekipman Listesi */}
       {selectedVisit ? (
         <div className="space-y-6">
           {Object.entries(groupedEquipments).map(([dept, items]) => (
@@ -261,58 +283,36 @@ const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
               </div>
               <div className="divide-y divide-gray-100 bg-white">
                 {items.map(eq => {
-                  // Bu ekipman için ziyaretteki veriyi bul (ID ile eşleşir)
                   const checkData = selectedVisit.equipment_checks?.[eq.id];
-                  const hasActivity = checkData?.activity === true || checkData?.activity === 'true';
+                  const hasAlert = isAlert(checkData);
                   
                   return (
-                    <div key={eq.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-10 rounded-full ${hasActivity ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                    <div key={eq.id} className="p-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3 hover:bg-gray-50 transition-colors">
+                      {/* Sol: Ekipman Bilgisi */}
+                      <div className="flex items-start gap-3 min-w-[200px]">
+                        <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${hasAlert ? 'bg-red-500' : 'bg-green-500'}`}></div>
                         <div>
                           <div className="font-medium text-gray-900 text-sm">{eq.equipment.name}</div>
                           <div className="text-xs text-gray-500 font-mono">{eq.equipment_code}</div>
                         </div>
                       </div>
 
-                      {/* Kontrol Sonuçları */}
-                      <div className="flex flex-wrap gap-2 items-center justify-start sm:justify-end">
+                      {/* Sağ: Kontrol Verileri (Dinamik) */}
+                      <div className="flex-1 flex flex-wrap gap-2 items-center justify-start sm:justify-end">
                         {checkData ? (
-                          <>
-                            {/* Durum Badge */}
-                            <span className={`px-2 py-1 rounded text-xs font-medium border ${
-                              checkData.status === 'ok' ? 'bg-green-50 text-green-700 border-green-200' :
-                              checkData.status === 'issue' ? 'bg-red-50 text-red-700 border-red-200' :
+                          Object.entries(checkData).map(([key, val]) => (
+                            <span key={key} className={`px-2 py-1 rounded text-xs font-medium border flex items-center gap-1 ${
+                              // Özel renklendirmeler
+                              (val === true || val === 'true' || val === 'var') ? 'bg-red-50 text-red-700 border-red-200' :
+                              (key === 'status' && val === 'ok') ? 'bg-green-50 text-green-700 border-green-200' :
                               'bg-gray-50 text-gray-700 border-gray-200'
                             }`}>
-                              {checkData.status === 'ok' ? 'Sorunsuz' : checkData.status}
+                              <span className="opacity-60 capitalize">{key}:</span>
+                              <span>{formatValue(key, val)}</span>
                             </span>
-
-                            {/* Aktivite */}
-                            {checkData.activity !== undefined && (
-                              <span className={`px-2 py-1 rounded text-xs font-medium border ${
-                                hasActivity ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'
-                              }`}>
-                                {hasActivity ? '⚠️ Aktivite Var' : 'Aktivite Yok'}
-                              </span>
-                            )}
-
-                            {/* Tüketim */}
-                            {checkData.consumption && (
-                              <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">
-                                Tüketim: {checkData.consumption}
-                              </span>
-                            )}
-
-                            {/* Sayım */}
-                            {checkData.count !== undefined && (
-                              <span className="px-2 py-1 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                                Sayım: {checkData.count}
-                              </span>
-                            )}
-                          </>
+                          ))
                         ) : (
-                          <span className="text-xs text-gray-400 italic px-2">Kontrol Verisi Yok</span>
+                          <span className="text-xs text-gray-400 italic px-2 border border-dashed rounded">Kontrol Verisi Yok</span>
                         )}
                       </div>
                     </div>
@@ -331,7 +331,7 @@ const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
   );
 };
 
-// --- DİĞER BİLEŞENLER (Aynı kalıyor, sadece placeholderları güncelledim) ---
+// --- DİĞER BİLEŞENLER (Placeholderlar) ---
 const BranchFloorPlanView = ({ branchId }: { branchId: string }) => (
   <div className="p-6 text-center text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg">
     <Layout className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -494,7 +494,6 @@ const BranchCorrectiveActionsList = ({ branchId }: { branchId: string }) => {
   );
 };
 
-// --- Helper Icon Component for Recharts ---
 const ActivityIcon = (props: any) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
 );
