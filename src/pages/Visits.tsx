@@ -10,9 +10,9 @@ import { format, startOfToday, endOfToday, isBefore, isAfter } from 'date-fns';
 // --- ARAYÜZLER (INTERFACES) ---
 interface Visit {
   id: string;
-  customer: { kisa_isim: string; } | null; // Beyaz ekran hatası için
+  customer: { kisa_isim: string; } | null;
   branch?: { sube_adi: string; };
-  visit_date: string; // Null kontrolü fetch içinde yapılıyor
+  visit_date: string;
   status: 'planned' | 'completed' | 'cancelled';
   visit_type?: string | string[];
   notes?: string;
@@ -115,7 +115,6 @@ const EditVisitModal: React.FC<{
 // --- ANA BİLEŞEN ---
 const Visits: React.FC = () => {
   const navigate = useNavigate();
-  // State'ler
   const [overdueVisits, setOverdueVisits] = useState<Visit[]>([]);
   const [todayVisits, setTodayVisits] = useState<Visit[]>([]);
   const [futureAndCancelledVisits, setFutureAndCancelledVisits] = useState<Visit[]>([]);
@@ -161,7 +160,7 @@ const Visits: React.FC = () => {
       let paidMaterialsByVisit: { [key: string]: any[] } = {};
 
       if (allVisitIds.length > 0) {
-        // DÜZELTME BURADA: product_id yerine paid_products kullanıldı
+        // --- DÜZELTME: 'product:paid_products' kullanıldı ---
         const { data: materialsData, error: materialsError } = await supabase
           .from('paid_material_sales')
           .select('visit_id, items:paid_material_sale_items(product:paid_products(name), quantity)')
@@ -240,7 +239,7 @@ const Visits: React.FC = () => {
       setCompletedVisits(completed.slice(from, to + 1));
 
     } catch (err: any) {
-      console.error("Ziyaret çekme hatası:", err);
+      console.error("Fetch error:", err);
       setError(err.message);
       toast.error("Ziyaretler yüklenirken bir hata oluştu.");
     } finally {
@@ -332,31 +331,21 @@ const Visits: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'planned':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'planned': return 'bg-yellow-100 text-yellow-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'planned':
-        return 'Planlandı';
-      case 'completed':
-        return 'Tamamlandı';
-      case 'cancelled':
-        return 'İptal Edildi';
-      default:
-        return status;
+      case 'planned': return 'Planlandı';
+      case 'completed': return 'Tamamlandı';
+      case 'cancelled': return 'İptal Edildi';
+      default: return status;
     }
   };
-
-  const totalPages = Math.ceil(totalVisits / visitsPerPage);
 
   const renderVisitCard = (visit: Visit) => (
     <div key={visit.id} className="bg-white rounded-lg shadow-sm">
@@ -392,6 +381,8 @@ const Visits: React.FC = () => {
     </div>
   );
 
+  const totalPages = Math.ceil(totalVisits / visitsPerPage);
+
   if (loading && overdueVisits.length === 0 && todayVisits.length === 0 && completedVisits.length === 0 && futureAndCancelledVisits.length === 0) {
     return <div className="p-4 text-center"><Loader2 className="animate-spin text-red-600" size={32} /></div>;
   }
@@ -416,13 +407,11 @@ const Visits: React.FC = () => {
         </div>
       </div>
 
-      {loading && overdueVisits.length === 0 && todayVisits.length === 0 && completedVisits.length === 0 && futureAndCancelledVisits.length === 0 && (
+      {loading && (
           <div className="text-center p-4"><Loader2 className="animate-spin text-red-600"/></div>
       )}
 
       <div className="space-y-4">
-        
-        {/* GRUP 1: Geçmiş Planlı Ziyaretler */}
         {overdueVisits.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-red-600 mb-2 flex items-center gap-2">
@@ -435,7 +424,6 @@ const Visits: React.FC = () => {
           </section>
         )}
 
-        {/* GRUP 2: Bugünkü Ziyaretler */}
         {todayVisits.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-blue-600 mb-2 flex items-center gap-2">
@@ -448,7 +436,6 @@ const Visits: React.FC = () => {
           </section>
         )}
 
-        {/* GRUP 3: Diğer (Gelecek/İptal) (Sayfalanmaz) */}
         {futureAndCancelledVisits.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -461,7 +448,6 @@ const Visits: React.FC = () => {
           </section>
         )}
 
-        {/* GRUP 4: Tamamlanan Ziyaretler (Sayfalamalı) */}
         {(completedVisits.length > 0 || totalPages > 1) && (
           <section>
             <h2 className="text-lg font-bold text-green-700 mb-2 flex items-center gap-2">
@@ -478,16 +464,13 @@ const Visits: React.FC = () => {
           </section>
         )}
 
-        {/* Hiçbir sonuç bulunamadı durumu */}
         {!loading && overdueVisits.length === 0 && todayVisits.length === 0 && completedVisits.length === 0 && futureAndCancelledVisits.length === 0 && (
           <div className="bg-white rounded-lg shadow-sm p-4 text-center text-gray-500">
             {searchTerm ? 'Arama kriterine uygun ziyaret bulunamadı' : 'Gösterilecek ziyaret bulunamadı'}
           </div>
         )}
-
       </div>
 
-      {/* Sayfalama "Tamamlanan Ziyaretler" için */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center p-4 mt-4">
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-4 py-2 text-sm bg-gray-200 rounded-lg disabled:opacity-50 flex items-center gap-2"><ChevronLeft size={16}/> Önceki</button>
@@ -496,7 +479,6 @@ const Visits: React.FC = () => {
         </div>
       )}
 
-      {/* MODALLAR */}
       {showActionModal && (
         <CorrectiveActionModal 
           isOpen={showActionModal} 
