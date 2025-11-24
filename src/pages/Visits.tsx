@@ -90,7 +90,6 @@ const EditVisitModal: React.FC<{
     }
   };
 
-  // Modalın kendisi "isOpen" prop'una göre render edilir
   if (!isOpen) return null;
 
   return (
@@ -116,11 +115,11 @@ const EditVisitModal: React.FC<{
 // --- ANA BİLEŞEN ---
 const Visits: React.FC = () => {
   const navigate = useNavigate();
-  // State'ler (Geçmiş, Bugün, Tamamlanan, Diğer)
-  const [overdueVisits, setOverdueVisits] = useState<Visit[]>([]); // Geçmiş Planlı
-  const [todayVisits, setTodayVisits] = useState<Visit[]>([]); // Bugün Planlı
-  const [futureAndCancelledVisits, setFutureAndCancelledVisits] = useState<Visit[]>([]); // Gelecek Planlı ve İptaller (Sayfalanmaz)
-  const [completedVisits, setCompletedVisits] = useState<Visit[]>([]); // Tamamlananlar (Sayfalanır)
+  // State'ler
+  const [overdueVisits, setOverdueVisits] = useState<Visit[]>([]);
+  const [todayVisits, setTodayVisits] = useState<Visit[]>([]);
+  const [futureAndCancelledVisits, setFutureAndCancelledVisits] = useState<Visit[]>([]);
+  const [completedVisits, setCompletedVisits] = useState<Visit[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +133,7 @@ const Visits: React.FC = () => {
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
   
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalVisits, setTotalVisits] = useState(0); // "TAMAMLANAN" ziyaretlerin toplamı
+  const [totalVisits, setTotalVisits] = useState(0);
   const visitsPerPage = 10;
 
   const fetchVisits = useCallback(async () => {
@@ -162,9 +161,10 @@ const Visits: React.FC = () => {
       let paidMaterialsByVisit: { [key: string]: any[] } = {};
 
       if (allVisitIds.length > 0) {
+        // DÜZELTME BURADA: product_id yerine paid_products kullanıldı
         const { data: materialsData, error: materialsError } = await supabase
           .from('paid_material_sales')
-          .select('visit_id, items:paid_material_sale_items(product:product_id(name), quantity)')
+          .select('visit_id, items:paid_material_sale_items(product:paid_products(name), quantity)')
           .in('visit_id', allVisitIds);
           
         if (materialsError) throw materialsError;
@@ -180,7 +180,6 @@ const Visits: React.FC = () => {
         paid_materials: paidMaterialsByVisit[visit.id] || [],
       }));
 
-      // Ziyaretleri 4 gruba ayır
       const today = startOfToday();
       const endToday = endOfToday();
 
@@ -190,10 +189,9 @@ const Visits: React.FC = () => {
       let futureAndCancelled: Visit[] = [];
 
       for (const visit of allEnhancedVisits) {
-        // Beyaz ekran koruması: Tarih veya müşteri bilgisi bozuksa
         if (!visit.visit_date || !visit.customer) {
             if (visit.status === 'completed') completed.push(visit);
-            else futureAndCancelled.push(visit); // Sorunlu kayıtları bu gruba at
+            else futureAndCancelled.push(visit);
             continue;
         }
         
@@ -204,17 +202,16 @@ const Visits: React.FC = () => {
             overdue.push(visit);
           } else if (visitDate >= today && visitDate <= endToday) {
             todayScheduled.push(visit);
-          } else if (isAfter(visitDate, endToday)) { // Gelecek planlı
+          } else if (isAfter(visitDate, endToday)) {
             futureAndCancelled.push(visit);
           }
         } else if (visit.status === 'completed') {
           completed.push(visit);
-        } else { // 'cancelled' vs.
+        } else {
           futureAndCancelled.push(visit);
         }
       }
 
-      // Grupları sırala
       overdue.sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
       todayScheduled.sort((a, b) => new Date(a.visit_date).getTime() - new Date(a.visit_date).getTime());
       
@@ -235,15 +232,15 @@ const Visits: React.FC = () => {
          return new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime();
       });
 
-      // State'leri ayarla
       setOverdueVisits(overdue);
       setTodayVisits(todayScheduled);
-      setFutureAndCancelledVisits(futureAndCancelled); // Sayfalanmaz
+      setFutureAndCancelledVisits(futureAndCancelled);
       
       setTotalVisits(completed.length);
-      setCompletedVisits(completed.slice(from, to + 1)); // Sayfalanır
+      setCompletedVisits(completed.slice(from, to + 1));
 
     } catch (err: any) {
+      console.error("Ziyaret çekme hatası:", err);
       setError(err.message);
       toast.error("Ziyaretler yüklenirken bir hata oluştu.");
     } finally {
@@ -365,7 +362,6 @@ const Visits: React.FC = () => {
     <div key={visit.id} className="bg-white rounded-lg shadow-sm">
       <div className="p-3 border-b border-gray-100">
         <div className="flex justify-between items-center text-xs mb-1">
-            {/* Beyaz ekran hatası için null kontrolü */}
             <span className="text-gray-500">{visit.visit_date ? new Date(visit.visit_date).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Tarih Yok'}</span>
             <div className="flex gap-2">
               <span className={`font-semibold px-2 py-1 rounded-full text-xs ${getStatusBadge(visit.status)}`}>
@@ -376,7 +372,6 @@ const Visits: React.FC = () => {
               </span>
             </div>
         </div>
-        {/* Beyaz ekran hatası için null kontrolü */}
         <div className="font-bold text-sm">{visit.customer ? visit.customer.kisa_isim : 'Müşteri Bilgisi Yok'}</div>
         <div className="flex justify-between items-center mt-1">
           <div className="text-xs text-gray-700">{visit.branch ? visit.branch.sube_adi : ''}</div>
@@ -501,7 +496,7 @@ const Visits: React.FC = () => {
         </div>
       )}
 
-      {/* GÜNCELLEME: MODALLAR (Siyah ekran hatasını çözmek için koşullu render) */}
+      {/* MODALLAR */}
       {showActionModal && (
         <CorrectiveActionModal 
           isOpen={showActionModal} 
