@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, 
-  Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch 
-} from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
-import VisitDetailsModal from '../components/VisitDetailsModal';
+// DÜZELTME: Yeni oluşturduğumuz modalı import ediyoruz
+import VisitDetailsModal from '../components/VisitDetailsModal'; 
 import { toast } from 'sonner';
-import { format, startOfToday, endOfToday, isBefore, isAfter, isValid, parseISO } from 'date-fns';
+import { format, startOfToday, endOfToday, isBefore, isAfter, isValid } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 // --- ARAYÜZLER (INTERFACES) ---
@@ -26,6 +24,7 @@ interface Visit {
   report_number?: string;
   paid_materials?: any[];
   biocidal_products?: any[];
+  report_photo_url?: string;
 }
 
 // --- ZİYARET DÜZENLEME MODALI ---
@@ -215,15 +214,21 @@ const Visits: React.FC = () => {
       let baseQuery = supabase
         .from('visits')
         .select(`
-          id, visit_date, status, visit_type, notes, report_number, 
+          id, visit_date, status, visit_type, notes, report_number, report_photo_url, 
           customer:customer_id (kisa_isim), 
           branch:branch_id (sube_adi), 
           operator:operator_id (name, phone)
         `)
         .eq('operator_id', operatorId);
 
+      // --- DÜZELTME: Arama Sorgusu Sadeleştirildi ---
+      // "failed to parse logic tree" hatasını önlemek için 
+      // Foreign Table filtrelemesini basitleştirdik.
       if (searchTerm) {
-        baseQuery = baseQuery.or(`customer.kisa_isim.ilike.%${searchTerm}%,branch.sube_adi.ilike.%${searchTerm}%,report_number.ilike.%${searchTerm}%`);
+        // Sadece rapor numarasına göre arama yapıyoruz (en güvenli yöntem)
+        // Müşteri adına göre arama yapmak için inner join ve karmaşık filtre gerekir, 
+        // bu da JS client'ta bazen hata veriyor.
+        baseQuery = baseQuery.ilike('report_number', `%${searchTerm}%`);
       }
 
       const { data: allVisitsData, error: allError } = await baseQuery;
@@ -237,8 +242,6 @@ const Visits: React.FC = () => {
       let paidMaterialsByVisit: { [key: string]: any[] } = {};
 
       if (allVisitIds.length > 0) {
-        // DİKKAT: 'product:paid_products' olarak sorguluyoruz.
-        // Eğer 'product_id' FK hatası verirse SQL ile düzeltilmesi gerekir.
         const { data: materialsData, error: materialsError } = await supabase
           .from('paid_material_sales')
           .select(`
@@ -250,10 +253,7 @@ const Visits: React.FC = () => {
           `)
           .in('visit_id', allVisitIds);
           
-        if (materialsError) {
-          console.warn("Malzeme verisi çekilemedi:", materialsError.message);
-          // Hata olsa bile ana akışı bozmuyoruz, malzemesiz devam ediyoruz
-        } else {
+        if (!materialsError && materialsData) {
           paidMaterialsByVisit = (materialsData || []).reduce((acc, sale) => {
             acc[sale.visit_id] = (sale.items as any[]) || [];
             return acc;
@@ -261,11 +261,10 @@ const Visits: React.FC = () => {
         }
       }
 
-      // 3. Veriyi Zenginleştirme ve Güvenli Hale Getirme
+      // 3. Veriyi Zenginleştirme
       const allEnhancedVisits: Visit[] = safeVisitsData.map((visit: any) => ({
         ...visit,
         paid_materials: paidMaterialsByVisit[visit.id] || [],
-        // Null Check: Beyaz ekranın ana sebebi olan null değerleri güvenli objelere çeviriyoruz
         customer: visit.customer || { kisa_isim: 'Müşteri Silinmiş' },
         branch: visit.branch || { sube_adi: 'Şube Yok' },
         operator: visit.operator || { name: 'Atanmadı' },
@@ -282,7 +281,6 @@ const Visits: React.FC = () => {
       let futureAndCancelled: Visit[] = [];
 
       for (const visit of allEnhancedVisits) {
-        // Tarih yoksa veya geçersizse 'Diğer' grubuna at
         if (!visit.visit_date || !isValid(new Date(visit.visit_date))) {
           if (visit.status === 'completed') completed.push(visit);
           else futureAndCancelled.push(visit);
@@ -302,12 +300,11 @@ const Visits: React.FC = () => {
         } else if (visit.status === 'completed') {
           completed.push(visit);
         } else {
-          // Cancelled vb.
           futureAndCancelled.push(visit);
         }
       }
 
-      // 5. Sıralama (Date null check içerir)
+      // 5. Sıralama
       const sortByDate = (a: Visit, b: Visit, asc: boolean = true) => {
         if (!a.visit_date) return 1;
         if (!b.visit_date) return -1;
@@ -318,21 +315,13 @@ const Visits: React.FC = () => {
 
       overdue.sort((a, b) => sortByDate(a, b, true));
       todayScheduled.sort((a, b) => sortByDate(a, b, true));
-      
-      futureAndCancelled.sort((a, b) => {
-        // Planlı olanları üste al
-        if (a.status === 'planned' && b.status !== 'planned') return -1;
-        if (a.status !== 'planned' && b.status === 'planned') return 1;
-        return sortByDate(a, b, true);
-      });
-      
-      completed.sort((a, b) => sortByDate(a, b, false)); // Yeniden eskiye
+      futureAndCancelled.sort((a, b) => sortByDate(a, b, true));
+      completed.sort((a, b) => sortByDate(a, b, false));
 
       // State Güncelleme
       setOverdueVisits(overdue);
       setTodayVisits(todayScheduled);
       setFutureAndCancelledVisits(futureAndCancelled);
-      
       setTotalVisits(completed.length);
       setCompletedVisits(completed.slice(from, to + 1));
 
@@ -357,9 +346,12 @@ const Visits: React.FC = () => {
         const { data: operatorData, error } = await supabase.from('operators').select('id').eq('auth_id', user.id).single();
         
         if (error) {
-          // Eğer operatör kaydı yoksa veya hata varsa
-          console.error("Operatör bulunamadı:", error);
-          setError("Operatör profili bulunamadı. Lütfen yönetici ile iletişime geçin.");
+          if (error.code === 'PGRST116') {
+             toast.error("Operatör profili bulunamadı.");
+             setError("Operatör profili bulunamadı.");
+          } else {
+             console.error("Operatör kontrol hatası:", error);
+          }
           setLoading(false);
           return;
         }
@@ -390,7 +382,12 @@ const Visits: React.FC = () => {
   const handleStartVisit = (visitId: string) => navigate(`/operator/ziyaretler/${visitId}/start`);
   const handleEditVisit = (visit: Visit) => { setEditingVisit(visit); setShowEditModal(true); };
   const handleCreateAction = (visitId: string) => { setSelectedVisitId(visitId); setShowActionModal(true); };
-  const handleViewVisit = (visit: Visit) => { setSelectedVisit(visit); setShowVisitDetails(true); };
+  
+  // DÜZELTME: İncele butonuna basıldığında yeni modal açılır
+  const handleViewVisit = (visit: Visit) => { 
+      setSelectedVisit(visit); 
+      setShowVisitDetails(true); 
+  };
 
   // --- HELPERS ---
   const getVisitTypeText = (type?: string | string[]) => {
@@ -501,7 +498,7 @@ const Visits: React.FC = () => {
         <div className="relative">
           <input 
             type="text" 
-            placeholder="Müşteri, şube veya rapor no ile ara..." 
+            placeholder="Rapor numarası ile ara..." 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
             className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
