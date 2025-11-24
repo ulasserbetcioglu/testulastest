@@ -5,20 +5,21 @@ import { supabase } from '../lib/supabase';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
 import VisitDetailsModal from '../components/VisitDetailsModal';
 import { toast } from 'sonner';
-import { format, startOfToday, endOfToday, isBefore, isAfter } from 'date-fns';
+import { format, startOfToday, endOfToday, isBefore, isAfter, isValid, parseISO } from 'date-fns';
+import { tr } from 'date-fns/locale';
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface Visit {
   id: string;
   customer: { kisa_isim: string; } | null;
-  branch?: { sube_adi: string; };
-  visit_date: string;
+  branch?: { sube_adi: string; } | null;
+  visit_date: string | null; // Null olabilir
   status: 'planned' | 'completed' | 'cancelled';
   visit_type?: string | string[];
   notes?: string;
   equipment_checks?: Record<string, any>;
   pest_types?: string[];
-  operator?: { name: string; phone?: string; };
+  operator?: { name: string; phone?: string; } | null;
   report_number?: string;
   paid_materials?: any[];
   biocidal_products?: any[];
@@ -50,14 +51,16 @@ const EditVisitModal: React.FC<{
 
   useEffect(() => {
     if (visit && visit.visit_date) {
-      const visitDate = new Date(visit.visit_date);
-      setFormData({
-        visitDate: format(visitDate, 'yyyy-MM-dd'),
-        visitTime: format(visitDate, 'HH:mm'),
-        visitType: Array.isArray(visit.visit_type) ? visit.visit_type[0] || '' : visit.visit_type || '',
-        pestTypes: visit.pest_types || [],
-        notes: visit.notes || ''
-      });
+      const dateObj = new Date(visit.visit_date);
+      if (isValid(dateObj)) {
+          setFormData({
+            visitDate: format(dateObj, 'yyyy-MM-dd'),
+            visitTime: format(dateObj, 'HH:mm'),
+            visitType: Array.isArray(visit.visit_type) ? visit.visit_type[0] || '' : visit.visit_type || '',
+            pestTypes: visit.pest_types || [],
+            notes: visit.notes || ''
+          });
+      }
     } else if (visit) {
        setFormData({
             visitDate: format(new Date(), 'yyyy-MM-dd'),
@@ -137,6 +140,7 @@ const Visits: React.FC = () => {
 
   const fetchVisits = useCallback(async () => {
     setLoading(true);
+    setError(null); // Hata durumunu sıfırla
     try {
       if (!operatorId) return;
 
@@ -145,7 +149,17 @@ const Visits: React.FC = () => {
 
       let baseQuery = supabase
         .from('visits')
-        .select(`id, visit_date, status, visit_type, notes, report_number, customer:customer_id (kisa_isim), branch:branch_id (sube_adi), operator:operator_id (name, phone)`)
+        .select(`
+          id, 
+          visit_date, 
+          status, 
+          visit_type, 
+          notes, 
+          report_number, 
+          customer:customer_id (kisa_isim), 
+          branch:branch_id (sube_adi), 
+          operator:operator_id (name, phone)
+        `)
         .eq('operator_id', operatorId);
 
       if (searchTerm) {
@@ -156,11 +170,14 @@ const Visits: React.FC = () => {
       
       if (allError) throw allError;
 
-      const allVisitIds = (allVisitsData || []).map(v => v.id);
+      // Veri güvenliği: Boş veri gelirse boş dizi ata
+      const safeVisitsData = allVisitsData || [];
+
+      const allVisitIds = safeVisitsData.map(v => v.id);
       let paidMaterialsByVisit: { [key: string]: any[] } = {};
 
       if (allVisitIds.length > 0) {
-        // --- DÜZELTME: Belirgin FK ismi kullanıldı ---
+        // Ücretli malzemeleri çek
         const { data: materialsData, error: materialsError } = await supabase
           .from('paid_material_sales')
           .select(`
@@ -173,18 +190,23 @@ const Visits: React.FC = () => {
           .in('visit_id', allVisitIds);
           
         if (materialsError) {
-            console.warn("Malzeme verisi çekilemedi (Olası yetki veya ilişki hatası):", materialsError.message);
+            console.warn("Malzeme verisi çekilemedi:", materialsError.message);
         } else {
             paidMaterialsByVisit = (materialsData || []).reduce((acc, sale) => {
-            acc[sale.visit_id] = (sale.items as any[]) || [];
-            return acc;
+              acc[sale.visit_id] = (sale.items as any[]) || [];
+              return acc;
             }, {} as { [key: string]: any[] });
         }
       }
 
-      const allEnhancedVisits = (allVisitsData || []).map(visit => ({
+      const allEnhancedVisits: Visit[] = safeVisitsData.map((visit: any) => ({
         ...visit,
         paid_materials: paidMaterialsByVisit[visit.id] || [],
+        // Null field korumaları
+        customer: visit.customer || { kisa_isim: 'Müşteri Silinmiş' },
+        branch: visit.branch || { sube_adi: 'Şube Yok' },
+        operator: visit.operator || { name: 'Atanmadı' },
+        visit_date: visit.visit_date // Date objesine çevirme işlemi aşağıda yapılacak
       }));
 
       const today = startOfToday();
@@ -196,13 +218,20 @@ const Visits: React.FC = () => {
       let futureAndCancelled: Visit[] = [];
 
       for (const visit of allEnhancedVisits) {
-        if (!visit.visit_date || !visit.customer) {
+        // Tarih yoksa veya geçersizse
+        if (!visit.visit_date) {
             if (visit.status === 'completed') completed.push(visit);
             else futureAndCancelled.push(visit);
             continue;
         }
         
         const visitDate = new Date(visit.visit_date);
+        
+        // Geçersiz tarih kontrolü
+        if (!isValid(visitDate)) {
+            futureAndCancelled.push(visit);
+            continue;
+        }
         
         if (visit.status === 'planned') {
           if (isBefore(visitDate, today)) {
@@ -219,31 +248,37 @@ const Visits: React.FC = () => {
         }
       }
 
-      overdue.sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime());
-      todayScheduled.sort((a, b) => new Date(a.visit_date).getTime() - new Date(a.visit_date).getTime());
+      // Sıralama fonksiyonları (Tarih null kontrolü eklenmiş)
+      const sortByDate = (a: Visit, b: Visit, asc: boolean = true) => {
+          if (!a.visit_date) return 1;
+          if (!b.visit_date) return -1;
+          const dateA = new Date(a.visit_date).getTime();
+          const dateB = new Date(b.visit_date).getTime();
+          return asc ? dateA - dateB : dateB - dateA;
+      };
+
+      overdue.sort((a, b) => sortByDate(a, b, true));
+      todayScheduled.sort((a, b) => sortByDate(a, b, true));
       
+      // Gelecek ve iptaller
       futureAndCancelled.sort((a, b) => {
         if (!a.visit_date) return 1;
         if (!b.visit_date) return -1;
         if (a.status === 'planned' && b.status !== 'planned') return -1;
         if (a.status !== 'planned' && b.status === 'planned') return 1;
-        if (a.status === 'planned' && b.status === 'planned') {
-            return new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime();
-        }
-        return new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime();
+        // İkisi de planlı ise tarihe göre
+        return sortByDate(a, b, true);
       });
       
-      completed.sort((a, b) => {
-         if (!a.visit_date) return 1;
-         if (!b.visit_date) return -1;
-         return new Date(b.visit_date).getTime() - new Date(a.visit_date).getTime();
-      });
+      // Tamamlananlar (Yeniden eskiye)
+      completed.sort((a, b) => sortByDate(a, b, false));
 
       setOverdueVisits(overdue);
       setTodayVisits(todayScheduled);
       setFutureAndCancelledVisits(futureAndCancelled);
       
       setTotalVisits(completed.length);
+      // Sayfalama işlemini slice ile yapıyoruz
       setCompletedVisits(completed.slice(from, to + 1));
 
     } catch (err: any) {
@@ -265,13 +300,17 @@ const Visits: React.FC = () => {
         }
         const { data: operatorData, error: operatorError } = await supabase.from('operators').select('id').eq('auth_id', user.id).single();
         
-        if (operatorError && operatorError.code === 'PGRST116') {
-             toast.error("Operatör profili bulunamadı.");
-             setError("Operatör profili bulunamadı.");
+        if (operatorError) {
+             // PGRST116: Sonuç bulunamadı (Satır yok)
+             if (operatorError.code === 'PGRST116') {
+                toast.error("Operatör profili bulunamadı.");
+                setError("Operatör profili bulunamadı.");
+             } else {
+                console.error("Operatör kontrol hatası:", operatorError);
+             }
              setLoading(false);
              return;
         }
-        if (operatorError) throw operatorError;
 
         if (operatorData) {
           setOperatorId(operatorData.id);
@@ -279,6 +318,7 @@ const Visits: React.FC = () => {
           setLoading(false);
         }
       } catch (err: any) {
+        console.error("Yetki kontrol hatası:", err);
         setError(err.message);
         setLoading(false);
       }
@@ -363,11 +403,16 @@ const Visits: React.FC = () => {
     }
   };
 
+  // Güvenli render fonksiyonu
   const renderVisitCard = (visit: Visit) => (
     <div key={visit.id} className="bg-white rounded-lg shadow-sm">
       <div className="p-3 border-b border-gray-100">
         <div className="flex justify-between items-center text-xs mb-1">
-            <span className="text-gray-500">{visit.visit_date ? new Date(visit.visit_date).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Tarih Yok'}</span>
+            <span className="text-gray-500">
+              {visit.visit_date && isValid(new Date(visit.visit_date)) 
+                ? format(new Date(visit.visit_date), 'dd MMMM yyyy HH:mm', { locale: tr }) 
+                : 'Tarih Yok'}
+            </span>
             <div className="flex gap-2">
               <span className={`font-semibold px-2 py-1 rounded-full text-xs ${getStatusBadge(visit.status)}`}>
                   {getStatusText(visit.status)}
@@ -377,9 +422,13 @@ const Visits: React.FC = () => {
               </span>
             </div>
         </div>
-        <div className="font-bold text-sm">{visit.customer ? visit.customer.kisa_isim : 'Müşteri Bilgisi Yok'}</div>
+        <div className="font-bold text-sm">
+          {visit.customer?.kisa_isim || 'Müşteri Bilgisi Yok'}
+        </div>
         <div className="flex justify-between items-center mt-1">
-          <div className="text-xs text-gray-700">{visit.branch ? visit.branch.sube_adi : ''}</div>
+          <div className="text-xs text-gray-700">
+            {visit.branch?.sube_adi || ''}
+          </div>
           {visit.report_number && <div className="text-xs text-gray-600">Rapor: {visit.report_number}</div>}
         </div>
       </div>
@@ -427,6 +476,7 @@ const Visits: React.FC = () => {
 
       <div className="space-y-4">
         
+        {/* GRUP 1: Geçmiş Planlı Ziyaretler */}
         {overdueVisits.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-red-600 mb-2 flex items-center gap-2">
@@ -439,6 +489,7 @@ const Visits: React.FC = () => {
           </section>
         )}
 
+        {/* GRUP 2: Bugünkü Ziyaretler */}
         {todayVisits.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-blue-600 mb-2 flex items-center gap-2">
@@ -451,6 +502,7 @@ const Visits: React.FC = () => {
           </section>
         )}
 
+        {/* GRUP 3: Diğer (Gelecek/İptal) */}
         {futureAndCancelledVisits.length > 0 && (
           <section>
             <h2 className="text-lg font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -463,6 +515,7 @@ const Visits: React.FC = () => {
           </section>
         )}
 
+        {/* GRUP 4: Tamamlanan Ziyaretler */}
         {(completedVisits.length > 0 || totalPages > 1) && (
           <section>
             <h2 className="text-lg font-bold text-green-700 mb-2 flex items-center gap-2">
@@ -486,6 +539,7 @@ const Visits: React.FC = () => {
         )}
       </div>
 
+      {/* Sayfalama */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center p-4 mt-4">
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-4 py-2 text-sm bg-gray-200 rounded-lg disabled:opacity-50 flex items-center gap-2"><ChevronLeft size={16}/> Önceki</button>
@@ -494,6 +548,7 @@ const Visits: React.FC = () => {
         </div>
       )}
 
+      {/* Modallar */}
       {showActionModal && (
         <CorrectiveActionModal 
           isOpen={showActionModal} 
