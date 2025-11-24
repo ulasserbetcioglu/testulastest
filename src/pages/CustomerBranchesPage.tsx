@@ -631,7 +631,7 @@ const CustomerBranchesPage: React.FC = () => {
                     {activeTab === 'dof' && <BranchCorrectiveActionsList branchId={branch.id} />}
                     {activeTab === 'materials' && <BranchMaterialUsageList branchId={branch.id} />}
                     {activeTab === 'pesticides' && <BranchPesticideUsageView branchId={branch.id} />}
-                    {activeTab === 'floorplan' && <BranchFloorPlanView branchId={branch.id} />}
+                    {activeTab === 'floorplan' && <FloorPlanViewer branchId={branch.id} />}  
                     {activeTab === 'trends' && <BranchTrendAnalysisView branchId={branch.id} />}
                   </div>
                 )}
