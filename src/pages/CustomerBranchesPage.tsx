@@ -9,6 +9,7 @@ import { localAuth } from '../lib/localAuth';
 import type { Branch } from '../types';
 import { format, subMonths, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import FloorPlanViewer from '../components/Branches/FloorPlanViewer';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line
