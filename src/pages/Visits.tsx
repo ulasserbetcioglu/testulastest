@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Loader2, CalendarClock, CalendarCheck2, CalendarSearch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
@@ -25,148 +25,6 @@ interface Visit {
   biocidal_products?: any[];
 }
 
-// --- ZİYARET DÜZENLEME MODALI ---
-const EditVisitModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  visit: Visit | null;
-  onSave: () => void;
-}> = ({ isOpen, onClose, visit, onSave }) => {
-  const [formData, setFormData] = useState({ 
-    visitDate: '', 
-    visitTime: '', 
-    visitType: '', 
-    pestTypes: [] as string[], 
-    notes: '' 
-  });
-  const [saving, setSaving] = useState(false);
-
-  const visitTypes = [
-    { id: 'ilk', label: 'İlk' }, { id: 'ucretli', label: 'Ücretli' },
-    { id: 'acil', label: 'Acil Çağrı' }, { id: 'teknik', label: 'Teknik İnceleme' },
-    { id: 'periyodik', label: 'Periyodik' }, { id: 'isyeri', label: 'İşyeri' },
-    { id: 'gozlem', label: 'Gözlem' }, { id: 'son', label: 'Son' }
-  ];
-  const pestTypes = [
-    { id: 'kus', label: 'Kuş' }, { id: 'hasere', label: 'Haşere' },
-    { id: 'ari', label: 'Arı' }, { id: 'kemirgen', label: 'Kemirgen' },
-    { id: 'yumusakca', label: 'Yumuşakça' }, { id: 'kedi_kopek', label: 'Kedi/Köpek' },
-    { id: 'sinek', label: 'Sinek' }, { id: 'surungen', label: 'Sürüngen' },
-    { id: 'ambar', label: 'Ambar Zararlısı' }
-  ];
-
-  useEffect(() => {
-    if (visit?.visit_date) {
-      const dateObj = new Date(visit.visit_date);
-      if (isValid(dateObj)) {
-        setFormData({
-          visitDate: format(dateObj, 'yyyy-MM-dd'),
-          visitTime: format(dateObj, 'HH:mm'),
-          visitType: Array.isArray(visit.visit_type) ? visit.visit_type[0] || '' : visit.visit_type || '',
-          pestTypes: visit.pest_types || [],
-          notes: visit.notes || ''
-        });
-      }
-    } else {
-      setFormData({
-        visitDate: format(new Date(), 'yyyy-MM-dd'),
-        visitTime: format(new Date(), 'HH:mm'),
-        visitType: '',
-        pestTypes: [],
-        notes: ''
-      });
-    }
-  }, [visit]);
-
-  const handlePestTypeChange = (pestId: string) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      pestTypes: prev.pestTypes.includes(pestId) 
-        ? prev.pestTypes.filter(id => id !== pestId) 
-        : [...prev.pestTypes, pestId] 
-    }));
-  };
-
-  const handleSave = async () => {
-    if (!visit) return;
-    setSaving(true);
-    try {
-      const visitDateTime = new Date(`${formData.visitDate}T${formData.visitTime}:00`).toISOString();
-      const { error } = await supabase
-        .from('visits')
-        .update({ 
-          visit_date: visitDateTime, 
-          visit_type: formData.visitType, 
-          pest_types: formData.pestTypes, 
-          notes: formData.notes 
-        })
-        .eq('id', visit.id);
-
-      if (error) throw error;
-      toast.success("Ziyaret başarıyla güncellendi.");
-      onSave();
-      onClose();
-    } catch (error: any) {
-      toast.error("Ziyaret güncellenirken hata: " + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-xl font-bold">Ziyareti Düzenle</h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200"><X size={20} /></button>
-        </div>
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Tarih</label>
-              <input type="date" value={formData.visitDate} onChange={e => setFormData({...formData, visitDate: e.target.value})} className="w-full p-2 border rounded-md" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Saat</label>
-              <input type="time" value={formData.visitTime} onChange={e => setFormData({...formData, visitTime: e.target.value})} className="w-full p-2 border rounded-md" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Ziyaret Türü</label>
-            <select value={formData.visitType} onChange={e => setFormData({...formData, visitType: e.target.value})} className="w-full p-2 border rounded-md">
-              <option value="">Tür Seçin...</option>
-              {visitTypes.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Hedef Zararlılar</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {pestTypes.map(type => (
-                <label key={type.id} className="flex items-center space-x-2 text-sm">
-                  <input type="checkbox" value={type.id} checked={formData.pestTypes.includes(type.id)} onChange={() => handlePestTypeChange(type.id)} className="form-checkbox text-blue-600"/>
-                  <span>{type.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notlar</label>
-            <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} rows={4} className="w-full p-2 border rounded-md"></textarea>
-          </div>
-        </div>
-        <div className="flex justify-end gap-3 p-4 bg-gray-50 border-t">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">İptal</button>
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 disabled:opacity-50">
-            {saving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>} Kaydet
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // --- ANA BİLEŞEN ---
 const Visits: React.FC = () => {
   const navigate = useNavigate();
@@ -186,8 +44,6 @@ const Visits: React.FC = () => {
   // Modal State'leri
   const [showVisitDetails, setShowVisitDetails] = useState(false);
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingVisit, setEditingVisit] = useState<Visit | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
   
@@ -329,7 +185,7 @@ const Visits: React.FC = () => {
     }
   }, [operatorId, isAdmin, currentPage, searchTerm]);
 
-  // --- EFFECTS ---
+  // --- ETKİLER (EFFECTS) ---
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -382,7 +238,12 @@ const Visits: React.FC = () => {
 
   // --- HANDLERS ---
   const handleStartVisit = (visitId: string) => navigate(`/operator/ziyaretler/${visitId}/start`);
-  const handleEditVisit = (visit: Visit) => { setEditingVisit(visit); setShowEditModal(true); };
+  
+  // DEĞİŞİKLİK: Düzenle butonu artık modal açmaz, detay sayfasına yönlendirir
+  const handleEditVisit = (visit: Visit) => {
+    navigate(`/operator/ziyaretler/${visit.id}/start`);
+  };
+
   const handleCreateAction = (visitId: string) => { setSelectedVisitId(visitId); setShowActionModal(true); };
   const handleViewVisit = (visit: Visit) => { setSelectedVisit(visit); setShowVisitDetails(true); };
 
@@ -445,7 +306,6 @@ const Visits: React.FC = () => {
         
         {visit.status === 'completed' ? (
           <div className="flex gap-2">
-             {/* --- YENİ EKLENEN: Tamamlanmış Ziyaretler İçin Düzenle Butonu --- */}
              <button 
                 onClick={() => handleEditVisit(visit)} 
                 className="px-3 py-1.5 rounded bg-white border border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center shadow-sm transition-colors"
@@ -508,7 +368,7 @@ const Visits: React.FC = () => {
         <div className="relative">
           <input 
             type="text" 
-            placeholder="Rapor numarası ile ara..." 
+            placeholder="Müşteri, şube veya rapor no ile ara..." 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
             className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
@@ -632,15 +492,6 @@ const Visits: React.FC = () => {
         <VisitDetailsModal 
           visit={selectedVisit as any} 
           onClose={() => { setShowVisitDetails(false); setSelectedVisit(null); }} 
-        />
-      )}
-      
-      {showEditModal && (
-        <EditVisitModal 
-          isOpen={showEditModal} 
-          onClose={() => setShowEditModal(false)} 
-          visit={editingVisit} 
-          onSave={fetchVisits} 
         />
       )}
     </div>
