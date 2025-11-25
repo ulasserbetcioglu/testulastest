@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, Users, FileText, BarChart, AlertTriangle, 
   Package, Layout, TrendingUp, Bug, AlertCircle, 
@@ -38,6 +38,7 @@ interface Document {
   type: string;
   created_at: string;
   file_url: string;
+  entity_type: string;
 }
 
 interface Certificate {
@@ -54,7 +55,7 @@ const MONTH_NAMES = [
   'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
 ];
 
-// --- MEVCUT ALT BİLEŞENLER ---
+// --- ALT BİLEŞENLER ---
 
 const BranchVisitsList = ({ branchId }: { branchId: string }) => {
   const [visits, setVisits] = useState<any[]>([]);
@@ -194,9 +195,7 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
   );
 };
 
-// --- YENİ EKLENEN ALT BİLEŞENLER ---
-
-// 1. Takvim
+// --- 1. Takvim
 const BranchCalendarView = ({ branchId }: { branchId: string }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -253,27 +252,61 @@ const BranchCalendarView = ({ branchId }: { branchId: string }) => {
   );
 };
 
-// 2. Dökümanlar
+// 2. Dökümanlar (GÜNCELLENDİ: Public Dökümanlar Dahil Edildi)
 const BranchDocumentsView = ({ branchId }: { branchId: string }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const f = async () => {
-      const { data } = await supabase.from('documents').select('*').eq('branch_id', branchId).order('created_at', { ascending: false });
+    const fetchDocs = async () => {
+      // 1. Önce şubenin bağlı olduğu Müşteri ID'sini çek
+      const { data: branchData } = await supabase
+        .from('branches')
+        .select('customer_id')
+        .eq('id', branchId)
+        .single();
+      
+      const customerId = branchData?.customer_id;
+
+      // 2. Dökümanları Çek (Şube'ye Özel + Müşteriye Özel + Genel/Public)
+      let query = supabase
+        .from('documents')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (customerId) {
+        query = query.or(`branch_id.eq.${branchId},customer_id.eq.${customerId},entity_type.eq.public`);
+      } else {
+        query = query.or(`branch_id.eq.${branchId},entity_type.eq.public`);
+      }
+
+      const { data } = await query;
       setDocuments(data || []);
       setLoading(false);
     };
-    f();
+    fetchDocs();
   }, [branchId]);
+
   if (loading) return <div className="p-4 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto"/></div>;
   if (documents.length === 0) return <div className="p-8 text-center text-gray-500 bg-gray-50 rounded border border-dashed">Döküman bulunamadı.</div>;
+  
   return (
     <div className="space-y-2">
       {documents.map((doc) => (
         <div key={doc.id} className="flex justify-between items-center p-3 bg-white border rounded-lg hover:shadow-sm transition-shadow">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded"><FileText size={20} /></div>
-            <div><p className="font-medium text-sm text-gray-900">{doc.name}</p><p className="text-xs text-gray-500">{doc.type} • {format(parseISO(doc.created_at), 'dd MMM yyyy', { locale: tr })}</p></div>
+            <div className={`p-2 rounded ${doc.entity_type === 'public' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
+              <FileText size={20} />
+            </div>
+            <div>
+              <p className="font-medium text-sm text-gray-900">{doc.name}</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>{doc.type}</span>
+                <span>•</span>
+                <span>{format(parseISO(doc.created_at), 'dd MMM yyyy', { locale: tr })}</span>
+                {doc.entity_type === 'public' && <span className="bg-orange-100 text-orange-700 px-1.5 rounded text-[10px]">Genel</span>}
+              </div>
+            </div>
           </div>
           <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded-full transition-colors"><Download size={18} /></a>
         </div>
@@ -288,6 +321,7 @@ const BranchCertificatesView = ({ branchId }: { branchId: string }) => {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const f = async () => {
+      // Sertifikaları da benzer mantıkla (Şube + Müşteri) çekebilirsiniz, şimdilik sadece şube
       const { data } = await supabase.from('certificates').select('*').eq('branch_id', branchId).order('valid_until', { ascending: true });
       setCertificates(data || []);
       setLoading(false);
