@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import jsPDF from 'jspdf'; // PDF kütüphanesi eklendi
 import {
   TrendingUp,
   Calendar,
@@ -22,7 +23,8 @@ import {
   MapPin,
   Phone,
   Mail,
-  Globe
+  Globe,
+  FileText // PDF ikonu için
 } from 'lucide-react';
 import {
   LineChart,
@@ -229,7 +231,6 @@ const AdminTrendAnalysisReport: React.FC = () => {
     }
   };
 
-  // DÜZELTME: navigate kullanılarak aynı sekmede açılması sağlandı
   const handleNavigateToDataEntry = () => {
     if (!selectedCustomerId) {
       toast.error('Lütfen önce bir müşteri seçin');
@@ -279,10 +280,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
     }
   };
 
-  // ... (fetchVisitStats, fetchEquipmentData vb. diğer fetch fonksiyonları AYNEN KORUNMALI)
-  // Yer kazanmak için buraya önceki kodun fetch fonksiyonlarını kopyalamanız gerekiyor.
-  // Önceki cevabımdaki tüm fetch... fonksiyonları buraya gelecek.
-  // Kullanıcı "tam kod" istediği için, önceki cevabımdaki fonksiyonları buraya ekliyorum:
+  // --- Data Fetching Functions ---
 
   const fetchVisitStats = async () => {
       try {
@@ -384,46 +382,46 @@ const AdminTrendAnalysisReport: React.FC = () => {
   };
 
   const fetchEquipmentList = async () => {
-      try {
-        let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
-        if (branchIds.length === 0) { setEquipmentList([]); return; }
-        
-        const { data, error } = await supabase.from('branch_equipment').select(`equipment_code, department, last_check, equipment:equipment_id (name, properties), branch:branch_id (sube_adi)`).in('branch_id', branchIds);
-        if (error) throw error;
-        
-        const { data: visitsData } = await supabase.from('visits').select('equipment_checks').in('branch_id', branchIds).gte('visit_date', dateRange.from).lte('visit_date', dateRange.to).eq('status', 'completed');
-        
-        const activityMap = new Map<string, { total: number; details: Record<string, number> }>();
-        visitsData?.forEach(visit => {
-          if (visit.equipment_checks) {
-            Object.entries(visit.equipment_checks).forEach(([code, checkData]: [string, any]) => {
-              if (!activityMap.has(code)) activityMap.set(code, { total: 0, details: {} });
-              const activity = activityMap.get(code)!;
-              if (checkData && typeof checkData === 'object') {
-                Object.entries(checkData).forEach(([key, value]) => {
-                  if (typeof value === 'number') { activity.total += value; activity.details[key] = (activity.details[key] || 0) + value; }
-                  else if (value === true || value === 'true' || value === 'var' || value === 'evet') { activity.total += 1; activity.details[key] = (activity.details[key] || 0) + 1; }
-                });
-              }
-            });
-          }
-        });
-        
-        setEquipmentList(data?.map((item: any) => {
-          const act = activityMap.get(item.equipment_code);
-          return {
-            equipment_name: item.equipment?.name || 'Bilinmeyen',
-            equipment_code: item.equipment_code || '',
-            department: item.department || '-',
-            branch_name: item.branch?.sube_adi || '-',
-            last_check_status: item.last_check?.status || '-',
-            last_check_date: item.last_check?.date ? format(parseISO(item.last_check.date), 'dd.MM.yyyy') : '-',
-            properties: item.equipment?.properties || {},
-            total_activity: act?.total || 0,
-            activity_details: act?.details || {}
-          };
-        }) || []);
-      } catch (error) { console.error(error); }
+    try {
+      let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
+      if (branchIds.length === 0) { setEquipmentList([]); return; }
+      
+      const { data, error } = await supabase.from('branch_equipment').select(`equipment_code, department, last_check, equipment:equipment_id (name, properties), branch:branch_id (sube_adi)`).in('branch_id', branchIds);
+      if (error) throw error;
+      
+      const { data: visitsData } = await supabase.from('visits').select('equipment_checks').in('branch_id', branchIds).gte('visit_date', dateRange.from).lte('visit_date', dateRange.to).eq('status', 'completed');
+      
+      const activityMap = new Map<string, { total: number; details: Record<string, number> }>();
+      visitsData?.forEach(visit => {
+        if (visit.equipment_checks) {
+          Object.entries(visit.equipment_checks).forEach(([code, checkData]: [string, any]) => {
+            if (!activityMap.has(code)) activityMap.set(code, { total: 0, details: {} });
+            const activity = activityMap.get(code)!;
+            if (checkData && typeof checkData === 'object') {
+              Object.entries(checkData).forEach(([key, value]) => {
+                if (typeof value === 'number') { activity.total += value; activity.details[key] = (activity.details[key] || 0) + value; }
+                else if (value === true || value === 'true' || value === 'var' || value === 'evet') { activity.total += 1; activity.details[key] = (activity.details[key] || 0) + 1; }
+              });
+            }
+          });
+        }
+      });
+      
+      setEquipmentList(data?.map((item: any) => {
+        const act = activityMap.get(item.equipment_code);
+        return {
+          equipment_name: item.equipment?.name || 'Bilinmeyen',
+          equipment_code: item.equipment_code || '',
+          department: item.department || '-',
+          branch_name: item.branch?.sube_adi || '-',
+          last_check_status: item.last_check?.status || '-',
+          last_check_date: item.last_check?.date ? format(parseISO(item.last_check.date), 'dd.MM.yyyy') : '-',
+          properties: item.equipment?.properties || {},
+          total_activity: act?.total || 0,
+          activity_details: act?.details || {}
+        };
+      }) || []);
+    } catch (error) { console.error(error); }
   };
 
   const fetchCorrectiveActions = async () => {
@@ -456,7 +454,6 @@ const AdminTrendAnalysisReport: React.FC = () => {
       } catch (error) { console.error(error); }
   };
 
-  // Ekipman Türü Bazlı Detaylı Analiz Fonksiyonu
   const fetchEquipmentTypeActivities = async () => {
       try {
         let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
@@ -575,10 +572,60 @@ const AdminTrendAnalysisReport: React.FC = () => {
     } catch (error) { toast.error('Hata oluştu'); } finally { setGenerating(false); }
   };
 
+  const handleExportPDF = async () => {
+    setGenerating(true);
+    toast.info('PDF oluşturuluyor, lütfen bekleyin...');
+
+    try {
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const elements = document.querySelectorAll('.pdf-section');
+      let yOffset = 10;
+      const pageHeight = 295; // A4 height in mm minus minimal margin
+      const pageWidth = 210;
+      const margin = 10;
+      const contentWidth = pageWidth - (2 * margin);
+
+      for (let i = 0; i < elements.length; i++) {
+        const element = elements[i] as HTMLElement;
+        
+        // Skip hidden elements
+        if (element.offsetParent === null) continue;
+
+        const canvas = await html2canvas(element, {
+          scale: 2, // Higher scale for better quality
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgHeight = (canvas.height * contentWidth) / canvas.width;
+
+        // Check if we need a new page
+        if (yOffset + imgHeight > pageHeight - margin) {
+          doc.addPage();
+          yOffset = 10; // Reset Y to top margin
+        }
+
+        doc.addImage(imgData, 'JPEG', margin, yOffset, contentWidth, imgHeight);
+        yOffset += imgHeight + 5; // Add small gap between sections
+      }
+
+      const customerName = customers.find(c => c.id === selectedCustomerId)?.kisa_isim || 'rapor';
+      doc.save(`Trend_Analiz_${customerName}_${format(new Date(), 'dd-MM-yyyy')}.pdf`);
+      toast.success('PDF başarıyla indirildi');
+
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast.error('PDF oluşturulurken hata oluştu');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const selectedCustomerName = customers.find(c => c.id === selectedCustomerId)?.kisa_isim || '';
   const selectedBranchName = filteredBranches.find(b => b.id === selectedBranchId)?.sube_adi || '';
 
-  // YENİ: Ekipman Özet Metni Oluşturucu
   const generateEquipmentSummaryText = (typeData: EquipmentTypeData) => {
     const totalActivity = typeData.activities.reduce((sum, act) => {
         return sum + typeData.propertyKeys.reduce((s, k) => s + (Number(act[k]) || 0), 0);
@@ -638,16 +685,21 @@ const AdminTrendAnalysisReport: React.FC = () => {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-4">
-            <button onClick={handleGenerateReport} disabled={loading || !selectedCustomerId} className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors">
+            <button onClick={handleGenerateReport} disabled={loading || !selectedCustomerId} className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <BarChart3 className="h-5 w-5" />} {loading ? 'Oluşturuluyor...' : 'Rapor Oluştur'}
             </button>
             <button onClick={handleNavigateToDataEntry} className="flex items-center gap-2 px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
               <Edit3 className="h-5 w-5" /> Veri Girişi / Düzenle
             </button>
             {visitStats && (
+              <>
                 <button onClick={handleExportImage} disabled={generating} className="flex items-center gap-2 px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-300 transition-colors">
-                  {generating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />} Raporu İndir
+                  {generating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />} Raporu İndir (JPG)
                 </button>
+                <button onClick={handleExportPDF} disabled={generating} className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300 transition-colors">
+                  {generating ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />} PDF İndir
+                </button>
+              </>
             )}
           </div>
 
@@ -674,8 +726,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
         {visitStats && (
           <div ref={reportRef} className="bg-white rounded-lg shadow-sm p-8 min-h-[1000px] flex flex-col justify-between">
             <div>
-                {/* 1. Header & Logo */}
-                <div className="flex justify-between items-center border-b-2 border-gray-200 pb-4 mb-6">
+                {/* 1. Header & Logo - PDF Section */}
+                <div className="flex justify-between items-center border-b-2 border-gray-200 pb-4 mb-6 pdf-section">
                 <div className="flex items-center gap-4">
                     {companySettings?.logo_url ? (
                         <img src={companySettings.logo_url} alt="Firma Logosu" className="h-20 object-contain" />
@@ -693,8 +745,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
                 </div>
                 </div>
 
-                {/* 2. Report Info Text */}
-                <div className="mb-8 p-4 bg-gray-50 rounded-lg text-sm text-gray-700 leading-relaxed border border-gray-100">
+                {/* 2. Report Info Text - PDF Section */}
+                <div className="mb-8 p-4 bg-gray-50 rounded-lg text-sm text-gray-700 leading-relaxed border border-gray-100 pdf-section">
                 <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2"><Info size={16} className="text-blue-500"/> Rapor Hakkında</h4>
                 <p>
                     Bu rapor, <strong>{selectedCustomerName}</strong> {selectedBranchName && `(${selectedBranchName})`} işletmesinde <strong>{format(parseISO(dateRange.from), 'dd.MM.yyyy', { locale: tr })}</strong> - <strong>{format(parseISO(dateRange.to), 'dd.MM.yyyy', { locale: tr })}</strong> tarihleri arasında gerçekleştirilen haşere kontrol faaliyetlerinin detaylı analizini içermektedir.
@@ -703,25 +755,25 @@ const AdminTrendAnalysisReport: React.FC = () => {
                 </p>
                 </div>
 
-                {/* 3. Visit Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                {/* 3. Visit Stats - PDF Section */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 pdf-section">
                 <div className="bg-blue-50 rounded-lg p-6 border border-blue-100"><p className="text-sm text-blue-600 font-medium">Toplam Ziyaret</p><p className="text-3xl font-bold text-blue-900 mt-2">{visitStats.total_visits}</p></div>
                 <div className="bg-green-50 rounded-lg p-6 border border-green-100"><p className="text-sm text-green-600 font-medium">Tamamlanan</p><p className="text-3xl font-bold text-green-900 mt-2">{visitStats.completed_visits}</p></div>
                 <div className="bg-yellow-50 rounded-lg p-6 border border-yellow-100"><p className="text-sm text-yellow-600 font-medium">Bekleyen</p><p className="text-3xl font-bold text-yellow-900 mt-2">{visitStats.pending_visits}</p></div>
                 <div className="bg-red-50 rounded-lg p-6 border border-red-100"><p className="text-sm text-red-600 font-medium">İptal Edilen</p><p className="text-3xl font-bold text-red-900 mt-2">{visitStats.cancelled_visits}</p></div>
                 </div>
 
-                {/* 4. Monthly Trends */}
+                {/* 4. Monthly Trends - PDF Section */}
                 {monthlyTrends.length > 0 && (
-                <div className="mb-10">
+                <div className="mb-10 pdf-section">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-blue-500 pl-3">Aylık Ziyaret ve Sorun Trendi</h3>
                     <ResponsiveContainer width="100%" height={300}><AreaChart data={monthlyTrends}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis /><Tooltip /><Legend /><Area type="monotone" dataKey="visits" stackId="1" stroke="#0088FE" fill="#0088FE" name="Ziyaretler" /><Area type="monotone" dataKey="equipment_checks" stackId="1" stroke="#00C49F" fill="#00C49F" name="Ekipman Kontrolleri" /><Area type="monotone" dataKey="issues_found" stackId="1" stroke="#FF8042" fill="#FF8042" name="Bulunan Sorunlar" /></AreaChart></ResponsiveContainer>
                 </div>
                 )}
                 
-                {/* 5. Equipment Summary */}
+                {/* 5. Equipment Summary - PDF Section */}
                 {equipmentData.length > 0 && (
-                <div className="mb-6">
+                <div className="mb-6 pdf-section">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-purple-500 pl-3">Genel Ekipman Durum Özeti</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="p-4 bg-white rounded-lg border shadow-sm text-center">
@@ -742,9 +794,9 @@ const AdminTrendAnalysisReport: React.FC = () => {
                 </div>
                 )}
 
-                {/* 6. Equipment Type Activity Charts (With Descriptions) */}
+                {/* 6. Equipment Type Activity Charts (With Descriptions) - Each is PDF Section */}
                 {(chartViewMode === 'total' ? equipmentTypeData : equipmentTypeDataByVisit).map((typeData) => (
-                <div key={typeData.type} className="mb-10 break-inside-avoid">
+                <div key={typeData.type} className="mb-10 break-inside-avoid pdf-section">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2 border-l-4 border-indigo-500 pl-3">{typeData.type_label} - Detaylı Analiz</h3>
                     
                     {/* YENİ EKLENEN AÇIKLAMA METNİ */}
@@ -786,9 +838,9 @@ const AdminTrendAnalysisReport: React.FC = () => {
                 </div>
                 ))}
                 
-                {/* 7. Biocidal Products */}
+                {/* 7. Biocidal Products - PDF Section */}
                 {biocidalProducts.length > 0 && (
-                <div className="mb-8 break-inside-avoid">
+                <div className="mb-8 break-inside-avoid pdf-section">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-green-500 pl-3">Biyosidal Ürün Kullanımı</h3>
                     <div className="overflow-hidden rounded-lg border border-gray-200">
                     <table className="w-full text-sm text-left text-gray-600">
@@ -804,8 +856,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
                 )}
             </div>
 
-            {/* 8. Footer (Kurumsal Bilgiler) */}
-            <div className="mt-8 pt-6 border-t-2 border-gray-200 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500">
+            {/* 8. Footer (Kurumsal Bilgiler) - PDF Section */}
+            <div className="mt-8 pt-6 border-t-2 border-gray-200 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500 pdf-section">
               <div className="flex items-center gap-4 mb-4 md:mb-0">
                 <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-400">
                     {companySettings?.logo_url ? <img src={companySettings.logo_url} className="w-full h-full rounded-full object-cover"/> : 'i'}
