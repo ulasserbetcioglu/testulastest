@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { 
   Save, Square, MousePointer, Move, Trash2, ArrowLeft, 
   Maximize2, ZoomIn, ZoomOut, Type, DoorOpen, LayoutTemplate, 
-  Plus, Layers, Upload, Image as ImageIcon, MapPin, Phone, Mail, Globe
+  Plus, Layers, Upload, Image as ImageIcon, MapPin, Phone, Mail, Globe, Loader2
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -72,6 +72,7 @@ const AdminFloorPlanEditor: React.FC = () => {
   const svgRef = useRef<SVGSVGElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Aktif Plan
   const currentPlan = plans.find(p => p.id === currentPlanId);
 
   useEffect(() => {
@@ -149,6 +150,7 @@ const AdminFloorPlanEditor: React.FC = () => {
       }
     } catch (error) {
       console.error('Veri hatası:', error);
+      toast.error('Veriler yüklenirken hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -172,6 +174,12 @@ const AdminFloorPlanEditor: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !currentPlan) return;
 
+    // Dosya tipi kontrolü
+    if (!file.type.startsWith('image/')) {
+        toast.error('Lütfen geçerli bir resim dosyası (JPEG, PNG) seçin.');
+        return;
+    }
+
     setUploadingBg(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -185,10 +193,11 @@ const AdminFloorPlanEditor: React.FC = () => {
 
       const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
       
-      // State'i güncelle (React render'ı tetiklenir)
+      // State güncelleme
       updateCurrentPlan({ background_url: urlData.publicUrl });
       toast.success('Plan resmi yüklendi');
     } catch (error: any) {
+      console.error('Upload Error:', error);
       toast.error('Yükleme hatası: ' + error.message);
     } finally {
       setUploadingBg(false);
@@ -275,8 +284,7 @@ const AdminFloorPlanEditor: React.FC = () => {
       height: type === 'wall' ? 10 : type === 'text' ? 30 : 120,
       text: type === 'text' ? 'Metin' : type === 'room' ? 'Oda Adı' : '',
       fontSize: 14,
-      rotation: 0,
-      color: '#333'
+      rotation: 0
     };
 
     if (type === 'door') { newEl.width = 40; newEl.height = 10; }
@@ -488,14 +496,15 @@ const AdminFloorPlanEditor: React.FC = () => {
               height: 800, 
               transform: `scale(${scale})`,
               transformOrigin: 'top center',
-              marginTop: '20px'
+              marginTop: '20px',
+              position: 'relative' // Düzeltme: Pozisyonlama
             }}
-            onDragOver={handleDrop} // Drop eventleri
+            onDragOver={handleDrop} 
             onDrop={handleDrop}
           >
             
-            {/* Header (Logo ve Başlık - Kağıdın içinde) */}
-            <div className="absolute top-0 left-0 right-0 h-24 bg-white border-b px-6 flex justify-between items-center z-10 pointer-events-none">
+            {/* Header (Logo ve Başlık) */}
+            <div className="absolute top-0 left-0 right-0 h-24 bg-white/95 border-b px-6 flex justify-between items-center z-20 pointer-events-none backdrop-blur-sm">
                <div className="flex items-center gap-4">
                   {companySettings?.logo_url ? (
                      <img src={companySettings.logo_url} alt="Logo" className="h-16 object-contain" />
@@ -516,13 +525,26 @@ const AdminFloorPlanEditor: React.FC = () => {
                </div>
             </div>
 
-            {/* SVG Çizim Alanı */}
+            {/* Çizim Alanı (HTML IMG + SVG) */}
             <div className="absolute top-24 bottom-16 left-0 right-0 bg-gray-50 overflow-hidden">
+              
+              {/* Katman 1: Arkaplan Resmi (HTML IMG) - Düzeltilmiş! */}
+              {/* SVG yerine div arkasına koyduk, böylece çökme yapmaz */}
+              {currentPlan?.background_url && (
+                <img 
+                  src={currentPlan.background_url}
+                  alt="Kat Planı"
+                  className="absolute top-0 left-0 w-full h-full object-contain opacity-90 pointer-events-none select-none"
+                  crossOrigin="anonymous"
+                />
+              )}
+
+              {/* Katman 2: SVG Çizim */}
               <svg 
                 ref={svgRef}
                 width="100%" 
                 height="100%" 
-                className="w-full h-full"
+                className="absolute top-0 left-0 w-full h-full z-10"
                 style={{ cursor: selectedTool === 'select' ? 'default' : 'crosshair' }}
               >
                 <defs>
@@ -531,22 +553,10 @@ const AdminFloorPlanEditor: React.FC = () => {
                   </pattern>
                 </defs>
                 
-                {/* Katman 1: Arkaplan Resmi (Düzeltilmiş - xlinkHref eklendi) */}
-                {currentPlan?.background_url && (
-                  <image 
-                    href={currentPlan.background_url}
-                    xlinkHref={currentPlan.background_url} // Yedek uyumluluk
-                    x="0" y="0" 
-                    width="100%" height="100%" 
-                    preserveAspectRatio="xMidYMid slice"
-                    opacity="0.9"
-                  />
-                )}
-
-                {/* Katman 2: Izgara (Resim yoksa göster) */}
+                {/* Izgara (Resim yoksa göster) */}
                 {!currentPlan?.background_url && <rect width="100%" height="100%" fill="url(#grid)" pointerEvents="none" />}
 
-                {/* Katman 3: Çizim Elemanları */}
+                {/* Çizim Elemanları */}
                 {currentPlan?.elements.map((el) => (
                   <g 
                     key={el.id}
@@ -591,7 +601,7 @@ const AdminFloorPlanEditor: React.FC = () => {
                   </g>
                 ))}
 
-                {/* Katman 4: Ekipmanlar */}
+                {/* Ekipmanlar */}
                 {currentPlan && Object.entries(currentPlan.equipment_positions).map(([eqId, pos]) => {
                   const eqInfo = equipments.find(e => e.id === eqId);
                   return (
@@ -611,8 +621,8 @@ const AdminFloorPlanEditor: React.FC = () => {
               </svg>
             </div>
 
-            {/* Footer (İletişim Bilgileri - Kağıdın en altında) */}
-            <div className="absolute bottom-0 left-0 right-0 h-16 bg-white border-t flex justify-between items-center px-8 text-xs text-gray-500 pointer-events-none">
+            {/* Footer (İletişim Bilgileri) */}
+            <div className="absolute bottom-0 left-0 right-0 h-16 bg-white border-t flex justify-between items-center px-8 text-xs text-gray-500 pointer-events-none z-20">
                <div className="flex items-center gap-1">
                  <MapPin size={12} className="text-blue-600"/> {companySettings?.address || 'Adres Bilgisi'}
                </div>
