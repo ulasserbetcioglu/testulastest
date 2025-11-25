@@ -3,8 +3,7 @@ import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Sav
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
-// DÜZELTME: Yeni oluşturduğumuz modalı import ediyoruz
-import VisitDetailsModal from '../components/VisitDetailsModal'; 
+import VisitDetailsModal from '../components/VisitDetailsModal';
 import { toast } from 'sonner';
 import { format, startOfToday, endOfToday, isBefore, isAfter, isValid } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -24,7 +23,6 @@ interface Visit {
   report_number?: string;
   paid_materials?: any[];
   biocidal_products?: any[];
-  report_photo_url?: string;
 }
 
 // --- ZİYARET DÜZENLEME MODALI ---
@@ -183,6 +181,7 @@ const Visits: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [operatorId, setOperatorId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false); 
   
   // Modal State'leri
   const [showVisitDetails, setShowVisitDetails] = useState(false);
@@ -202,7 +201,8 @@ const Visits: React.FC = () => {
     setError(null);
     
     try {
-      if (!operatorId) {
+      // Eğer operatör ID yoksa ve Admin değilse işlem yapma
+      if (!operatorId && !isAdmin) {
         setLoading(false);
         return;
       }
@@ -214,21 +214,18 @@ const Visits: React.FC = () => {
       let baseQuery = supabase
         .from('visits')
         .select(`
-          id, visit_date, status, visit_type, notes, report_number, report_photo_url, 
+          id, visit_date, status, visit_type, notes, report_number, 
           customer:customer_id (kisa_isim), 
           branch:branch_id (sube_adi), 
           operator:operator_id (name, phone)
-        `)
-        .eq('operator_id', operatorId);
+        `);
 
-      // --- DÜZELTME: Arama Sorgusu Sadeleştirildi ---
-      // "failed to parse logic tree" hatasını önlemek için 
-      // Foreign Table filtrelemesini basitleştirdik.
+      if (operatorId) {
+        baseQuery = baseQuery.eq('operator_id', operatorId);
+      }
+
       if (searchTerm) {
-        // Sadece rapor numarasına göre arama yapıyoruz (en güvenli yöntem)
-        // Müşteri adına göre arama yapmak için inner join ve karmaşık filtre gerekir, 
-        // bu da JS client'ta bazen hata veriyor.
-        baseQuery = baseQuery.ilike('report_number', `%${searchTerm}%`);
+        baseQuery = baseQuery.or(`customer.kisa_isim.ilike.%${searchTerm}%,branch.sube_adi.ilike.%${searchTerm}%,report_number.ilike.%${searchTerm}%`);
       }
 
       const { data: allVisitsData, error: allError } = await baseQuery;
@@ -238,7 +235,7 @@ const Visits: React.FC = () => {
       const safeVisitsData = allVisitsData || [];
       const allVisitIds = safeVisitsData.map(v => v.id);
       
-      // 2. Ücretli Malzemeleri Çekme (Ayrı Sorgu)
+      // 2. Ücretli Malzemeleri Çekme
       let paidMaterialsByVisit: { [key: string]: any[] } = {};
 
       if (allVisitIds.length > 0) {
@@ -271,7 +268,7 @@ const Visits: React.FC = () => {
         visit_date: visit.visit_date
       }));
 
-      // 4. Gruplama Mantığı
+      // 4. Gruplama
       const today = startOfToday();
       const endToday = endOfToday();
 
@@ -318,7 +315,6 @@ const Visits: React.FC = () => {
       futureAndCancelled.sort((a, b) => sortByDate(a, b, true));
       completed.sort((a, b) => sortByDate(a, b, false));
 
-      // State Güncelleme
       setOverdueVisits(overdue);
       setTodayVisits(todayScheduled);
       setFutureAndCancelledVisits(futureAndCancelled);
@@ -331,9 +327,9 @@ const Visits: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [operatorId, currentPage, searchTerm]);
+  }, [operatorId, isAdmin, currentPage, searchTerm]);
 
-  // --- ETKİLER (EFFECTS) ---
+  // --- EFFECTS ---
 
   useEffect(() => {
     const checkUserRole = async () => {
@@ -343,6 +339,12 @@ const Visits: React.FC = () => {
           navigate('/login');
           return;
         }
+
+        if (user.email === 'admin@ilaclamatik.com') {
+            setIsAdmin(true);
+            return;
+        }
+
         const { data: operatorData, error } = await supabase.from('operators').select('id').eq('auth_id', user.id).single();
         
         if (error) {
@@ -369,10 +371,10 @@ const Visits: React.FC = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (operatorId) {
+    if (operatorId || isAdmin) {
       fetchVisits();
     }
-  }, [operatorId, currentPage, fetchVisits]);
+  }, [operatorId, isAdmin, currentPage, fetchVisits]);
   
   useEffect(() => {
     setCurrentPage(1);
@@ -382,12 +384,7 @@ const Visits: React.FC = () => {
   const handleStartVisit = (visitId: string) => navigate(`/operator/ziyaretler/${visitId}/start`);
   const handleEditVisit = (visit: Visit) => { setEditingVisit(visit); setShowEditModal(true); };
   const handleCreateAction = (visitId: string) => { setSelectedVisitId(visitId); setShowActionModal(true); };
-  
-  // DÜZELTME: İncele butonuna basıldığında yeni modal açılır
-  const handleViewVisit = (visit: Visit) => { 
-      setSelectedVisit(visit); 
-      setShowVisitDetails(true); 
-  };
+  const handleViewVisit = (visit: Visit) => { setSelectedVisit(visit); setShowVisitDetails(true); };
 
   // --- HELPERS ---
   const getVisitTypeText = (type?: string | string[]) => {
@@ -447,9 +444,22 @@ const Visits: React.FC = () => {
         </button>
         
         {visit.status === 'completed' ? (
-          <button onClick={() => handleViewVisit(visit)} className="px-4 py-1.5 rounded bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center shadow-sm transition-colors">
-            <Eye size={16} className="mr-1.5" /> İncele
-          </button>
+          <div className="flex gap-2">
+             {/* --- YENİ EKLENEN: Tamamlanmış Ziyaretler İçin Düzenle Butonu --- */}
+             <button 
+                onClick={() => handleEditVisit(visit)} 
+                className="px-3 py-1.5 rounded bg-white border border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center shadow-sm transition-colors"
+             >
+               <Edit size={16} className="mr-1.5" /> Düzenle
+             </button>
+             
+             <button 
+                onClick={() => handleViewVisit(visit)} 
+                className="px-4 py-1.5 rounded bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center shadow-sm transition-colors"
+             >
+               <Eye size={16} className="mr-1.5" /> İncele
+             </button>
+          </div>
         ) : (
           <>
             <button onClick={() => handleEditVisit(visit)} className="px-3 py-1.5 rounded text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center transition-colors">
