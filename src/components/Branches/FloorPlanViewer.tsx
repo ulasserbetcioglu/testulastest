@@ -17,6 +17,7 @@ interface EquipmentInfo {
 interface FloorPlan {
   id: string;
   title: string;
+  background_url?: string;
   elements: any[];
   equipment_positions: Record<string, { x: number, y: number }>;
 }
@@ -113,6 +114,13 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
     return '#10b981'; // Yeşil (Temiz)
   };
 
+  // Yardımcı: Özellik değerini formatla
+  const formatValue = (key: string, val: any) => {
+    if (val === true || val === 'true') return 'Evet / Var';
+    if (val === false || val === 'false') return 'Hayır / Yok';
+    return val;
+  };
+
   if (loading) return <div className="flex justify-center p-8"><RefreshCw className="animate-spin text-gray-400" /></div>;
 
   if (plans.length === 0) {
@@ -201,7 +209,21 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                 <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" strokeWidth="1"/>
               </pattern>
             </defs>
-            <rect width="100%" height="100%" fill="url(#smallGrid)" />
+            
+            {/* Katman 1: Arkaplan Resmi (DÜZELTİLDİ: Hem href hem xlinkHref) */}
+            {currentPlan?.background_url ? (
+              <image 
+                href={currentPlan.background_url} 
+                xlinkHref={currentPlan.background_url}
+                x="0" y="0" 
+                width="100%" height="100%" 
+                preserveAspectRatio="xMidYMid slice"
+                opacity="0.9"
+              />
+            ) : (
+               /* Resim yoksa ızgara göster */
+               <rect width="100%" height="100%" fill="url(#smallGrid)" />
+            )}
 
             {/* Mimari Elemanlar */}
             {currentPlan?.elements?.map((el: any) => (
@@ -219,7 +241,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                     <>
                         <rect 
                             x={el.x} y={el.y} width={el.width} height={el.height} 
-                            fill="#f8fafc" fillOpacity={0.8} 
+                            fill="#f8fafc" fillOpacity={0.6} 
                             stroke="#cbd5e1" strokeWidth="2" 
                         />
                         <text 
@@ -255,7 +277,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                         x={el.x} y={el.y + (el.fontSize || 14)} 
                         fontSize={el.fontSize || 14} 
                         fill="#374151" 
-                        fontWeight="500"
+                        fontWeight="600"
                         style={{ userSelect: 'none' }}
                     >
                         {el.text || 'Metin'}
@@ -302,6 +324,17 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                       {eqInfo.equipment_code}
                     </text>
                   )}
+                  
+                  {/* Hover Tooltip (Kısa Bilgi) */}
+                  <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <rect x="-60" y="-50" width="120" height="35" rx="4" fill="#1e293b" fillOpacity="0.9" />
+                    <text x="0" y="-36" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">
+                      {eqInfo?.equipment.name || 'Ekipman'}
+                    </text>
+                    <text x="0" y="-24" textAnchor="middle" fill="#94a3b8" fontSize="9">
+                      Detay için tıklayın
+                    </text>
+                  </g>
                 </g>
               );
             })}
@@ -362,9 +395,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                             key === 'count' ? 'Sayı' : key}
                          </span>
                          <span className="text-sm font-bold text-gray-800">
-                           {val === true ? 'Var / Evet' : 
-                            val === false ? 'Yok / Hayır' : 
-                            val === 'ok' ? 'Tamam' : String(val)}
+                           {formatValue(key, val)}
                          </span>
                        </div>
                      ))}
