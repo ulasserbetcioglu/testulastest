@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Users, FileText, BarChart, AlertTriangle, 
   Package, Layout, TrendingUp, Bug, AlertCircle, 
@@ -252,37 +252,47 @@ const BranchCalendarView = ({ branchId }: { branchId: string }) => {
   );
 };
 
-// 2. Dökümanlar (GÜNCELLENDİ: Public Dökümanlar Dahil Edildi)
+// 2. Dökümanlar (GÜNCELLENDİ - SORGUSU DÜZELTİLDİ)
 const BranchDocumentsView = ({ branchId }: { branchId: string }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDocs = async () => {
-      // 1. Önce şubenin bağlı olduğu Müşteri ID'sini çek
-      const { data: branchData } = await supabase
-        .from('branches')
-        .select('customer_id')
-        .eq('id', branchId)
-        .single();
-      
-      const customerId = branchData?.customer_id;
+      try {
+        setLoading(true);
+        // 1. Şubenin bağlı olduğu Müşteri ID'sini çek
+        const { data: branchData } = await supabase
+          .from('branches')
+          .select('customer_id')
+          .eq('id', branchId)
+          .single();
+        
+        const customerId = branchData?.customer_id;
 
-      // 2. Dökümanları Çek (Şube'ye Özel + Müşteriye Özel + Genel/Public)
-      let query = supabase
-        .from('documents')
-        .select('*')
-        .order('created_at', { ascending: false });
+        // 2. Dökümanları Çek
+        let query = supabase
+          .from('documents')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (customerId) {
-        query = query.or(`branch_id.eq.${branchId},customer_id.eq.${customerId},entity_type.eq.public`);
-      } else {
-        query = query.or(`branch_id.eq.${branchId},entity_type.eq.public`);
+        // Filtre mantığı: Şube ID'si eşleşenler VEYA (Varsa) Müşteri ID'si eşleşenler VEYA Türü 'public' olanlar
+        let filterString = `branch_id.eq.${branchId},entity_type.eq.public`;
+        if (customerId) {
+           filterString += `,customer_id.eq.${customerId}`;
+        }
+
+        query = query.or(filterString);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        setDocuments(data || []);
+      } catch (error) {
+        console.error("Döküman hatası:", error);
+      } finally {
+        setLoading(false);
       }
-
-      const { data } = await query;
-      setDocuments(data || []);
-      setLoading(false);
     };
     fetchDocs();
   }, [branchId]);
@@ -321,7 +331,6 @@ const BranchCertificatesView = ({ branchId }: { branchId: string }) => {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const f = async () => {
-      // Sertifikaları da benzer mantıkla (Şube + Müşteri) çekebilirsiniz, şimdilik sadece şube
       const { data } = await supabase.from('certificates').select('*').eq('branch_id', branchId).order('valid_until', { ascending: true });
       setCertificates(data || []);
       setLoading(false);
@@ -450,7 +459,7 @@ const BranchDashboard: React.FC = () => {
                 <button onClick={() => setActiveTab('calendar')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Calendar size={16} /> Takvim</button>
                 <button onClick={() => setActiveTab('equipment')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'equipment' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Package size={16} /> Ekipmanlar</button>
                 <button onClick={() => setActiveTab('dof')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'dof' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><AlertCircle size={16} /> DÖF</button>
-                <button onClick={() => setActiveTab('materials')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'materials' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><FileText size={16} /> Malzeme Kullanımı & Ücretlendirme</button>
+                <button onClick={() => setActiveTab('materials')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'materials' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><FileText size={16} /> Malzeme</button>
                 <button onClick={() => setActiveTab('documents')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'documents' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><FileCheck size={16} /> Dökümanlar</button>
                 <button onClick={() => setActiveTab('certificates')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'certificates' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Award size={16} /> Sertifikalar</button>
                 <button onClick={() => setActiveTab('floorplan')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'floorplan' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Layout size={16} /> Kroki</button>
