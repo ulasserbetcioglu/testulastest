@@ -29,7 +29,7 @@ interface FloorPlanElement {
 interface FloorPlan {
   id: string;
   title: string;
-  background_url?: string; // Arkaplan resmi
+  background_url?: string;
   elements: FloorPlanElement[];
   equipment_positions: Record<string, { x: number, y: number }>;
 }
@@ -178,20 +178,20 @@ const AdminFloorPlanEditor: React.FC = () => {
       const fileName = `floor-plans/${branchId}/${currentPlan.id}-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('documents') // veya company-assets
-        .upload(fileName, file);
+        .from('documents')
+        .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
       
+      // State'i güncelle (React render'ı tetiklenir)
       updateCurrentPlan({ background_url: urlData.publicUrl });
-      toast.success('Arkaplan resmi yüklendi');
+      toast.success('Plan resmi yüklendi');
     } catch (error: any) {
       toast.error('Yükleme hatası: ' + error.message);
     } finally {
       setUploadingBg(false);
-      // Inputu temizle ki aynı dosyayı tekrar seçebilelim
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -531,10 +531,11 @@ const AdminFloorPlanEditor: React.FC = () => {
                   </pattern>
                 </defs>
                 
-                {/* Katman 1: Arkaplan Resmi */}
+                {/* Katman 1: Arkaplan Resmi (Düzeltilmiş - xlinkHref eklendi) */}
                 {currentPlan?.background_url && (
                   <image 
-                    href={currentPlan.background_url} 
+                    href={currentPlan.background_url}
+                    xlinkHref={currentPlan.background_url} // Yedek uyumluluk
                     x="0" y="0" 
                     width="100%" height="100%" 
                     preserveAspectRatio="xMidYMid slice"
