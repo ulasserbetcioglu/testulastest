@@ -7,6 +7,7 @@ import {
   Search, Calendar, Save, Loader2, CheckCircle, AlertCircle, 
   Filter, MapPin, Box, ChevronRight, ArrowLeft 
 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom'; // useSearchParams eklendi
 
 // --- Interfaces ---
 interface Customer { id: string; kisa_isim: string; }
@@ -37,6 +38,9 @@ interface BranchEquipment {
 }
 
 const AdminVisitDataEntry: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams(); // URL parametrelerini oku
+  
   // --- State ---
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -56,7 +60,7 @@ const AdminVisitDataEntry: React.FC = () => {
   
   // Filters
   const [dateRange, setDateRange] = useState({
-    from: format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'), // Son 1 ay
+    from: format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd'),
   });
 
@@ -64,6 +68,27 @@ const AdminVisitDataEntry: React.FC = () => {
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  // URL Parametrelerini Kontrol Et ve Otomatik Seç
+  useEffect(() => {
+    const paramCustomerId = searchParams.get('customer_id');
+    const paramBranchId = searchParams.get('branch_id');
+
+    if (paramCustomerId && customers.length > 0) {
+      setSelectedCustomerId(paramCustomerId);
+      
+      // Müşteri seçildikten sonra şubeleri çek
+      fetchBranches(paramCustomerId).then(() => {
+         if (paramBranchId) {
+           setSelectedBranchId(paramBranchId);
+           // Şube de seçilirse ziyaretleri otomatik getir (küçük bir gecikme ile state'in oturmasını bekle)
+           setTimeout(() => {
+             fetchVisits(paramBranchId); 
+           }, 100);
+         }
+      });
+    }
+  }, [customers, searchParams]); 
 
   useEffect(() => {
     if (selectedCustomerId) {
@@ -86,9 +111,13 @@ const AdminVisitDataEntry: React.FC = () => {
     setBranches(data || []);
   };
 
-  const fetchVisits = async () => {
-    if (!selectedBranchId) {
-      toast.error('Lütfen bir şube seçiniz');
+  // fetchVisits fonksiyonunu parametre alabilir hale getirdim (otomatik tetikleme için)
+  const fetchVisits = async (branchIdParam?: string) => {
+    const targetBranchId = branchIdParam || selectedBranchId;
+    
+    if (!targetBranchId) {
+      // Manuel tetiklemede uyarı ver, otomatik tetiklemede sessiz kal
+      if (!branchIdParam) toast.error('Lütfen bir şube seçiniz');
       return;
     }
     
@@ -100,7 +129,7 @@ const AdminVisitDataEntry: React.FC = () => {
           id, visit_date, status, visit_type, equipment_checks, branch_id,
           operator:operator_id(name)
         `)
-        .eq('branch_id', selectedBranchId)
+        .eq('branch_id', targetBranchId)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
         .order('visit_date', { ascending: false });
@@ -108,7 +137,7 @@ const AdminVisitDataEntry: React.FC = () => {
       if (error) throw error;
       setVisits(data || []);
       
-      if (data?.length === 0) {
+      if (data?.length === 0 && !branchIdParam) {
         toast.info('Bu tarih aralığında ziyaret bulunamadı.');
       }
     } catch (error: any) {
@@ -129,14 +158,13 @@ const AdminVisitDataEntry: React.FC = () => {
           equipment:equipment_id ( id, name, properties )
         `)
         .eq('branch_id', visit.branch_id)
-        .order('equipment_code'); // Koda göre sıralı
+        .order('equipment_code');
 
       if (eqError) throw eqError;
 
       setEquipmentList(eqData || []);
       
       // 2. Mevcut verileri form state'ine yükle
-      // Eğer ziyaretin içinde veri varsa onu kullan, yoksa boş obje
       setFormData(visit.equipment_checks || {});
       
       setSelectedVisit(visit);
@@ -167,7 +195,6 @@ const AdminVisitDataEntry: React.FC = () => {
         .from('visits')
         .update({
           equipment_checks: formData,
-          // status: 'completed' // İsteğe bağlı: Veri girilince otomatik tamamlandıya çekmek isterseniz açın
         })
         .eq('id', selectedVisit.id);
 
@@ -175,7 +202,6 @@ const AdminVisitDataEntry: React.FC = () => {
 
       toast.success('Veriler başarıyla güncellendi');
       
-      // Listeyi güncelle (opsiyonel, güncel veriyi yansıtmak için)
       setVisits(prev => prev.map(v => v.id === selectedVisit.id ? { ...v, equipment_checks: formData } : v));
       
     } catch (error: any) {
@@ -381,7 +407,7 @@ const AdminVisitDataEntry: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
                 <button
-                  onClick={fetchVisits}
+                  onClick={() => fetchVisits()}
                   disabled={loading || !selectedBranchId}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
                 >
