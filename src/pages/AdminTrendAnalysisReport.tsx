@@ -215,8 +215,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
       params.append('branch_id', selectedBranchId);
     }
     
-    window.open(`/admin/visit-data-entry?${params.toString()}`, '_blank');
-  };
+    navigate(`/admin/visit-data-entry?${params.toString()}`);
+   };
 
   const handleGenerateReport = async () => {
     if (!selectedCustomerId) {
