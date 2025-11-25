@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import jsPDF from 'jspdf'; // PDF kütüphanesi eklendi
+import jsPDF from 'jspdf';
 import {
   TrendingUp,
   Calendar,
@@ -24,7 +24,7 @@ import {
   Phone,
   Mail,
   Globe,
-  FileText // PDF ikonu için
+  FileText
 } from 'lucide-react';
 import {
   LineChart,
@@ -133,7 +133,6 @@ interface EquipmentTypeData {
   propertyLabels: Record<string, string>;
 }
 
-// Şirket Ayarları Arayüzü
 interface CompanySettings {
   company_name: string;
   logo_url: string;
@@ -280,7 +279,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
     }
   };
 
-  // --- Data Fetching Functions ---
+  // --- Fetch Functions ---
 
   const fetchVisitStats = async () => {
       try {
@@ -435,23 +434,23 @@ const AdminTrendAnalysisReport: React.FC = () => {
   };
 
   const fetchVisitCompletionRates = async () => {
-      try {
-        let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
-        if (branchIds.length === 0) { setVisitCompletionRates([]); return; }
-        const { data, error } = await supabase.from('visits').select('visit_date, status').in('branch_id', branchIds).gte('visit_date', dateRange.from).lte('visit_date', dateRange.to);
-        if (error) throw error;
-        const monthlyData = new Map<string, any>();
-        data?.forEach(visit => {
-          const month = format(parseISO(visit.visit_date), 'MMM yyyy');
-          if (!monthlyData.has(month)) monthlyData.set(month, { total: 0, completed: 0, cancelled: 0, pending: 0 });
-          const stats = monthlyData.get(month);
-          stats.total++;
-          if (visit.status === 'completed') stats.completed++;
-          else if (visit.status === 'cancelled') stats.cancelled++;
-          else stats.pending++;
-        });
-        setVisitCompletionRates(Array.from(monthlyData.entries()).map(([month, stats]) => ({ month, ...stats, rate: stats.total > 0 ? (stats.completed / stats.total) * 100 : 0 })));
-      } catch (error) { console.error(error); }
+    try {
+      let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
+      if (branchIds.length === 0) { setVisitCompletionRates([]); return; }
+      const { data, error } = await supabase.from('visits').select('visit_date, status').in('branch_id', branchIds).gte('visit_date', dateRange.from).lte('visit_date', dateRange.to);
+      if (error) throw error;
+      const monthlyData = new Map<string, any>();
+      data?.forEach(visit => {
+        const month = format(parseISO(visit.visit_date), 'MMM yyyy');
+        if (!monthlyData.has(month)) monthlyData.set(month, { total: 0, completed: 0, cancelled: 0, pending: 0 });
+        const stats = monthlyData.get(month);
+        stats.total++;
+        if (visit.status === 'completed') stats.completed++;
+        else if (visit.status === 'cancelled') stats.cancelled++;
+        else stats.pending++;
+      });
+      setVisitCompletionRates(Array.from(monthlyData.entries()).map(([month, stats]) => ({ month, ...stats, rate: stats.total > 0 ? (stats.completed / stats.total) * 100 : 0 })));
+    } catch (error) { console.error(error); }
   };
 
   const fetchEquipmentTypeActivities = async () => {
@@ -580,7 +579,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
       const doc = new jsPDF('p', 'mm', 'a4');
       const elements = document.querySelectorAll('.pdf-section');
       let yOffset = 10;
-      const pageHeight = 295; // A4 height in mm minus minimal margin
+      const pageHeight = 295;
       const pageWidth = 210;
       const margin = 10;
       const contentWidth = pageWidth - (2 * margin);
@@ -588,11 +587,11 @@ const AdminTrendAnalysisReport: React.FC = () => {
       for (let i = 0; i < elements.length; i++) {
         const element = elements[i] as HTMLElement;
         
-        // Skip hidden elements
+        // Gizli elemanları atla
         if (element.offsetParent === null) continue;
 
         const canvas = await html2canvas(element, {
-          scale: 2, // Higher scale for better quality
+          scale: 2,
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff'
@@ -601,17 +600,16 @@ const AdminTrendAnalysisReport: React.FC = () => {
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
         const imgHeight = (canvas.height * contentWidth) / canvas.width;
 
-        // Check if we need a new page
+        // Yeni sayfa gerekip gerekmediğini kontrol et
         if (yOffset + imgHeight > pageHeight - margin) {
           doc.addPage();
-          yOffset = 10; // Reset Y to top margin
+          yOffset = 10;
         }
 
         doc.addImage(imgData, 'JPEG', margin, yOffset, contentWidth, imgHeight);
-        yOffset += imgHeight + 5; // Add small gap between sections
+        yOffset += imgHeight + 5;
       }
 
-      const customerName = customers.find(c => c.id === selectedCustomerId)?.kisa_isim || 'rapor';
       doc.save(`Trend_Analiz_${customerName}_${format(new Date(), 'dd-MM-yyyy')}.pdf`);
       toast.success('PDF başarıyla indirildi');
 
@@ -637,11 +635,13 @@ const AdminTrendAnalysisReport: React.FC = () => {
     ).length;
 
     return (
-        <p className="text-sm text-gray-600 mt-2 mb-4 italic bg-blue-50 p-3 rounded border border-blue-100">
-           <Info className="w-4 h-4 inline mr-1 text-blue-500" />
-           <strong>{typeData.type_label}</strong> kategorisinde toplam <strong>{equipmentCount}</strong> adet ekipman izlenmektedir. 
-           Belirtilen dönemde <strong>{activeEquipmentCount}</strong> ekipmanda toplam <strong>{totalActivity}</strong> adet aktivite/bulgu tespit edilmiştir.
-        </p>
+        <div className="pdf-section">
+            <p className="text-sm text-gray-600 mt-2 mb-4 italic bg-blue-50 p-3 rounded border border-blue-100">
+            <Info className="w-4 h-4 inline mr-1 text-blue-500" />
+            <strong>{typeData.type_label}</strong> kategorisinde toplam <strong>{equipmentCount}</strong> adet ekipman izlenmektedir. 
+            Belirtilen dönemde <strong>{activeEquipmentCount}</strong> ekipmanda toplam <strong>{totalActivity}</strong> adet aktivite/bulgu tespit edilmiştir.
+            </p>
+        </div>
     );
   };
 
@@ -796,15 +796,15 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
                 {/* 6. Equipment Type Activity Charts (With Descriptions) - Each is PDF Section */}
                 {(chartViewMode === 'total' ? equipmentTypeData : equipmentTypeDataByVisit).map((typeData) => (
-                <div key={typeData.type} className="mb-10 break-inside-avoid pdf-section">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2 border-l-4 border-indigo-500 pl-3">{typeData.type_label} - Detaylı Analiz</h3>
+                <div key={typeData.type} className="mb-10 break-inside-avoid">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2 border-l-4 border-indigo-500 pl-3 pdf-section">{typeData.type_label} - Detaylı Analiz</h3>
                     
                     {/* YENİ EKLENEN AÇIKLAMA METNİ */}
                     {generateEquipmentSummaryText(typeData)}
 
                     <div className="space-y-6">
                     {typeData.propertyKeys.map((propKey, propIdx) => (
-                        <div key={propKey} className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div key={propKey} className="bg-white p-4 rounded-lg border border-gray-200 pdf-section">
                         <h4 className="text-sm font-semibold text-gray-800 mb-3 text-center">{typeData.propertyLabels[propKey]} Dağılımı</h4>
                         <ResponsiveContainer width="100%" height={Math.max(250, typeData.activities.length * 30)}>
                             <BarChart data={typeData.activities} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
@@ -819,7 +819,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
                     ))}
                     
                     {/* Summary Table */}
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 pdf-section">
                         <h4 className="text-sm font-semibold text-gray-800 mb-3">Özet Tablo</h4>
                         <div className="overflow-x-auto">
                         <table className="w-full text-sm">
