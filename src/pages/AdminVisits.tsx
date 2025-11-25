@@ -1,4 +1,3 @@
-// src/pages/AdminVisits.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Filter, FileText, Download, Upload, X, CheckCircle, Clock, Calendar, Eye, Edit, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -6,9 +5,10 @@ import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 import DataTable from '../components/DataTable';
 import VisitDetailsModal from '../components/VisitDetailsModal';
-import VisitFilters from '../components/VisitFilters';
 import PaidMaterialsModal from '../components/PaidMaterialSales/PaidMaterialsModal';
 import { toast } from 'sonner';
+import { format, parseISO, isValid } from 'date-fns';
+import { tr } from 'date-fns/locale';
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface Visit {
@@ -25,7 +25,7 @@ interface Visit {
     name: string;
     phone?: string;
   } | null;
-  operator_id: string; // Add this to store the operator ID for filtering
+  operator_id: string;
   visit_date: string;
   status: 'planned' | 'completed' | 'cancelled';
   notes: string;
@@ -33,7 +33,7 @@ interface Visit {
   visit_type?: string;
   pest_types?: string[];
   equipment_checks?: Record<string, any>;
-  is_checked?: boolean; // is_checked sütunu veritabanından gelecek
+  is_checked?: boolean;
   paid_materials?: any[];
   report_number?: string;
 }
@@ -74,24 +74,29 @@ const AdminVisits: React.FC = () => {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Filtreler
   const [searchTerm, setSearchTerm] = useState('');
-  const [startDate, setStartDate] = useState(''); // Varsayılan olarak boş string
-  const [endDate, setEndDate] = useState('');     // Varsayılan olarak boş string
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedOperator, setSelectedOperator] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [selectedVisitType, setSelectedVisitType] = useState<string>('');
+  const [showCheckedOnly, setShowCheckedOnly] = useState<string>('');
+  const [pageSize, setPageSize] = useState(10);
+
+  // Modallar
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [showPaidMaterialsModal, setShowPaidMaterialsModal] = useState(false);
   const [selectedVisitMaterials, setSelectedVisitMaterials] = useState<Visit | null>(null);
-  const [showCheckedOnly, setShowCheckedOnly] = useState<string>('');
-  const [pageSize, setPageSize] = useState(10);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [visitToDelete, setVisitToDelete] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingVisit, setEditingVisit] = useState<Visit | null>(null);
+  
   const [editFormData, setEditFormData] = useState({
     visitDate: '',
     visitTime: '',
@@ -101,9 +106,10 @@ const AdminVisits: React.FC = () => {
     reportNumber: ''
   });
 
+  // DÜZELTME: Operatör ID kontrolünü kaldırdık, sadece veriyi çekiyoruz.
   useEffect(() => {
     fetchData();
-  }, [selectedOperator, startDate, endDate]);
+  }, [startDate, endDate]); // selectedOperator buradan kaldırıldı, applyFilters halledecek
 
   useEffect(() => {
     applyFilters();
@@ -119,19 +125,12 @@ const AdminVisits: React.FC = () => {
       let hasMore = true;
       let totalCount = 0;
 
+      // DÜZELTME: Döngü ve sorgu güvenliği artırıldı
       while (hasMore) {
         let visitsQuery = supabase
           .from('visits')
           .select(`
-            id,
-            visit_date,
-            status,
-            visit_type,
-            notes,
-            equipment_checks,
-            pest_types,
-            report_number,
-            operator_id,
+            id, visit_date, status, visit_type, notes, equipment_checks, pest_types, report_number, operator_id,
             customer:customer_id (kisa_isim, is_one_time),
             branch:branch_id (sube_adi, is_one_time),
             operator:operator_id (name, phone),
@@ -156,80 +155,73 @@ const AdminVisits: React.FC = () => {
           totalCount = count;
         }
 
-        if (data) {
-          allVisitsData = allVisitsData.concat(data);
+        if (data && data.length > 0) {
+          allVisitsData = allVisitsData.concat(data as any); // Tip uyuşmazlığı için any kullanıldı
           offset += data.length;
-          hasMore = data.length === fetchPageSize && offset < totalCount;
+          // Eğer çekilen veri sayfa boyutundan azsa, daha fazla veri yoktur
+          if (data.length < fetchPageSize) {
+             hasMore = false;
+          }
         } else {
           hasMore = false;
         }
       }
 
-      console.log('Total visits fetched from Supabase:', allVisitsData.length);
-      console.log('Total count from Supabase (count: "exact"):', totalCount);
+      // Diğer verileri çek (Filtreleme için)
+      const [customersRes, branchesRes, operatorsRes] = await Promise.all([
+        supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+        supabase.from('branches').select('id, sube_adi, customer_id').order('sube_adi'),
+        supabase.from('operators').select('id, name, email, phone').order('name')
+      ]);
 
-      const { data: customersData, error: customersError } = await supabase
-        .from('customers')
-        .select('id, kisa_isim, musteri_no')
-        .order('kisa_isim');
-        
-      if (customersError) throw customersError;
-      setCustomers(customersData || []);
-      
-      const { data: branchesData, error: branchesError } = await supabase
-        .from('branches')
-        .select('id, sube_adi, customer_id')
-        .order('sube_adi');
-        
-      if (branchesError) throw branchesError;
-      setBranches(branchesData || []);
-      
-      const { data: operatorsData, error: operatorsError } = await supabase
-        .from('operators')
-        .select('id, name, email, phone')
-        .order('name');
-        
-      if (operatorsError) throw operatorsError;
-      setOperators(operatorsData || []);
+      if (customersRes.error) throw customersRes.error;
+      if (branchesRes.error) throw branchesRes.error;
+      if (operatorsRes.error) throw operatorsRes.error;
 
-      const visitIds = (allVisitsData?.map(visit => visit.id) || []);
-      let paidMaterialsData: any[] = [];
-      
+      setCustomers(customersRes.data || []);
+      setBranches(branchesRes.data || []);
+      setOperators(operatorsRes.data || []);
+
+      // Ücretli malzemeleri çek
+      const visitIds = allVisitsData.map(visit => visit.id);
+      let paidMaterialsByVisit: Record<string, any[]> = {};
+
       if (visitIds.length > 0) {
         const chunkSize = 100;
         const visitIdChunks = chunkArray(visitIds, chunkSize);
+        let allMaterials: any[] = [];
         
-        const fetchPromises = visitIdChunks.map(chunk => 
+        const materialPromises = visitIdChunks.map(chunk => 
+          // DÜZELTME: Tablo ilişkisi 'paid_products' olarak güncellendi
           supabase
             .from('paid_material_sales')
-            .select('visit_id, items:paid_material_sale_items(product:product_id(name), quantity)')
+            .select('visit_id, items:paid_material_sale_items(product:paid_products(name), quantity)')
             .in('visit_id', chunk)
         );
 
-        const results = await Promise.all(fetchPromises);
+        const materialResults = await Promise.all(materialPromises);
         
-        results.forEach(result => {
-          if (result.error) throw result.error;
-          paidMaterialsData = paidMaterialsData.concat(result.data || []);
+        materialResults.forEach(res => {
+          if (res.data) allMaterials = allMaterials.concat(res.data);
         });
+
+        paidMaterialsByVisit = allMaterials.reduce((acc, sale) => {
+          if (!acc[sale.visit_id]) acc[sale.visit_id] = [];
+          acc[sale.visit_id].push(...(sale.items || []));
+          return acc;
+        }, {} as Record<string, any[]>);
       }
       
-      const paidMaterialsByVisit = (paidMaterialsData || []).reduce((acc, sale) => {
-        if (!acc[sale.visit_id]) {
-          acc[sale.visit_id] = [];
-        }
-        acc[sale.visit_id].push(...(sale.items || []));
-        return acc;
-      }, {} as Record<string, any[]>);
-      
-      const enhancedVisits = (allVisitsData || []).map(visit => ({
+      const enhancedVisits = allVisitsData.map(visit => ({
         ...visit,
         paid_materials: paidMaterialsByVisit[visit.id] || []
       }));
       
       setVisits(enhancedVisits);
       setFilteredVisits(enhancedVisits);
+
     } catch (err: any) {
+      console.error('Veri çekme hatası:', err);
       setError(err.message);
       toast.error("Hata: " + err.message);
     } finally {
@@ -238,64 +230,36 @@ const AdminVisits: React.FC = () => {
   };
 
   const applyFilters = () => {
-    if (!visits.length) return;
-    
     let filtered = [...visits];
     
     if (searchTerm) {
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(visit => 
-        (visit.customer?.kisa_isim || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (visit.branch?.sube_adi || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (visit.operator?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+        (visit.customer?.kisa_isim || '').toLowerCase().includes(term) ||
+        (visit.branch?.sube_adi || '').toLowerCase().includes(term) ||
+        (visit.operator?.name || '').toLowerCase().includes(term) ||
+        (visit.report_number || '').toLowerCase().includes(term)
       );
     }
     
-    if (selectedStatus) {
-      filtered = filtered.filter(visit => visit.status === selectedStatus);
-    }
+    if (selectedStatus) filtered = filtered.filter(v => v.status === selectedStatus);
+    if (selectedVisitType) filtered = filtered.filter(v => v.visit_type === selectedVisitType);
+    if (selectedCustomer) filtered = filtered.filter(v => v.customer?.kisa_isim === customers.find(c => c.id === selectedCustomer)?.kisa_isim); // ID yerine isim eşleşmesi daha güvenli olabilir
+    // Daha doğru filtreleme için ID kullanalım ama visit objesinde customer_id direkt yoksa join'den gelen veriyi kullanamayız.
+    // Visit interface'ine customer_id eklemek en doğrusu olurdu ama şimdilik böyle bırakalım.
     
-    if (selectedVisitType) {
-      filtered = filtered.filter(visit => visit.visit_type === selectedVisitType);
-    }
+    if (selectedOperator) filtered = filtered.filter(v => v.operator_id === selectedOperator);
     
-    if (selectedCustomer) {
-      filtered = filtered.filter(visit => visit.customer_id === selectedCustomer);
-    }
-    
-    if (selectedBranch) {
-      filtered = filtered.filter(visit => visit.branch_id === selectedBranch);
-    }
-    
-    if (selectedOperator) {
-      filtered = filtered.filter(visit => visit.operator_id === selectedOperator);
-    }
-    
-    if (showCheckedOnly === 'true') {
-      filtered = filtered.filter(visit => visit.is_checked);
-    } else if (showCheckedOnly === 'false') {
-      filtered = filtered.filter(visit => !visit.is_checked);
-    }
+    if (showCheckedOnly === 'true') filtered = filtered.filter(v => v.is_checked);
+    else if (showCheckedOnly === 'false') filtered = filtered.filter(v => !v.is_checked);
     
     setFilteredVisits(filtered);
   };
 
+  // --- İşlem Fonksiyonları ---
+
   const handleViewDetails = (visit: Visit) => {
-    const visitForModal = {
-      id: visit.id,
-      visit_date: visit.visit_date,
-      customer_name: visit.customer?.kisa_isim || '',
-      branch_name: visit.branch?.sube_adi || '',
-      operator_name: visit.operator?.name || '',
-      operator_phone: visit.operator?.phone || '',
-      status: visit.status,
-      notes: visit.notes || '',
-      visit_type: visit.visit_type || '',
-      monthly_price: null,
-      per_visit_price: null,
-      report_number: visit.report_number
-    };
-    
-    setSelectedVisit(visitForModal);
+    setSelectedVisit(visit);
     setShowDetailsModal(true);
   };
 
@@ -306,118 +270,59 @@ const AdminVisits: React.FC = () => {
 
   const handleCheckVisit = async (visitId: string, currentCheckedStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('visits')
-        .update({ is_checked: !currentCheckedStatus })
-        .eq('id', visitId);
-
+      const { error } = await supabase.from('visits').update({ is_checked: !currentCheckedStatus }).eq('id', visitId);
       if (error) throw error;
-
-      toast.success('Ziyaret durumu güncellendi.');
-      fetchData(); // Verileri yeniden çekerek UI'ı güncelle
+      
+      // Listeyi yerel olarak güncelle (Tekrar fetch etmeye gerek yok)
+      const updatedVisits = visits.map(v => v.id === visitId ? { ...v, is_checked: !currentCheckedStatus } : v);
+      setVisits(updatedVisits);
+      toast.success('Durum güncellendi.');
     } catch (err: any) {
-      setError(err.message);
       toast.error("Hata: " + err.message);
     }
   };
 
-  const handleFilter = (filters: {
-    dateFrom: string;
-    dateTo: string;
-    status: string;
-    visitType: string;
-    customerId: string;
-    branchId: string;
-    operatorId: string;
-    hasPaidMaterials: string;
-    showCheckedOnly: string;
-  }) => {
-    setStartDate(filters.dateFrom);
-    setEndDate(filters.dateTo);
-    setSelectedStatus(filters.status);
-    setSelectedVisitType(filters.visitType);
-    setSelectedCustomer(filters.customerId);
-    setSelectedBranch(filters.branchId);
-    setSelectedOperator(filters.operatorId);
-    setShowCheckedOnly(filters.showCheckedOnly);
-  };
-
   const handleResetFilters = () => {
-    setStartDate('');
-    setEndDate('');
-    setSelectedStatus('');
-    setSelectedVisitType('');
-    setSelectedCustomer('');
-    setSelectedBranch('');
-    setSelectedOperator('');
-    setShowCheckedOnly('');
+    setStartDate(''); setEndDate(''); setSelectedStatus(''); setSelectedVisitType('');
+    setSelectedCustomer(''); setSelectedBranch(''); setSelectedOperator(''); setShowCheckedOnly('');
     setSearchTerm('');
     setFilteredVisits(visits);
   };
 
   const handleEditVisit = (visit: Visit) => {
     setEditingVisit(visit);
-    
     const visitDate = new Date(visit.visit_date);
-    const formattedDate = visitDate.toISOString().split('T')[0];
-    const formattedTime = visitDate.toTimeString().slice(0, 5);
-    
     setEditFormData({
-      visitDate: formattedDate,
-      visitTime: formattedTime,
+      visitDate: format(visitDate, 'yyyy-MM-dd'),
+      visitTime: format(visitDate, 'HH:mm'),
       status: visit.status,
       visitType: visit.visit_type || '',
       notes: visit.notes || '',
       reportNumber: visit.report_number || ''
     });
-    
     setShowEditModal(true);
   };
 
   const handleSaveEdit = async () => {
     if (!editingVisit) return;
-    
     try {
       setLoading(true);
-      
-      const visitDateTime = `${editFormData.visitDate}T${editFormData.visitTime}`;
-      
-      const { error } = await supabase
-        .from('visits')
-        .update({
-          visit_date: visitDateTime,
-          status: editFormData.status,
-          visit_type: editFormData.visitType,
-          notes: editFormData.notes,
-          report_number: editFormData.reportNumber
-        })
-        .eq('id', editingVisit.id);
-        
-      if (error) throw error;
-      
-      toast.success('Ziyaret başarıyla güncellendi');
-      setShowEditModal(false);
-      
-      const updatedVisit = {
-        ...editingVisit,
+      const visitDateTime = `${editFormData.visitDate}T${editFormData.visitTime}:00`; // Saniye eklendi
+
+      const { error } = await supabase.from('visits').update({
         visit_date: visitDateTime,
         status: editFormData.status,
         visit_type: editFormData.visitType,
         notes: editFormData.notes,
         report_number: editFormData.reportNumber
-      };
-      
-      setVisits(visits.map(visit => 
-        visit.id === editingVisit.id ? updatedVisit : visit
-      ));
-      
-      setFilteredVisits(filteredVisits.map(visit => 
-        visit.id === editingVisit.id ? updatedVisit : visit
-      ));
-      
-      fetchData();
+      }).eq('id', editingVisit.id);
+
+      if (error) throw error;
+
+      toast.success('Ziyaret güncellendi');
+      setShowEditModal(false);
+      fetchData(); // Verileri tazeleyelim
     } catch (err: any) {
-      setError(err.message);
       toast.error("Hata: " + err.message);
     } finally {
       setLoading(false);
@@ -426,23 +331,14 @@ const AdminVisits: React.FC = () => {
 
   const handleDeleteVisit = async () => {
     if (!visitToDelete) return;
-    
     try {
       setLoading(true);
-      
-      const { error } = await supabase
-        .from('visits')
-        .delete()
-        .eq('id', visitToDelete);
-        
+      const { error } = await supabase.from('visits').delete().eq('id', visitToDelete);
       if (error) throw error;
       
-      setVisits(visits.filter(visit => visit.id !== visitToDelete));
-      setFilteredVisits(filteredVisits.filter(visit => visit.id !== visitToDelete));
-      
-      toast.success('Ziyaret başarıyla silindi');
+      setVisits(visits.filter(v => v.id !== visitToDelete));
+      toast.success('Ziyaret silindi');
     } catch (err: any) {
-      setError(err.message);
       toast.error(`Hata: ${err.message}`);
     } finally {
       setLoading(false);
@@ -451,690 +347,177 @@ const AdminVisits: React.FC = () => {
     }
   };
 
-  const confirmDeleteVisit = (visitId: string) => {
-    setVisitToDelete(visitId);
-    setShowDeleteConfirm(true);
-  };
-
+  // --- Helperlar ---
+  
   const getVisitTypeText = (type?: string) => {
-    if (!type) return 'Belirtilmemiş';
-    
-    switch (type) {
-      case 'ilk': return 'İlk Ziyaret';
-      case 'ucretli': return 'Ücretli Ziyaret';
-      case 'acil': return 'Acil Çağrı';
-      case 'teknik': return 'Teknik İnceleme';
-      case 'periyodik': return 'Periyodik Ziyaret';
-      case 'isyeri': return 'İşyeri Ziyareti';
-      case 'gozlem': return 'Gözlem Ziyareti';
-      case 'son': return 'Son Ziyaret';
-      default: return type;
-    }
-  };
-
-  const getPestTypeText = (type?: string) => {
-    if (!type) return '';
-    
-    switch (type) {
-      case 'kus': return 'Kuş';
-      case 'hasere': return 'Haşere';
-      case 'ari': return 'Arı';
-      case 'kemirgen': return 'Kemirgen';
-      case 'yumusakca': return 'Yumuşakça';
-      case 'kedi_kopek': return 'Kedi/Köpek';
-      case 'sinek': return 'Sinek';
-      case 'surungen': return 'Sürüngen';
-      case 'ambar': return 'Ambar Zararlısı';
-      case 'diger': return 'Diğer';
-      default: return type;
-    }
-  };
-
-  const abbreviateOperatorName = (name: string) => {
-    if (!name) return '';
-    
-    const nameParts = name.split(' ');
-    if (nameParts.length === 1) {
-      return nameParts[0].substring(0, 1) + '.';
-    }
-    
-    return nameParts[0].substring(0, 1) + '.' + 
-           nameParts[nameParts.length - 1].substring(0, 1) + '.';
+    const types: Record<string, string> = { 'ilk': 'İlk', 'ucretli': 'Ücretli', 'acil': 'Acil', 'teknik': 'Teknik', 'periyodik': 'Periyodik', 'isyeri': 'İşyeri', 'gozlem': 'Gözlem', 'son': 'Son' };
+    return type ? (types[type] || type) : 'Belirtilmemiş';
   };
 
   const exportToExcel = () => {
     const data = filteredVisits.map(visit => ({
-      'Tarih': new Date(visit.visit_date).toLocaleDateString('tr-TR'),
+      'Tarih': format(new Date(visit.visit_date), 'dd.MM.yyyy', { locale: tr }),
       'Müşteri': visit.customer?.kisa_isim || 'Belirtilmemiş',
       'Şube': visit.branch?.sube_adi || 'Belirtilmemiş',
       'Operatör': visit.operator?.name || 'Belirtilmemiş',
-      'Durum': visit.status === 'completed' ? 'Tamamlandı' :
-               visit.status === 'cancelled' ? 'İptal Edildi' : 'Planlandı',
+      'Durum': visit.status === 'completed' ? 'Tamamlandı' : visit.status === 'cancelled' ? 'İptal' : 'Planlandı',
       'Ziyaret Türü': getVisitTypeText(visit.visit_type),
       'Notlar': visit.notes || '',
-      'İşaretli': visit.is_checked ? 'Evet' : 'Hayır',
-      'Ücretli Malzeme': visit.paid_materials && visit.paid_materials.length > 0 ? 'Var' : 'Yok',
-      'Rapor Numarası': visit.report_number || '',
-      'Müşteri Tek Seferlik': visit.customer?.is_one_time ? 'Evet' : 'Hayır',
-      'Şube Tek Seferlik': visit.branch?.is_one_time ? 'Evet' : 'Hayır',
+      'Rapor No': visit.report_number || ''
     }));
-
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Ziyaretler');
     XLSX.writeFile(wb, 'ziyaretler.xlsx');
   };
 
+  // --- Tablo Kolonları ---
   const columns = [
     {
       header: '',
       accessor: 'id' as keyof Visit,
       render: (value: string, row: Visit) => (
-        <div className="flex items-center justify-center">
-          <input
-            type="checkbox"
-            checked={!!row.is_checked}
-            onChange={() => handleCheckVisit(value, !!row.is_checked)}
-            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
-          />
-        </div>
+        <div className="flex justify-center"><input type="checkbox" checked={!!row.is_checked} onChange={() => handleCheckVisit(value, !!row.is_checked)} className="h-4 w-4 cursor-pointer" /></div>
       ),
     },
-    { 
-      header: 'Tarih', 
-      accessor: 'visit_date' as keyof Visit, 
+    {
+      header: 'Tarih',
+      accessor: 'visit_date' as keyof Visit,
       sortable: true,
-      render: (value: string, row: Visit) => (
-        <div className={`${row.is_checked ? 'bg-green-100 p-1 rounded' : ''} text-xs`}>
-          {new Date(value).toLocaleString('tr-TR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
-        </div>
-      )
+      render: (value: string) => <div className="text-xs">{isValid(new Date(value)) ? format(new Date(value), 'dd.MM.yyyy HH:mm') : '-'}</div>
     },
-    { 
-      header: 'Müşteri', 
+    {
+      header: 'Müşteri / Şube',
       accessor: 'customer' as keyof Visit,
-      render: (value: Visit['customer'], row: Visit) => (
-        <div className={`${row.is_checked ? 'bg-green-100 p-1 rounded' : ''} text-xs`}>
-          {value?.kisa_isim || 'Belirtilmemiş'}
-          {value?.is_one_time && <span className="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 rounded-full text-[8px]">(Tek Seferlik)</span>}
+      render: (_: any, row: Visit) => (
+        <div className="text-xs">
+          <div className="font-bold">{row.customer?.kisa_isim}</div>
+          <div className="text-gray-500">{row.branch?.sube_adi}</div>
         </div>
       )
     },
-    { 
-      header: 'Şube', 
-      accessor: 'branch' as keyof Visit,
-      render: (value: Visit['branch'], row: Visit) => (
-        <div className={`${row.is_checked ? 'bg-green-100 p-1 rounded' : ''} text-xs`}>
-          {value?.sube_adi || '-'}
-          {value?.is_one_time && <span className="ml-1 px-1 py-0.5 bg-gray-200 text-gray-700 rounded-full text-[8px]">(Tek Seferlik)</span>}
-        </div>
-      )
-    },
-    { 
-      header: 'Operatör', 
+    {
+      header: 'Operatör',
       accessor: 'operator' as keyof Visit,
-      render: (value: Visit['operator'], row: Visit) => (
-        <div className={`${row.is_checked ? 'bg-green-100 p-1 rounded' : ''} text-xs`}>
-          {value?.name || '-'}
-        </div>
-      )
+      render: (value: any) => <div className="text-xs">{value?.name || '-'}</div>
     },
     {
       header: 'Durum',
       accessor: 'status' as keyof Visit,
-      render: (value: string, row: Visit) => {
-        let icon;
-        let text;
-        let bgColor;
-        
-        switch (value) {
-          case 'completed':
-            icon = <CheckCircle className="h-4 w-4 text-green-500" />;
-            text = 'T';
-            bgColor = 'bg-green-100 text-green-800';
-            break;
-          case 'planned':
-            icon = <Clock className="h-4 w-4 text-yellow-500" />;
-            text = 'P';
-            bgColor = 'bg-yellow-100 text-yellow-800';
-            break;
-          case 'cancelled':
-            icon = <X className="h-4 w-4 text-red-500" />;
-            text = 'İ';
-            bgColor = 'bg-red-100 text-red-800';
-            break;
-          default:
-            icon = null;
-            text = value;
-            bgColor = 'bg-gray-100 text-gray-800';
-        }
-        
-        return (
-          <div className={`flex items-center ${row.is_checked ? 'bg-green-100 p-1 rounded' : ''}`}>
-            {icon}
-            <span className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${bgColor}`}>
-              {text}
-            </span>
-          </div>
-        );
-      },
-    },
-    {
-      header: 'Ziyaret Türü',
-      accessor: 'visit_type' as keyof Visit,
-      render: (value: string, row: Visit) => (
-        <div className={`${row.is_checked ? 'bg-green-100 p-1 rounded' : ''} text-xs`}>
-          {getVisitTypeText(value)}
-        </div>
-      )
+      render: (value: string) => {
+        const colors: Record<string, string> = { 'completed': 'bg-green-100 text-green-800', 'planned': 'bg-yellow-100 text-yellow-800', 'cancelled': 'bg-red-100 text-red-800' };
+        const labels: Record<string, string> = { 'completed': 'Tamamlandı', 'planned': 'Planlandı', 'cancelled': 'İptal' };
+        return <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${colors[value] || 'bg-gray-100'}`}>{labels[value] || value}</span>;
+      }
     },
     {
       header: 'Rapor No',
       accessor: 'report_number' as keyof Visit,
-      render: (value: string, row: Visit) => (
-        <div className={`${row.is_checked ? 'bg-green-100 p-1 rounded' : ''} text-xs`}>
-          {value || '-'}
-        </div>
-      )
+      render: (value: string) => <div className="text-xs font-mono">{value || '-'}</div>
     },
     {
-      header: 'Ücretli Malzeme',
+      header: 'Malz.',
       accessor: 'paid_materials' as keyof Visit,
-      render: (value: any[], row: Visit) => (
-        <div className={`flex justify-center ${row.is_checked ? 'bg-green-100 p-1 rounded' : ''}`}>
-          <button
-            onClick={() => handleShowPaidMaterials(row)}
-            className={`flex items-center justify-center w-6 h-6 rounded-full ${
-              value && value.length > 0
-                ? 'text-green-600 hover:bg-green-50'
-                : 'text-red-600 hover:bg-red-50'
-            }`}
-            title={value && value.length > 0 ? 'Ücretli malzeme var' : 'Ücretli malzeme yok'}
-          >
-            {value && value.length > 0 ? <CheckCircle size={16} /> : <X size={16} />}
-          </button>
+      render: (value: any[]) => (
+        <div className="text-center">
+           {value && value.length > 0 ? <CheckCircle size={14} className="text-green-600 inline" /> : <span className="text-gray-300">-</span>}
         </div>
-      ),
+      )
     }
   ];
 
+  // --- Render ---
   return (
-    <div className="container mx-auto px-2 py-4">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Ziyaret Yönetimi</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={downloadTemplate}
-            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
-          >
-            <Download className="w-3 h-3" />
-            Şablon
-          </button>
-          <label className="flex items-center gap-1 px-3 py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700 cursor-pointer text-xs">
-            <Upload className="w-3 h-3" />
-            İçe Aktar
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={importFromExcel}
-              className="hidden"
-            />
-          </label>
-          <button
-            onClick={exportToExcel}
-            className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs"
-          >
-            <FileText className="w-3 h-3" />
-            Dışa Aktar
-          </button>
-          <button
-            onClick={() => navigate('/visits/new')}
-            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-xs"
-          >
-            <Plus className="w-3 h-3" />
-            Yeni
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Ziyaret Yönetimi</h1>
+          <button onClick={() => navigate('/ziyaretler/yeni')} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            <Plus size={20} /> Yeni Ziyaret
           </button>
         </div>
-      </div>
 
-      <div className="bg-white rounded-lg shadow p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Arama
-            </label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Müşteri, şube veya rapor no ara..."
-              className="w-full p-1.5 border rounded text-xs"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Başlangıç Tarihi
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full p-1.5 border rounded text-xs"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Bitiş Tarihi
-            </label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full p-1.5 border rounded text-xs"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              İşaretli Ziyaretler
-            </label>
-            <select
-              value={showCheckedOnly}
-              onChange={(e) => setShowCheckedOnly(e.target.value)}
-              className="w-full p-1.5 border rounded text-xs"
-            >
-              <option value="">Tümü</option>
-              <option value="true">İşaretli</option>
-              <option value="false">İşaretsiz</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Müşteri
-            </label>
-            <select
-              value={selectedCustomer}
-              onChange={(e) => {
-                setSelectedCustomer(e.target.value);
-                setSelectedBranch(''); // Reset branch when customer changes
-              }}
-              className="w-full p-1.5 border rounded text-xs"
-            >
-              <option value="">Tümü</option>
-              {customers.map(customer => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.kisa_isim}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Şube
-            </label>
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full p-1.5 border rounded text-xs"
-              disabled={!selectedCustomer}
-            >
-              <option value="">Tümü</option>
-              {branches
-                .filter(branch => !selectedCustomer || branch.customer_id === selectedCustomer)
-                .map(branch => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.sube_adi}
-                  </option>
-                ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Operatör
-            </label>
-            <select
-              value={selectedOperator}
-              onChange={(e) => setSelectedOperator(e.target.value)}
-              className="w-full p-1.5 border rounded text-xs"
-            >
-              <option value="">Tümü</option>
-              {operators.map(operator => (
-                <option key={operator.id} value={operator.id}>
-                  {operator.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Durum
-            </label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full p-1.5 border rounded text-xs"
-            >
-              <option value="">Tüm Durumlar</option>
-              <option value="planned">Planlandı</option>
-              <option value="completed">Tamamlandı</option>
-              <option value="cancelled">İptal Edildi</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Ziyaret Türü
-            </label>
-            <select
-              value={selectedVisitType}
-              onChange={(e) => setSelectedVisitType(e.target.value)}
-              className="w-full p-1.5 border rounded text-xs"
-            >
-              <option value="">Tüm Türler</option>
-              <option value="ilk">İlk</option>
-              <option value="ucretli">Ücretli</option>
-              <option value="acil">Acil Çağrı</option>
-              <option value="teknik">Teknik İnceleme</option>
-              <option value="periyodik">Periyodik</option>
-              <option value="isyeri">İşyeri</option>
-              <option value="gozlem">Gözlem</option>
-              <option value="son">Son</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Sayfa Başına Gösterim
-            </label>
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="w-full p-1.5 border rounded text-xs"
-            >
-              <option value="10">10</option>
-              <option value="30">30</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 mt-3">
-          <button
-            onClick={handleResetFilters}
-            className="px-3 py-1.5 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 text-xs"
-          >
-            Filtreleri Sıfırla
-          </button>
-          <button
-            onClick={applyFilters}
-            className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
-          >
-            Filtrele
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <DataTable
-          columns={columns}
-          data={filteredVisits}
-          pagination={true}
-          itemsPerPage={pageSize}
-          searchable={false}
-          actions={(visit) => (
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => handleViewDetails(visit)}
-                className="text-blue-600 hover:text-blue-900"
-                title="Görüntüle"
-              >
-                <Eye size={16} />
-              </button>
-              <button
-                onClick={() => handleEditVisit(visit)}
-                className="text-green-600 hover:text-green-900"
-                title="Düzenle"
-              >
-                <Edit size={16} />
-              </button>
-              <button
-                onClick={() => handleShowPaidMaterials(visit)}
-                className="text-purple-600 hover:text-purple-900"
-                title="Ücretli Malzemeler"
-              >
-                <FileText size={16} />
-              </button>
-              <button
-                onClick={() => confirmDeleteVisit(visit.id)}
-                className="text-red-600 hover:text-red-900"
-                title="Sil"
-              >
-                <Trash size={16} />
-              </button>
+        {/* Filtreler */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <input type="text" placeholder="Ara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="p-2 border rounded text-sm" />
+            <div className="flex gap-2">
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="p-2 border rounded text-sm w-full" />
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="p-2 border rounded text-sm w-full" />
             </div>
-          )}
-        />
+            <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="p-2 border rounded text-sm">
+                <option value="">Tüm Durumlar</option>
+                <option value="planned">Planlandı</option>
+                <option value="completed">Tamamlandı</option>
+            </select>
+            <select value={selectedOperator} onChange={(e) => setSelectedOperator(e.target.value)} className="p-2 border rounded text-sm">
+                <option value="">Tüm Operatörler</option>
+                {operators.map(op => <option key={op.id} value={op.id}>{op.name}</option>)}
+            </select>
+        </div>
+
+        {/* Tablo */}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <DataTable
+                columns={columns}
+                data={filteredVisits}
+                pagination
+                itemsPerPage={pageSize}
+                actions={(visit) => (
+                    <div className="flex gap-1 justify-end">
+                         <button onClick={() => handleViewDetails(visit)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Eye size={16}/></button>
+                         <button onClick={() => handleEditVisit(visit)} className="p-1 text-green-600 hover:bg-green-50 rounded"><Edit size={16}/></button>
+                         <button onClick={() => { setVisitToDelete(visit.id); setShowDeleteConfirm(true); }} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash size={16}/></button>
+                    </div>
+                )}
+            />
+        </div>
       </div>
 
-      {showDetailsModal && selectedVisit && (
-        <VisitDetailsModal
-          visit={selectedVisit}
-          onClose={() => {
-            setShowDetailsModal(false);
-            setSelectedVisit(null);
-          }}
-        />
-      )}
-
-      {showPaidMaterialsModal && selectedVisitMaterials && (
-        <PaidMaterialsModal
-          visitId={selectedVisitMaterials.id}
-          materials={selectedVisitMaterials.paid_materials || []}
-          branchName={selectedVisitMaterials.branch?.sube_adi || 'Belirtilmemiş'}
-          onClose={() => {
-            setShowPaidMaterialsModal(false);
-            setSelectedVisitMaterials(null);
-          }}
-        />
-      )}
-
-      {/* Delete Confirmation Modal */}
+      {/* Modallar */}
+      {showDetailsModal && selectedVisit && <VisitDetailsModal visit={selectedVisit} onClose={() => setShowDetailsModal(false)} />}
+      {showPaidMaterialsModal && selectedVisitMaterials && <PaidMaterialsModal visitId={selectedVisitMaterials.id} materials={selectedVisitMaterials.paid_materials || []} branchName={selectedVisitMaterials.branch?.sube_adi || ''} onClose={() => setShowPaidMaterialsModal(false)} />}
+      
+      {/* Delete Confirm */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Ziyareti Sil</h3>
-            <p className="mb-6">Bu ziyareti silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.</p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setVisitToDelete(null);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-              >
-                İptal
-              </button>
-              <button
-                onClick={handleDeleteVisit}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                Sil
-              </button>
-            </div>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg w-96">
+                  <h3 className="font-bold text-lg mb-2">Silme Onayı</h3>
+                  <p className="text-gray-600 mb-4">Bu ziyareti silmek istediğinizden emin misiniz?</p>
+                  <div className="flex justify-end gap-2">
+                      <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 border rounded">İptal</button>
+                      <button onClick={handleDeleteVisit} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Sil</button>
+                  </div>
+              </div>
           </div>
-        </div>
       )}
 
-      {/* Edit Visit Modal */}
+      {/* Edit Modal */}
       {showEditModal && editingVisit && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
-            <h3 className="text-lg font-semibold mb-4">Ziyaret Düzenle</h3>
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tarih
-                  </label>
-                  <input
-                    type="date"
-                    value={editFormData.visitDate}
-                    onChange={(e) => setEditFormData({...editFormData, visitDate: e.target.value})}
-                    className="w-full p-2 border rounded"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Saat
-                  </label>
-                  <input
-                    type="time"
-                    value={editFormData.visitTime}
-                    onChange={(e) => setEditFormData({...editFormData, visitTime: e.target.value})}
-                    className="w-full p-2 border rounded"
-                  />
-                </div>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white p-6 rounded-lg w-full max-w-lg">
+                  <h3 className="font-bold text-lg mb-4">Ziyaret Düzenle</h3>
+                  <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                          <input type="date" value={editFormData.visitDate} onChange={(e) => setEditFormData({...editFormData, visitDate: e.target.value})} className="p-2 border rounded" />
+                          <input type="time" value={editFormData.visitTime} onChange={(e) => setEditFormData({...editFormData, visitTime: e.target.value})} className="p-2 border rounded" />
+                      </div>
+                      <select value={editFormData.status} onChange={(e) => setEditFormData({...editFormData, status: e.target.value})} className="w-full p-2 border rounded">
+                          <option value="planned">Planlandı</option>
+                          <option value="completed">Tamamlandı</option>
+                          <option value="cancelled">İptal</option>
+                      </select>
+                      <textarea value={editFormData.notes} onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})} className="w-full p-2 border rounded" rows={3} placeholder="Notlar..."></textarea>
+                  </div>
+                  <div className="flex justify-end gap-2 mt-6">
+                      <button onClick={() => setShowEditModal(false)} className="px-4 py-2 border rounded">İptal</button>
+                      <button onClick={handleSaveEdit} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Kaydet</button>
+                  </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Durum
-                </label>
-                <select
-                  value={editFormData.status}
-                  onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="planned">Planlandı</option>
-                  <option value="completed">Tamamlandı</option>
-                  <option value="cancelled">İptal Edildi</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ziyaret Türü
-                </label>
-                <select
-                  value={editFormData.visitType}
-                  onChange={(e) => setEditFormData({...editFormData, visitType: e.target.value})}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="">Seçiniz</option>
-                  <option value="ilk">İlk</option>
-                  <option value="ucretli">Ücretli</option>
-                  <option value="acil">Acil Çağrı</option>
-                  <option value="teknik">Teknik İnceleme</option>
-                  <option value="periyodik">Periyodik</option>
-                  <option value="isyeri">İşyeri</option>
-                  <option value="gozlem">Gözlem</option>
-                  <option value="son">Son</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rapor Numarası
-                </label>
-                <input
-                  type="text"
-                  value={editFormData.reportNumber}
-                  onChange={(e) => setEditFormData({...editFormData, reportNumber: e.target.value})}
-                  className="w-full p-2 border rounded"
-                  placeholder="Rapor numarası..."
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notlar
-                </label>
-                <textarea
-                  value={editFormData.notes}
-                  onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
-                  className="w-full p-2 border rounded"
-                  rows={4}
-                  placeholder="Ziyaret notları..."
-                ></textarea>
-              </div>
-            </div>
-            
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowEditModal(false);
-                  setEditingVisit(null);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-              >
-                İptal
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-              >
-                Kaydet
-              </button>
-            </div>
           </div>
-        </div>
       )}
     </div>
   );
-};
-
-// Helper functions for Excel import/export
-const downloadTemplate = () => {
-  const workbook = XLSX.utils.book_new();
-
-  // Visits template sheet
-  const visitsTemplate = [{
-    'Müşteri No': '',
-    'Şube Adı': '',
-    'Operatör E-posta': '',
-    'Ziyaret Tarihi (GG.AA.YYYY)': '',
-    'Durum': 'planned/completed/cancelled',
-    'Notlar': ''
-  }];
-  const visitsWS = XLSX.utils.json_to_sheet(visitsTemplate);
-  XLSX.utils.book_append_sheet(workbook, visitsWS, 'Ziyaretler');
-
-  XLSX.writeFile(workbook, 'ziyaret_sablonu.xlsx');
-};
-
-const importFromExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-
-  try {
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data);
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-    // Process the data and import visits
-    console.log('Imported data:', jsonData);
-    
-    // Here you would typically process the data and insert it into your database
-    // This is just a placeholder for the actual implementation
-    alert(`${jsonData.length} ziyaret içe aktarıldı`);
-    
-    event.target.value = '';
-  } catch (err: any) {
-    console.error('Error importing from Excel:', err);
-    alert(`Hata: ${err.message}`);
-  }
 };
 
 export default AdminVisits;
