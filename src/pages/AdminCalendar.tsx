@@ -6,7 +6,7 @@ import {
   Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, 
   User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, 
   CheckSquare, DollarSign, TrendingUp, Users, MessageSquare, Info, 
-  CheckCircle, AlertCircle, Camera, Bug, Activity, Megaphone 
+  CheckCircle, AlertCircle, Camera, Bug, Activity, Megaphone, Package 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,14 +23,14 @@ interface Visit {
   visit_type: string | string[];
   is_checked: boolean;
   
-  // --- YENİ ALANLAR (visits tablosunda olmalı) ---
+  // Detay alanları
   rapor_no?: string;
-  aciklama?: string;            // Operatörün kendine notu (Dahili)
-  musteri_aciklamasi?: string;  // Müşteriye giden not (Harici)
-  yonetici_notu?: string;       // Yönetici notu
-  yogunluk?: string;            // 'dusuk', 'orta', 'yuksek'
-  pest_types?: string[];        // ['Hamam Böceği', 'Fare']
-  image_url?: string;           // Rapor fotoğrafı URL
+  aciklama?: string; 
+  musteri_aciklamasi?: string;
+  yonetici_notu?: string;
+  yogunluk?: string; 
+  pest_types?: string[];
+  image_url?: string;
 
   total_visit_revenue?: number;
   material_sales_revenue?: number;
@@ -79,6 +79,8 @@ interface MaterialDisplayItem {
   material_name: string;
   quantity: number;
   unit?: string;
+  unit_price: number;
+  total_price: number;
 }
 
 interface MaterialBreakdownItem {
@@ -160,7 +162,7 @@ const getVisitTypeLabel = (type: string | string[] | undefined): string => {
   return types[typeId] || typeId.charAt(0).toUpperCase() + typeId.slice(1);
 };
 
-// --- GÜNCELLENMİŞ ZİYARET DETAY MODALI ---
+// --- VISIT DETAIL MODAL ---
 const VisitDetailModal: React.FC<{ 
   visit: Visit | null; 
   onClose: () => void; 
@@ -172,10 +174,12 @@ const VisitDetailModal: React.FC<{
 
   const materialsForThisVisit = paidMaterialDetailsMap.get(visit.id) || [];
   const hasPaidMaterialUsage = materialsForThisVisit.length > 0;
+  
+  // Aylık özet için müşteri/şube bilgilerini al
   const customerSummary = visit.customer_id ? monthlyMaterialUsageSummary.get(visit.customer_id) : undefined;
   const branchMonthlySummary = (customerSummary && visit.branch_id) ? customerSummary.branches_summary.get(visit.branch_id) : undefined;
 
-  // Yoğunluk Bar Göstergesi
+  // Yoğunluk Göstergesi
   const DensityIndicator = ({ density }: { density: string | undefined }) => {
     let color = 'bg-gray-200';
     let text = 'Belirtilmedi';
@@ -208,14 +212,7 @@ const VisitDetailModal: React.FC<{
       <div>
         <p className="text-xs text-gray-500 font-medium">{label}</p>
         {isLink ? (
-           <a 
-             href={linkHref} 
-             target="_blank" 
-             rel="noopener noreferrer"
-             className="text-sm text-blue-600 font-medium hover:underline break-words"
-           >
-             {value}
-           </a>
+           <a href={linkHref} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 font-medium hover:underline break-words">{value}</a>
         ) : (
            <p className="text-sm text-gray-800 font-medium break-words">{value}</p>
         )}
@@ -225,10 +222,7 @@ const VisitDetailModal: React.FC<{
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200" onClick={onClose}>
-      <div 
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200" 
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
         
         {/* HEADER */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
@@ -273,29 +267,21 @@ const VisitDetailModal: React.FC<{
                </div>
             </div>
 
-            <InfoRow 
-              icon={FileText} 
-              label="Ziyaret Tipi" 
-              value={Array.isArray(visit.visit_type) ? visit.visit_type.map(type => getVisitTypeLabel(type)).join(', ') : getVisitTypeLabel(visit.visit_type)} 
-            />
+            <InfoRow icon={FileText} label="Ziyaret Tipi" value={Array.isArray(visit.visit_type) ? visit.visit_type.map(type => getVisitTypeLabel(type)).join(', ') : getVisitTypeLabel(visit.visit_type)} />
           </div>
 
           <div className="h-px bg-gray-100" />
 
-          {/* 2. Zararlı ve Yoğunluk (Teknik Veriler) */}
+          {/* 2. Teknik Veriler */}
           <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
             <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
                <Activity className="w-4 h-4 text-indigo-500"/> Teknik Veriler
             </h4>
-            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-               {/* Yoğunluk */}
                <div>
                   <p className="text-xs text-gray-500 mb-2 font-medium">Popülasyon Yoğunluğu</p>
                   <DensityIndicator density={visit.yogunluk} />
                </div>
-
-               {/* Zararlılar */}
                <div>
                   <p className="text-xs text-gray-500 mb-2 font-medium">Hedef Zararlılar</p>
                   {visit.pest_types && visit.pest_types.length > 0 ? (
@@ -313,38 +299,24 @@ const VisitDetailModal: React.FC<{
             </div>
           </div>
 
-          {/* 3. Açıklamalar (Operatör vs Müşteri) */}
+          {/* 3. Açıklamalar */}
           <div className="grid gap-4">
-             
-             {/* Operatörün Teknik Açıklaması (İç Not) */}
              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                  <MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)
-                </h4>
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2"><MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)</h4>
                 <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 shadow-sm leading-relaxed whitespace-pre-wrap">
                   {visit.aciklama ? visit.aciklama : <span className="text-gray-400 italic">Operatör not girmemiş.</span>}
                 </div>
              </div>
-
-             {/* Müşteri Açıklaması (Raporda Gözüken) */}
              <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2">
-                  <Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu
-                </h4>
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2"><Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu</h4>
                 <div className="text-sm text-gray-800 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
                   {visit.musteri_aciklamasi ? visit.musteri_aciklamasi : <span className="text-gray-400 italic">Müşteri için özel bir not girilmemiş.</span>}
                 </div>
              </div>
-
-             {/* Yönetici Notu */}
              {visit.yonetici_notu && (
                 <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
-                   <h4 className="flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2">
-                    <Info className="w-4 h-4" /> Yönetici Notu
-                  </h4>
-                  <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-yellow-100 shadow-sm leading-relaxed whitespace-pre-wrap italic">
-                    {visit.yonetici_notu}
-                  </div>
+                   <h4 className="flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2"><Info className="w-4 h-4" /> Yönetici Notu</h4>
+                  <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-yellow-100 shadow-sm leading-relaxed whitespace-pre-wrap italic">{visit.yonetici_notu}</div>
                 </div>
              )}
           </div>
@@ -352,17 +324,10 @@ const VisitDetailModal: React.FC<{
           {/* 4. Rapor Fotoğrafı */}
           {visit.image_url && (
              <div>
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
-                   <Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı
-                </h4>
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3"><Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı</h4>
                 <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex justify-center p-4">
                    <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
-                      <img 
-                        src={visit.image_url} 
-                        alt="Ziyaret Raporu" 
-                        className="max-h-72 object-contain mx-auto rounded-lg shadow-sm"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
+                      <img src={visit.image_url} alt="Ziyaret Raporu" className="max-h-72 object-contain mx-auto rounded-lg shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center rounded-lg">
                          <span className="opacity-0 group-hover:opacity-100 bg-black/70 text-white text-xs px-2 py-1 rounded">Resmi Büyüt</span>
                       </div>
@@ -371,51 +336,53 @@ const VisitDetailModal: React.FC<{
              </div>
           )}
 
-          {/* 5. Konum ve Kontrol */}
+          {/* 5. Konum */}
           <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
              {visit.branch?.latitude ? (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <MapPin className="w-4 h-4 text-red-500" />
-                  <a 
-                    href={`https://www.google.com/maps/search/?api=1&query=${visit.branch.latitude},${visit.branch.longitude}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="hover:underline hover:text-blue-600 cursor-pointer font-medium"
-                  >
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${visit.branch.latitude},${visit.branch.longitude}`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-blue-600 cursor-pointer font-medium">
                     Konum: {visit.branch.latitude.toFixed(4)}, {visit.branch.longitude.toFixed(4)}
                   </a>
                 </div>
              ) : (
                <span className="flex items-center gap-2 text-sm text-gray-400"><MapPin className="w-4 h-4"/> Konum yok</span>
              )}
-             
              <div className="flex items-center gap-2 text-sm">
                 <span className="text-gray-500">Kontrol:</span>
-                {visit.is_checked ? (
-                  <span className="flex items-center gap-1 text-green-600 font-medium"><CheckCircle className="w-4 h-4"/> Evet</span>
-                ) : (
-                  <span className="flex items-center gap-1 text-gray-400"><AlertCircle className="w-4 h-4"/> Hayır</span>
-                )}
+                {visit.is_checked ? <span className="flex items-center gap-1 text-green-600 font-medium"><CheckCircle className="w-4 h-4"/> Evet</span> : <span className="flex items-center gap-1 text-gray-400"><AlertCircle className="w-4 h-4"/> Hayır</span>}
              </div>
           </div>
 
-          {/* 6. Malzeme Kullanımı */}
+          {/* 6. Malzeme Kullanımı (Ziyaret Bazlı) */}
           {hasPaidMaterialUsage && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                 <Tag className="w-4 h-4 text-orange-500"/> Kullanılan Malzemeler
+                 <Package className="w-4 h-4 text-orange-500"/> Ziyarette Kullanılan Malzemeler
               </h4>
-              <div className="bg-orange-50 rounded-xl border border-orange-100 p-3">
-                <ul className="space-y-2">
-                  {materialsForThisVisit.map((material, index) => (
-                    <li key={index} className="flex justify-between text-sm text-gray-700 border-b border-orange-200/50 last:border-0 pb-1 last:pb-0">
-                      <span>{material.material_name}</span>
-                      <span className="font-medium bg-white px-2 py-0.5 rounded text-orange-700 shadow-sm">
-                        {material.quantity} {material.unit || ''}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="border border-orange-200 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-orange-50 text-orange-800 text-xs uppercase font-semibold">
+                    <tr>
+                      <th className="px-4 py-2">Malzeme</th>
+                      <th className="px-4 py-2 text-center">Miktar</th>
+                      <th className="px-4 py-2 text-right">Birim Fiyat</th>
+                      <th className="px-4 py-2 text-right">Toplam</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-orange-100 bg-white">
+                    {materialsForThisVisit.map((material, index) => (
+                      <tr key={index} className="hover:bg-orange-50/30">
+                        <td className="px-4 py-2 font-medium text-gray-700">{material.material_name}</td>
+                        <td className="px-4 py-2 text-center text-gray-600">
+                          <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-semibold">{material.quantity} {material.unit}</span>
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-600">{material.unit_price.toFixed(2)} ₺</td>
+                        <td className="px-4 py-2 text-right font-bold text-orange-700">{material.total_price.toFixed(2)} ₺</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -439,10 +406,7 @@ const VisitDetailModal: React.FC<{
                   )}
                   <div className="flex justify-between text-lg font-bold text-white pt-2 mt-1 border-t border-gray-600">
                     <span>Toplam Ciro</span>
-                    <span className="flex items-center gap-1 text-green-400">
-                      <DollarSign className="w-5 h-5" />
-                      {visit.total_visit_revenue?.toFixed(2)} TL
-                    </span>
+                    <span className="flex items-center gap-1 text-green-400"><DollarSign className="w-5 h-5" />{visit.total_visit_revenue?.toFixed(2)} TL</span>
                   </div>
                 </div>
              </div>
@@ -455,24 +419,27 @@ const VisitDetailModal: React.FC<{
                 {format(new Date(visit.visit_date), 'MMMM yyyy', { locale: tr })} Ayı Şube Genel Özeti ({branchMonthlySummary.branch_name})
               </strong>
               <div className="text-xs space-y-1 text-gray-600">
-                 <p>Toplam Satış: <span className="font-semibold">{branchMonthlySummary.total_sales_amount.toFixed(2)} TL</span></p>
-                 <p>Satışlı Ziyaret: <span className="font-semibold">{branchMonthlySummary.total_visits_with_sales}</span></p>
+                 <p>Bu Ay Toplam Satış: <span className="font-semibold text-gray-800">{branchMonthlySummary.total_sales_amount.toFixed(2)} TL</span> <span className="text-gray-400 italic">(Sadece tamamlanan ziyaretler)</span></p>
+                 <p>Malzeme Satışlı Ziyaret: <span className="font-semibold">{branchMonthlySummary.total_visits_with_sales}</span></p>
+                 
+                 {Object.keys(branchMonthlySummary.materials_breakdown).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="font-semibold mb-1">Bu Ay Kullanılan Toplam Malzemeler:</p>
+                        <ul className="list-disc list-inside ml-2">
+                            {Object.entries(branchMonthlySummary.materials_breakdown).map(([name, details]) => (
+                                <li key={name}>{name}: <strong>{details.total_quantity} {details.unit_type}</strong> ({details.total_item_amount.toFixed(2)} ₺)</li>
+                            ))}
+                        </ul>
+                    </div>
+                 )}
               </div>
             </div>
           )}
 
         </div>
-        
-        {/* FOOTER */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end">
-          <button 
-            onClick={onClose} 
-            className="px-6 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
-          >
-            Kapat
-          </button>
+          <button onClick={onClose} className="px-6 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm">Kapat</button>
         </div>
-
       </div>
     </div>
   );
@@ -570,19 +537,12 @@ const AdminCalendar: React.FC = () => {
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
 
-    // --- QUERY GÜNCELLENDİ: Artık visits tablosundan doğrudan çekiyoruz ---
     let visitsQuery = supabase
       .from('visits')
       .select(`
         id, visit_date, status, is_checked, visit_type, 
         
-        rapor_no,
-        aciklama,
-        musteri_aciklamasi,
-        yogunluk,
-        pest_types,
-        image_url,
-        yonetici_notu,
+        rapor_no, aciklama, musteri_aciklamasi, yogunluk, pest_types, image_url, yonetici_notu,
 
         customer_id, branch_id, operator_id,
         customer:customer_id(kisa_isim),
@@ -664,64 +624,80 @@ const AdminCalendar: React.FC = () => {
 
     (visitsData || []).forEach(visit => {
       let materialSalesRevenue = 0;
+      
+      // *** KRİTİK DÜZELTME: Aylık Toplama SADECE TAMAMLANANLAR dahil edilir ***
+      // Ama Ziyaret Detayında (visitMaterialsMap) o ziyarete ait ne varsa gözükmelidir.
+      const isCompleted = visit.status === 'completed';
+
       (visit.paid_material_sales || []).forEach(sale => {
           materialSalesRevenue += sale.total_amount || 0;
 
-          if (!monthlySummaryMap.has(sale.customer_id)) {
-            monthlySummaryMap.set(sale.customer_id, {
-              customer_id: sale.customer_id,
-              customer_name: visit.customer?.kisa_isim || 'Bilinmeyen Müşteri',
-              total_sales_amount: 0,
-              total_visits_with_sales: 0, 
-              materials_breakdown: {},
-              branches_summary: new Map()
-            });
-          }
-          const customerSummary = monthlySummaryMap.get(sale.customer_id)!;
-          customerSummary.total_sales_amount += sale.total_amount || 0;
+          // 1. Aylık Toplamlar (Sadece Tamamlananlar)
+          if (isCompleted) {
+              if (!monthlySummaryMap.has(sale.customer_id)) {
+                monthlySummaryMap.set(sale.customer_id, {
+                  customer_id: sale.customer_id,
+                  customer_name: visit.customer?.kisa_isim || 'Bilinmeyen Müşteri',
+                  total_sales_amount: 0,
+                  total_visits_with_sales: 0, 
+                  materials_breakdown: {},
+                  branches_summary: new Map()
+                });
+              }
+              const customerSummary = monthlySummaryMap.get(sale.customer_id)!;
+              customerSummary.total_sales_amount += sale.total_amount || 0;
 
-          if (sale.branch_id) {
-            if (!customerSummary.branches_summary.has(sale.branch_id)) {
-              customerSummary.branches_summary.set(sale.branch_id, {
-                branch_id: sale.branch_id,
-                branch_name: visit.branch?.sube_adi || 'Bilinmeyen Şube',
-                total_sales_amount: 0,
-                total_visits_with_sales: 0,
-                materials_breakdown: {}
-              });
-            }
-            const branchSummary = customerSummary.branches_summary.get(sale.branch_id)!;
-            branchSummary.total_sales_amount += sale.total_amount || 0;
+              if (sale.branch_id) {
+                if (!customerSummary.branches_summary.has(sale.branch_id)) {
+                  customerSummary.branches_summary.set(sale.branch_id, {
+                    branch_id: sale.branch_id,
+                    branch_name: visit.branch?.sube_adi || 'Bilinmeyen Şube',
+                    total_sales_amount: 0,
+                    total_visits_with_sales: 0,
+                    materials_breakdown: {}
+                  });
+                }
+                const branchSummary = customerSummary.branches_summary.get(sale.branch_id)!;
+                branchSummary.total_sales_amount += sale.total_amount || 0;
+              }
           }
 
           (sale.paid_material_sale_items || []).forEach(item => {
             const product = item.paid_products;
             if (!product) return;
 
+            // 2. Bu Ziyaretin Detayı (Her durumda ekle)
             if (!visitMaterialsMap.has(visit.id)) {
               visitMaterialsMap.set(visit.id, []);
             }
+            const unitPrice = item.unit_price || 0;
             visitMaterialsMap.get(visit.id)?.push({
               material_name: product.name,
               quantity: item.quantity,
-              unit: product.unit_type
+              unit: product.unit_type,
+              unit_price: unitPrice,
+              total_price: item.quantity * unitPrice
             });
 
-            const itemTotalAmount = item.quantity * (item.unit_price || 0);
+            // 3. Aylık Kırılım (Sadece Tamamlananlar)
+            if (isCompleted) {
+                const itemTotalAmount = item.quantity * (item.unit_price || 0);
+                const customerSummary = monthlySummaryMap.get(sale.customer_id)!; // isCompleted ise yukarıda oluştu
 
-            if (!customerSummary.materials_breakdown[product.name]) {
-              customerSummary.materials_breakdown[product.name] = { total_quantity: 0, unit_type: product.unit_type, total_item_amount: 0 };
-            }
-            customerSummary.materials_breakdown[product.name].total_quantity += item.quantity;
-            customerSummary.materials_breakdown[product.name].total_item_amount += itemTotalAmount;
-            
-            if (sale.branch_id) {
-              const branchSummary = customerSummary.branches_summary.get(sale.branch_id)!;
-              if (!branchSummary.materials_breakdown[product.name]) {
-                branchSummary.materials_breakdown[product.name] = { total_quantity: 0, unit_type: product.unit_type, total_item_amount: 0 };
-              }
-              branchSummary.materials_breakdown[product.name].total_quantity += item.quantity;
-              branchSummary.materials_breakdown[product.name].total_item_amount += itemTotalAmount;
+                if (!customerSummary.materials_breakdown[product.name]) {
+                  customerSummary.materials_breakdown[product.name] = { total_quantity: 0, unit_type: product.unit_type, total_item_amount: 0 };
+                }
+                customerSummary.materials_breakdown[product.name].total_quantity += item.quantity;
+                customerSummary.materials_breakdown[product.name].total_item_amount += itemTotalAmount;
+                
+                if (sale.branch_id) {
+                  const branchSummary = customerSummary.branches_summary.get(sale.branch_id)!;
+                  if (!branchSummary.materials_breakdown[product.name]) {
+                    branchSummary.materials_breakdown[product.name] = { total_quantity: 0, unit_type: product.unit_type, total_item_amount: 0 };
+                  }
+                  branchSummary.materials_breakdown[product.name].total_quantity += item.quantity;
+                  branchSummary.materials_breakdown[product.name].total_item_amount += itemTotalAmount;
+                }
             }
           });
       });
@@ -786,7 +762,8 @@ const AdminCalendar: React.FC = () => {
         customerSummary.branches_summary.forEach(branchSummary => {
             const branchVisitsWithSales = new Set<string>();
             (visitsData || []).forEach(v => {
-                if (v.branch_id === branchSummary.branch_id && (v.paid_material_sales || []).length > 0) {
+                // Sadece tamamlanan ziyaretleri say
+                if (v.branch_id === branchSummary.branch_id && v.status === 'completed' && (v.paid_material_sales || []).length > 0) {
                     branchVisitsWithSales.add(v.id);
                     visitsWithSales.add(v.id);
                 }
@@ -1192,10 +1169,9 @@ const AdminCalendar: React.FC = () => {
 
                 const filteredOperatorSchedules = operatorSchedules.filter((schedule: any) => {
                   const doneCount = visits.filter((v: Visit) => {
-                    if (schedule.branch_id) {
-                      return v.branch_id === schedule.branch_id;
-                    }
-                    return v.customer_id === schedule.customer_id;
+                    const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                    const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                    return matchesBranch || matchesCustomer;
                   }).length;
                   const isComplete = doneCount >= schedule.visits_required;
 
@@ -1210,17 +1186,14 @@ const AdminCalendar: React.FC = () => {
 
                 const totalEstimatedRevenue = filteredOperatorSchedules.reduce((sum: number, s: any) => sum + calculateScheduleEstimatedRevenue(s), 0);
 
-                const uniqueCompletedVisits = new Set<string>();
-                filteredOperatorSchedules.forEach((schedule: any) => {
-                  const matchingVisits = visits.filter((v: Visit) => {
-                    if (schedule.branch_id) {
-                      return v.branch_id === schedule.branch_id;
-                    }
-                    return v.customer_id === schedule.customer_id;
-                  });
-                  matchingVisits.forEach(v => uniqueCompletedVisits.add(v.id));
-                });
-                const completedCount = uniqueCompletedVisits.size;
+                const completedCount = filteredOperatorSchedules.reduce((sum: number, schedule: any) => {
+                  const completed = visits.filter((v: Visit) => {
+                    const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                    const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                    return matchesBranch || matchesCustomer;
+                  }).length;
+                  return sum + completed;
+                }, 0);
 
                 return (
                   <div key={operatorName} className="border rounded-lg p-4">
@@ -1262,10 +1235,9 @@ const AdminCalendar: React.FC = () => {
                         const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
 
                         const doneCount = visits.filter((v: Visit) => {
-                          if (schedule.branch_id) {
-                            return v.branch_id === schedule.branch_id;
-                          }
-                          return v.customer_id === schedule.customer_id;
+                          const matchesBranch = schedule.branch_id && v.branch_id === schedule.branch_id;
+                          const matchesCustomer = schedule.customer_id && v.customer_id === schedule.customer_id;
+                          return matchesBranch || matchesCustomer;
                         }).length;
 
                         const progress = schedule.visits_required > 0 ? (doneCount / schedule.visits_required) * 100 : 0;
@@ -1323,40 +1295,49 @@ const AdminCalendar: React.FC = () => {
             const scheduledBranchIds = new Set(monthlySchedules.filter((s: any) => s.branch_id).map((s: any) => s.branch_id));
             const scheduledCustomerIds = new Set(monthlySchedules.filter((s: any) => s.customer_id && !s.branch_id).map((s: any) => s.customer_id));
 
-            const unscheduledBranches = branches.filter(b => !scheduledBranchIds.has(b.id) && !inactiveItems.branches.some(ib => ib.id === b.id));
-            const unscheduledCustomers = customers.filter(c => !scheduledCustomerIds.has(c.id) && !inactiveItems.customers.some(ic => ic.id === c.id));
+            const unplannedBranches = branches.filter(b => {
+              if (selectedCustomer && b.customer_id !== selectedCustomer) return false;
+              if (selectedBranch && b.id !== selectedBranch) return false;
+              return !scheduledBranchIds.has(b.id);
+            });
 
-            const allUnscheduledBranches = [...inactiveItems.branches, ...unscheduledBranches];
-            const allUnscheduledCustomers = [...inactiveItems.customers, ...unscheduledCustomers];
+            const unplannedCustomers = customers.filter(c => {
+               if (selectedCustomer && c.id !== selectedCustomer) return false;
+               return !scheduledCustomerIds.has(c.id);
+            });
 
             return (
               <>
-                {allUnscheduledBranches.length > 0 && (
+                {unplannedBranches.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Şubeler ({allUnscheduledBranches.length})</h4>
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                      {allUnscheduledBranches.map(branch => (
-                        <li key={branch.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={`${branch.sube_adi} (${branch.customer?.kisa_isim || 'Müşteri Yok'})`}>
-                          <span className="font-medium">{branch.sube_adi}</span>
-                          <span className="text-gray-400 ml-1">({branch.customer?.kisa_isim || 'N/A'})</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Şubeler ({unplannedBranches.length})</h4>
+                    <div className="max-h-60 overflow-y-auto border rounded-md p-2">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {unplannedBranches.map(branch => (
+                            <li key={branch.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={`${branch.sube_adi} (${branch.customer?.kisa_isim || 'Müşteri Yok'})`}>
+                            <span className="font-medium">{branch.sube_adi}</span>
+                            <span className="text-gray-400 ml-1">({branch.customer?.kisa_isim || 'N/A'})</span>
+                            </li>
+                        ))}
+                        </ul>
+                    </div>
                   </div>
                 )}
-                {allUnscheduledCustomers.length > 0 && (
+                {unplannedCustomers.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Müşteriler ({allUnscheduledCustomers.length})</h4>
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                      {allUnscheduledCustomers.map(customer => (
-                        <li key={customer.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={customer.kisa_isim}>{customer.kisa_isim}</li>
-                      ))}
-                    </ul>
+                    <h4 className="font-semibold text-gray-600 mb-2">Planlanmamış Müşteriler ({unplannedCustomers.length})</h4>
+                    <div className="max-h-60 overflow-y-auto border rounded-md p-2">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {unplannedCustomers.map(customer => (
+                            <li key={customer.id} className="text-sm text-gray-600 p-2 bg-gray-100 rounded-md truncate" title={customer.kisa_isim}>{customer.kisa_isim}</li>
+                        ))}
+                        </ul>
+                    </div>
                   </div>
                 )}
-                {allUnscheduledBranches.length === 0 && allUnscheduledCustomers.length === 0 && (
+                {unplannedBranches.length === 0 && unplannedCustomers.length === 0 && (
                   <p className="text-center text-gray-400 py-4">
-                    {selectedCustomer || selectedBranch ? 'Bu filtreleme için bu ay planlanmamış şube veya kayıt bulunmuyor.' : 'Bu ay için planlanmamış bir kayıt bulunmuyor.'}
+                    {selectedCustomer || selectedBranch ? 'Bu filtreleme için bu ay planlanmamış şube veya kayıt bulunmuyor.' : 'Harika! Bu ay tüm aktif kayıtlar planlanmış.'}
                   </p>
                 )}
               </>
