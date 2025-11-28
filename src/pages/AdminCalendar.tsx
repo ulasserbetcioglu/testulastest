@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, getDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
-import { Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, CheckSquare, DollarSign, TrendingUp, Users } from 'lucide-react';
+import { 
+  Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, 
+  User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, 
+  CheckSquare, DollarSign, TrendingUp, Users, MessageSquare, Info, 
+  CheckCircle, AlertCircle 
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 // --- ARAYÜZLER (INTERFACES) ---
@@ -17,6 +22,8 @@ interface Visit {
   status: 'planned' | 'completed' | 'cancelled';
   visit_type: string | string[];
   is_checked: boolean;
+  aciklama?: string; // Operatör notu
+  yonetici_notu?: string; // Yönetici notu
   total_visit_revenue?: number;
   material_sales_revenue?: number;
   service_per_visit_revenue?: number;
@@ -122,7 +129,7 @@ interface AggregatedRevenueItem {
   visits: number;
 }
 
-// --- BİLEŞENLER (COMPONENTS) ---
+// --- YARDIMCI BİLEŞENLER ---
 
 const StatusInfo: React.FC<{ status: Visit['status'] }> = ({ status }) => {
   const config = {
@@ -144,84 +151,219 @@ const getVisitTypeLabel = (type: string | string[] | undefined): string => {
   return types[typeId] || typeId.charAt(0).toUpperCase() + typeId.slice(1);
 };
 
-const VisitDetailModal: React.FC<{ visit: Visit | null; onClose: () => void; paidMaterialDetailsMap: Map<string, MaterialDisplayItem[]>; monthlyMaterialUsageSummary: Map<string, CustomerMaterialSummary> }> = ({ visit, onClose, paidMaterialDetailsMap, monthlyMaterialUsageSummary }) => {
+// --- YENİLENMİŞ & GELİŞMİŞ ZİYARET DETAY PENCERESİ ---
+const VisitDetailModal: React.FC<{ 
+  visit: Visit | null; 
+  onClose: () => void; 
+  paidMaterialDetailsMap: Map<string, MaterialDisplayItem[]>; 
+  monthlyMaterialUsageSummary: Map<string, CustomerMaterialSummary> 
+}> = ({ visit, onClose, paidMaterialDetailsMap, monthlyMaterialUsageSummary }) => {
+  
   if (!visit) return null;
 
   const materialsForThisVisit = paidMaterialDetailsMap.get(visit.id) || [];
   const hasPaidMaterialUsage = materialsForThisVisit.length > 0;
-
   const customerSummary = visit.customer_id ? monthlyMaterialUsageSummary.get(visit.customer_id) : undefined;
   const branchMonthlySummary = (customerSummary && visit.branch_id) ? customerSummary.branches_summary.get(visit.branch_id) : undefined;
 
+  // Bilgi satırı yardımcısı
+  const InfoRow = ({ icon: Icon, label, value }: any) => (
+    <div className="flex items-start gap-3">
+      <div className="mt-0.5 p-1.5 bg-gray-100 rounded-lg shrink-0">
+        <Icon className="w-4 h-4 text-gray-600" />
+      </div>
+      <div>
+        <p className="text-xs text-gray-500 font-medium">{label}</p>
+        <p className="text-sm text-gray-800 font-medium break-words">{value}</p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-auto transform transition-all duration-300 scale-95 animate-fade-in" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center border-b pb-3 mb-4">
-          <h3 className="text-xl font-bold text-gray-800">Ziyaret Detayı</h3>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200 transition-colors"><X size={20} /></button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div 
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200" 
+        onClick={e => e.stopPropagation()}
+      >
+        
+        {/* HEADER */}
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
+          <div>
+            <h3 className="text-lg font-bold text-gray-800">Ziyaret Detayı</h3>
+            <p className="text-xs text-gray-500">Kayıt ID: #{visit.id.substring(0, 8)}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors">
+            <X size={20} />
+          </button>
         </div>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center gap-3"><User className="w-5 h-5 text-gray-400" /> <strong>Müşteri:</strong> {visit.customer?.kisa_isim || 'N/A'}</div>
-          {visit.branch && <div className="flex items-center gap-3"><Building className="w-5 h-5 text-gray-400" /> <strong>Şube:</strong> {visit.branch.sube_adi}</div>}
-          <div className="flex items-center gap-3"><User className="w-5 h-5 text-gray-400" /> <strong>Operatör:</strong> {visit.operator?.name || 'N/A'}</div>
-          <div className="flex items-center gap-3"><CalendarIcon className="w-5 h-5 text-gray-400" /> <strong>Tarih:</strong> {format(new Date(visit.visit_date), 'dd MMMM yyyy HH:mm', { locale: tr })}</div>
-          <div className="flex items-center gap-3"><Tag className="w-5 h-5 text-gray-400" /> <strong>Durum:</strong> <StatusInfo status={visit.status} /> <span className="ml-1 capitalize">{visit.status === 'completed' ? 'Tamamlandı' : visit.status === 'planned' ? 'Planlandı' : 'İptal Edildi'}</span></div>
-          {visit.branch?.latitude && visit.branch?.longitude && (
-            <div className="flex items-center gap-3"><MapPin className="w-5 h-5 text-gray-400" /> <strong>Konum:</strong> {visit.branch.latitude.toFixed(4)}, {visit.branch.longitude.toFixed(4)}</div>
-          )}
-          <div className="flex items-center gap-3"><FileText className="w-5 h-5 text-gray-400" /> <strong>Ziyaret Tipi:</strong> {Array.isArray(visit.visit_type) ? visit.visit_type.map(type => getVisitTypeLabel(type)).join(', ') : getVisitTypeLabel(visit.visit_type)}</div>
+
+        {/* SCROLLABLE CONTENT */}
+        <div className="overflow-y-auto p-6 space-y-6 custom-scrollbar">
           
+          {/* 1. Temel Bilgiler */}
+          <div className="grid grid-cols-2 gap-y-4 gap-x-2">
+            <InfoRow icon={User} label="Müşteri" value={visit.customer?.kisa_isim || 'N/A'} />
+            <InfoRow icon={Building} label="Şube" value={visit.branch?.sube_adi || 'Genel'} />
+            <InfoRow icon={User} label="Operatör" value={visit.operator?.name || 'N/A'} />
+            <InfoRow icon={CalendarIcon} label="Tarih" value={format(new Date(visit.visit_date), 'dd MMMM yyyy HH:mm', { locale: tr })} />
+          </div>
+
+          <div className="h-px bg-gray-100" />
+
+          {/* 2. Durum ve Tip */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-start gap-3">
+               <div className="mt-0.5 p-1.5 bg-gray-100 rounded-lg shrink-0">
+                  <Tag className="w-4 h-4 text-gray-600" />
+               </div>
+               <div>
+                 <p className="text-xs text-gray-500 font-medium">Durum</p>
+                 <div className="flex items-center mt-1">
+                   <StatusInfo status={visit.status} /> 
+                   <span className="ml-2 text-sm font-medium capitalize">
+                     {visit.status === 'completed' ? 'Tamamlandı' : visit.status === 'planned' ? 'Planlandı' : 'İptal'}
+                   </span>
+                 </div>
+               </div>
+            </div>
+            <InfoRow 
+              icon={FileText} 
+              label="Ziyaret Tipi" 
+              value={Array.isArray(visit.visit_type) ? visit.visit_type.map(type => getVisitTypeLabel(type)).join(', ') : getVisitTypeLabel(visit.visit_type)} 
+            />
+          </div>
+
+          {/* 3. Açıklamalar (ÖNEMLİ BÖLÜM) */}
+          <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100 space-y-3">
+            <div>
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2">
+                <MessageSquare className="w-4 h-4" /> Operatör Açıklaması
+              </h4>
+              <p className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
+                {visit.aciklama ? visit.aciklama : <span className="text-gray-400 italic">Açıklama girilmemiş.</span>}
+              </p>
+            </div>
+
+            {visit.yonetici_notu && (
+              <div className="mt-3 pt-3 border-t border-blue-200/50">
+                 <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                  <Info className="w-4 h-4" /> Yönetici Notu
+                </h4>
+                <p className="text-sm text-gray-600 italic bg-white p-2 rounded border border-gray-100">
+                  "{visit.yonetici_notu}"
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Konum ve Kontrol */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+             {visit.branch?.latitude ? (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <MapPin className="w-4 h-4 text-red-500" />
+                  <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${visit.branch.latitude},${visit.branch.longitude}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="hover:underline hover:text-blue-600 cursor-pointer font-medium"
+                  >
+                    Konum: {visit.branch.latitude.toFixed(4)}, {visit.branch.longitude.toFixed(4)}
+                  </a>
+                </div>
+             ) : (
+               <span className="flex items-center gap-2 text-sm text-gray-400"><MapPin className="w-4 h-4"/> Konum yok</span>
+             )}
+             
+             <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-500">Kontrol:</span>
+                {visit.is_checked ? (
+                  <span className="flex items-center gap-1 text-green-600 font-medium"><CheckCircle className="w-4 h-4"/> Evet</span>
+                ) : (
+                  <span className="flex items-center gap-1 text-gray-400"><AlertCircle className="w-4 h-4"/> Hayır</span>
+                )}
+             </div>
+          </div>
+
+          {/* 5. Malzeme Kullanımı */}
           {hasPaidMaterialUsage && (
-            <div className="space-y-1 mt-3 p-2 border rounded-md bg-gray-50">
-              <strong className="flex items-center gap-2 text-gray-700">Bu Ziyarette Kullanılan Malzemeler:</strong>
-              <ul className="list-disc list-inside text-gray-600">
-                {materialsForThisVisit.map((material, index) => (
-                  <li key={index}>
-                    {material.material_name}: {material.quantity} {material.unit || ''}
-                  </li>
-                ))}
-              </ul>
+            <div className="space-y-2">
+              <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                 <Tag className="w-4 h-4 text-orange-500"/> Kullanılan Malzemeler
+              </h4>
+              <div className="bg-orange-50 rounded-xl border border-orange-100 p-3">
+                <ul className="space-y-2">
+                  {materialsForThisVisit.map((material, index) => (
+                    <li key={index} className="flex justify-between text-sm text-gray-700 border-b border-orange-200/50 last:border-0 pb-1 last:pb-0">
+                      <span>{material.material_name}</span>
+                      <span className="font-medium bg-white px-2 py-0.5 rounded text-orange-700 shadow-sm">
+                        {material.quantity} {material.unit || ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
 
-          {branchMonthlySummary && (
-            <div className="space-y-1 mt-3 p-2 border rounded-md bg-blue-50">
-              <strong className="flex items-center gap-2 text-blue-700">
-                {format(new Date(visit.visit_date), 'MMMM yyyy', { locale: tr })} Ayı Şube Malzeme Kullanımı ({branchMonthlySummary.branch_name})
-              </strong>
-              <p className="text-gray-700"><strong>Toplam Satış Tutarı:</strong> {branchMonthlySummary.total_sales_amount.toFixed(2)} TL</p>
-              <p className="text-gray-700"><strong>Malzeme Satışı Yapılan Ziyaret Sayısı:</strong> {branchMonthlySummary.total_visits_with_sales}</p>
-              {Object.keys(branchMonthlySummary.materials_breakdown).length > 0 && (
-                <div className="mt-2">
-                  <p className="font-semibold text-gray-700">Malzeme Dökümü:</p>
-                  <ul className="list-disc list-inside text-gray-600 ml-4">
-                    {Object.entries(branchMonthlySummary.materials_breakdown).map(([materialName, details]) => (
-                      <li key={materialName}>
-                        {materialName}: {details.total_quantity} {details.unit_type || ''} ({details.total_item_amount.toFixed(2)} TL)
-                      </li>
-                    ))}
-                  </ul>
+          {/* 6. Finansal Özet (Dark Mode Kartı) */}
+          {(visit.total_visit_revenue !== undefined || (visit.material_sales_revenue && visit.material_sales_revenue > 0)) && (
+             <div className="bg-gray-800 text-white rounded-xl p-4 shadow-lg">
+                <h4 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-3 border-b border-gray-600 pb-2">Ziyaret Finansal Özeti</h4>
+                <div className="grid grid-cols-1 gap-2">
+                  {visit.service_per_visit_revenue !== undefined && visit.service_per_visit_revenue > 0 && (
+                    <div className="flex justify-between text-sm text-gray-300">
+                      <span>Hizmet Bedeli</span>
+                      <span>{visit.service_per_visit_revenue.toFixed(2)} TL</span>
+                    </div>
+                  )}
+                  {visit.material_sales_revenue !== undefined && visit.material_sales_revenue > 0 && (
+                     <div className="flex justify-between text-sm text-gray-300">
+                       <span>Malzeme Satışı</span>
+                       <span>{visit.material_sales_revenue.toFixed(2)} TL</span>
+                     </div>
+                  )}
+                  <div className="flex justify-between text-lg font-bold text-white pt-2 mt-1 border-t border-gray-600">
+                    <span>Toplam Ciro</span>
+                    <span className="flex items-center gap-1 text-green-400">
+                      <DollarSign className="w-5 h-5" />
+                      {visit.total_visit_revenue?.toFixed(2)} TL
+                    </span>
+                  </div>
                 </div>
-              )}
+             </div>
+          )}
+
+          {/* 7. Aylık Şube Özeti (Mevcut Bilgi) */}
+          {branchMonthlySummary && (
+            <div className="mt-4 p-4 border border-dashed border-gray-300 rounded-xl bg-gray-50/50">
+              <strong className="block text-sm text-gray-700 mb-2">
+                {format(new Date(visit.visit_date), 'MMMM yyyy', { locale: tr })} Ayı Şube Genel Özeti ({branchMonthlySummary.branch_name})
+              </strong>
+              <div className="text-xs space-y-1 text-gray-600">
+                 <p>Toplam Satış: <span className="font-semibold">{branchMonthlySummary.total_sales_amount.toFixed(2)} TL</span></p>
+                 <p>Satışlı Ziyaret: <span className="font-semibold">{branchMonthlySummary.total_visits_with_sales}</span></p>
+              </div>
             </div>
           )}
-          <div className="flex items-center gap-3"><input type="checkbox" checked={visit.is_checked} readOnly className="form-checkbox h-4 w-4 text-green-500 rounded-sm" /> <strong>Kontrol Edildi:</strong> {visit.is_checked ? 'Evet' : 'Hayır'}</div>
-          
-          {visit.total_visit_revenue !== undefined && (
-            <div className="flex items-center gap-3"><DollarSign className="w-5 h-5 text-gray-400" /> <strong>Toplam Ziyaret Cirosu:</strong> {visit.total_visit_revenue.toFixed(2)} TL</div>
-          )}
-          {visit.material_sales_revenue !== undefined && visit.material_sales_revenue > 0 && (
-            <div className="flex items-center gap-3 pl-8 text-gray-600">Malzeme Satış Cirosu: {visit.material_sales_revenue.toFixed(2)} TL</div>
-          )}
-          {visit.service_per_visit_revenue !== undefined && visit.service_per_visit_revenue > 0 && (
-            <div className="flex items-center gap-3 pl-8 text-gray-600">Ziyaret Başı Servis Cirosu: {visit.service_per_visit_revenue.toFixed(2)} TL</div>
-          )}
+
         </div>
+        
+        {/* FOOTER */}
+        <div className="p-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end">
+          <button 
+            onClick={onClose} 
+            className="px-6 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors shadow-sm"
+          >
+            Kapat
+          </button>
+        </div>
+
       </div>
     </div>
   );
 };
 
+// --- ANA BİLEŞEN ---
 const AdminCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -313,10 +455,12 @@ const AdminCalendar: React.FC = () => {
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
 
+    // DÜZELTME: aciklama ve yonetici_notu alanları eklendi
     let visitsQuery = supabase
       .from('visits')
       .select(`
         id, visit_date, status, is_checked, visit_type, 
+        aciklama, yonetici_notu,
         customer_id, branch_id, operator_id,
         customer:customer_id(kisa_isim),
         branch:branch_id(sube_adi, latitude, longitude),
@@ -924,12 +1068,10 @@ const AdminCalendar: React.FC = () => {
                 const operatorSchedules = schedules;
 
                 const filteredOperatorSchedules = operatorSchedules.filter((schedule: any) => {
-                  // DÜZELTME: Şube bazlı filtreleme (Müşteri ID'si üzerinden genel sayım engellendi)
                   const doneCount = visits.filter((v: Visit) => {
                     if (schedule.branch_id) {
                       return v.branch_id === schedule.branch_id;
                     }
-                    // Sadece müşteri bazlı plan (tüm şubeler)
                     return v.customer_id === schedule.customer_id;
                   }).length;
                   const isComplete = doneCount >= schedule.visits_required;
@@ -945,7 +1087,6 @@ const AdminCalendar: React.FC = () => {
 
                 const totalEstimatedRevenue = filteredOperatorSchedules.reduce((sum: number, s: any) => sum + calculateScheduleEstimatedRevenue(s), 0);
 
-                // DÜZELTME: Mükerrer sayımı önlemek için Set kullanımı
                 const uniqueCompletedVisits = new Set<string>();
                 filteredOperatorSchedules.forEach((schedule: any) => {
                   const matchingVisits = visits.filter((v: Visit) => {
@@ -997,7 +1138,6 @@ const AdminCalendar: React.FC = () => {
                         const branchName = schedule.branch?.sube_adi;
                         const displayName = branchName ? `${customerName} - ${branchName}` : customerName;
 
-                        // DÜZELTME: Kart içi ilerleme çubuğu ve sayım mantığı
                         const doneCount = visits.filter((v: Visit) => {
                           if (schedule.branch_id) {
                             return v.branch_id === schedule.branch_id;
