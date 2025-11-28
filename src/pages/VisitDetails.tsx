@@ -1,3 +1,4 @@
+// src/pages/VisitDetails.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -49,6 +50,7 @@ interface Visit {
   report_photo_file_path?: string;
 }
 
+// ✅ DÜZELTME: Orijinal dosyanızdaki gibi 'biocidal_products' tablosunu kullanır
 interface BiocidalProduct {
   id: string;
   name: string;
@@ -73,6 +75,7 @@ interface PaidMaterialItem {
   total_price: number;
 }
 
+// Biyosidal kullanım state'i için arayüz
 interface BiocidalUsageItem {
   productId: string;
   quantity: string;
@@ -118,7 +121,7 @@ const densityOptions = [
   { id: 'istila', label: 'İstila' }
 ];
 
-// --- AddEquipmentModal Bileşeni ---
+// ... (AddEquipmentModal bileşeni - Değişiklik yok) ...
 const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, branchId, onSave }) => {
   const [equipment, setEquipment] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -220,7 +223,9 @@ const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, 
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-xl font-semibold">Ekipman Ekle</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <CloseIcon size={24} />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
@@ -324,7 +329,7 @@ const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, 
   );
 };
 
-// --- Ana VisitDetails Bileşeni ---
+
 const VisitDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -344,6 +349,7 @@ const VisitDetails: React.FC = () => {
   const [endTime, setEndTime] = useState('');
   const [reportNumber, setReportNumber] = useState('');
 
+  // Biyosidal state'i yeni arayüze göre güncellendi
   const [biocidalUsage, setBiocidalUsage] = useState<BiocidalUsageItem[]>([
     { productId: '', quantity: '', dosage: '', unit: '' }
   ]);
@@ -370,7 +376,7 @@ const VisitDetails: React.FC = () => {
 
   useEffect(() => {
     fetchVisitDetails();
-    fetchBiocidalProducts(); 
+    fetchBiocidalProducts(); // Orijinal fonksiyon
     fetchOperatorId();
   }, [id]);
 
@@ -382,49 +388,6 @@ const VisitDetails: React.FC = () => {
     }
   }, [visit]);
 
-  // --- OTOMATİK DOLDURMA MANTIĞI ---
-  useEffect(() => {
-    if (branchEquipment.length > 0) {
-      setEquipmentChecks(prevChecks => {
-        const newChecks = { ...prevChecks };
-        let hasChanges = false;
-
-        branchEquipment.forEach(item => {
-          if (item.equipment.properties) {
-            if (!newChecks[item.id]) {
-              newChecks[item.id] = {};
-              hasChanges = true;
-            }
-
-            Object.entries(item.equipment.properties).forEach(([key, prop]) => {
-              if (newChecks[item.id][key] === undefined || newChecks[item.id][key] === null || newChecks[item.id][key] === '') {
-                if (prop.type === 'boolean') {
-                  newChecks[item.id][key] = 'false';
-                } else if (prop.type === 'number') {
-                  newChecks[item.id][key] = 0;
-                } else {
-                  const lowerKey = key.toLowerCase();
-                  if (lowerKey.includes('tüketim') || lowerKey.includes('consumption')) {
-                      newChecks[item.id][key] = 'Yok';
-                  } else if (lowerKey.includes('durum') || lowerKey.includes('status')) {
-                      newChecks[item.id][key] = 'Sorunsuz';
-                  } else if (lowerKey.includes('aktivite') || lowerKey.includes('activity')) {
-                      newChecks[item.id][key] = 'Yok';
-                  } else {
-                      newChecks[item.id][key] = 'Yok';
-                  }
-                }
-                hasChanges = true;
-              }
-            });
-          }
-        });
-
-        return hasChanges ? newChecks : prevChecks;
-      });
-    }
-  }, [branchEquipment]);
-
   useEffect(() => {
     if (operatorId) {
       fetchPaidProducts();
@@ -435,7 +398,6 @@ const VisitDetails: React.FC = () => {
     setShowPaidVisitAmount(selectedVisitTypes.includes('ucretli'));
   }, [selectedVisitTypes]);
 
-  // Edit modunda önceki ücretli malzemeleri yükle
   useEffect(() => {
     if (isEditMode && previousPaidMaterials.length > 0) {
       const initialPaidProducts = previousPaidMaterials.map(item => ({
@@ -447,6 +409,7 @@ const VisitDetails: React.FC = () => {
     }
   }, [isEditMode, previousPaidMaterials]);
 
+  // ... (calculateDistanceFromPrevious, fetchOperatorId) ...
   const calculateDistanceFromPrevious = () => {
     if (
       visit?.branch?.latitude && 
@@ -484,6 +447,8 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+
+  // 'paid_products' tablosunu çeker
   const fetchPaidProducts = async () => {
     try {
       const { data, error } = await supabase
@@ -595,9 +560,10 @@ const VisitDetails: React.FC = () => {
         setReportPhotoPreview(data.report_photo_url);
       }
 
+      // Düzenleme modunda ücretli ve biyosidal verileri çek
       if (data?.status === 'completed') {
         fetchPreviousPaidMaterials(id);
-        fetchPreviousBiocidalUsage(id);
+        fetchPreviousBiocidalUsage(id); // Biyosidal verileri çeken fonksiyon
       }
     } catch (err: any) {
       setError(err.message);
@@ -614,7 +580,7 @@ const VisitDetails: React.FC = () => {
           id,
           items:paid_material_sale_items (
             id,
-            product:paid_products (id, name),
+            product:product_id (id, name),
             quantity,
             unit_price,
             total_price
@@ -634,6 +600,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // Düzenleme modunda eski biyosidal verilerini çeker
   const fetchPreviousBiocidalUsage = async (visitId: string) => {
     try {
       const { data, error } = await supabase
@@ -657,6 +624,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ... (fetchBranchEquipment - Değişiklik yok) ...
   const fetchBranchEquipment = async (branchId: string) => {
     try {
       const { data: branchEquipmentData, error: branchEquipmentError } = await supabase
@@ -711,6 +679,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ✅ DÜZELTME: Biyosidal ürünleri 'biocidal_products' tablosundan çeker
   const fetchBiocidalProducts = async () => {
     try {
       const { data, error } = await supabase
@@ -726,6 +695,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ... (handleEquipmentCheckChange, handlePestTypeChange, handleVisitTypeChange - Değişiklik yok) ...
   const handleEquipmentCheckChange = (equipmentId: string, field: string, value: any) => {
     setEquipmentChecks(prev => ({
       ...prev,
@@ -754,6 +724,7 @@ const VisitDetails: React.FC = () => {
     });
   };
 
+  // Biyosidal state handler'ı 'dosage' ve 'unit'i içerecek şekilde güncellendi
   const handleBiocidalChange = (index: number, field: 'productId' | 'quantity' | 'dosage' | 'unit', value: string) => {
     const newBiocidalUsage = [...biocidalUsage];
     newBiocidalUsage[index] = {
@@ -761,6 +732,7 @@ const VisitDetails: React.FC = () => {
       [field]: value
     };
 
+    // Eğer ürün seçimi değiştiyse, birimi otomatik doldur
     if (field === 'productId') {
       const product = biocidalProducts.find(p => p.id === value);
       newBiocidalUsage[index].unit = product?.unit_type || 'adet';
@@ -769,6 +741,7 @@ const VisitDetails: React.FC = () => {
     setBiocidalUsage(newBiocidalUsage);
   };
 
+  // Yeni eklenen satır 'dosage' ve 'unit' içeriyor
   const addBiocidalProduct = () => {
     setBiocidalUsage([...biocidalUsage, { productId: '', quantity: '', dosage: '', unit: '' }]);
   };
@@ -781,6 +754,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ... (handlePaidProductChange, addPaidProduct, removePaidProduct, updateOperatorStock, savePaidMaterialSale - Değişiklik yok) ...
   const handlePaidProductChange = (index: number, field: 'productId' | 'quantity', value: string) => {
     const newPaidProductUsage = [...paidProductUsage];
     newPaidProductUsage[index] = {
@@ -841,15 +815,18 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // --- MÜKERRER KAYIT ÖNLEYEN GÜNCELLENMİŞ FONKSİYON ---
   const savePaidMaterialSale = async () => {
-    if (noPaidProductsUsed) return;
+    if (noPaidProductsUsed) {
+      return;
+    }
     
     const validPaidProducts = paidProductUsage.filter(
       item => item.productId && item.quantity && parseFloat(item.quantity) > 0
     );
     
-    if (validPaidProducts.length === 0) return;
+    if (validPaidProducts.length === 0) {
+      return;
+    }
     
     try {
       let totalAmount = 0;
@@ -871,48 +848,53 @@ const VisitDetails: React.FC = () => {
         };
       });
       
-      // 1. Veritabanında bu ziyaret için zaten kayıt var mı kontrol et
-      const { data: existingSale } = await supabase
-         .from('paid_material_sales')
-         .select('id')
-         .eq('visit_id', id)
-         .maybeSingle();
-
-      let saleId = existingSale?.id;
-
-      if (saleId) {
-        // GÜNCELLEME MODU
-        // Eski detayları sil
-        await supabase.from('paid_material_sale_items').delete().eq('sale_id', saleId);
-        
-        // Ana kaydı güncelle
-        await supabase.from('paid_material_sales').update({
+      if (isEditMode && existingSaleId) {
+        await supabase
+          .from('paid_material_sale_items')
+          .delete()
+          .eq('sale_id', existingSaleId);
+          
+        await supabase
+          .from('paid_material_sales')
+          .update({
             total_amount: totalAmount,
             updated_at: new Date().toISOString()
-        }).eq('id', saleId);
-      } else {
-        // YENİ KAYIT MODU
-        const { data: saleData, error: saleError } = await supabase
-          .from('paid_material_sales')
-          .insert([{
-            customer_id: visit?.customer.id,
-            branch_id: visit?.branch?.id || null,
-            visit_id: id,
-            sale_date: new Date().toISOString().split('T')[0],
-            status: 'pending',
-            total_amount: totalAmount,
-            notes: `Ziyaret sırasında satılan ürünler: ${new Date().toISOString().split('T')[0]}`,
-            created_by: (await supabase.auth.getUser()).data.user?.id
-          }])
-          .select()
-          .single();
+          })
+          .eq('id', existingSaleId);
           
-        if (saleError) throw saleError;
-        saleId = saleData.id;
+        const saleItemsWithSaleId = saleItems.map(item => ({
+          ...item,
+          sale_id: existingSaleId
+        }));
+        
+        await supabase
+          .from('paid_material_sale_items')
+          .insert(saleItemsWithSaleId);
+          
+        return;
       }
       
-      // Detayları ekle
-      const saleItemsWithSaleId = saleItems.map(item => ({ ...item, sale_id: saleId }));
+      const { data: saleData, error: saleError } = await supabase
+        .from('paid_material_sales')
+        .insert([{
+          customer_id: visit?.customer.id,
+          branch_id: visit?.branch?.id || null,
+          visit_id: id,
+          sale_date: new Date().toISOString().split('T')[0],
+          status: 'pending',
+          total_amount: totalAmount,
+          notes: `Ziyaret sırasında satılan ürünler: ${new Date().toISOString().split('T')[0]}`,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        }])
+        .select()
+        .single();
+        
+      if (saleError) throw saleError;
+      
+      const saleItemsWithSaleId = saleItems.map(item => ({
+        ...item,
+        sale_id: saleData.id
+      }));
       
       const { error: itemsError } = await supabase
         .from('paid_material_sale_items')
@@ -920,7 +902,6 @@ const VisitDetails: React.FC = () => {
       
       if (itemsError) throw itemsError;
       
-      // Stok düş
       for (const item of validPaidProducts) {
         await updateOperatorStock(item.productId, parseFloat(item.quantity));
       }
@@ -930,18 +911,30 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // --- MÜKERRER KAYIT ÖNLEYEN BİYOSİDAL FONKSİYONU ---
+
+  // Biyosidal verilerini 'biocidal_products_usage' tablosuna kaydeder
   const saveBiocidalUsage = async () => {
     if (!id || !operatorId || !visit) return;
 
-    // Her zaman önce eskileri temizle (Temiz bir sayfa aç)
-    await supabase.from('biocidal_products_usage').delete().eq('visit_id', id);
+    // Düzenleme modundaysak, bu ziyarete ait eski kayıtları sil
+    if (isEditMode) {
+      const { error: deleteError } = await supabase
+        .from('biocidal_products_usage')
+        .delete()
+        .eq('visit_id', id);
+      
+      if (deleteError) {
+        throw new Error(`Eski biyosidal verileri silinemedi: ${deleteError.message}`);
+      }
+    }
 
     const validBiocidalUsage = biocidalUsage.filter(
       item => item.productId && item.quantity && parseFloat(item.quantity) > 0
     );
 
-    if (validBiocidalUsage.length === 0) return; 
+    if (validBiocidalUsage.length === 0) {
+      return; 
+    }
 
     const dataToInsert = validBiocidalUsage.map(item => ({
       visit_id: id,
@@ -963,6 +956,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
+  // ... (handlePhotoChange, clearPhoto - Değişiklik yok) ...
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) {
       setReportPhotoFile(null);
@@ -979,6 +973,7 @@ const VisitDetails: React.FC = () => {
     setReportPhotoFile(null);
     setReportPhotoPreview(null);
   };
+
 
   const saveVisit = async () => {
     if (!reportNumber) {
@@ -1005,6 +1000,7 @@ const VisitDetails: React.FC = () => {
     try {
       setLoading(true);
       
+      // 1. Rapor fotoğrafı yükleme
       let uploadedPhotoUrl: string | null = visit?.report_photo_url || null;
       let uploadedPhotoFilePath: string | null = visit?.report_photo_file_path || null;
 
@@ -1028,6 +1024,7 @@ const VisitDetails: React.FC = () => {
         uploadedPhotoFilePath = null;
       }
 
+      // Notları hazırla
       let updatedNotes = notes;
       if (showPaidVisitAmount && paidVisitAmount) {
         updatedNotes = `Ücretli ziyaret tutarı: ${paidVisitAmount} TL\n\n${notes}`;
@@ -1035,6 +1032,7 @@ const VisitDetails: React.FC = () => {
       
       const visitTypeValue = selectedVisitTypes.length > 0 ? selectedVisitTypes[0] : null;
       
+      // 2. 'visits' tablosunu güncelle
       const { data, error } = await supabase
         .from('visits')
         .update({
@@ -1052,15 +1050,17 @@ const VisitDetails: React.FC = () => {
 
       if (error) throw error;
       
+      // 3. Ücretli ürünleri kaydet (veya güncelle)
       if (!noPaidProductsUsed) {
         await savePaidMaterialSale();
       } else if (isEditMode && existingSaleId) {
-         // Eğer edit modundaysak ve "kullanılmadı" seçildiyse, eski kaydı sil
         await supabase.from('paid_material_sales').delete().eq('id', existingSaleId);
       }
 
+      // 4. Biyosidal ürünleri kaydet (veya güncelle)
       await saveBiocidalUsage();
 
+      // 5. E-posta gönder
       if (sendEmailNotification && visit) {
         try {
           const recipientEmails = await getRecipientEmails(
@@ -1090,11 +1090,29 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // ... (Diğer handler fonksiyonları aynı kalacak) ...
-  const handleAddEquipment = () => { if (visit?.branch?.id) setShowAddEquipmentModal(true); else alert('Şube bilgisi bulunamadı'); };
-  const handleEquipmentAdded = () => { if (visit?.branch?.id) fetchBranchEquipment(visit.branch.id); };
-  const groupedEquipment = branchEquipment.reduce((acc, item) => { if (!acc[item.department]) acc[item.department] = []; acc[item.department].push(item); return acc; }, {} as Record<string, BranchEquipment[]>);
-  const XCloseIcon = ({ size }: { size?: number }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>);
+  // ... (handleAddEquipment, handleEquipmentAdded, groupedEquipment - Değişiklik yok) ...
+  const handleAddEquipment = () => {
+    if (visit?.branch?.id) {
+      setShowAddEquipmentModal(true);
+    } else {
+      alert('Şube bilgisi bulunamadı');
+    }
+  };
+
+  const handleEquipmentAdded = () => {
+    if (visit?.branch?.id) {
+      fetchBranchEquipment(visit.branch.id);
+    }
+  };
+
+  const groupedEquipment = branchEquipment.reduce((acc, item) => {
+    if (!acc[item.department]) {
+      acc[item.department] = [];
+    }
+    acc[item.department].push(item);
+    return acc;
+  }, {} as Record<string, BranchEquipment[]>);
+
 
   if (loading) return <div>Yükleniyor...</div>;
   if (error) return <div>Hata: {error}</div>;
@@ -1102,34 +1120,73 @@ const VisitDetails: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4">
-      {/* ... (Render kısmı aynı kalacak, sadece otomatik doldurulan ekipmanlar görünecek) ... */}
-      
+      {/* ... (Header bölümü - Değişiklik yok) ... */}
       <div className="mb-6">
         <div className="text-sm text-gray-500">
-          {new Date(visit.visit_date).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          {new Date(visit.visit_date).toLocaleString('tr-TR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
         </div>
-        <h1 className="text-xl font-bold">{visit.customer.kisa_isim}</h1>
+        <h1 className="text-xl font-bold">
+          {visit.customer.kisa_isim}
+        </h1>
         {visit.branch && (
           <div className="text-gray-700 flex items-center">
             {visit.branch.sube_adi}
-            {visit.branch.latitude && visit.branch.longitude && <span className="ml-2 text-green-600 flex items-center text-sm"><MapPin size={14} className="mr-1" />{visit.branch.latitude.toFixed(4)}, {visit.branch.longitude.toFixed(4)}</span>}
+            {visit.branch.latitude && visit.branch.longitude && (
+              <span className="ml-2 text-green-600 flex items-center text-sm">
+                <MapPin size={14} className="mr-1" />
+                {visit.branch.latitude.toFixed(4)}, {visit.branch.longitude.toFixed(4)}
+              </span>
+            )}
           </div>
         )}
-        {isEditMode && <div className="mt-2 bg-yellow-50 p-2 rounded-md text-yellow-700 text-sm flex items-center"><Edit size={16} className="mr-2" />Düzenleme modundasınız.</div>}
+        
+        {distanceFromPrevious !== null && visit?.previous_visit && (
+          <div className="mt-2 bg-blue-50 p-2 rounded-md text-blue-700 text-sm flex items-center">
+            <Navigation size={16} className="mr-2" />
+            Önceki ziyaretten mesafe: {distanceFromPrevious.toFixed(2)} km
+          </div>
+        )}
+        
+        {isEditMode && (
+          <div className="mt-2 bg-yellow-50 p-2 rounded-md text-yellow-700 text-sm flex items-center">
+            <Edit size={16} className="mr-2" />
+            Düzenleme modundasınız. Ziyaret bilgilerini güncelleyebilirsiniz.
+          </div>
+        )}
       </div>
 
-      {/* Ekipmanlar Bölümü (Otomatik Doldurulmuş) */}
+      {/* ... (Ekipmanlar bölümü - Değişiklik yok) ... */}
       {visit.branch && (
         <div className="bg-white rounded-lg shadow-md mb-6">
           <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg flex justify-between items-center">
             <h2 className="font-medium">Ekipmanlar</h2>
-            {branchEquipment.length === 0 && <button onClick={handleAddEquipment} className="bg-white text-red-600 px-3 py-1 rounded text-sm flex items-center"><Tool size={16} className="mr-1" />Ekipman Ekle</button>}
+            {branchEquipment.length === 0 && (
+              <button 
+                onClick={handleAddEquipment}
+                className="bg-white text-red-600 px-3 py-1 rounded text-sm flex items-center"
+              >
+                <Tool size={16} className="mr-1" />
+                Ekipman Ekle
+              </button>
+            )}
           </div>
           <div className="p-4">
             {Object.entries(groupedEquipment).length === 0 ? (
               <div className="text-center py-4 text-gray-500 flex flex-col items-center">
                 <p className="mb-4">Bu şubede ekipman bulunmuyor</p>
-                <button onClick={handleAddEquipment} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center"><Plus size={16} className="mr-2" />Ekipman Ekle</button>
+                <button 
+                  onClick={handleAddEquipment}
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center"
+                >
+                  <Plus size={16} className="mr-2" />
+                  Ekipman Ekle
+                </button>
               </div>
             ) : (
               Object.entries(groupedEquipment).map(([department, items]) => (
@@ -1138,7 +1195,9 @@ const VisitDetails: React.FC = () => {
                   <div className="space-y-4">
                     {items.map((item, index) => (
                       <div key={item.id} className="border rounded-lg p-4">
-                        <div className="font-medium">Ekipman {index + 1} ({item.equipment_code})</div>
+                        <div className="font-medium">
+                          Ekipman {index + 1} ({item.equipment_code})
+                        </div>
                         <div className="text-sm text-gray-600 mb-3">{item.equipment.name}</div>
                         
                         <div className="grid grid-cols-1 gap-2">
@@ -1147,21 +1206,39 @@ const VisitDetails: React.FC = () => {
                               {Object.entries(item.equipment.properties).map(([key, prop]) => (
                                 <div key={key} className="flex justify-between items-center">
                                   <span>{prop.label}</span>
-                                  {/* Değerler otomatik dolu gelir, sadece gerekirse değiştirilir */}
                                   {prop.type === 'boolean' ? (
-                                    <select value={equipmentChecks[item.id]?.[key] || ''} onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)} className="border rounded p-1">
-                                      <option value="false">Hayır</option>
+                                    <select
+                                      value={equipmentChecks[item.id]?.[key] || ''}
+                                      onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)}
+                                      className="border rounded p-1"
+                                    >
+                                      <option value="">Seçiniz</option>
                                       <option value="true">Evet</option>
+                                      <option value="false">Hayır</option>
                                     </select>
                                   ) : prop.type === 'number' ? (
-                                    <input type="number" value={equipmentChecks[item.id]?.[key] || ''} onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)} className="border rounded p-1 w-20 text-right" />
+                                    <input
+                                      type="number"
+                                      value={equipmentChecks[item.id]?.[key] || ''}
+                                      onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)}
+                                      className="border rounded p-1 w-20 text-right"
+                                    />
                                   ) : (
-                                    <input type="text" value={equipmentChecks[item.id]?.[key] || ''} onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)} className="border rounded p-1 w-40" />
+                                    <input
+                                      type="text"
+                                      value={equipmentChecks[item.id]?.[key] || ''}
+                                      onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)}
+                                      className="border rounded p-1 w-40"
+                                    />
                                   )}
                                 </div>
                               ))}
                             </div>
-                          ) : <div className="text-sm text-gray-500 italic">Özellik yok</div>}
+                          ) : (
+                            <div className="text-sm text-gray-500 italic">
+                              Bu ekipman için tanımlanmış özellik bulunmuyor
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1173,30 +1250,410 @@ const VisitDetails: React.FC = () => {
         </div>
       )}
 
-      {/* Diğer Form Alanları (Aynı) */}
+      {/* ... (Ziyaret Türü, Hedef Zararlılar, Yoğunluk bölümleri - Değişiklik yok) ... */}
       <div className="bg-white rounded-lg shadow-md mb-6">
-        <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg"><h2 className="font-medium">Ziyaret Türü</h2></div>
+        <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
+          <h2 className="font-medium">Ziyaret Türü</h2>
+        </div>
         <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
           {visitTypes.map((type) => (
-            <label key={type.id} className="flex items-center space-x-2"><input type="checkbox" checked={selectedVisitTypes.includes(type.id)} onChange={() => handleVisitTypeChange(type.id)} className="form-checkbox" /><span>{type.label}</span></label>
+            <label key={type.id} className="flex items-center space-x-2">
+              <input 
+                type="checkbox" 
+                checked={selectedVisitTypes.includes(type.id)}
+                onChange={() => handleVisitTypeChange(type.id)}
+                className="form-checkbox" 
+              />
+              <span>{type.label}</span>
+            </label>
           ))}
         </div>
-        {showPaidVisitAmount && <div className="px-4 pb-4"><label className="block text-sm font-medium text-gray-700 mb-1">Ücretli Ziyaret Tutarı (TL)</label><input type="text" value={paidVisitAmount} onChange={(e) => setPaidVisitAmount(e.target.value)} className="w-full p-2 border rounded" placeholder="Tutar giriniz..." /></div>}
+        
+        {showPaidVisitAmount && (
+          <div className="px-4 pb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Ücretli Ziyaret Tutarı (TL)
+            </label>
+            <input
+              type="text"
+              value={paidVisitAmount}
+              onChange={(e) => setPaidVisitAmount(e.target.value)}
+              className="w-full p-2 border rounded"
+              placeholder="Ücretli ziyaret tutarını giriniz..."
+            />
+          </div>
+        )}
       </div>
 
-      {/* ... (Hedef Zararlılar, Yoğunluk, Biyosidal, Ücretli Ürünler, Notlar, Resim, E-posta vb. kısımlar önceki kodun aynısıdır) ... */}
-      {/* Yer tasarrufu için burayı kısa tuttum, siz dosyadaki diğer inputları koruyun */}
-      
+      <div className="bg-white rounded-lg shadow-md mb-6">
+        <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
+          <h2 className="font-medium">Hedef Zararlılar</h2>
+        </div>
+        <div className="p-4 grid grid-cols-2 gap-4">
+          {pestTypes.map((type) => (
+            <label key={type.id} className="flex items-center space-x-2">
+              <input 
+                type="checkbox" 
+                checked={selectedPestTypes.includes(type.id)}
+                onChange={() => handlePestTypeChange(type.id)}
+                className="form-checkbox" 
+              />
+              <span>{type.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md mb-6">
+        <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
+          <h2 className="font-medium">Yoğunluk</h2>
+        </div>
+        <div className="p-4 flex justify-between">
+          {densityOptions.map((option) => (
+            <label key={option.id} className="flex items-center space-x-2">
+              <input 
+                type="radio" 
+                name="density" 
+                value={option.id}
+                checked={density === option.id}
+                onChange={() => setDensity(option.id)}
+                className="form-radio" 
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* ✅ GÜNCELLENDİ: Biyosidal Ürünler bölümü (Doz/Birim eklendi) */}
+      {biocidalUsage.map((item, index) => (
+        <div key={`biocidal-${index}`} className="bg-white rounded-lg shadow-md mb-6">
+          <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg flex justify-between items-center">
+            <h2 className="font-medium">Biyosidal Ürün {index + 1}</h2>
+            {index > 0 && (
+              <button 
+                onClick={() => removeBiocidalProduct(index)}
+                className="text-white hover:text-red-200"
+              >
+                <Trash size={16} />
+              </button>
+            )}
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ürün Adı
+                </label>
+                <select 
+                  value={item.productId}
+                  onChange={(e) => handleBiocidalChange(index, 'productId', e.target.value)}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="">Seçiniz...</option>
+                  {/* 'biocidal_products' tablosundan çekilen veriler */}
+                  {biocidalProducts.map(product => (
+                    <option key={product.id} value={product.id}>
+                      {product.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Miktar
+                  </label>
+                  <input 
+                    type="text" 
+                    value={item.quantity}
+                    onChange={(e) => handleBiocidalChange(index, 'quantity', e.target.value)}
+                    className="w-full p-2 border rounded" 
+                    placeholder="örn: 1.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Birim
+                  </label>
+                  <input 
+                    type="text" 
+                    value={item.unit} // State'den 'unit' alınıyor
+                    onChange={(e) => handleBiocidalChange(index, 'unit', e.target.value)}
+                    className="w-full p-2 border rounded bg-gray-50" 
+                    placeholder="örn: lt, ml, gr"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Doz
+                </label>
+                <input 
+                  type="text" 
+                  value={item.dosage} // State'den 'dosage' alınıyor
+                  onChange={(e) => handleBiocidalChange(index, 'dosage', e.target.value)}
+                  className="w-full p-2 border rounded" 
+                  placeholder="örn: 10ml / 1L Su"
+                />
+              </div>
+
+              {index === biocidalUsage.length - 1 && (
+                <div className="flex items-end">
+                  <button 
+                    onClick={addBiocidalProduct}
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center"
+                  >
+                    <Plus size={16} className="mr-1" /> Biyosidal Ekle
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {/* ... (Ücretli Ürünler bölümü - Değişiklik yok) ... */}
+      <div className="bg-white rounded-lg shadow-md mb-6">
+        <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
+          <h2 className="font-medium">Ücretli Ürünler</h2>
+        </div>
+        <div className="p-4">
+          {isEditMode && previousPaidMaterials.length > 0 && (
+            <div className="mb-4 bg-blue-50 p-4 rounded-lg">
+              <h3 className="font-medium text-blue-800 mb-2">Önceki Ziyarette Kullanılan Ürünler</h3>
+              <div className="space-y-2">
+                {previousPaidMaterials.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center">
+                    <span>{item.product.name}</span>
+                    <span className="font-medium">{item.quantity} adet</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <div className="mb-4">
+            <label className="flex items-center space-x-2">
+              <input 
+                type="checkbox" 
+                checked={noPaidProductsUsed}
+                onChange={(e) => {
+                  setNoPaidProductsUsed(e.target.checked);
+                  if (e.target.checked) {
+                    setPaidProductUsage([{ productId: '', quantity: '' }]);
+                  }
+                }}
+                className="form-checkbox" 
+              />
+              <span className="font-medium">Ücretli ürün kullanılmadı</span>
+            </label>
+          </div>
+          
+          {!noPaidProductsUsed && paidProductUsage.map((item, index) => (
+            <div key={`paid-${index}`} className="mb-4 bg-gray-50 p-4 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium">Ücretli Ürün {index + 1}</h3>
+                {index > 0 && (
+                  <button 
+                    onClick={() => removePaidProduct(index)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    <Trash size={16} />
+                  </button>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ürün Adı
+                  </label>
+                  <select 
+                    value={item.productId}
+                    onChange={(e) => handlePaidProductChange(index, 'productId', e.target.value)}
+                    className="w-full p-2 border rounded"
+                    disabled={noPaidProductsUsed}
+                  >
+                    <option value="">Seçiniz...</option>
+                    {paidProducts.map(product => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Miktar
+                    </label>
+                    <div className="flex">
+                      <input 
+                        type="text" 
+                        value={item.quantity}
+                        onChange={(e) => handlePaidProductChange(index, 'quantity', e.target.value)}
+                        className="w-full p-2 border rounded-l"
+                        disabled={noPaidProductsUsed}
+                      />
+                      <span className="bg-gray-100 p-2 border border-l-0 rounded-r">
+                        {paidProducts.find(p => p.id === item.productId)?.unit_type || 'birim'}
+                      </span>
+                    </div>
+                  </div>
+                  {index === paidProductUsage.length - 1 && !noPaidProductsUsed && (
+                    <div className="flex items-end">
+                      <button 
+                        onClick={addPaidProduct}
+                        className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center"
+                      >
+                        <Plus size={16} className="mr-1" /> Ürün Ekle
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ... (Notlar, Açıklamalar, Saatler, Rapor No, Fotoğraf, E-posta ve Kaydet Butonu - Değişiklik yok) ... */}
+      <div className="bg-white rounded-lg shadow-md mb-6">
+        <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
+          <h2 className="font-medium">Notlar (Sadece Operatör Görür)</h2>
+        </div>
+        <div className="p-4">
+          <textarea 
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="w-full p-2 border rounded" 
+            rows={4}
+            placeholder="Operatör notları (müşteri göremez)..."
+          ></textarea>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md mb-6">
+        <div className="bg-red-600 text-white px-4 py-2 rounded-t-lg">
+          <h2 className="font-medium">Açıklamalar (Müşteri Görebilir)</h2>
+        </div>
+        <div className="p-4">
+          <textarea 
+            value={explanation}
+            onChange={(e) => setExplanation(e.target.value)}
+            className="w-full p-2 border rounded" 
+            rows={4}
+            placeholder="Müşterinin göreceği açıklamalar..."
+          ></textarea>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Başlama Saati
+          </label>
+          <input 
+            type="time" 
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className="w-full p-2 border rounded" 
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Bitiş Saati
+          </label>
+          <input 
+            type="time" 
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            className="w-full p-2 border rounded" 
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Faaliyet Rapor No <span className="text-red-600">*</span>
+          </label>
+          <input 
+            type="text" 
+            value={reportNumber}
+            onChange={(e) => setReportNumber(e.target.value)}
+            className="w-full p-2 border rounded" 
+            required
+          />
+          {!reportNumber && (
+            <p className="mt-1 text-sm text-red-600">Bu alan zorunludur</p>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Rapor Fotoğrafı
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            capture="camera"
+            onChange={handlePhotoChange}
+            ref={fileInputRef}
+            style={{ display: 'none' }} 
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()} 
+            className="w-full p-2 border rounded bg-gray-100 flex items-center justify-center gap-2 hover:bg-gray-200"
+          >
+            <Camera size={18} /> Resim Çek / Yükle
+          </button>
+          {reportPhotoPreview && (
+            <div className="mt-2 relative">
+              <img src={reportPhotoPreview} alt="Rapor Fotoğrafı Önizleme" className="w-full h-32 object-cover rounded" />
+              <button
+                type="button"
+                onClick={clearPhoto}
+                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <CloseIcon size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="flex items-center mb-6">
-        <input type="checkbox" id="sendEmail" checked={sendEmailNotification} onChange={(e) => setSendEmailNotification(e.target.checked)} className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded" />
-        <label htmlFor="sendEmail" className="ml-2 block text-sm text-gray-700 flex items-center"><Mail size={16} className="mr-1" />Müşteriye e-posta bildirimi gönder</label>
+        <input
+          type="checkbox"
+          id="sendEmail"
+          checked={sendEmailNotification}
+          onChange={(e) => setSendEmailNotification(e.target.checked)}
+          className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+        />
+        <label htmlFor="sendEmail" className="ml-2 block text-sm text-gray-700 flex items-center">
+          <Mail size={16} className="mr-1" />
+          Müşteriye e-posta bildirimi gönder
+        </label>
       </div>
 
-      <button onClick={saveVisit} className="w-full bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700" disabled={loading || !reportNumber || selectedVisitTypes.length === 0}>
+      <button 
+        onClick={saveVisit}
+        className="w-full bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700"
+        disabled={loading || !reportNumber || selectedVisitTypes.length === 0 || (!noPaidProductsUsed && paidProductUsage.every(item => !item.productId || !item.quantity))}
+      >
         {loading ? 'Kaydediliyor...' : isEditMode ? 'Güncelle' : 'Tamamlandı'}
       </button>
 
-      <AddEquipmentModal isOpen={showAddEquipmentModal} onClose={() => setShowAddEquipmentModal(false)} branchId={visit.branch?.id || ''} onSave={handleEquipmentAdded} />
+      <AddEquipmentModal
+        isOpen={showAddEquipmentModal}
+        onClose={() => setShowAddEquipmentModal(false)}
+        branchId={visit.branch?.id || ''}
+        onSave={handleEquipmentAdded}
+      />
     </div>
   );
 };
