@@ -6,7 +6,7 @@ import {
   Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, 
   User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, 
   CheckSquare, DollarSign, TrendingUp, Users, MessageSquare, Info, 
-  CheckCircle, AlertCircle, Camera, Bug, Activity, Megaphone, Package, ImageOff
+  CheckCircle, AlertCircle, Camera, Bug, Activity, Megaphone, Package, Image as ImageIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,7 +23,7 @@ interface Visit {
   visit_type: string | string[];
   is_checked: boolean;
   
-  // Detay alanları
+  // Detay alanları (Veritabanında bu sütunlar olmalı)
   rapor_no?: string;
   aciklama?: string; 
   musteri_aciklamasi?: string;
@@ -162,7 +162,7 @@ const getVisitTypeLabel = (type: string | string[] | undefined): string => {
   return types[typeId] || typeId.charAt(0).toUpperCase() + typeId.slice(1);
 };
 
-// --- VISIT DETAIL MODAL ---
+// --- GÜNCELLENMİŞ ZİYARET DETAY PENCERESİ ---
 const VisitDetailModal: React.FC<{ 
   visit: Visit | null; 
   onClose: () => void; 
@@ -170,11 +170,12 @@ const VisitDetailModal: React.FC<{
   monthlyMaterialUsageSummary: Map<string, CustomerMaterialSummary> 
 }> = ({ visit, onClose, paidMaterialDetailsMap, monthlyMaterialUsageSummary }) => {
   
-  const [imageError, setImageError] = useState(false);
+  // Resim yükleme hatası kontrolü
+  const [imgError, setImgError] = useState(false);
 
-  // Modal her açıldığında/kapandığında veya visit değiştiğinde error state'ini sıfırla
+  // Visit değiştiğinde hata state'ini sıfırla
   useEffect(() => {
-    setImageError(false);
+    setImgError(false);
   }, [visit]);
 
   if (!visit) return null;
@@ -182,7 +183,6 @@ const VisitDetailModal: React.FC<{
   const materialsForThisVisit = paidMaterialDetailsMap.get(visit.id) || [];
   const hasPaidMaterialUsage = materialsForThisVisit.length > 0;
   
-  // Aylık özet için müşteri/şube bilgilerini al
   const customerSummary = visit.customer_id ? monthlyMaterialUsageSummary.get(visit.customer_id) : undefined;
   const branchMonthlySummary = (customerSummary && visit.branch_id) ? customerSummary.branches_summary.get(visit.branch_id) : undefined;
 
@@ -279,7 +279,7 @@ const VisitDetailModal: React.FC<{
 
           <div className="h-px bg-gray-100" />
 
-          {/* 2. Malzeme Kullanımı (Ziyaret Bazlı) - YUKARI TAŞINDI */}
+          {/* 2. ZİYARETTE KULLANILAN MALZEMELER (İSTEĞİN ÜZERİNE YUKARIDA) */}
           {hasPaidMaterialUsage && (
             <div className="space-y-3">
               <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
@@ -312,7 +312,7 @@ const VisitDetailModal: React.FC<{
             </div>
           )}
 
-          {/* 3. Aylık Şube Özeti - YUKARI TAŞINDI */}
+          {/* 3. AYLIK ŞUBE GENEL ÖZETİ (İSTEĞİN ÜZERİNE YUKARIDA) */}
           {branchMonthlySummary && (
             <div className="p-4 border border-dashed border-gray-300 rounded-xl bg-gray-50/50">
               <strong className="block text-sm text-gray-700 mb-2">
@@ -336,16 +336,19 @@ const VisitDetailModal: React.FC<{
             </div>
           )}
 
-          {/* 4. Teknik Veriler - AŞAĞI TAŞINDI */}
+          {/* 4. TEKNİK VERİLER (İSTEĞİN ÜZERİNE AŞAĞIYA ALINDI) */}
           <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
             <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
                <Activity className="w-4 h-4 text-indigo-500"/> Teknik Veriler
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+               {/* Yoğunluk */}
                <div>
                   <p className="text-xs text-gray-500 mb-2 font-medium">Popülasyon Yoğunluğu</p>
                   <DensityIndicator density={visit.yogunluk} />
                </div>
+
+               {/* Zararlılar */}
                <div>
                   <p className="text-xs text-gray-500 mb-2 font-medium">Hedef Zararlılar</p>
                   {visit.pest_types && visit.pest_types.length > 0 ? (
@@ -363,20 +366,57 @@ const VisitDetailModal: React.FC<{
             </div>
           </div>
 
-          {/* 5. Açıklamalar */}
+          {/* 5. RAPOR FOTOĞRAFI (Görünürlük garantilendi) */}
+          {visit.image_url && visit.image_url.trim() !== '' && (
+             <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
+                  <Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı
+                </h4>
+                
+                <div className="relative w-full flex justify-center bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
+                   {!imgError ? (
+                     <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in w-full text-center">
+                        <img 
+                          src={visit.image_url} 
+                          alt="Rapor Görseli" 
+                          className="max-h-80 object-contain mx-auto transition-transform duration-300"
+                          onError={() => setImgError(true)}
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                           <span className="opacity-0 group-hover:opacity-100 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full shadow-lg">Büyütmek için tıkla</span>
+                        </div>
+                     </a>
+                   ) : (
+                     <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                        <ImageIcon className="w-10 h-10 mb-2 opacity-40" />
+                        <span className="text-xs">Fotoğraf yüklenemedi veya bağlantı kırık.</span>
+                        <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="mt-2 text-xs text-blue-500 hover:underline">Bağlantıyı açmayı dene</a>
+                     </div>
+                   )}
+                </div>
+             </div>
+          )}
+
+          {/* 6. Açıklamalar */}
           <div className="grid gap-4">
              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2"><MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)</h4>
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                  <MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)
+                </h4>
                 <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 shadow-sm leading-relaxed whitespace-pre-wrap">
                   {visit.aciklama ? visit.aciklama : <span className="text-gray-400 italic">Operatör not girmemiş.</span>}
                 </div>
              </div>
+
              <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2"><Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu</h4>
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2">
+                  <Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu
+                </h4>
                 <div className="text-sm text-gray-800 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
                   {visit.musteri_aciklamasi ? visit.musteri_aciklamasi : <span className="text-gray-400 italic">Müşteri için özel bir not girilmemiş.</span>}
                 </div>
              </div>
+
              {visit.yonetici_notu && (
                 <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
                    <h4 className="flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2"><Info className="w-4 h-4" /> Yönetici Notu</h4>
@@ -384,35 +424,6 @@ const VisitDetailModal: React.FC<{
                 </div>
              )}
           </div>
-
-          {/* 6. Rapor Fotoğrafı */}
-          {visit.image_url && (
-             <div>
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3"><Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı</h4>
-                <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex justify-center p-4">
-                   <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
-                      {!imageError ? (
-                        <img 
-                          src={visit.image_url} 
-                          alt="Ziyaret Raporu" 
-                          className="max-h-72 object-contain mx-auto rounded-lg shadow-sm" 
-                          onError={() => setImageError(true)} 
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-                          <ImageOff className="w-12 h-12 mb-2 opacity-50" />
-                          <span className="text-sm">Görsel yüklenemedi</span>
-                        </div>
-                      )}
-                      {!imageError && (
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center rounded-lg">
-                           <span className="opacity-0 group-hover:opacity-100 bg-black/70 text-white text-xs px-2 py-1 rounded">Resmi Büyüt</span>
-                        </div>
-                      )}
-                   </a>
-                </div>
-             </div>
-          )}
 
           {/* 7. Konum */}
           <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
@@ -558,6 +569,7 @@ const AdminCalendar: React.FC = () => {
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
 
+    // --- QUERY GÜNCELLENDİ: Artık visits tablosundan doğrudan çekiyoruz ---
     let visitsQuery = supabase
       .from('visits')
       .select(`
