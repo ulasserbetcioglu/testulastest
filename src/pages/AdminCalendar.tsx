@@ -6,7 +6,7 @@ import {
   Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, 
   User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, 
   CheckSquare, DollarSign, TrendingUp, Users, MessageSquare, Info, 
-  CheckCircle, AlertCircle, Camera, Bug, Activity, Megaphone, Package 
+  CheckCircle, AlertCircle, Camera, Bug, Activity, Megaphone, Package, ImageOff
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -170,6 +170,13 @@ const VisitDetailModal: React.FC<{
   monthlyMaterialUsageSummary: Map<string, CustomerMaterialSummary> 
 }> = ({ visit, onClose, paidMaterialDetailsMap, monthlyMaterialUsageSummary }) => {
   
+  const [imageError, setImageError] = useState(false);
+
+  // Modal her açıldığında/kapandığında veya visit değiştiğinde error state'ini sıfırla
+  useEffect(() => {
+    setImageError(false);
+  }, [visit]);
+
   if (!visit) return null;
 
   const materialsForThisVisit = paidMaterialDetailsMap.get(visit.id) || [];
@@ -272,89 +279,7 @@ const VisitDetailModal: React.FC<{
 
           <div className="h-px bg-gray-100" />
 
-          {/* 2. Teknik Veriler */}
-          <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
-            <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
-               <Activity className="w-4 h-4 text-indigo-500"/> Teknik Veriler
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-               <div>
-                  <p className="text-xs text-gray-500 mb-2 font-medium">Popülasyon Yoğunluğu</p>
-                  <DensityIndicator density={visit.yogunluk} />
-               </div>
-               <div>
-                  <p className="text-xs text-gray-500 mb-2 font-medium">Hedef Zararlılar</p>
-                  {visit.pest_types && visit.pest_types.length > 0 ? (
-                     <div className="flex flex-wrap gap-2">
-                        {visit.pest_types.map((pest, idx) => (
-                           <span key={idx} className="px-2.5 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-100 flex items-center gap-1">
-                              <Bug className="w-3 h-3"/> {pest}
-                           </span>
-                        ))}
-                     </div>
-                  ) : (
-                     <span className="text-sm text-gray-400 italic">Belirtilmedi</span>
-                  )}
-               </div>
-            </div>
-          </div>
-
-          {/* 3. Açıklamalar */}
-          <div className="grid gap-4">
-             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2"><MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)</h4>
-                <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 shadow-sm leading-relaxed whitespace-pre-wrap">
-                  {visit.aciklama ? visit.aciklama : <span className="text-gray-400 italic">Operatör not girmemiş.</span>}
-                </div>
-             </div>
-             <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2"><Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu</h4>
-                <div className="text-sm text-gray-800 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
-                  {visit.musteri_aciklamasi ? visit.musteri_aciklamasi : <span className="text-gray-400 italic">Müşteri için özel bir not girilmemiş.</span>}
-                </div>
-             </div>
-             {visit.yonetici_notu && (
-                <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
-                   <h4 className="flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2"><Info className="w-4 h-4" /> Yönetici Notu</h4>
-                  <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-yellow-100 shadow-sm leading-relaxed whitespace-pre-wrap italic">{visit.yonetici_notu}</div>
-                </div>
-             )}
-          </div>
-
-          {/* 4. Rapor Fotoğrafı */}
-          {visit.image_url && (
-             <div>
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3"><Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı</h4>
-                <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex justify-center p-4">
-                   <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
-                      <img src={visit.image_url} alt="Ziyaret Raporu" className="max-h-72 object-contain mx-auto rounded-lg shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center rounded-lg">
-                         <span className="opacity-0 group-hover:opacity-100 bg-black/70 text-white text-xs px-2 py-1 rounded">Resmi Büyüt</span>
-                      </div>
-                   </a>
-                </div>
-             </div>
-          )}
-
-          {/* 5. Konum */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-             {visit.branch?.latitude ? (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin className="w-4 h-4 text-red-500" />
-                  <a href={`https://www.google.com/maps/search/?api=1&query=${visit.branch.latitude},${visit.branch.longitude}`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-blue-600 cursor-pointer font-medium">
-                    Konum: {visit.branch.latitude.toFixed(4)}, {visit.branch.longitude.toFixed(4)}
-                  </a>
-                </div>
-             ) : (
-               <span className="flex items-center gap-2 text-sm text-gray-400"><MapPin className="w-4 h-4"/> Konum yok</span>
-             )}
-             <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-500">Kontrol:</span>
-                {visit.is_checked ? <span className="flex items-center gap-1 text-green-600 font-medium"><CheckCircle className="w-4 h-4"/> Evet</span> : <span className="flex items-center gap-1 text-gray-400"><AlertCircle className="w-4 h-4"/> Hayır</span>}
-             </div>
-          </div>
-
-          {/* 6. Malzeme Kullanımı (Ziyaret Bazlı) */}
+          {/* 2. Malzeme Kullanımı (Ziyaret Bazlı) - YUKARI TAŞINDI */}
           {hasPaidMaterialUsage && (
             <div className="space-y-3">
               <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
@@ -387,7 +312,127 @@ const VisitDetailModal: React.FC<{
             </div>
           )}
 
-          {/* 7. Finansal Özet */}
+          {/* 3. Aylık Şube Özeti - YUKARI TAŞINDI */}
+          {branchMonthlySummary && (
+            <div className="p-4 border border-dashed border-gray-300 rounded-xl bg-gray-50/50">
+              <strong className="block text-sm text-gray-700 mb-2">
+                {format(new Date(visit.visit_date), 'MMMM yyyy', { locale: tr })} Ayı Şube Genel Özeti ({branchMonthlySummary.branch_name})
+              </strong>
+              <div className="text-xs space-y-1 text-gray-600">
+                 <p>Bu Ay Toplam Satış: <span className="font-semibold text-gray-800">{branchMonthlySummary.total_sales_amount.toFixed(2)} TL</span> <span className="text-gray-400 italic">(Sadece tamamlanan ziyaretler)</span></p>
+                 <p>Malzeme Satışlı Ziyaret: <span className="font-semibold">{branchMonthlySummary.total_visits_with_sales}</span></p>
+                 
+                 {Object.keys(branchMonthlySummary.materials_breakdown).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="font-semibold mb-1">Bu Ay Kullanılan Toplam Malzemeler:</p>
+                        <ul className="list-disc list-inside ml-2">
+                            {Object.entries(branchMonthlySummary.materials_breakdown).map(([name, details]) => (
+                                <li key={name}>{name}: <strong>{details.total_quantity} {details.unit_type}</strong> ({details.total_item_amount.toFixed(2)} ₺)</li>
+                            ))}
+                        </ul>
+                    </div>
+                 )}
+              </div>
+            </div>
+          )}
+
+          {/* 4. Teknik Veriler - AŞAĞI TAŞINDI */}
+          <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+            <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+               <Activity className="w-4 h-4 text-indigo-500"/> Teknik Veriler
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+               <div>
+                  <p className="text-xs text-gray-500 mb-2 font-medium">Popülasyon Yoğunluğu</p>
+                  <DensityIndicator density={visit.yogunluk} />
+               </div>
+               <div>
+                  <p className="text-xs text-gray-500 mb-2 font-medium">Hedef Zararlılar</p>
+                  {visit.pest_types && visit.pest_types.length > 0 ? (
+                     <div className="flex flex-wrap gap-2">
+                        {visit.pest_types.map((pest, idx) => (
+                           <span key={idx} className="px-2.5 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-100 flex items-center gap-1">
+                              <Bug className="w-3 h-3"/> {pest}
+                           </span>
+                        ))}
+                     </div>
+                  ) : (
+                     <span className="text-sm text-gray-400 italic">Belirtilmedi</span>
+                  )}
+               </div>
+            </div>
+          </div>
+
+          {/* 5. Açıklamalar */}
+          <div className="grid gap-4">
+             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2"><MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)</h4>
+                <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 shadow-sm leading-relaxed whitespace-pre-wrap">
+                  {visit.aciklama ? visit.aciklama : <span className="text-gray-400 italic">Operatör not girmemiş.</span>}
+                </div>
+             </div>
+             <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2"><Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu</h4>
+                <div className="text-sm text-gray-800 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
+                  {visit.musteri_aciklamasi ? visit.musteri_aciklamasi : <span className="text-gray-400 italic">Müşteri için özel bir not girilmemiş.</span>}
+                </div>
+             </div>
+             {visit.yonetici_notu && (
+                <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
+                   <h4 className="flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2"><Info className="w-4 h-4" /> Yönetici Notu</h4>
+                  <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-yellow-100 shadow-sm leading-relaxed whitespace-pre-wrap italic">{visit.yonetici_notu}</div>
+                </div>
+             )}
+          </div>
+
+          {/* 6. Rapor Fotoğrafı */}
+          {visit.image_url && (
+             <div>
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3"><Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı</h4>
+                <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex justify-center p-4">
+                   <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
+                      {!imageError ? (
+                        <img 
+                          src={visit.image_url} 
+                          alt="Ziyaret Raporu" 
+                          className="max-h-72 object-contain mx-auto rounded-lg shadow-sm" 
+                          onError={() => setImageError(true)} 
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                          <ImageOff className="w-12 h-12 mb-2 opacity-50" />
+                          <span className="text-sm">Görsel yüklenemedi</span>
+                        </div>
+                      )}
+                      {!imageError && (
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center rounded-lg">
+                           <span className="opacity-0 group-hover:opacity-100 bg-black/70 text-white text-xs px-2 py-1 rounded">Resmi Büyüt</span>
+                        </div>
+                      )}
+                   </a>
+                </div>
+             </div>
+          )}
+
+          {/* 7. Konum */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+             {visit.branch?.latitude ? (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <MapPin className="w-4 h-4 text-red-500" />
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${visit.branch.latitude},${visit.branch.longitude}`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-blue-600 cursor-pointer font-medium">
+                    Konum: {visit.branch.latitude.toFixed(4)}, {visit.branch.longitude.toFixed(4)}
+                  </a>
+                </div>
+             ) : (
+               <span className="flex items-center gap-2 text-sm text-gray-400"><MapPin className="w-4 h-4"/> Konum yok</span>
+             )}
+             <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-500">Kontrol:</span>
+                {visit.is_checked ? <span className="flex items-center gap-1 text-green-600 font-medium"><CheckCircle className="w-4 h-4"/> Evet</span> : <span className="flex items-center gap-1 text-gray-400"><AlertCircle className="w-4 h-4"/> Hayır</span>}
+             </div>
+          </div>
+
+          {/* 8. Finansal Özet */}
           {(visit.total_visit_revenue !== undefined || (visit.material_sales_revenue && visit.material_sales_revenue > 0)) && (
              <div className="bg-gray-800 text-white rounded-xl p-4 shadow-lg">
                 <h4 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-3 border-b border-gray-600 pb-2">Finansal Özet</h4>
@@ -410,30 +455,6 @@ const VisitDetailModal: React.FC<{
                   </div>
                 </div>
              </div>
-          )}
-
-          {/* 8. Aylık Şube Özeti */}
-          {branchMonthlySummary && (
-            <div className="mt-4 p-4 border border-dashed border-gray-300 rounded-xl bg-gray-50/50">
-              <strong className="block text-sm text-gray-700 mb-2">
-                {format(new Date(visit.visit_date), 'MMMM yyyy', { locale: tr })} Ayı Şube Genel Özeti ({branchMonthlySummary.branch_name})
-              </strong>
-              <div className="text-xs space-y-1 text-gray-600">
-                 <p>Bu Ay Toplam Satış: <span className="font-semibold text-gray-800">{branchMonthlySummary.total_sales_amount.toFixed(2)} TL</span> <span className="text-gray-400 italic">(Sadece tamamlanan ziyaretler)</span></p>
-                 <p>Malzeme Satışlı Ziyaret: <span className="font-semibold">{branchMonthlySummary.total_visits_with_sales}</span></p>
-                 
-                 {Object.keys(branchMonthlySummary.materials_breakdown).length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-200">
-                        <p className="font-semibold mb-1">Bu Ay Kullanılan Toplam Malzemeler:</p>
-                        <ul className="list-disc list-inside ml-2">
-                            {Object.entries(branchMonthlySummary.materials_breakdown).map(([name, details]) => (
-                                <li key={name}>{name}: <strong>{details.total_quantity} {details.unit_type}</strong> ({details.total_item_amount.toFixed(2)} ₺)</li>
-                            ))}
-                        </ul>
-                    </div>
-                 )}
-              </div>
-            </div>
           )}
 
         </div>
@@ -625,8 +646,6 @@ const AdminCalendar: React.FC = () => {
     (visitsData || []).forEach(visit => {
       let materialSalesRevenue = 0;
       
-      // *** KRİTİK DÜZELTME: Aylık Toplama SADECE TAMAMLANANLAR dahil edilir ***
-      // Ama Ziyaret Detayında (visitMaterialsMap) o ziyarete ait ne varsa gözükmelidir.
       const isCompleted = visit.status === 'completed';
 
       (visit.paid_material_sales || []).forEach(sale => {
@@ -682,7 +701,7 @@ const AdminCalendar: React.FC = () => {
             // 3. Aylık Kırılım (Sadece Tamamlananlar)
             if (isCompleted) {
                 const itemTotalAmount = item.quantity * (item.unit_price || 0);
-                const customerSummary = monthlySummaryMap.get(sale.customer_id)!; // isCompleted ise yukarıda oluştu
+                const customerSummary = monthlySummaryMap.get(sale.customer_id)!;
 
                 if (!customerSummary.materials_breakdown[product.name]) {
                   customerSummary.materials_breakdown[product.name] = { total_quantity: 0, unit_type: product.unit_type, total_item_amount: 0 };
@@ -762,7 +781,6 @@ const AdminCalendar: React.FC = () => {
         customerSummary.branches_summary.forEach(branchSummary => {
             const branchVisitsWithSales = new Set<string>();
             (visitsData || []).forEach(v => {
-                // Sadece tamamlanan ziyaretleri say
                 if (v.branch_id === branchSummary.branch_id && v.status === 'completed' && (v.paid_material_sales || []).length > 0) {
                     branchVisitsWithSales.add(v.id);
                     visitsWithSales.add(v.id);
