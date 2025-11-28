@@ -6,14 +6,13 @@ import {
   Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, 
   User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, 
   CheckSquare, DollarSign, TrendingUp, Users, MessageSquare, Info, 
-  CheckCircle, AlertCircle, Camera, Bug, Hash 
+  CheckCircle, AlertCircle, Camera, Bug, Activity, FileJson, Megaphone 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface Visit {
   id: string;
-  rapor_no?: string; // YENİ: Rapor Numarası
   customer_id: string;
   branch_id: string | null;
   customer: { kisa_isim: string } | null;
@@ -22,14 +21,22 @@ interface Visit {
   visit_date: string;
   status: 'planned' | 'completed' | 'cancelled';
   visit_type: string | string[];
-  pest_types?: string[]; // YENİ: Zararlı Türleri (Örn: ['Hamam Böceği', 'Fare'])
-  image_url?: string; // YENİ: Rapor Fotoğrafı URL'i
   is_checked: boolean;
-  aciklama?: string; 
-  yonetici_notu?: string; 
   total_visit_revenue?: number;
   material_sales_revenue?: number;
   service_per_visit_revenue?: number;
+
+  // --- YENİ: Detay Tablosundan Gelecek Veriler ---
+  visit_details?: Array<{
+    rapor_no?: string;
+    aciklama?: string; // Operatörün yazdığı teknik/iç açıklama
+    musteri_aciklamasi?: string; // Müşterinin göreceği açıklama
+    yogunluk?: 'dusuk' | 'orta' | 'yuksek' | string;
+    pest_types?: string[];
+    image_url?: string;
+    yonetici_notu?: string;
+  }>;
+
   paid_material_sales?: Array<{
     id: string;
     total_amount: number;
@@ -154,7 +161,7 @@ const getVisitTypeLabel = (type: string | string[] | undefined): string => {
   return types[typeId] || typeId.charAt(0).toUpperCase() + typeId.slice(1);
 };
 
-// --- YENİLENMİŞ & GELİŞMİŞ ZİYARET DETAY PENCERESİ ---
+// --- GÜNCELLENMİŞ ZİYARET DETAY MODALI ---
 const VisitDetailModal: React.FC<{ 
   visit: Visit | null; 
   onClose: () => void; 
@@ -168,6 +175,34 @@ const VisitDetailModal: React.FC<{
   const hasPaidMaterialUsage = materialsForThisVisit.length > 0;
   const customerSummary = visit.customer_id ? monthlyMaterialUsageSummary.get(visit.customer_id) : undefined;
   const branchMonthlySummary = (customerSummary && visit.branch_id) ? customerSummary.branches_summary.get(visit.branch_id) : undefined;
+
+  // Detay tablosundan gelen veriyi al (Genelde 1-1 ilişki olduğu için ilk eleman)
+  const detail = visit.visit_details && visit.visit_details.length > 0 ? visit.visit_details[0] : null;
+
+  // Yoğunluk Göstergesi Yardımcısı
+  const DensityIndicator = ({ density }: { density: string }) => {
+    let color = 'bg-gray-200';
+    let text = 'Belirtilmedi';
+    let width = '0%';
+
+    const d = density?.toLowerCase() || '';
+    if (d.includes('yüksek') || d === 'high' || d === 'yuksek') {
+      color = 'bg-red-500'; text = 'Yüksek'; width = '100%';
+    } else if (d.includes('orta') || d === 'medium') {
+      color = 'bg-yellow-500'; text = 'Orta'; width = '60%';
+    } else if (d.includes('düşük') || d === 'low' || d === 'dusuk') {
+      color = 'bg-green-500'; text = 'Düşük'; width = '30%';
+    }
+
+    return (
+      <div className="flex items-center gap-2 w-full max-w-xs">
+        <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+          <div className={`h-full ${color} transition-all duration-500`} style={{ width }}></div>
+        </div>
+        <span className="text-xs font-medium text-gray-600 min-w-[3rem]">{text}</span>
+      </div>
+    );
+  };
 
   // Bilgi satırı yardımcısı
   const InfoRow = ({ icon: Icon, label, value, isLink = false, linkHref = "" }: any) => (
@@ -205,13 +240,13 @@ const VisitDetailModal: React.FC<{
           <div>
             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
               Ziyaret Detayı
-              {visit.rapor_no && (
-                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-mono">
-                  Rapor No: {visit.rapor_no}
+              {detail?.rapor_no && (
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-mono border border-blue-200">
+                  #{detail.rapor_no}
                 </span>
               )}
             </h3>
-            <p className="text-xs text-gray-500 mt-1">Sistem ID: #{visit.id.substring(0, 8)}</p>
+            <p className="text-xs text-gray-500 mt-1">Sistem ID: {visit.id.substring(0, 8)}...</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors">
             <X size={20} />
@@ -252,63 +287,87 @@ const VisitDetailModal: React.FC<{
 
           <div className="h-px bg-gray-100" />
 
-          {/* 2. Zararlı Türleri (NEW) */}
-          {visit.pest_types && visit.pest_types.length > 0 && (
+          {/* 2. Zararlı Türleri & Yoğunluk (YENİ) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             {/* Zararlılar */}
+             {detail?.pest_types && detail.pest_types.length > 0 ? (
+                <div>
+                   <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
+                      <Bug className="w-4 h-4 text-red-500" /> Hedef Zararlılar
+                   </h4>
+                   <div className="flex flex-wrap gap-2">
+                      {detail.pest_types.map((pest, idx) => (
+                         <span key={idx} className="px-2.5 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-100">
+                            {pest}
+                         </span>
+                      ))}
+                   </div>
+                </div>
+             ) : (
+                <div className="text-sm text-gray-400 flex items-center gap-2"><Bug className="w-4 h-4"/> Zararlı belirtilmedi</div>
+             )}
+
+             {/* Yoğunluk */}
              <div>
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
-                   <Bug className="w-4 h-4 text-red-500" /> Hedef Zararlılar
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
+                   <Activity className="w-4 h-4 text-blue-500" /> Popülasyon Yoğunluğu
                 </h4>
-                <div className="flex flex-wrap gap-2">
-                   {visit.pest_types.map((pest, idx) => (
-                      <span key={idx} className="px-3 py-1 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-100">
-                         {pest}
-                      </span>
-                   ))}
+                <DensityIndicator density={detail?.yogunluk || ''} />
+             </div>
+          </div>
+
+          {/* 3. Açıklamalar (ÖNEMLİ BÖLÜM - 3 Farklı Alan) */}
+          <div className="grid gap-4">
+             
+             {/* Operatörün Teknik Açıklaması */}
+             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                  <MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)
+                </h4>
+                <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 shadow-sm leading-relaxed whitespace-pre-wrap">
+                  {detail?.aciklama ? detail.aciklama : <span className="text-gray-400 italic">Operatör not girmemiş.</span>}
                 </div>
              </div>
-          )}
 
-          {/* 3. Açıklamalar */}
-          <div className="grid gap-4">
-             {/* Operatör Açıklaması */}
-             <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+             {/* Müşteri Açıklaması (Raporda giden) */}
+             <div className="bg-blue-50/70 rounded-xl p-4 border border-blue-200">
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2">
-                  <MessageSquare className="w-4 h-4" /> Operatör Açıklaması
+                  <Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu
                 </h4>
-                <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
-                  {visit.aciklama ? visit.aciklama : <span className="text-gray-400 italic">Açıklama girilmemiş.</span>}
+                <div className="text-sm text-gray-800 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
+                  {detail?.musteri_aciklamasi ? detail.musteri_aciklamasi : <span className="text-gray-400 italic">Müşteri için özel bir not girilmemiş.</span>}
                 </div>
              </div>
 
              {/* Yönetici Notu */}
-             {visit.yonetici_notu && (
+             {detail?.yonetici_notu && (
                 <div className="bg-yellow-50/50 rounded-xl p-4 border border-yellow-100">
                    <h4 className="flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2">
                     <Info className="w-4 h-4" /> Yönetici Notu
                   </h4>
                   <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-yellow-100 shadow-sm leading-relaxed whitespace-pre-wrap italic">
-                    {visit.yonetici_notu}
+                    {detail.yonetici_notu}
                   </div>
                 </div>
              )}
           </div>
 
-          {/* 4. Rapor Fotoğrafı (NEW) */}
-          {visit.image_url && (
+          {/* 4. Rapor Fotoğrafı */}
+          {detail?.image_url && (
              <div>
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
                    <Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı
                 </h4>
-                <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex justify-center">
-                   <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
+                <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-100 flex justify-center p-2">
+                   <a href={detail.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
                       <img 
-                        src={visit.image_url} 
+                        src={detail.image_url} 
                         alt="Ziyaret Raporu" 
-                        className="max-h-64 object-contain mx-auto"
+                        className="max-h-64 object-contain mx-auto rounded-lg shadow-sm"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                         <span className="opacity-0 group-hover:opacity-100 bg-black/70 text-white text-xs px-2 py-1 rounded">Büyüt</span>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center rounded-lg">
+                         <span className="opacity-0 group-hover:opacity-100 bg-black/70 text-white text-xs px-2 py-1 rounded">Resmi Büyüt</span>
                       </div>
                    </a>
                 </div>
@@ -514,13 +573,25 @@ const AdminCalendar: React.FC = () => {
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
 
-    // DÜZELTME: rapor_no, pest_types, image_url alanları eklendi
+    // --- QUERY GÜNCELLEMESİ ---
+    // 'visit_details' tablosundan detayları çekiyoruz.
+    // Eğer tablo adın farklıysa (örneğin 'reports') buradaki 'visit_details' ismini değiştir.
     let visitsQuery = supabase
       .from('visits')
       .select(`
         id, visit_date, status, is_checked, visit_type, 
-        aciklama, yonetici_notu, rapor_no, pest_types, image_url,
         customer_id, branch_id, operator_id,
+        
+        visit_details:visit_details (
+           rapor_no,
+           aciklama,
+           musteri_aciklamasi,
+           yogunluk,
+           pest_types,
+           image_url,
+           yonetici_notu
+        ),
+
         customer:customer_id(kisa_isim),
         branch:branch_id(sube_adi, latitude, longitude),
         operator:operator_id(id, name),
