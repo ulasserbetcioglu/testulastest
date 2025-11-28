@@ -6,7 +6,7 @@ import {
   Download, FileImage, FileText, ChevronLeft, ChevronRight, X, Loader2, 
   User, Building, Calendar as CalendarIcon, Tag, MapPin, ClipboardX, 
   CheckSquare, DollarSign, TrendingUp, Users, MessageSquare, Info, 
-  CheckCircle, AlertCircle, Camera, Bug, Activity, FileJson, Megaphone 
+  CheckCircle, AlertCircle, Camera, Bug, Activity, Megaphone 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,21 +22,20 @@ interface Visit {
   status: 'planned' | 'completed' | 'cancelled';
   visit_type: string | string[];
   is_checked: boolean;
+  
+  // --- DÜZELTME: Bu alanlar artık direkt visits tablosunda ---
+  rapor_no?: string;
+  aciklama?: string; // Operatör notu
+  musteri_aciklamasi?: string; // Müşteri notu
+  yonetici_notu?: string; // Yönetici notu
+  yogunluk?: string; // 'dusuk', 'orta', 'yuksek'
+  pest_types?: string[]; // Zararlı türleri
+  image_url?: string; // Rapor resmi
+
   total_visit_revenue?: number;
   material_sales_revenue?: number;
   service_per_visit_revenue?: number;
-
-  // --- YENİ: Detay Tablosundan Gelecek Veriler ---
-  visit_details?: Array<{
-    rapor_no?: string;
-    aciklama?: string; // Operatörün yazdığı teknik/iç açıklama
-    musteri_aciklamasi?: string; // Müşterinin göreceği açıklama
-    yogunluk?: 'dusuk' | 'orta' | 'yuksek' | string;
-    pest_types?: string[];
-    image_url?: string;
-    yonetici_notu?: string;
-  }>;
-
+  
   paid_material_sales?: Array<{
     id: string;
     total_amount: number;
@@ -161,7 +160,7 @@ const getVisitTypeLabel = (type: string | string[] | undefined): string => {
   return types[typeId] || typeId.charAt(0).toUpperCase() + typeId.slice(1);
 };
 
-// --- GÜNCELLENMİŞ ZİYARET DETAY MODALI ---
+// --- VISIT DETAIL MODAL ---
 const VisitDetailModal: React.FC<{ 
   visit: Visit | null; 
   onClose: () => void; 
@@ -176,11 +175,8 @@ const VisitDetailModal: React.FC<{
   const customerSummary = visit.customer_id ? monthlyMaterialUsageSummary.get(visit.customer_id) : undefined;
   const branchMonthlySummary = (customerSummary && visit.branch_id) ? customerSummary.branches_summary.get(visit.branch_id) : undefined;
 
-  // Detay tablosundan gelen veriyi al (Genelde 1-1 ilişki olduğu için ilk eleman)
-  const detail = visit.visit_details && visit.visit_details.length > 0 ? visit.visit_details[0] : null;
-
-  // Yoğunluk Göstergesi Yardımcısı
-  const DensityIndicator = ({ density }: { density: string }) => {
+  // Yoğunluk Göstergesi
+  const DensityIndicator = ({ density }: { density: string | undefined }) => {
     let color = 'bg-gray-200';
     let text = 'Belirtilmedi';
     let width = '0%';
@@ -204,7 +200,6 @@ const VisitDetailModal: React.FC<{
     );
   };
 
-  // Bilgi satırı yardımcısı
   const InfoRow = ({ icon: Icon, label, value, isLink = false, linkHref = "" }: any) => (
     <div className="flex items-start gap-3">
       <div className="mt-0.5 p-1.5 bg-gray-100 rounded-lg shrink-0">
@@ -240,9 +235,9 @@ const VisitDetailModal: React.FC<{
           <div>
             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
               Ziyaret Detayı
-              {detail?.rapor_no && (
+              {visit.rapor_no && (
                 <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-mono border border-blue-200">
-                  #{detail.rapor_no}
+                  #{visit.rapor_no}
                 </span>
               )}
             </h3>
@@ -256,7 +251,7 @@ const VisitDetailModal: React.FC<{
         {/* SCROLLABLE CONTENT */}
         <div className="overflow-y-auto p-6 space-y-6 custom-scrollbar">
           
-          {/* 1. Temel Bilgiler Grid */}
+          {/* 1. Temel Bilgiler */}
           <div className="grid grid-cols-2 gap-y-5 gap-x-4">
             <InfoRow icon={User} label="Müşteri" value={visit.customer?.kisa_isim || 'N/A'} />
             <InfoRow icon={Building} label="Şube" value={visit.branch?.sube_adi || 'Genel'} />
@@ -287,16 +282,16 @@ const VisitDetailModal: React.FC<{
 
           <div className="h-px bg-gray-100" />
 
-          {/* 2. Zararlı Türleri & Yoğunluk (YENİ) */}
+          {/* 2. Zararlı ve Yoğunluk */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
              {/* Zararlılar */}
-             {detail?.pest_types && detail.pest_types.length > 0 ? (
+             {visit.pest_types && visit.pest_types.length > 0 ? (
                 <div>
                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
                       <Bug className="w-4 h-4 text-red-500" /> Hedef Zararlılar
                    </h4>
                    <div className="flex flex-wrap gap-2">
-                      {detail.pest_types.map((pest, idx) => (
+                      {visit.pest_types.map((pest, idx) => (
                          <span key={idx} className="px-2.5 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-100">
                             {pest}
                          </span>
@@ -304,7 +299,7 @@ const VisitDetailModal: React.FC<{
                    </div>
                 </div>
              ) : (
-                <div className="text-sm text-gray-400 flex items-center gap-2"><Bug className="w-4 h-4"/> Zararlı belirtilmedi</div>
+                <div className="text-sm text-gray-400 flex items-center gap-2 mt-2"><Bug className="w-4 h-4"/> Zararlı belirtilmedi</div>
              )}
 
              {/* Yoğunluk */}
@@ -312,11 +307,11 @@ const VisitDetailModal: React.FC<{
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
                    <Activity className="w-4 h-4 text-blue-500" /> Popülasyon Yoğunluğu
                 </h4>
-                <DensityIndicator density={detail?.yogunluk || ''} />
+                <DensityIndicator density={visit.yogunluk || ''} />
              </div>
           </div>
 
-          {/* 3. Açıklamalar (ÖNEMLİ BÖLÜM - 3 Farklı Alan) */}
+          {/* 3. Açıklamalar */}
           <div className="grid gap-4">
              
              {/* Operatörün Teknik Açıklaması */}
@@ -325,43 +320,43 @@ const VisitDetailModal: React.FC<{
                   <MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)
                 </h4>
                 <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-gray-200 shadow-sm leading-relaxed whitespace-pre-wrap">
-                  {detail?.aciklama ? detail.aciklama : <span className="text-gray-400 italic">Operatör not girmemiş.</span>}
+                  {visit.aciklama ? visit.aciklama : <span className="text-gray-400 italic">Operatör not girmemiş.</span>}
                 </div>
              </div>
 
-             {/* Müşteri Açıklaması (Raporda giden) */}
+             {/* Müşteri Açıklaması */}
              <div className="bg-blue-50/70 rounded-xl p-4 border border-blue-200">
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2">
                   <Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu
                 </h4>
                 <div className="text-sm text-gray-800 bg-white p-3 rounded-lg border border-blue-100 shadow-sm leading-relaxed whitespace-pre-wrap">
-                  {detail?.musteri_aciklamasi ? detail.musteri_aciklamasi : <span className="text-gray-400 italic">Müşteri için özel bir not girilmemiş.</span>}
+                  {visit.musteri_aciklamasi ? visit.musteri_aciklamasi : <span className="text-gray-400 italic">Müşteri için özel bir not girilmemiş.</span>}
                 </div>
              </div>
 
              {/* Yönetici Notu */}
-             {detail?.yonetici_notu && (
+             {visit.yonetici_notu && (
                 <div className="bg-yellow-50/50 rounded-xl p-4 border border-yellow-100">
                    <h4 className="flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2">
                     <Info className="w-4 h-4" /> Yönetici Notu
                   </h4>
                   <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-yellow-100 shadow-sm leading-relaxed whitespace-pre-wrap italic">
-                    {detail.yonetici_notu}
+                    {visit.yonetici_notu}
                   </div>
                 </div>
              )}
           </div>
 
           {/* 4. Rapor Fotoğrafı */}
-          {detail?.image_url && (
+          {visit.image_url && (
              <div>
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
                    <Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı
                 </h4>
                 <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-100 flex justify-center p-2">
-                   <a href={detail.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
+                   <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
                       <img 
-                        src={detail.image_url} 
+                        src={visit.image_url} 
                         alt="Ziyaret Raporu" 
                         className="max-h-64 object-contain mx-auto rounded-lg shadow-sm"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -573,25 +568,21 @@ const AdminCalendar: React.FC = () => {
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
 
-    // --- QUERY GÜNCELLEMESİ ---
-    // 'visit_details' tablosundan detayları çekiyoruz.
-    // Eğer tablo adın farklıysa (örneğin 'reports') buradaki 'visit_details' ismini değiştir.
+    // --- DÜZELTME: Veriler artık direkt visits tablosundan çekiliyor ---
     let visitsQuery = supabase
       .from('visits')
       .select(`
         id, visit_date, status, is_checked, visit_type, 
-        customer_id, branch_id, operator_id,
         
-        visit_details:visit_details (
-           rapor_no,
-           aciklama,
-           musteri_aciklamasi,
-           yogunluk,
-           pest_types,
-           image_url,
-           yonetici_notu
-        ),
+        rapor_no,
+        aciklama,
+        musteri_aciklamasi,
+        yogunluk,
+        pest_types,
+        image_url,
+        yonetici_notu,
 
+        customer_id, branch_id, operator_id,
         customer:customer_id(kisa_isim),
         branch:branch_id(sube_adi, latitude, longitude),
         operator:operator_id(id, name),
