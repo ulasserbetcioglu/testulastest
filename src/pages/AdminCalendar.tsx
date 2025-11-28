@@ -23,14 +23,14 @@ interface Visit {
   visit_type: string | string[];
   is_checked: boolean;
   
-  // --- DÜZELTME: Bu alanlar artık direkt visits tablosunda ---
+  // --- YENİ ALANLAR (visits tablosunda olmalı) ---
   rapor_no?: string;
-  aciklama?: string; // Operatör notu
-  musteri_aciklamasi?: string; // Müşteri notu
-  yonetici_notu?: string; // Yönetici notu
-  yogunluk?: string; // 'dusuk', 'orta', 'yuksek'
-  pest_types?: string[]; // Zararlı türleri
-  image_url?: string; // Rapor resmi
+  aciklama?: string;            // Operatörün kendine notu (Dahili)
+  musteri_aciklamasi?: string;  // Müşteriye giden not (Harici)
+  yonetici_notu?: string;       // Yönetici notu
+  yogunluk?: string;            // 'dusuk', 'orta', 'yuksek'
+  pest_types?: string[];        // ['Hamam Böceği', 'Fare']
+  image_url?: string;           // Rapor fotoğrafı URL
 
   total_visit_revenue?: number;
   material_sales_revenue?: number;
@@ -160,7 +160,7 @@ const getVisitTypeLabel = (type: string | string[] | undefined): string => {
   return types[typeId] || typeId.charAt(0).toUpperCase() + typeId.slice(1);
 };
 
-// --- VISIT DETAIL MODAL ---
+// --- GÜNCELLENMİŞ ZİYARET DETAY MODALI ---
 const VisitDetailModal: React.FC<{ 
   visit: Visit | null; 
   onClose: () => void; 
@@ -175,7 +175,7 @@ const VisitDetailModal: React.FC<{
   const customerSummary = visit.customer_id ? monthlyMaterialUsageSummary.get(visit.customer_id) : undefined;
   const branchMonthlySummary = (customerSummary && visit.branch_id) ? customerSummary.branches_summary.get(visit.branch_id) : undefined;
 
-  // Yoğunluk Göstergesi
+  // Yoğunluk Bar Göstergesi
   const DensityIndicator = ({ density }: { density: string | undefined }) => {
     let color = 'bg-gray-200';
     let text = 'Belirtilmedi';
@@ -191,11 +191,11 @@ const VisitDetailModal: React.FC<{
     }
 
     return (
-      <div className="flex items-center gap-2 w-full max-w-xs">
-        <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+      <div className="flex items-center gap-3 w-full">
+        <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
           <div className={`h-full ${color} transition-all duration-500`} style={{ width }}></div>
         </div>
-        <span className="text-xs font-medium text-gray-600 min-w-[3rem]">{text}</span>
+        <span className="text-xs font-medium text-gray-600 min-w-[3rem] text-right">{text}</span>
       </div>
     );
   };
@@ -236,7 +236,7 @@ const VisitDetailModal: React.FC<{
             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
               Ziyaret Detayı
               {visit.rapor_no && (
-                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-mono border border-blue-200">
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-mono border border-blue-200 ml-2">
                   #{visit.rapor_no}
                 </span>
               )}
@@ -282,39 +282,41 @@ const VisitDetailModal: React.FC<{
 
           <div className="h-px bg-gray-100" />
 
-          {/* 2. Zararlı ve Yoğunluk */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-             {/* Zararlılar */}
-             {visit.pest_types && visit.pest_types.length > 0 ? (
-                <div>
-                   <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
-                      <Bug className="w-4 h-4 text-red-500" /> Hedef Zararlılar
-                   </h4>
-                   <div className="flex flex-wrap gap-2">
-                      {visit.pest_types.map((pest, idx) => (
-                         <span key={idx} className="px-2.5 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-100">
-                            {pest}
-                         </span>
-                      ))}
-                   </div>
-                </div>
-             ) : (
-                <div className="text-sm text-gray-400 flex items-center gap-2 mt-2"><Bug className="w-4 h-4"/> Zararlı belirtilmedi</div>
-             )}
+          {/* 2. Zararlı ve Yoğunluk (Teknik Veriler) */}
+          <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+            <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+               <Activity className="w-4 h-4 text-indigo-500"/> Teknik Veriler
+            </h4>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+               {/* Yoğunluk */}
+               <div>
+                  <p className="text-xs text-gray-500 mb-2 font-medium">Popülasyon Yoğunluğu</p>
+                  <DensityIndicator density={visit.yogunluk} />
+               </div>
 
-             {/* Yoğunluk */}
-             <div>
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
-                   <Activity className="w-4 h-4 text-blue-500" /> Popülasyon Yoğunluğu
-                </h4>
-                <DensityIndicator density={visit.yogunluk || ''} />
-             </div>
+               {/* Zararlılar */}
+               <div>
+                  <p className="text-xs text-gray-500 mb-2 font-medium">Hedef Zararlılar</p>
+                  {visit.pest_types && visit.pest_types.length > 0 ? (
+                     <div className="flex flex-wrap gap-2">
+                        {visit.pest_types.map((pest, idx) => (
+                           <span key={idx} className="px-2.5 py-0.5 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-100 flex items-center gap-1">
+                              <Bug className="w-3 h-3"/> {pest}
+                           </span>
+                        ))}
+                     </div>
+                  ) : (
+                     <span className="text-sm text-gray-400 italic">Belirtilmedi</span>
+                  )}
+               </div>
+            </div>
           </div>
 
-          {/* 3. Açıklamalar */}
+          {/* 3. Açıklamalar (Operatör vs Müşteri) */}
           <div className="grid gap-4">
              
-             {/* Operatörün Teknik Açıklaması */}
+             {/* Operatörün Teknik Açıklaması (İç Not) */}
              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                   <MessageSquare className="w-4 h-4" /> Operatör Açıklaması (Dahili)
@@ -324,8 +326,8 @@ const VisitDetailModal: React.FC<{
                 </div>
              </div>
 
-             {/* Müşteri Açıklaması */}
-             <div className="bg-blue-50/70 rounded-xl p-4 border border-blue-200">
+             {/* Müşteri Açıklaması (Raporda Gözüken) */}
+             <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-blue-800 mb-2">
                   <Megaphone className="w-4 h-4" /> Müşteri Bilgilendirme Notu
                 </h4>
@@ -336,7 +338,7 @@ const VisitDetailModal: React.FC<{
 
              {/* Yönetici Notu */}
              {visit.yonetici_notu && (
-                <div className="bg-yellow-50/50 rounded-xl p-4 border border-yellow-100">
+                <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
                    <h4 className="flex items-center gap-2 text-sm font-semibold text-yellow-800 mb-2">
                     <Info className="w-4 h-4" /> Yönetici Notu
                   </h4>
@@ -353,12 +355,12 @@ const VisitDetailModal: React.FC<{
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
                    <Camera className="w-4 h-4 text-gray-600" /> Rapor Fotoğrafı
                 </h4>
-                <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-100 flex justify-center p-2">
+                <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex justify-center p-4">
                    <a href={visit.image_url} target="_blank" rel="noopener noreferrer" className="block relative group cursor-zoom-in">
                       <img 
                         src={visit.image_url} 
                         alt="Ziyaret Raporu" 
-                        className="max-h-64 object-contain mx-auto rounded-lg shadow-sm"
+                        className="max-h-72 object-contain mx-auto rounded-lg shadow-sm"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center rounded-lg">
@@ -568,7 +570,7 @@ const AdminCalendar: React.FC = () => {
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
 
-    // --- DÜZELTME: Veriler artık direkt visits tablosundan çekiliyor ---
+    // --- QUERY GÜNCELLENDİ: Artık visits tablosundan doğrudan çekiyoruz ---
     let visitsQuery = supabase
       .from('visits')
       .select(`
