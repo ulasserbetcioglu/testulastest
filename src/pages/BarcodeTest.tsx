@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Scan, QrCode, Search, Save, CheckCircle, 
-  AlertTriangle, MapPin, Box, Plus, History, X 
+  AlertTriangle, MapPin, Box, History, X, Camera
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 // TİPLER
 interface Equipment {
@@ -24,6 +25,10 @@ const BarcodeTest: React.FC = () => {
   const [scannedData, setScannedData] = useState<Equipment | null>(null);
   const [view, setView] = useState<'idle' | 'found' | 'register'>('idle');
   const [recentScans, setRecentScans] = useState<string[]>([]);
+  
+  // KAMERA STATE
+  const [showCamera, setShowCamera] = useState(false);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   // YENİ KAYIT FORMU STATE
   const [newEqData, setNewEqData] = useState({
@@ -32,20 +37,84 @@ const BarcodeTest: React.FC = () => {
     location: ''
   });
 
+  // --- KAMERA YÖNETİMİ ---
+  useEffect(() => {
+    if (showCamera) {
+      // DOM elementinin render edildiğinden emin olmak için küçük bir gecikme
+      const timeoutId = setTimeout(() => {
+        // Eğer zaten bir scanner varsa temizle
+        if (scannerRef.current) {
+          scannerRef.current.clear().catch(console.error);
+        }
+
+        const scanner = new Html5QrcodeScanner(
+          "reader",
+          { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+            showTorchButtonIfSupported: true
+          },
+          /* verbose= */ false
+        );
+        
+        scannerRef.current = scanner;
+
+        scanner.render(
+          (decodedText) => {
+            // Başarılı okuma
+            handleScanSuccess(decodedText);
+          },
+          (errorMessage) => {
+            // Okuma hatalarını görmezden gel (Sürekli tarama yaptığı için çok hata fırlatır)
+          }
+        );
+      }, 100);
+
+      return () => {
+        clearTimeout(timeoutId);
+        if (scannerRef.current) {
+          scannerRef.current.clear().catch(console.error);
+          scannerRef.current = null;
+        }
+      };
+    } else {
+      // Kamera kapatıldığında temizle
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(console.error);
+        scannerRef.current = null;
+      }
+    }
+  }, [showCamera]);
+
+  const handleScanSuccess = (decodedText: string) => {
+    // Kamerayı kapat ve sesi çal (opsiyonel)
+    setShowCamera(false);
+    setBarcodeInput(decodedText);
+    toast.success('Barkod Okundu!');
+    
+    // İşlemi başlat
+    handleSearchProcess(decodedText);
+  };
+
   // --- FONKSİYONLAR ---
 
-  // 1. Barkod Tarama / Arama Simülasyonu
-  const handleScan = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!barcodeInput.trim()) return;
+  // Manuel Form Submit
+  const handleManualScan = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSearchProcess(barcodeInput);
+  };
+
+  // Ortak Arama Fonksiyonu
+  const handleSearchProcess = async (code: string) => {
+    if (!code.trim()) return;
 
     setLoading(true);
     setScannedData(null);
     
-    // Simüle edilmiş "bip" sesi efekti eklenebilir :)
     // Geçmişe ekle
-    if (!recentScans.includes(barcodeInput)) {
-      setRecentScans(prev => [barcodeInput, ...prev].slice(0, 5));
+    if (!recentScans.includes(code)) {
+      setRecentScans(prev => [code, ...prev].slice(0, 5));
     }
 
     try {
@@ -53,7 +122,7 @@ const BarcodeTest: React.FC = () => {
       const { data, error } = await supabase
         .from('branch_equipment')
         .select('*')
-        .eq('equipment_code', barcodeInput)
+        .eq('equipment_code', code)
         .single();
 
       if (error && error.code !== 'PGRST116') {
@@ -68,7 +137,6 @@ const BarcodeTest: React.FC = () => {
       } else {
         // BULUNAMADI -> KAYIT EKRANI
         setView('register');
-        // Formu sıfırla ama ismi otomatik öneri yap (Örn: İstasyon X)
         setNewEqData({
           name: '',
           type: 'Kemirgen İstasyonu',
@@ -83,7 +151,7 @@ const BarcodeTest: React.FC = () => {
     }
   };
 
-  // 2. Yeni Ekipman Kaydetme (Pairing)
+  // Yeni Ekipman Kaydetme (Pairing)
   const handleRegister = async () => {
     if (!newEqData.name || !newEqData.location) {
       toast.warning('Lütfen isim ve konum giriniz.');
@@ -95,7 +163,7 @@ const BarcodeTest: React.FC = () => {
       const { data, error } = await supabase
         .from('branch_equipment')
         .insert([{
-          equipment_code: barcodeInput, // Barkodu eşleştiriyoruz
+          equipment_code: barcodeInput,
           name: newEqData.name,
           type: newEqData.type,
           location: newEqData.location,
@@ -108,7 +176,7 @@ const BarcodeTest: React.FC = () => {
 
       toast.success('Başarıyla Eşleştirildi!');
       setScannedData(data);
-      setView('found'); // Kayıttan sonra direkt buldu ekranına geç
+      setView('found');
 
     } catch (err: any) {
       toast.error('Kayıt hatası: ' + err.message);
@@ -117,10 +185,8 @@ const BarcodeTest: React.FC = () => {
     }
   };
 
-  // 3. Kontrol Yapma (Simülasyon)
   const handleCheck = () => {
     toast.success(`${scannedData?.name} kontrol edildi ve sisteme işlendi.`);
-    // Burada normalde 'visits' veya 'equipment_checks' tablosuna insert atılır.
     resetScanner();
   };
 
@@ -128,6 +194,7 @@ const BarcodeTest: React.FC = () => {
     setBarcodeInput('');
     setScannedData(null);
     setView('idle');
+    setShowCamera(false);
   };
 
   return (
@@ -139,7 +206,7 @@ const BarcodeTest: React.FC = () => {
         <div className="bg-gray-900 p-6 text-white text-center relative">
           <QrCode className="mx-auto mb-2 opacity-80" size={32} />
           <h1 className="text-xl font-bold tracking-tight">Saha Operasyon Terminali</h1>
-          <p className="text-xs text-gray-400 mt-1">Barkod / QR Test Modülü v1.0</p>
+          <p className="text-xs text-gray-400 mt-1">Barkod / QR Test Modülü v2.0</p>
           
           {view !== 'idle' && (
             <button 
@@ -154,34 +221,58 @@ const BarcodeTest: React.FC = () => {
         {/* BODY */}
         <div className="p-6">
           
-          {/* EKRAN 1: TARAMA (INPUT) */}
+          {/* EKRAN 1: TARAMA (INPUT & CAMERA) */}
           {view === 'idle' && (
             <div className="space-y-6 animate-in fade-in zoom-in duration-300">
-              <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-blue-100">
-                  <Scan size={32} />
+              
+              {/* KAMERA ALANI */}
+              {showCamera ? (
+                <div className="relative bg-black rounded-xl overflow-hidden shadow-inner border-2 border-blue-500">
+                  <div id="reader" className="w-full"></div>
+                  <button 
+                    onClick={() => setShowCamera(false)}
+                    className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 z-10"
+                  >
+                    <X size={16} />
+                  </button>
+                  <p className="text-white text-center text-xs py-2 absolute bottom-0 w-full bg-black/50">Barkodu kare içine hizalayın</p>
                 </div>
-                <h2 className="text-lg font-bold text-gray-800">Barkodu Okutun</h2>
-                <p className="text-sm text-gray-500">
-                  Ekipman üzerindeki barkodu okutun veya manuel olarak aşağıya girin.
-                </p>
-              </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <button 
+                    onClick={() => setShowCamera(true)}
+                    className="w-full py-8 border-2 border-dashed border-blue-300 bg-blue-50 rounded-xl flex flex-col items-center justify-center gap-3 text-blue-600 hover:bg-blue-100 hover:border-blue-400 transition-all group"
+                  >
+                    <div className="p-4 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform">
+                      <Camera size={32} />
+                    </div>
+                    <span className="font-bold text-lg">Kamerayı Aç ve Tara</span>
+                  </button>
+                  
+                  <div className="relative flex py-2 items-center">
+                    <div className="flex-grow border-t border-gray-200"></div>
+                    <span className="flex-shrink-0 mx-4 text-gray-400 text-xs uppercase font-bold">veya manuel gir</span>
+                    <div className="flex-grow border-t border-gray-200"></div>
+                  </div>
+                </div>
+              )}
 
-              <form onSubmit={handleScan} className="relative">
+              {/* MANUEL GİRİŞ */}
+              <form onSubmit={handleManualScan} className="relative">
                 <input
                   type="text"
                   value={barcodeInput}
                   onChange={(e) => setBarcodeInput(e.target.value)}
                   placeholder="Örn: EQ-12345"
                   className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl text-lg font-mono focus:border-blue-500 focus:ring-0 outline-none transition-all placeholder:text-gray-300"
-                  autoFocus
+                  autoFocus={!showCamera}
                 />
                 <Scan className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 
                 <button 
                   type="submit"
                   disabled={loading || !barcodeInput}
-                  className="mt-4 w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-blue-200"
+                  className="mt-4 w-full bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-900 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none shadow-lg"
                 >
                   {loading ? 'Aranıyor...' : 'Sorgula'} <Search size={18} />
                 </button>
@@ -197,8 +288,8 @@ const BarcodeTest: React.FC = () => {
                     {recentScans.map((code, idx) => (
                       <button 
                         key={idx} 
-                        onClick={() => setBarcodeInput(code)}
-                        className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-mono"
+                        onClick={() => { setBarcodeInput(code); handleSearchProcess(code); }}
+                        className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-mono transition-colors"
                       >
                         {code}
                       </button>
@@ -228,7 +319,7 @@ const BarcodeTest: React.FC = () => {
                     <span className="text-xs text-gray-500 uppercase font-bold">Barkod ID</span>
                     <p className="font-mono text-lg font-bold text-gray-800">{scannedData.equipment_code}</p>
                   </div>
-                  <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium text-gray-600">{scannedData.status}</span>
+                  <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium text-gray-600 capitalize">{scannedData.status}</span>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-dashed">
@@ -279,8 +370,8 @@ const BarcodeTest: React.FC = () => {
                   <AlertTriangle size={24} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-orange-800">Yeni Ekipman Algılandı</h3>
-                  <p className="text-xs text-orange-600">Bu barkod henüz sisteme kayıtlı değil.</p>
+                  <h3 className="font-bold text-orange-800">Yeni Ekipman</h3>
+                  <p className="text-xs text-orange-600">Barkod sisteme kayıtlı değil. Eşleştirme yapılıyor.</p>
                 </div>
               </div>
 
@@ -330,13 +421,21 @@ const BarcodeTest: React.FC = () => {
                 </div>
               </div>
 
-              <button 
-                onClick={handleRegister}
-                disabled={loading}
-                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition flex items-center justify-center gap-2"
-              >
-                {loading ? 'Kaydediliyor...' : 'Eşleştir ve Kaydet'} <Save size={18} />
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={resetScanner}
+                  className="py-3 rounded-xl border border-gray-300 font-medium text-gray-600 hover:bg-gray-50 transition"
+                >
+                  İptal
+                </button>
+                <button 
+                  onClick={handleRegister}
+                  disabled={loading}
+                  className="py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition flex items-center justify-center gap-2"
+                >
+                  {loading ? '...' : 'Kaydet'} <Save size={18} />
+                </button>
+              </div>
             </div>
           )}
 
@@ -344,7 +443,7 @@ const BarcodeTest: React.FC = () => {
         
         {/* FOOTER */}
         <div className="bg-gray-50 p-4 text-center text-xs text-gray-400 border-t">
-          Simülasyon Modu • Gerçek veritabanı bağlantısı aktif.
+          Simülasyon & Gerçek Kamera Modu Aktif.
         </div>
       </div>
     </div>
