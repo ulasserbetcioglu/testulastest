@@ -1,4 +1,3 @@
-// src/App.tsx
 'use client';
 
 import React from 'react';
@@ -81,7 +80,7 @@ import AylikMalzemeEposta from './pages/AylikMalzemeEposta';
 import PazarlamaEposta from './pages/PazarlamaEposta';
 import EkipmanPazarlama from './pages/EkipmanPazarlama';
 import EkipmanYonetimi from './pages/EkipmanYonetimi';
-import HizmetPazarlama from './pages/HizmetYonetimi';
+import HizmetPazarlama from './pages/HizmetPazarlama';
 import GonderilenEpostalar from './pages/GonderilenEpostalar';
 import TedarikSiparisi from './pages/TedarikSiparisi';
 import SiparisOlusturma from './pages/SiparisOlusturma';
@@ -98,7 +97,7 @@ import { supabase } from './lib/supabase';
 import YillikKarZararRaporu from './pages/YillikKarZararRaporu';
 import ProfitabilityAnalysis from './pages/ProfitabilityAnalysis';
 import BulkVisitImport from './pages/BulkVisitImport';
-import AdminBranches from './pages/AdminBranches'; 
+import AdminBranches from './pages/AdminBranches';
 import OperatorQuickNotes from './pages/OperatorQuickNotes';
 import AdminQuickNotes from './pages/AdminQuickNotes';
 import UnbilledCustomers from './pages/UnbilledCustomers';
@@ -114,8 +113,8 @@ import PesticideUsageReport from './pages/PesticideUsageReport';
 import AdminPesticideReport from './pages/AdminPesticideReport';
 import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
-// YENİ IMPORT
 import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
+import BarcodeTest from './pages/BarcodeTest'; // Yeni Barkod Modülü
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -124,7 +123,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-const [isAdmin, setIsAdmin] = React.useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = React.useState<boolean | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -276,6 +275,10 @@ function App() {
           <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
           {/* Korumalı rapor görüntüleyici */}
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
+
+          {/* --- YENİ EKLENEN MODÜL --- */}
+          {/* Bu sayfaya gitmek için tarayıcıda /barkod-test yazın */}
+          <Route path="/barkod-test" element={<BarcodeTest />} />
           
           {/* Admin Routes */}
           <Route
