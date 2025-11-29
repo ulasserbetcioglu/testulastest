@@ -114,7 +114,8 @@ import AdminPesticideReport from './pages/AdminPesticideReport';
 import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
 import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
-import BarcodeTest from './pages/BarcodeTest'; // Yeni Barkod Modülü
+import BarcodeTest from './pages/BarcodeTest';
+import AdminMaterialSalesReports from './pages/AdminMaterialSalesReports'; // YENİ EKLENEN IMPORT
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -362,9 +363,11 @@ function App() {
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
             <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
-            
-            {/* YENİ EKLENEN ADMIN ROUTE */}
             <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />
+            
+            {/* YENİ EKLENEN ROTA */}
+            <Route path="malzeme-satis-raporlari" element={<AdminMaterialSalesReports />} />
+            
           </Route>
           
           {/* Operator Routes */}
