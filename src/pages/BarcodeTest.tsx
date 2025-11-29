@@ -47,9 +47,10 @@ const BarcodeTest: React.FC = () => {
       
       const startScanner = async () => {
         // DOM elementinin hazır olması için kısa bir bekleme
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 100));
         
-        if (!document.getElementById("reader")) {
+        const element = document.getElementById("reader");
+        if (!element) {
           console.error("Reader element not found");
           if(isMounted) {
              setCameraLoading(false);
@@ -58,7 +59,7 @@ const BarcodeTest: React.FC = () => {
           return;
         }
 
-        // Önceki scanner varsa temizle
+        // Önceki scanner varsa temizle (Garanti olsun)
         if (scannerRef.current) {
           try {
             await scannerRef.current.stop();
@@ -68,6 +69,7 @@ const BarcodeTest: React.FC = () => {
           }
         }
 
+        // Yeni instance
         const html5QrCode = new Html5Qrcode("reader");
         scannerRef.current = html5QrCode;
 
@@ -78,17 +80,20 @@ const BarcodeTest: React.FC = () => {
               fps: 10,
               qrbox: { width: 250, height: 250 },
               aspectRatio: 1.0,
-              formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128 ]
+              // Formatları belirtmek performansı artırır ve hataları azaltır
+              formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.EAN_13 ] 
             },
             (decodedText) => {
               if (isMounted) handleScanSuccess(decodedText);
             },
-            () => {} // Hata callback'i (Sessiz mod)
+            (errorMessage) => {
+               // Tarama sırasındaki anlık hataları yutuyoruz, console kirlenmesin
+            }
           );
         } catch (err) {
           console.error("Kamera başlatma hatası:", err);
           if (isMounted) {
-            toast.error("Kamera başlatılamadı. İzinleri kontrol edin.");
+            toast.error("Kamera başlatılamadı. İzinleri kontrol edin veya https kullanın.");
             setShowCamera(false);
           }
         } finally {
@@ -103,25 +108,38 @@ const BarcodeTest: React.FC = () => {
     return () => {
       isMounted = false;
       if (scannerRef.current) {
-        scannerRef.current.stop().then(() => {
-          scannerRef.current?.clear();
-        }).catch(err => console.warn("Scanner stop error", err));
+        // Ref kopyasını alalım, cleanup sırasında ref değişebilir
+        const scannerToStop = scannerRef.current;
+        scannerRef.current = null; // Ref'i hemen boşalt
+
+        scannerToStop.stop().then(() => {
+          scannerToStop.clear();
+        }).catch(err => {
+          // "Scanner is not running" hatası normaldir, yutuyoruz
+          console.warn("Scanner cleanup info:", err);
+        });
       }
     };
   }, [showCamera]);
 
   const handleScanSuccess = async (decodedText: string) => {
-    // Okuma başarılı olduğunda kamerayı durdur
+    // 1. Önce state'i güncelle (UI tepki versin)
+    setBarcodeInput(decodedText);
+    toast.success('Barkod Okundu!');
+    
+    // 2. Kamerayı güvenli kapat
     if (scannerRef.current) {
       try {
         await scannerRef.current.stop();
         await scannerRef.current.clear();
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        // Stop hatası önemli değil
+      }
+      scannerRef.current = null; // Ref'i temizle ki cleanup tekrar çalışmasın
     }
-    
     setShowCamera(false);
-    setBarcodeInput(decodedText);
-    toast.success('Barkod Okundu!');
+
+    // 3. Arama işlemini başlat
     handleSearchProcess(decodedText);
   };
 
@@ -165,7 +183,8 @@ const BarcodeTest: React.FC = () => {
         toast.info('Ekipman sisteme kayıtlı değil.');
       }
     } catch (err: any) {
-      toast.error('Hata: ' + err.message);
+      console.error('Search Error:', err);
+      toast.error('Sorgulama hatası: ' + (err.message || 'Bilinmeyen hata'));
     } finally {
       setLoading(false);
     }
@@ -225,7 +244,7 @@ const BarcodeTest: React.FC = () => {
         <div className="bg-gray-900 p-6 text-white text-center relative">
           <QrCode className="mx-auto mb-2 opacity-80" size={32} />
           <h1 className="text-xl font-bold tracking-tight">Saha Operasyon Terminali</h1>
-          <p className="text-xs text-gray-400 mt-1">Barkod / QR Test Modülü v2.1</p>
+          <p className="text-xs text-gray-400 mt-1">Barkod / QR Test Modülü v2.2</p>
           
           {view !== 'idle' && (
             <button 
@@ -246,7 +265,7 @@ const BarcodeTest: React.FC = () => {
               
               {/* KAMERA ALANI */}
               {showCamera ? (
-                <div className="relative bg-black rounded-xl overflow-hidden shadow-inner border-2 border-blue-500 min-h-[250px] flex items-center justify-center">
+                <div className="relative bg-black rounded-xl overflow-hidden shadow-inner border-2 border-blue-500 min-h-[300px] flex items-center justify-center">
                   <div id="reader" className="w-full h-full"></div>
                   
                   {cameraLoading && (
@@ -478,7 +497,7 @@ const BarcodeTest: React.FC = () => {
         
         {/* FOOTER */}
         <div className="bg-gray-50 p-4 text-center text-[10px] text-gray-400 border-t uppercase tracking-wider">
-          v2.1 • html5-qrcode Pro Mode • HTTPS Gerekli
+          v2.2 • html5-qrcode Pro Mode • HTTPS Gerekli
         </div>
       </div>
     </div>
