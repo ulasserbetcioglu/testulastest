@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell 
-} from 'recharts'; // Grafik kütüphanesi (kurulu değilse npm install recharts)
-import { Calendar, Users, Building, TrendingUp, Download, RefreshCw, Filter } from 'lucide-react';
+} from 'recharts';
+import { Calendar, Users, Building, TrendingUp, Download, RefreshCw, Filter, Package } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -20,6 +20,7 @@ interface SaleData {
   } | null;
   items: {
     quantity: number;
+    total_price: number; // Ürün bazlı ciro için eklendi
     product: { name: string };
   }[];
 }
@@ -33,13 +34,12 @@ const AdminMaterialSalesReports: React.FC = () => {
   // Varsayılan olarak son 1 ayı getir
   const [startDate, setStartDate] = useState(format(startOfMonth(subMonths(new Date(), 0)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [activeTab, setActiveTab] = useState<'ozet' | 'personel' | 'musteri'>('ozet');
+  const [activeTab, setActiveTab] = useState<'ozet' | 'personel' | 'musteri' | 'urunler'>('ozet');
 
   // --- VERİ ÇEKME ---
   const fetchAllSales = async () => {
     setLoading(true);
     try {
-      // Müşteri ID filtresi OLMADAN tüm satışları çekiyoruz
       const { data, error } = await supabase
         .from('paid_material_sales')
         .select(`
@@ -53,6 +53,7 @@ const AdminMaterialSalesReports: React.FC = () => {
           ),
           items:paid_material_sale_items (
             quantity,
+            total_price,
             product:product_id (name)
           )
         `)
@@ -84,7 +85,7 @@ const AdminMaterialSalesReports: React.FC = () => {
     return { totalRevenue, totalSalesCount, totalItemsSold };
   }, [sales]);
 
-  // 2. Personel Performansı (Kim ne satmış?)
+  // 2. Personel Performansı
   const personnelPerformance = useMemo(() => {
     const stats: Record<string, { name: string; revenue: number; count: number }> = {};
 
@@ -98,7 +99,7 @@ const AdminMaterialSalesReports: React.FC = () => {
     return Object.values(stats).sort((a, b) => b.revenue - a.revenue);
   }, [sales]);
 
-  // 3. Müşteri ve Şube Sıralaması (En çok kime satılmış?)
+  // 3. Müşteri ve Şube Sıralaması
   const customerPerformance = useMemo(() => {
     const stats: Record<string, { name: string; revenue: number }> = {};
     sales.forEach(sale => {
@@ -113,7 +114,6 @@ const AdminMaterialSalesReports: React.FC = () => {
   const branchPerformance = useMemo(() => {
     const stats: Record<string, { name: string; customer: string; revenue: number }> = {};
     sales.forEach(sale => {
-      // Şube yoksa 'Merkez' veya Müşteri adını kullanabiliriz
       const branchName = sale.branch?.sube_adi || 'Merkez';
       const key = `${sale.customer?.kisa_isim} - ${branchName}`;
       
@@ -124,32 +124,58 @@ const AdminMaterialSalesReports: React.FC = () => {
     return Object.values(stats).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
   }, [sales]);
 
+  // 4. Ürün Performansı (YENİ EKLENDİ)
+  const productPerformance = useMemo(() => {
+    const stats: Record<string, { name: string; quantity: number; revenue: number }> = {};
+    
+    sales.forEach(sale => {
+      sale.items.forEach(item => {
+        const pName = item.product?.name || 'Bilinmeyen Ürün';
+        if (!stats[pName]) stats[pName] = { name: pName, quantity: 0, revenue: 0 };
+        stats[pName].quantity += item.quantity;
+        stats[pName].revenue += item.total_price || 0;
+      });
+    });
+
+    // Adet sayısına göre azalan sıralama
+    return Object.values(stats).sort((a, b) => b.quantity - a.quantity);
+  }, [sales]);
+
 
   // --- EXCEL DIŞA AKTARMA ---
   const exportReport = () => {
-    // Personel Raporu Sayfası
+    // Personel Raporu
     const wsPersonnel = XLSX.utils.json_to_sheet(personnelPerformance.map(p => ({
       'Personel': p.name,
       'Toplam Satış Tutarı': p.revenue,
       'İşlem Sayısı': p.count
     })));
 
-    // Müşteri Raporu Sayfası
+    // Ürün Raporu (YENİ)
+    const wsProducts = XLSX.utils.json_to_sheet(productPerformance.map(p => ({
+      'Ürün Adı': p.name,
+      'Satılan Adet': p.quantity,
+      'Toplam Gelir': p.revenue
+    })));
+
+    // Müşteri Raporu
     const wsCustomer = XLSX.utils.json_to_sheet(customerPerformance.map(c => ({
       'Müşteri': c.name,
       'Toplam Alım Tutarı': c.revenue
     })));
 
-    // Ham Veri Sayfası
+    // Ham Veri
     const wsRaw = XLSX.utils.json_to_sheet(sales.map(s => ({
       'Tarih': format(new Date(s.sale_date), 'dd.MM.yyyy', { locale: tr }),
       'Müşteri': s.customer?.kisa_isim,
       'Şube': s.branch?.sube_adi,
       'Personel': s.visit?.operator?.name,
-      'Tutar': s.total_amount
+      'Tutar': s.total_amount,
+      'Ürünler': s.items.map(i => `${i.product?.name} (${i.quantity})`).join(', ')
     })));
 
     const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsProducts, "Ürün Analizi");
     XLSX.utils.book_append_sheet(wb, wsPersonnel, "Personel Performans");
     XLSX.utils.book_append_sheet(wb, wsCustomer, "Müşteri Analizi");
     XLSX.utils.book_append_sheet(wb, wsRaw, "Tüm Satışlar");
@@ -163,7 +189,7 @@ const AdminMaterialSalesReports: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Malzeme Satış Raporları</h1>
-          <p className="text-gray-500 text-sm">Satış performansını ve dağılımları analiz edin.</p>
+          <p className="text-gray-500 text-sm">Satış performansını, ürünleri ve dağılımları analiz edin.</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
@@ -230,29 +256,35 @@ const AdminMaterialSalesReports: React.FC = () => {
             <h3 className="text-3xl font-bold text-gray-800">{summaryStats.totalItemsSold}</h3>
           </div>
           <div className="p-4 bg-purple-50 rounded-full text-purple-600">
-            <Building size={24} />
+            <Package size={24} />
           </div>
         </div>
       </div>
 
       {/* SEKME YAPISI */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex border-b">
+        <div className="flex border-b overflow-x-auto">
           <button 
             onClick={() => setActiveTab('ozet')}
-            className={`px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'ozet' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'ozet' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             Genel Bakış
           </button>
           <button 
+            onClick={() => setActiveTab('urunler')}
+            className={`px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'urunler' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            Ürün Analizi
+          </button>
+          <button 
             onClick={() => setActiveTab('personel')}
-            className={`px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'personel' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'personel' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             Personel Performansı
           </button>
           <button 
             onClick={() => setActiveTab('musteri')}
-            className={`px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'musteri' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'musteri' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             Müşteri & Şube Analizi
           </button>
@@ -306,16 +338,62 @@ const AdminMaterialSalesReports: React.FC = () => {
             </div>
           )}
 
-          {/* SEKME 2: PERSONEL LİSTESİ */}
+          {/* SEKME 2: ÜRÜN ANALİZİ (YENİ SEKME) */}
+          {activeTab === 'urunler' && (
+            <div>
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Satılan Malzemeler (Adet ve Ciro)</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 border rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün Adı</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Satılan Adet</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Elde Edilen Gelir</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ortalama Birim Fiyat</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {productPerformance.map((p, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                           <div className="flex items-center">
+                             <span className="font-medium text-gray-900">{idx + 1}. {p.name}</span>
+                           </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-700">
+                          {p.quantity} Adet
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-green-600">
+                          {p.revenue.toLocaleString('tr-TR')} ₺
+                        </td>
+                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                          {(p.quantity > 0 ? (p.revenue / p.quantity) : 0).toLocaleString('tr-TR')} ₺
+                        </td>
+                      </tr>
+                    ))}
+                    {productPerformance.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                          Seçilen tarih aralığında ürün satışı bulunamadı.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SEKME 3: PERSONEL LİSTESİ */}
           {activeTab === 'personel' && (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 border rounded-lg">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Personel</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">İşlem Sayısı</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Toplam Ciro</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ortalama İşlem Tutarı</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ort. İşlem Tutarı</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -336,7 +414,7 @@ const AdminMaterialSalesReports: React.FC = () => {
             </div>
           )}
 
-          {/* SEKME 3: MÜŞTERİ VE ŞUBE LİSTESİ */}
+          {/* SEKME 4: MÜŞTERİ VE ŞUBE LİSTESİ */}
           {activeTab === 'musteri' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Müşteri Tablosu */}
