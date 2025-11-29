@@ -1,14 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell 
-} from 'recharts';
-import { Calendar, Users, Building, TrendingUp, Download, RefreshCw, Filter, Package } from 'lucide-react';
+import { Calendar, Filter, TrendingUp, Download, RefreshCw, Package, Search, Building2, UserCheck, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 // --- TİP TANIMLAMALARI ---
+interface SaleItemFlat {
+  sale_id: string;
+  sale_date: string;
+  customer_name: string;
+  branch_name: string;
+  operator_name: string;
+  product_name: string;
+  quantity: number;
+  total_price: number;
+}
+
 interface SaleData {
   id: string;
   sale_date: string;
@@ -20,25 +28,25 @@ interface SaleData {
   } | null;
   items: {
     quantity: number;
-    total_price: number; // Ürün bazlı ciro için eklendi
+    total_price: number;
     product: { name: string };
   }[];
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
-
 const AdminMaterialSalesReports: React.FC = () => {
   const [sales, setSales] = useState<SaleData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Varsayılan olarak son 1 ayı getir
   const [startDate, setStartDate] = useState(format(startOfMonth(subMonths(new Date(), 0)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [activeTab, setActiveTab] = useState<'ozet' | 'personel' | 'musteri' | 'urunler'>('ozet');
+  const [searchTerm, setSearchTerm] = useState(''); 
 
   // --- VERİ ÇEKME ---
   const fetchAllSales = async () => {
     setLoading(true);
+    setError(null);
     try {
       const { data, error } = await supabase
         .from('paid_material_sales')
@@ -63,8 +71,9 @@ const AdminMaterialSalesReports: React.FC = () => {
 
       if (error) throw error;
       setSales(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Veri çekme hatası:', err);
+      setError(err.message || 'Veriler çekilirken bir hata oluştu.');
     } finally {
       setLoading(false);
     }
@@ -74,381 +83,264 @@ const AdminMaterialSalesReports: React.FC = () => {
     fetchAllSales();
   }, [startDate, endDate]);
 
-  // --- ANALİZ VE HESAPLAMALAR ---
+  // --- HESAPLAMA MOTORU ---
+  const filteredItems = useMemo(() => {
+    let allItems: SaleItemFlat[] = [];
 
-  // 1. Genel Özet İstatistikleri
-  const summaryStats = useMemo(() => {
-    const totalRevenue = sales.reduce((sum, s) => sum + s.total_amount, 0);
-    const totalSalesCount = sales.length;
-    const totalItemsSold = sales.reduce((sum, s) => sum + s.items.reduce((is, i) => is + i.quantity, 0), 0);
-    
-    return { totalRevenue, totalSalesCount, totalItemsSold };
-  }, [sales]);
-
-  // 2. Personel Performansı
-  const personnelPerformance = useMemo(() => {
-    const stats: Record<string, { name: string; revenue: number; count: number }> = {};
+    if (!sales) return [];
 
     sales.forEach(sale => {
-      const opName = sale.visit?.operator?.name || 'Belirsiz';
-      if (!stats[opName]) stats[opName] = { name: opName, revenue: 0, count: 0 };
-      stats[opName].revenue += sale.total_amount;
-      stats[opName].count += 1;
+      // items dizisi boş veya null ise atla
+      if (sale.items && sale.items.length > 0) {
+        sale.items.forEach(item => {
+          allItems.push({
+            sale_id: sale.id,
+            sale_date: sale.sale_date,
+            customer_name: sale.customer?.kisa_isim || 'Bilinmeyen Müşteri',
+            branch_name: sale.branch?.sube_adi || 'Merkez / Şube Yok',
+            operator_name: sale.visit?.operator?.name || 'Belirsiz',
+            product_name: item.product?.name || 'İsimsiz Ürün',
+            quantity: item.quantity || 0,
+            total_price: item.total_price || 0
+          });
+        });
+      }
     });
 
-    return Object.values(stats).sort((a, b) => b.revenue - a.revenue);
-  }, [sales]);
+    // Filtreleme (Ürün Adına Göre)
+    if (searchTerm.trim() !== '') {
+      const lowerTerm = searchTerm.toLowerCase();
+      allItems = allItems.filter(item => 
+        (item.product_name && item.product_name.toLowerCase().includes(lowerTerm))
+      );
+    }
 
-  // 3. Müşteri ve Şube Sıralaması
-  const customerPerformance = useMemo(() => {
-    const stats: Record<string, { name: string; revenue: number }> = {};
-    sales.forEach(sale => {
-      const custName = sale.customer?.kisa_isim || 'Bilinmeyen';
-      if (!stats[custName]) stats[custName] = { name: custName, revenue: 0 };
-      stats[custName].revenue += sale.total_amount;
+    return allItems;
+  }, [sales, searchTerm]);
+
+  // --- İSTATİSTİKLER ---
+  const stats = useMemo(() => {
+    return {
+      totalRevenue: filteredItems.reduce((sum, item) => sum + (item.total_price || 0), 0),
+      totalQuantity: filteredItems.reduce((sum, item) => sum + (item.quantity || 0), 0),
+      uniqueTransactions: new Set(filteredItems.map(i => i.sale_id)).size,
+    };
+  }, [filteredItems]);
+
+  const customerStats = useMemo(() => {
+    const groups: Record<string, number> = {};
+    filteredItems.forEach(item => {
+      groups[item.customer_name] = (groups[item.customer_name] || 0) + item.total_price;
     });
-    // Top 10 Müşteri
-    return Object.values(stats).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-  }, [sales]);
+    return Object.entries(groups)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  }, [filteredItems]);
 
-  const branchPerformance = useMemo(() => {
-    const stats: Record<string, { name: string; customer: string; revenue: number }> = {};
-    sales.forEach(sale => {
-      const branchName = sale.branch?.sube_adi || 'Merkez';
-      const key = `${sale.customer?.kisa_isim} - ${branchName}`;
-      
-      if (!stats[key]) stats[key] = { name: branchName, customer: sale.customer?.kisa_isim, revenue: 0 };
-      stats[key].revenue += sale.total_amount;
+  const productStats = useMemo(() => {
+    const groups: Record<string, { qty: number, revenue: number }> = {};
+    filteredItems.forEach(item => {
+      if (!groups[item.product_name]) groups[item.product_name] = { qty: 0, revenue: 0 };
+      groups[item.product_name].qty += item.quantity;
+      groups[item.product_name].revenue += item.total_price;
     });
-    // Top 10 Şube
-    return Object.values(stats).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-  }, [sales]);
+    return Object.entries(groups)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.qty - a.qty);
+  }, [filteredItems]);
 
-  // 4. Ürün Performansı (YENİ EKLENDİ)
-  const productPerformance = useMemo(() => {
-    const stats: Record<string, { name: string; quantity: number; revenue: number }> = {};
-    
-    sales.forEach(sale => {
-      sale.items.forEach(item => {
-        const pName = item.product?.name || 'Bilinmeyen Ürün';
-        if (!stats[pName]) stats[pName] = { name: pName, quantity: 0, revenue: 0 };
-        stats[pName].quantity += item.quantity;
-        stats[pName].revenue += item.total_price || 0;
-      });
+  const operatorStats = useMemo(() => {
+    const groups: Record<string, number> = {};
+    filteredItems.forEach(item => {
+      groups[item.operator_name] = (groups[item.operator_name] || 0) + item.total_price;
     });
+    return Object.entries(groups)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredItems]);
 
-    // Adet sayısına göre azalan sıralama
-    return Object.values(stats).sort((a, b) => b.quantity - a.quantity);
-  }, [sales]);
-
-
-  // --- EXCEL DIŞA AKTARMA ---
-  const exportReport = () => {
-    // Personel Raporu
-    const wsPersonnel = XLSX.utils.json_to_sheet(personnelPerformance.map(p => ({
-      'Personel': p.name,
-      'Toplam Satış Tutarı': p.revenue,
-      'İşlem Sayısı': p.count
-    })));
-
-    // Ürün Raporu (YENİ)
-    const wsProducts = XLSX.utils.json_to_sheet(productPerformance.map(p => ({
-      'Ürün Adı': p.name,
-      'Satılan Adet': p.quantity,
-      'Toplam Gelir': p.revenue
-    })));
-
-    // Müşteri Raporu
-    const wsCustomer = XLSX.utils.json_to_sheet(customerPerformance.map(c => ({
-      'Müşteri': c.name,
-      'Toplam Alım Tutarı': c.revenue
-    })));
-
-    // Ham Veri
-    const wsRaw = XLSX.utils.json_to_sheet(sales.map(s => ({
-      'Tarih': format(new Date(s.sale_date), 'dd.MM.yyyy', { locale: tr }),
-      'Müşteri': s.customer?.kisa_isim,
-      'Şube': s.branch?.sube_adi,
-      'Personel': s.visit?.operator?.name,
-      'Tutar': s.total_amount,
-      'Ürünler': s.items.map(i => `${i.product?.name} (${i.quantity})`).join(', ')
-    })));
-
+  // --- EXCEL ---
+  const exportExcel = () => {
+    const wsData = filteredItems.map(item => ({
+      'Tarih': format(new Date(item.sale_date), 'dd.MM.yyyy', { locale: tr }),
+      'Ürün': item.product_name,
+      'Müşteri': item.customer_name,
+      'Şube': item.branch_name,
+      'Personel': item.operator_name,
+      'Adet': item.quantity,
+      'Tutar': item.total_price
+    }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsProducts, "Ürün Analizi");
-    XLSX.utils.book_append_sheet(wb, wsPersonnel, "Personel Performans");
-    XLSX.utils.book_append_sheet(wb, wsCustomer, "Müşteri Analizi");
-    XLSX.utils.book_append_sheet(wb, wsRaw, "Tüm Satışlar");
-
-    XLSX.writeFile(wb, `Satis_Raporu_${startDate}_${endDate}.xlsx`);
+    const ws = XLSX.utils.json_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, "Rapor");
+    XLSX.writeFile(wb, `Malzeme_Analiz.xlsx`);
   };
 
+  if (error) {
+    return (
+      <div className="p-6 text-center text-red-600">
+        <AlertTriangle className="mx-auto mb-2" size={40} />
+        <h2 className="text-xl font-bold">Bir hata oluştu</h2>
+        <p>{error}</p>
+        <button onClick={fetchAllSales} className="mt-4 px-4 py-2 bg-red-100 rounded hover:bg-red-200">Tekrar Dene</button>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
-      {/* BAŞLIK VE FİLTRELER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+    <div className="min-h-screen bg-gray-50 p-6 space-y-6">
+      
+      {/* ÜST PANEL */}
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Malzeme Satış Raporları</h1>
-          <p className="text-gray-500 text-sm">Satış performansını, ürünleri ve dağılımları analiz edin.</p>
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Package className="text-blue-600" />
+            Malzeme Satış Analizi
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            {searchTerm ? `"${searchTerm}" için sonuçlar.` : 'Tüm ürün satışları.'}
+          </p>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border">
-            <Calendar size={18} className="text-gray-500" />
-            <input 
-              type="date" 
-              value={startDate} 
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-transparent text-sm focus:outline-none"
-            />
-            <span className="text-gray-400">-</span>
-            <input 
-              type="date" 
-              value={endDate} 
-              onChange={(e) => setEndDate(e.target.value)}
-              className="bg-transparent text-sm focus:outline-none"
+
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="relative group flex-1 md:w-64">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Ürün adı ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
-          
-          <button 
-            onClick={fetchAllSales} 
-            className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-            title="Yenile"
-          >
+
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded-lg p-1.5 px-3">
+            <Calendar size={18} className="text-gray-500" />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-sm outline-none w-32" />
+            <span className="text-gray-400">-</span>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-sm outline-none w-32" />
+          </div>
+
+          <button onClick={fetchAllSales} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg border border-gray-200">
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
 
-          <button 
-            onClick={exportReport}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-          >
+          <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm">
             <Download size={18} />
-            <span>Excel Raporu</span>
+            <span className="hidden sm:inline">Excel</span>
           </button>
         </div>
       </div>
 
-      {/* KPI KARTLARI (ÖZET) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Toplam Ciro</p>
-            <h3 className="text-3xl font-bold text-gray-800">{summaryStats.totalRevenue.toLocaleString('tr-TR')} ₺</h3>
-          </div>
-          <div className="p-4 bg-green-50 rounded-full text-green-600">
-            <TrendingUp size={24} />
+      {/* KPI KARTLARI */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+          <p className="text-sm font-medium text-gray-500">Seçili Ciro</p>
+          <div className="flex justify-between items-end mt-2">
+            <h3 className="text-2xl font-bold text-gray-900">{stats.totalRevenue.toLocaleString('tr-TR')} ₺</h3>
+            <div className="p-2 bg-green-50 text-green-600 rounded-lg"><TrendingUp size={20} /></div>
           </div>
         </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Toplam İşlem</p>
-            <h3 className="text-3xl font-bold text-gray-800">{summaryStats.totalSalesCount}</h3>
-          </div>
-          <div className="p-4 bg-blue-50 rounded-full text-blue-600">
-            <Filter size={24} />
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+          <p className="text-sm font-medium text-gray-500">Satılan Miktar</p>
+          <div className="flex justify-between items-end mt-2">
+            <h3 className="text-2xl font-bold text-gray-900">{stats.totalQuantity} Adet</h3>
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Package size={20} /></div>
           </div>
         </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-1">Satılan Ürün Adedi</p>
-            <h3 className="text-3xl font-bold text-gray-800">{summaryStats.totalItemsSold}</h3>
-          </div>
-          <div className="p-4 bg-purple-50 rounded-full text-purple-600">
-            <Package size={24} />
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+          <p className="text-sm font-medium text-gray-500">İşlem Hacmi</p>
+          <div className="flex justify-between items-end mt-2">
+            <h3 className="text-2xl font-bold text-gray-900">{stats.uniqueTransactions} İşlem</h3>
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Filter size={20} /></div>
           </div>
         </div>
       </div>
 
-      {/* SEKME YAPISI */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex border-b overflow-x-auto">
-          <button 
-            onClick={() => setActiveTab('ozet')}
-            className={`px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'ozet' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
-          >
-            Genel Bakış
-          </button>
-          <button 
-            onClick={() => setActiveTab('urunler')}
-            className={`px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'urunler' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
-          >
-            Ürün Analizi
-          </button>
-          <button 
-            onClick={() => setActiveTab('personel')}
-            className={`px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'personel' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
-          >
-            Personel Performansı
-          </button>
-          <button 
-            onClick={() => setActiveTab('musteri')}
-            className={`px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'musteri' ? 'border-b-2 border-green-600 text-green-700 bg-green-50' : 'text-gray-600 hover:bg-gray-50'}`}
-          >
-            Müşteri & Şube Analizi
-          </button>
+      {/* DETAY TABLOLARI */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Ürün Listesi */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden h-[500px] flex flex-col">
+          <div className="p-4 border-b bg-gray-50">
+            <h3 className="font-semibold text-gray-800">Bulunan Ürünler</h3>
+          </div>
+          <div className="overflow-y-auto flex-1 p-2">
+            {productStats.map((prod, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 mb-2 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="flex-1 min-w-0 mr-2">
+                  <p className="font-medium text-sm text-gray-900 truncate">{prod.name}</p>
+                  <p className="text-xs text-gray-500">{prod.revenue.toLocaleString('tr-TR')} ₺ Ciro</p>
+                </div>
+                <div className="bg-white px-2 py-1 rounded border text-xs font-bold text-gray-700 whitespace-nowrap">
+                  {prod.qty} Adet
+                </div>
+              </div>
+            ))}
+             {productStats.length === 0 && (
+               <p className="text-center text-gray-400 text-sm mt-10">Kayıt bulunamadı.</p>
+             )}
+          </div>
         </div>
 
-        <div className="p-6">
-          {/* SEKME 1: GENEL BAKIŞ (Grafikler) */}
-          {activeTab === 'ozet' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-lg font-bold text-gray-800 mb-4">En Çok Satış Yapan Personeller</h3>
-                <div className="h-80 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={personnelPerformance.slice(0, 5)} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="name" type="category" width={100} />
-                      <RechartsTooltip formatter={(value) => `${Number(value).toLocaleString('tr-TR')} ₺`} />
-                      <Bar dataKey="revenue" fill="#10B981" radius={[0, 4, 4, 0]} name="Ciro" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold text-gray-800 mb-4">En Büyük 5 Müşteri</h3>
-                <div className="h-80 w-full flex justify-center">
-                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={customerPerformance.slice(0, 5)}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        paddingAngle={5}
-                        dataKey="revenue"
-                        nameKey="name"
-                        label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {customerPerformance.slice(0, 5).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip formatter={(value) => `${Number(value).toLocaleString('tr-TR')} ₺`} />
-                    </PieChart>
-                   </ResponsiveContainer>
-                </div>
-              </div>
+        {/* Müşteri Listesi */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden h-[500px] flex flex-col">
+            <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+              <h3 className="font-semibold text-gray-800">Müşteri Bazlı Dağılım</h3>
+              <UserCheck size={18} className="text-gray-400" />
             </div>
-          )}
-
-          {/* SEKME 2: ÜRÜN ANALİZİ (YENİ SEKME) */}
-          {activeTab === 'urunler' && (
-            <div>
-              <h3 className="text-lg font-bold text-gray-800 mb-4">Satılan Malzemeler (Adet ve Ciro)</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 border rounded-lg">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün Adı</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Satılan Adet</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Elde Edilen Gelir</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ortalama Birim Fiyat</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {productPerformance.map((p, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                           <div className="flex items-center">
-                             <span className="font-medium text-gray-900">{idx + 1}. {p.name}</span>
-                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-700">
-                          {p.quantity} Adet
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-green-600">
-                          {p.revenue.toLocaleString('tr-TR')} ₺
-                        </td>
-                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                          {(p.quantity > 0 ? (p.revenue / p.quantity) : 0).toLocaleString('tr-TR')} ₺
-                        </td>
-                      </tr>
-                    ))}
-                    {productPerformance.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                          Seçilen tarih aralığında ürün satışı bulunamadı.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* SEKME 3: PERSONEL LİSTESİ */}
-          {activeTab === 'personel' && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 border rounded-lg">
-                <thead className="bg-gray-50">
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Personel</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">İşlem Sayısı</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Toplam Ciro</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ort. İşlem Tutarı</th>
+                    <th className="px-6 py-3">Müşteri</th>
+                    <th className="px-6 py-3 text-right">Tutar</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {personnelPerformance.map((p, idx) => (
+                <tbody className="divide-y divide-gray-100">
+                  {customerStats.map((cust, idx) => (
                     <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{p.name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-gray-600">{p.count}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-green-600">
-                        {p.revenue.toLocaleString('tr-TR')} ₺
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-gray-600">
-                        {(p.revenue / p.count).toLocaleString('tr-TR')} ₺
-                      </td>
+                      <td className="px-6 py-3 font-medium text-gray-900">{cust.name}</td>
+                      <td className="px-6 py-3 text-right font-semibold text-gray-700">{cust.value.toLocaleString('tr-TR')} ₺</td>
                     </tr>
                   ))}
+                   {customerStats.length === 0 && (
+                    <tr><td colSpan={2} className="p-4 text-center text-gray-500">Veri bulunamadı.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
-          )}
-
-          {/* SEKME 4: MÜŞTERİ VE ŞUBE LİSTESİ */}
-          {activeTab === 'musteri' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Müşteri Tablosu */}
-              <div>
-                <h3 className="font-bold text-gray-700 mb-3 border-b pb-2">En Çok Alım Yapan Müşteriler (Top 10)</h3>
-                <ul className="space-y-3">
-                  {customerPerformance.map((c, idx) => (
-                    <li key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-gray-700">{idx + 1}. {c.name}</span>
-                      <span className="font-bold text-green-600">{c.revenue.toLocaleString('tr-TR')} ₺</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Şube Tablosu */}
-              <div>
-                <h3 className="font-bold text-gray-700 mb-3 border-b pb-2">En Çok Alım Yapan Şubeler (Top 10)</h3>
-                <ul className="space-y-3">
-                  {branchPerformance.map((b, idx) => (
-                    <li key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <span className="block font-medium text-gray-700">{idx + 1}. {b.name}</span>
-                        <span className="text-xs text-gray-500">{b.customer}</span>
-                      </div>
-                      <span className="font-bold text-green-600">{b.revenue.toLocaleString('tr-TR')} ₺</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+       {/* Personel Listesi */}
+       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b bg-gray-50">
+            <h3 className="font-semibold text-gray-800">Personel Satış Performansı</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-gray-500 uppercase bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3">Personel</th>
+                  <th className="px-6 py-3 text-right">Toplam Satış (₺)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {operatorStats.map((op, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-6 py-3 font-medium text-gray-900">{op.name}</td>
+                    <td className="px-6 py-3 text-right font-bold text-green-600">{op.value.toLocaleString('tr-TR')} ₺</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
     </div>
   );
 };
