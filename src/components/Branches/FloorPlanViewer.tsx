@@ -345,7 +345,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                 x="0" y="0" 
                 width={activeFloorData.width}
                 height={activeFloorData.height}
-                // preserveAspectRatio="none" // BU SATIR SİLİNDİ, KAYMAYI ENGELLER
+                preserveAspectRatio="none" // BU SATIRI GERİ EKLEDİK: Resmi alana tam sığdırır, kaymayı önler
                 opacity="0.9"
               />
             ) : (
