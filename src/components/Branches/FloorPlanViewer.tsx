@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar, RefreshCw, Layout, Info, X, MapPin, Activity, Layers, ZoomIn, ZoomOut, Move } from 'lucide-react';
+import { Calendar, RefreshCw, Layout, Info, X, Activity, Layers, ZoomIn, ZoomOut, Move } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
@@ -14,27 +14,20 @@ interface EquipmentInfo {
   equipment: { name: string; type: string };
 }
 
-interface FloorPlanElement {
+interface FloorLayer {
   id: string;
-  type: 'wall' | 'door' | 'window' | 'equipment' | 'text' | 'room';
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  rotation?: number;
-  text?: string;
-  equipmentId?: string;
-  equipmentCode?: string;
-  hasActivity?: boolean;
-  lastActivity?: boolean;
+  name: string;
+  elements: any[];
+  background?: string;
 }
 
 interface FloorPlan {
   id: string;
   title: string;
   background_url?: string;
-  elements: FloorPlanElement[];
+  elements: any[];
   equipment_positions: Record<string, { x: number, y: number }>;
+  floors?: FloorLayer[]; // Çoklu kat desteği için eklendi
   width?: number;
   height?: number;
 }
@@ -47,6 +40,9 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   const [plans, setPlans] = useState<FloorPlan[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   
+  // YENİ: Kat Yönetimi State'i
+  const [activeFloorIndex, setActiveFloorIndex] = useState(0);
+
   const [equipmentsMap, setEquipmentsMap] = useState<Record<string, EquipmentInfo>>({});
   const [loading, setLoading] = useState(true);
   
@@ -59,8 +55,43 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   // Detay Modalı için State
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(null);
 
-  // Aktif Kroki
+  // Aktif Plan (Veritabanı Satırı)
   const currentPlan = plans.find(p => p.id === currentPlanId);
+
+  // YENİ: Aktif Kat Verisini Hesapla
+  // Eğer planın içinde 'floors' dizisi varsa onu kullan, yoksa kök elementleri kullan.
+  const hasFloors = currentPlan?.floors && currentPlan.floors.length > 0;
+  
+  const activeFloorData = React.useMemo(() => {
+    if (!currentPlan) return null;
+    
+    if (hasFloors && currentPlan.floors) {
+      const floor = currentPlan.floors[activeFloorIndex] || currentPlan.floors[0];
+      
+      // Ekipman pozisyonlarını elementlerden çıkar (Floors yapısında equipment_positions olmayabilir)
+      const derivedPositions: Record<string, { x: number, y: number }> = {};
+      floor.elements?.forEach((el: any) => {
+        if (el.type === 'equipment' && el.equipmentId) {
+          derivedPositions[el.equipmentId] = { x: el.x, y: el.y };
+        }
+      });
+
+      return {
+        elements: floor.elements || [],
+        background: floor.background, // 'background_url' yerine 'background' olabilir
+        positions: derivedPositions,
+        name: floor.name
+      };
+    }
+
+    return {
+      elements: currentPlan.elements || [],
+      background: currentPlan.background_url,
+      positions: currentPlan.equipment_positions || {},
+      name: currentPlan.title
+    };
+  }, [currentPlan, hasFloors, activeFloorIndex]);
+
 
   useEffect(() => {
     fetchData();
@@ -70,22 +101,21 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
     try {
       setLoading(true);
       
-      // 1. Krokileri Çek (Çoklu kat desteği)
       const { data: planData } = await supabase
         .from('branch_floor_plans')
         .select('*')
         .eq('branch_id', branchId)
-        .order('created_at', { ascending: true }); // Oluşturulma sırasına göre (örn: Zemin, 1. Kat)
+        .order('created_at', { ascending: true });
       
       if (planData && planData.length > 0) {
         setPlans(planData);
-        setCurrentPlanId(planData[0].id); // İlk katı seç
+        setCurrentPlanId(planData[0].id);
+        setActiveFloorIndex(0); // İlk açılışta zemin kat
       } else {
         setPlans([]);
         setCurrentPlanId(null);
       }
 
-      // 2. Ekipman Bilgilerini Çek
       const { data: eqData } = await supabase
         .from('branch_equipment')
         .select('id, equipment_code, equipment:equipment_id(name, type)')
@@ -97,7 +127,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       });
       setEquipmentsMap(eqMap);
 
-      // 3. Tamamlanan Ziyaretleri Çek
       const { data: visitData } = await supabase
         .from('visits')
         .select('id, visit_date, equipment_checks, operator:operator_id(name)')
@@ -119,24 +148,21 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
 
   const selectedVisit = visits.find(v => v.id === selectedVisitId);
 
-  // Isı Haritası Renk Mantığı
   const getEquipmentStatusColor = (eqId: string) => {
-    if (!selectedVisit || !selectedVisit.equipment_checks) return '#9ca3af'; // Gri
+    if (!selectedVisit || !selectedVisit.equipment_checks) return '#9ca3af'; 
 
     const check = selectedVisit.equipment_checks[eqId];
     if (!check) return '#9ca3af';
 
-    // Kırmızı: Aktivite, sorun, tüketim varsa
     const isActivity = Object.values(check).some(val => 
        val === true || val === 'true' || val === 'var' || val === 'problem' || val === 'issue' ||
        (typeof val === 'string' && val.includes('tüketim') && val !== 'yok')
     );
 
-    if (isActivity) return '#ef4444'; // Kırmızı
-    return '#10b981'; // Yeşil (Temiz)
+    if (isActivity) return '#ef4444'; 
+    return '#10b981'; 
   };
 
-  // Yardımcı: Özellik değerini formatla
   const formatValue = (key: string, val: any) => {
     if (val === true || val === 'true') return 'Evet / Var';
     if (val === false || val === 'false') return 'Hayır / Yok';
@@ -193,64 +219,90 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   return (
     <div className="space-y-4">
       {/* Üst Kontrol Paneli */}
-      <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col gap-4">
         
-        {/* Sol Taraf: Kat ve Tarih Seçimi */}
-        <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-            
-            {/* Kat Seçimi (Sadece birden fazla kat varsa göster) */}
-            {plans.length > 1 && (
-                <div className="flex items-center gap-2 bg-purple-50 p-2 rounded-lg border border-purple-100 w-full sm:w-auto">
-                    <Layers className="text-purple-600" size={20} />
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            {/* Sol Taraf: Kat ve Tarih Seçimi */}
+            <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+                
+                {/* Plan Seçimi (Eğer birden fazla plan kaydı varsa) */}
+                {plans.length > 1 && !hasFloors && (
+                    <div className="flex items-center gap-2 bg-purple-50 p-2 rounded-lg border border-purple-100 w-full sm:w-auto">
+                        <Layers className="text-purple-600" size={20} />
+                        <div className="flex-1">
+                            <label className="block text-[10px] font-bold text-purple-800 uppercase tracking-wider">Plan</label>
+                            <select 
+                                value={currentPlanId || ''} 
+                                onChange={(e) => {
+                                    setCurrentPlanId(e.target.value);
+                                    setActiveFloorIndex(0);
+                                    resetTransform();
+                                }}
+                                className="bg-transparent border-none p-0 text-sm font-semibold text-purple-900 focus:ring-0 cursor-pointer w-full"
+                            >
+                                {plans.map(p => <option key={p.id} value={p.id}>{p.title || 'Plan'}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {/* Tarih Seçimi */}
+                <div className="flex items-center gap-2 bg-blue-50 p-2 rounded-lg border border-blue-100 flex-1 min-w-[250px]">
+                    <Calendar className="text-blue-600" size={20} />
                     <div className="flex-1">
-                        <label className="block text-[10px] font-bold text-purple-800 uppercase tracking-wider">Kat / Bölge</label>
-                        <select 
-                            value={currentPlanId || ''} 
-                            onChange={(e) => {
-                                setCurrentPlanId(e.target.value);
-                                resetTransform();
-                            }}
-                            className="bg-transparent border-none p-0 text-sm font-semibold text-purple-900 focus:ring-0 cursor-pointer w-full"
+                        <label className="block text-[10px] font-bold text-blue-800 uppercase tracking-wider">Ziyaret Tarihi</label>
+                        <select
+                            value={selectedVisitId}
+                            onChange={(e) => setSelectedVisitId(e.target.value)}
+                            className="bg-transparent border-none p-0 text-sm font-medium text-blue-900 focus:ring-0 cursor-pointer w-full"
                         >
-                            {plans.map(p => <option key={p.id} value={p.id}>{p.title || 'Kat'}</option>)}
+                            {visits.length === 0 && <option>Veri Yok</option>}
+                            {visits.map(v => (
+                                <option key={v.id} value={v.id}>
+                                    {format(parseISO(v.visit_date), 'dd MMM yyyy', { locale: tr })} - {v.operator?.name}
+                                </option>
+                            ))}
                         </select>
                     </div>
                 </div>
-            )}
+            </div>
 
-            {/* Tarih Seçimi */}
-            <div className="flex items-center gap-2 bg-blue-50 p-2 rounded-lg border border-blue-100 flex-1">
-                <Calendar className="text-blue-600" size={20} />
-                <div className="flex-1">
-                    <label className="block text-[10px] font-bold text-blue-800 uppercase tracking-wider">Ziyaret Tarihi</label>
-                    <select
-                        value={selectedVisitId}
-                        onChange={(e) => setSelectedVisitId(e.target.value)}
-                        className="bg-transparent border-none p-0 text-sm font-medium text-blue-900 focus:ring-0 cursor-pointer w-full"
-                    >
-                        {visits.length === 0 && <option>Veri Yok</option>}
-                        {visits.map(v => (
-                            <option key={v.id} value={v.id}>
-                                {format(parseISO(v.visit_date), 'dd MMM yyyy', { locale: tr })} - {v.operator?.name}
-                            </option>
-                        ))}
-                    </select>
+            {/* Sağ Taraf: Lejant */}
+            <div className="flex gap-3 text-xs font-medium text-gray-600 ml-auto">
+                <div className="flex items-center gap-1.5 bg-red-50 px-2 py-1 rounded border border-red-100">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Aktivite
+                </div>
+                <div className="flex items-center gap-1.5 bg-green-50 px-2 py-1 rounded border border-green-100">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span> Temiz
+                </div>
+                <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                    <span className="w-2 h-2 rounded-full bg-gray-400"></span> Veri Yok
                 </div>
             </div>
         </div>
 
-        {/* Sağ Taraf: Lejant */}
-        <div className="flex gap-3 text-xs font-medium text-gray-600 ml-auto">
-          <div className="flex items-center gap-1.5 bg-red-50 px-2 py-1 rounded border border-red-100">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Aktivite
-          </div>
-          <div className="flex items-center gap-1.5 bg-green-50 px-2 py-1 rounded border border-green-100">
-            <span className="w-2 h-2 rounded-full bg-green-500"></span> Temiz
-          </div>
-          <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-            <span className="w-2 h-2 rounded-full bg-gray-400"></span> Veri Yok
-          </div>
-        </div>
+        {/* KAT SEÇİM BUTONLARI (Yeni Özellik) */}
+        {hasFloors && currentPlan?.floors && (
+            <div className="flex gap-2 overflow-x-auto pb-2 border-t pt-3">
+                {currentPlan.floors.map((floor, idx) => (
+                    <button
+                        key={floor.id || idx}
+                        onClick={() => {
+                            setActiveFloorIndex(idx);
+                            resetTransform();
+                        }}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap border ${
+                            activeFloorIndex === idx 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                    >
+                        <Layers size={16} />
+                        {floor.name}
+                    </button>
+                ))}
+            </div>
+        )}
       </div>
 
       {/* Kroki Çizim Alanı */}
@@ -279,24 +331,22 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
             </defs>
             
             {/* Katman 1: Arkaplan Resmi */}
-            {currentPlan?.background_url ? (
+            {activeFloorData?.background ? (
               <image 
-                href={currentPlan.background_url} 
-                xlinkHref={currentPlan.background_url}
+                href={activeFloorData.background} 
+                xlinkHref={activeFloorData.background}
                 x="0" y="0" 
                 width="100%" height="100%" 
                 preserveAspectRatio="none"
                 opacity="0.9"
               />
             ) : (
-               /* Resim yoksa ızgara göster */
                <rect width="100%" height="100%" fill="url(#smallGrid)" />
             )}
 
             {/* Mimari Elemanlar */}
-            {currentPlan?.elements?.map((el: any) => (
+            {activeFloorData?.elements?.map((el: any) => (
               <g key={el.id}>
-                {/* DUVAR */}
                 {el.type === 'wall' && (
                     <rect 
                         x={el.x} y={el.y} width={el.width} height={el.height} 
@@ -305,7 +355,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                     />
                 )}
                 
-                {/* ODA */}
                 {el.type === 'room' && (
                     <g transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`}>
                         <rect 
@@ -323,7 +372,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                     </g>
                 )}
 
-                {/* KAPI */}
                 {el.type === 'door' && (
                     <g transform={`translate(${el.x}, ${el.y}) rotate(${el.rotation || 0}, ${el.width/2}, ${el.height/2})`}>
                         <rect width={el.width} height={el.height} fill="#a16207" rx={2} />
@@ -331,7 +379,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                     </g>
                 )}
 
-                {/* PENCERE */}
                 {el.type === 'window' && (
                     <rect 
                         x={el.x} y={el.y} width={el.width} height={el.height} 
@@ -340,7 +387,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                     />
                 )}
 
-                {/* METİN */}
                 {el.type === 'text' && (
                     <text 
                         x={el.x} y={el.y + (el.fontSize || 14)} 
@@ -357,7 +403,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
             ))}
 
             {/* Ekipmanlar ve Isı Haritası */}
-            {currentPlan?.equipment_positions && Object.entries(currentPlan.equipment_positions).map(([eqId, pos]: [string, any]) => {
+            {activeFloorData?.positions && Object.entries(activeFloorData.positions).map(([eqId, pos]: [string, any]) => {
               const statusColor = getEquipmentStatusColor(eqId);
               const isHot = statusColor === '#ef4444';
               const eqInfo = equipmentsMap[eqId];
@@ -368,11 +414,10 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                   transform={`translate(${pos.x}, ${pos.y})`} 
                   className="group cursor-pointer pointer-events-auto"
                   onClick={(e) => {
-                    e.stopPropagation(); // Pan işlemini engelle
+                    e.stopPropagation(); 
                     setSelectedEquipmentId(eqId);
                   }}
                 >
-                  {/* Isı Etkisi (Sadece kırmızıysa yanıp sön) */}
                   {isHot && (
                     <circle r="24" fill={statusColor} opacity="0.3">
                       <animate attributeName="r" values="20;28;20" dur="2s" repeatCount="indefinite" />
@@ -380,10 +425,8 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                     </circle>
                   )}
                   
-                  {/* Ekipman Noktası */}
                   <circle r="10" fill={statusColor} stroke="white" strokeWidth="2" className="shadow-sm drop-shadow-md transition-transform hover:scale-125" />
                   
-                  {/* Ekipman Kodu (Text) */}
                   {eqInfo && (
                     <text 
                       x="0" y="24" 
@@ -398,7 +441,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                     </text>
                   )}
                   
-                  {/* Hover Tooltip (Kısa Bilgi) */}
                   <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <rect x="-60" y="-50" width="120" height="35" rx="4" fill="#1e293b" fillOpacity="0.9" />
                     <text x="0" y="-36" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">
