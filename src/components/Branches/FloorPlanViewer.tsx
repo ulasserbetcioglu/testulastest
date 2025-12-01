@@ -472,8 +472,18 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                 <div className="text-center py-8">
                   <Info className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-600 font-medium">Veri Bulunamadı</p>
+                  <p className="text-sm text-gray-400 mt-1">Bu ziyarette bu ekipman için kontrol verisi girilmemiş.</p>
                 </div>
               )}
+            </div>
+            
+            <div className="p-4 border-t bg-gray-50 flex justify-end">
+              <button 
+                onClick={() => setSelectedEquipmentId(null)}
+                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors shadow-sm"
+              >
+                Kapat
+              </button>
             </div>
           </div>
         </div>
