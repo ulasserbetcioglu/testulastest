@@ -17,7 +17,6 @@ import Customers from './pages/Customers';
 import CustomerDetails from './components/Customers/CustomerDetails';
 import Offers from './pages/Offers';
 import OfferTemplates from './pages/OfferTemplates';
-import AdminMeetingMinutes from './pages/AdminMeetingMinutes';
 import NewOffer from './pages/NewOffer';
 import Definitions from './pages/Definitions';
 import Warehouses from './pages/Warehouses';
@@ -116,7 +115,8 @@ import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
 import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
 import BarcodeTest from './pages/BarcodeTest';
-import AdminMaterialSalesReports from './pages/AdminMaterialSalesReports'; // YENİ EKLENEN IMPORT
+import AdminMaterialSalesReports from './pages/AdminMaterialSalesReports';
+import AdminMeetingMinutes from './pages/AdminMeetingMinutes'; // YENİ EKLENEN SAYFA
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -278,8 +278,7 @@ function App() {
           {/* Korumalı rapor görüntüleyici */}
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
 
-          {/* --- YENİ EKLENEN MODÜL --- */}
-          {/* Bu sayfaya gitmek için tarayıcıda /barkod-test yazın */}
+          {/* Barkod Test Sayfası */}
           <Route path="/barkod-test" element={<BarcodeTest />} />
           
           {/* Admin Routes */}
@@ -366,9 +365,9 @@ function App() {
             <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
             <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />
             
-            {/* YENİ EKLENEN ROTA */}
+            {/* YENİ EKLENEN ROTALAR */}
             <Route path="malzeme-satis-raporlari" element={<AdminMaterialSalesReports />} />
-          
+            <Route path="toplanti-tutanaklari" element={<AdminMeetingMinutes />} />
             
           </Route>
           
