@@ -310,7 +310,6 @@ function App() {
             <Route path="sertifikalar" element={<Certificates />} />
             <Route path="ayarlar" element={<Settings />} />
             <Route path="bildirimler" element={<Notifications />} />
-            <Route path="toplanti-tutanaklari" element={<AdminMeetingMinutes />} />
             <Route path="bildirim-gonder" element={<AdminNotifications />} />
             <Route path="tanimlamalar" element={<Definitions />} />
             <Route path="takvim" element={<AdminCalendar />} />
