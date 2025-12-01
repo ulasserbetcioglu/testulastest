@@ -55,8 +55,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(null);
 
-  // Resim Boyutları State'i - BU KRİTİK NOKTA
-  // Resmin doğal boyutlarını saklayarak koordinat sistemini buna göre kuracağız.
+  // Resim Boyutları State'i (Eski kayıtlar için fallback)
   const [imageDimensions, setImageDimensions] = useState<{ width: number, height: number } | null>(null);
 
   // Aktif Plan
@@ -77,35 +76,32 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       const img = new Image();
       img.src = currentBackgroundUrl;
       img.onload = () => {
-        // Resmin orijinal boyutlarını alıyoruz
         setImageDimensions({
           width: img.naturalWidth,
           height: img.naturalHeight
         });
       };
     } else {
-      // Resim yoksa varsayılan bir boyut (örneğin veritabanındaki veya sabit)
       setImageDimensions(null);
     }
   }, [currentBackgroundUrl]);
-
 
   // Aktif Kat Verisini Hesapla
   const activeFloorData = useMemo(() => {
     if (!currentPlan) return null;
     
-    // Varsayılan boyutlar (Resim yüklenene kadar veya resim yoksa)
-    const fallbackWidth = currentPlan.width || 1000;
-    const fallbackHeight = currentPlan.height || 800;
-
-    // Resim yüklendiyse onun boyutlarını, yoksa fallback kullan
-    const finalWidth = imageDimensions?.width || fallbackWidth;
-    const finalHeight = imageDimensions?.height || fallbackHeight;
+    // Varsayılan boyutlar
+    const defaultWidth = 1000;
+    const defaultHeight = 800;
 
     // Çoklu kat yapısı
     if (currentPlan.floors && currentPlan.floors.length > 0) {
       const floor = currentPlan.floors[activeFloorIndex] || currentPlan.floors[0];
       
+      // Veritabanında boyut varsa onu kullan (En Doğrusu), yoksa resimden geleni kullan
+      const finalWidth = floor.width || imageDimensions?.width || defaultWidth;
+      const finalHeight = floor.height || imageDimensions?.height || defaultHeight;
+
       const derivedPositions: Record<string, { x: number, y: number }> = {};
       floor.elements?.forEach((el: any) => {
         if (el.type === 'equipment' && el.equipmentId) {
@@ -124,6 +120,9 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
     }
 
     // Tek katlı yapı
+    const finalWidth = currentPlan.width || imageDimensions?.width || defaultWidth;
+    const finalHeight = currentPlan.height || imageDimensions?.height || defaultHeight;
+
     return {
       elements: currentPlan.elements || [],
       background: currentPlan.background_url,
@@ -133,7 +132,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       height: finalHeight
     };
   }, [currentPlan, activeFloorIndex, imageDimensions]);
-
 
   useEffect(() => {
     fetchData();
@@ -241,7 +239,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   const zoomIn = () => setTransform(p => ({ ...p, scale: Math.min(10, p.scale + 0.2) }));
   const zoomOut = () => setTransform(p => ({ ...p, scale: Math.max(0.1, p.scale - 0.2) }));
   const resetTransform = () => setTransform({ x: 0, y: 0, scale: 1 });
-
 
   if (loading) return <div className="flex justify-center p-8"><RefreshCw className="animate-spin text-gray-400" /></div>;
 
@@ -361,13 +358,12 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         <div 
           className="relative bg-white shadow-2xl transition-transform duration-75 ease-linear origin-center" 
           style={{ 
-            // Burada genişlik ve yükseklik resmin GERÇEK boyutlarına eşitlendi
             width: activeFloorData?.width, 
             height: activeFloorData?.height, 
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` 
           }}
         >
-          {/* viewBox, resmin doğal boyutlarıyla 1:1 eşleşiyor */}
+          {/* SVG viewBox, resmin gerçek boyutlarına sabitlendi */}
           <svg 
             width={activeFloorData?.width}
             height={activeFloorData?.height}
@@ -388,8 +384,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                 x="0" y="0" 
                 width={activeFloorData.width}
                 height={activeFloorData.height}
-                // DÜZELTME: preserveAspectRatio KALDIRILDI
-                // viewBox zaten resim boyutunda olduğu için resim tam oturacak ve oran korunacak.
+                // DÜZELTME: Resim esnetilmiyor, orijinal boyutunda çiziliyor.
                 opacity="0.9"
               />
             ) : (
