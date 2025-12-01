@@ -367,7 +367,8 @@ function App() {
             <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />
             
             {/* YENİ EKLENEN ROTA */}
-            <Route path="malzeme-satis-raporlari" element={<AdminMaterialSalesReports />} />
+            <Route path="malzeme-satis-raporlari" element={<AdminMaterialSalesReports />}
+            <Route path="toplanti-tutanaklari" element={<AdminMeetingMinutes />} />
             
           </Route>
           
