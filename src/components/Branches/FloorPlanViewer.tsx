@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Calendar, RefreshCw, Layout, Info, X, Activity, Layers, ZoomIn, ZoomOut, Move } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
@@ -27,7 +27,7 @@ interface FloorPlan {
   background_url?: string;
   elements: any[];
   equipment_positions: Record<string, { x: number, y: number }>;
-  floors?: FloorLayer[]; // Çoklu kat desteği için eklendi
+  floors?: FloorLayer[];
   width?: number;
   height?: number;
 }
@@ -40,7 +40,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   const [plans, setPlans] = useState<FloorPlan[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   
-  // YENİ: Kat Yönetimi State'i
   const [activeFloorIndex, setActiveFloorIndex] = useState(0);
 
   const [equipmentsMap, setEquipmentsMap] = useState<Record<string, EquipmentInfo>>({});
@@ -52,23 +51,20 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   const dragStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Detay Modalı için State
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(null);
 
-  // Aktif Plan (Veritabanı Satırı)
+  // Aktif Plan
   const currentPlan = plans.find(p => p.id === currentPlanId);
 
-  // YENİ: Aktif Kat Verisini Hesapla
-  // Eğer planın içinde 'floors' dizisi varsa onu kullan, yoksa kök elementleri kullan.
-  const hasFloors = currentPlan?.floors && currentPlan.floors.length > 0;
-  
-  const activeFloorData = React.useMemo(() => {
+  // Aktif Kat Verisini Hesapla
+  const activeFloorData = useMemo(() => {
     if (!currentPlan) return null;
     
-    if (hasFloors && currentPlan.floors) {
+    // Çoklu kat yapısı varsa
+    if (currentPlan.floors && currentPlan.floors.length > 0) {
       const floor = currentPlan.floors[activeFloorIndex] || currentPlan.floors[0];
       
-      // Ekipman pozisyonlarını elementlerden çıkar (Floors yapısında equipment_positions olmayabilir)
+      // Floors içindeki elements dizisinden ekipman pozisyonlarını çıkarıyoruz
       const derivedPositions: Record<string, { x: number, y: number }> = {};
       floor.elements?.forEach((el: any) => {
         if (el.type === 'equipment' && el.equipmentId) {
@@ -78,19 +74,25 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
 
       return {
         elements: floor.elements || [],
-        background: floor.background, // 'background_url' yerine 'background' olabilir
+        background: floor.background,
         positions: derivedPositions,
-        name: floor.name
+        name: floor.name,
+        // Katın kendine özel boyutu yoksa planın genel boyutunu kullan
+        width: currentPlan.width || 1000, 
+        height: currentPlan.height || 800
       };
     }
 
+    // Tek katlı (eski) yapı
     return {
       elements: currentPlan.elements || [],
       background: currentPlan.background_url,
       positions: currentPlan.equipment_positions || {},
-      name: currentPlan.title
+      name: currentPlan.title,
+      width: currentPlan.width || 1000,
+      height: currentPlan.height || 800
     };
-  }, [currentPlan, hasFloors, activeFloorIndex]);
+  }, [currentPlan, activeFloorIndex]);
 
 
   useEffect(() => {
@@ -110,7 +112,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       if (planData && planData.length > 0) {
         setPlans(planData);
         setCurrentPlanId(planData[0].id);
-        setActiveFloorIndex(0); // İlk açılışta zemin kat
+        setActiveFloorIndex(0);
       } else {
         setPlans([]);
         setCurrentPlanId(null);
@@ -225,8 +227,8 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
             {/* Sol Taraf: Kat ve Tarih Seçimi */}
             <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
                 
-                {/* Plan Seçimi (Eğer birden fazla plan kaydı varsa) */}
-                {plans.length > 1 && !hasFloors && (
+                {/* Plan Seçimi (Eğer birden fazla plan kaydı varsa ve floors yapısı yoksa) */}
+                {plans.length > 1 && (!currentPlan?.floors || currentPlan.floors.length === 0) && (
                     <div className="flex items-center gap-2 bg-purple-50 p-2 rounded-lg border border-purple-100 w-full sm:w-auto">
                         <Layers className="text-purple-600" size={20} />
                         <div className="flex-1">
@@ -282,7 +284,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         </div>
 
         {/* KAT SEÇİM BUTONLARI (Yeni Özellik) */}
-        {hasFloors && currentPlan?.floors && (
+        {currentPlan?.floors && currentPlan.floors.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-2 border-t pt-3">
                 {currentPlan.floors.map((floor, idx) => (
                     <button
@@ -318,26 +320,32 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         <div 
           className="relative bg-white shadow-2xl transition-transform duration-75 ease-linear origin-center" 
           style={{ 
-            width: currentPlan?.width || 1000, 
-            height: currentPlan?.height || 800, 
+            width: activeFloorData?.width, // Veritabanından gelen gerçek boyut
+            height: activeFloorData?.height, 
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` 
           }}
         >
-          <svg width="100%" height="100%" className="w-full h-full pointer-events-none">
+          <svg 
+            width={activeFloorData?.width}
+            height={activeFloorData?.height}
+            viewBox={`0 0 ${activeFloorData?.width} ${activeFloorData?.height}`}
+            className="w-full h-full pointer-events-none"
+          >
             <defs>
               <pattern id="smallGrid" width="20" height="20" patternUnits="userSpaceOnUse">
                 <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" strokeWidth="1"/>
               </pattern>
             </defs>
             
-            {/* Katman 1: Arkaplan Resmi */}
+            {/* Katman 1: Arkaplan Resmi - DÜZELTME BURADA */}
             {activeFloorData?.background ? (
               <image 
                 href={activeFloorData.background} 
                 xlinkHref={activeFloorData.background}
                 x="0" y="0" 
-                width="100%" height="100%" 
-                preserveAspectRatio="none"
+                width={activeFloorData.width}
+                height={activeFloorData.height}
+                // preserveAspectRatio="none" // BU SATIR SİLİNDİ, KAYMAYI ENGELLER
                 opacity="0.9"
               />
             ) : (
