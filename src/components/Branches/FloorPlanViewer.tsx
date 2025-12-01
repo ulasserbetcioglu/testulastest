@@ -19,6 +19,8 @@ interface FloorLayer {
   name: string;
   elements: any[];
   background?: string;
+  width?: number;
+  height?: number;
 }
 
 interface FloorPlan {
@@ -40,6 +42,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   const [plans, setPlans] = useState<FloorPlan[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   
+  // Kat Seçimi için State
   const [activeFloorIndex, setActiveFloorIndex] = useState(0);
 
   const [equipmentsMap, setEquipmentsMap] = useState<Record<string, EquipmentInfo>>({});
@@ -56,11 +59,15 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   // Aktif Plan
   const currentPlan = plans.find(p => p.id === currentPlanId);
 
-  // Aktif Kat Verisini Hesapla
+  // --- AKTİF KAT VERİSİNİ HESAPLA ---
   const activeFloorData = useMemo(() => {
     if (!currentPlan) return null;
     
-    // Çoklu kat yapısı varsa
+    // Varsayılan boyutlar (Veritabanında yoksa)
+    const defaultWidth = 1000;
+    const defaultHeight = 800;
+
+    // Çoklu kat yapısı varsa (Yeni Sistem)
     if (currentPlan.floors && currentPlan.floors.length > 0) {
       const floor = currentPlan.floors[activeFloorIndex] || currentPlan.floors[0];
       
@@ -77,20 +84,20 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         background: floor.background,
         positions: derivedPositions,
         name: floor.name,
-        // Katın kendine özel boyutu yoksa planın genel boyutunu kullan
-        width: currentPlan.width || 1000, 
-        height: currentPlan.height || 800
+        // Katın boyutu varsa onu kullan, yoksa planın genel boyutunu kullan
+        width: floor.width || currentPlan.width || defaultWidth, 
+        height: floor.height || currentPlan.height || defaultHeight
       };
     }
 
-    // Tek katlı (eski) yapı
+    // Tek katlı (Eski Sistem)
     return {
       elements: currentPlan.elements || [],
       background: currentPlan.background_url,
       positions: currentPlan.equipment_positions || {},
       name: currentPlan.title,
-      width: currentPlan.width || 1000,
-      height: currentPlan.height || 800
+      width: currentPlan.width || defaultWidth,
+      height: currentPlan.height || defaultHeight
     };
   }, [currentPlan, activeFloorIndex]);
 
@@ -103,6 +110,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
     try {
       setLoading(true);
       
+      // Krokileri Çek
       const { data: planData } = await supabase
         .from('branch_floor_plans')
         .select('*')
@@ -112,12 +120,13 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       if (planData && planData.length > 0) {
         setPlans(planData);
         setCurrentPlanId(planData[0].id);
-        setActiveFloorIndex(0);
+        setActiveFloorIndex(0); // İlk açılışta ilk katı seç
       } else {
         setPlans([]);
         setCurrentPlanId(null);
       }
 
+      // Ekipman Bilgilerini Çek
       const { data: eqData } = await supabase
         .from('branch_equipment')
         .select('id, equipment_code, equipment:equipment_id(name, type)')
@@ -129,6 +138,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       });
       setEquipmentsMap(eqMap);
 
+      // Ziyaretleri Çek
       const { data: visitData } = await supabase
         .from('visits')
         .select('id, visit_date, equipment_checks, operator:operator_id(name)')
@@ -224,10 +234,10 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col gap-4">
         
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            {/* Sol Taraf: Kat ve Tarih Seçimi */}
+            {/* Sol Taraf: Plan ve Tarih Seçimi */}
             <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
                 
-                {/* Plan Seçimi (Eğer birden fazla plan kaydı varsa ve floors yapısı yoksa) */}
+                {/* Plan Seçimi (Birden fazla bağımsız plan kaydı varsa) */}
                 {plans.length > 1 && (!currentPlan?.floors || currentPlan.floors.length === 0) && (
                     <div className="flex items-center gap-2 bg-purple-50 p-2 rounded-lg border border-purple-100 w-full sm:w-auto">
                         <Layers className="text-purple-600" size={20} />
@@ -283,7 +293,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
             </div>
         </div>
 
-        {/* KAT SEÇİM BUTONLARI (Yeni Özellik) */}
+        {/* KAT SEÇİM BUTONLARI (Adminin eklediği katlar burada görünür) */}
         {currentPlan?.floors && currentPlan.floors.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-2 border-t pt-3">
                 {currentPlan.floors.map((floor, idx) => (
@@ -320,11 +330,12 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         <div 
           className="relative bg-white shadow-2xl transition-transform duration-75 ease-linear origin-center" 
           style={{ 
-            width: activeFloorData?.width, // Veritabanından gelen gerçek boyut
-            height: activeFloorData?.height, 
+            width: activeFloorData?.width, // Planın gerçek genişliği
+            height: activeFloorData?.height, // Planın gerçek yüksekliği
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` 
           }}
         >
+          {/* SVG Ayarları: viewBox, boyutları sabitler. Bu sayede noktalar kaymaz. */}
           <svg 
             width={activeFloorData?.width}
             height={activeFloorData?.height}
@@ -337,7 +348,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
               </pattern>
             </defs>
             
-            {/* Katman 1: Arkaplan Resmi - DÜZELTME BURADA */}
+            {/* Katman 1: Arkaplan Resmi */}
             {activeFloorData?.background ? (
               <image 
                 href={activeFloorData.background} 
@@ -345,14 +356,16 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                 x="0" y="0" 
                 width={activeFloorData.width}
                 height={activeFloorData.height}
-                preserveAspectRatio="none" // BU SATIRI GERİ EKLEDİK: Resmi alana tam sığdırır, kaymayı önler
+                // DÜZELTME: preserveAspectRatio="none" resmi svg kutusuna tam olarak yayar.
+                // Admin tarafında resim esnetilerek işaretleme yapıldığı için burada da esnetilmeli.
+                preserveAspectRatio="none" 
                 opacity="0.9"
               />
             ) : (
                <rect width="100%" height="100%" fill="url(#smallGrid)" />
             )}
 
-            {/* Mimari Elemanlar */}
+            {/* Mimari Elemanlar (Duvar, Kapı vb.) */}
             {activeFloorData?.elements?.map((el: any) => (
               <g key={el.id}>
                 {el.type === 'wall' && (
@@ -362,7 +375,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                         transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`}
                     />
                 )}
-                
                 {el.type === 'room' && (
                     <g transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`}>
                         <rect 
@@ -379,14 +391,12 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                         </text>
                     </g>
                 )}
-
                 {el.type === 'door' && (
                     <g transform={`translate(${el.x}, ${el.y}) rotate(${el.rotation || 0}, ${el.width/2}, ${el.height/2})`}>
                         <rect width={el.width} height={el.height} fill="#a16207" rx={2} />
                         <path d={`M 0 ${el.height} Q ${el.width} ${el.height} ${el.width} 0`} fill="none" stroke="#a16207" strokeDasharray="4" />
                     </g>
                 )}
-
                 {el.type === 'window' && (
                     <rect 
                         x={el.x} y={el.y} width={el.width} height={el.height} 
@@ -394,7 +404,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                         transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`}
                     />
                 )}
-
                 {el.type === 'text' && (
                     <text 
                         x={el.x} y={el.y + (el.fontSize || 14)} 
@@ -410,7 +419,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
               </g>
             ))}
 
-            {/* Ekipmanlar ve Isı Haritası */}
+            {/* Ekipmanlar ve Noktalar */}
             {activeFloorData?.positions && Object.entries(activeFloorData.positions).map(([eqId, pos]: [string, any]) => {
               const statusColor = getEquipmentStatusColor(eqId);
               const isHot = statusColor === '#ef4444';
@@ -464,21 +473,21 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
           </svg>
         </div>
 
-        {/* Zoom Kontrolleri */}
+        {/* Zoom Butonları */}
         <div className="absolute bottom-4 right-4 flex gap-2 bg-white/90 p-2 rounded-lg shadow border z-20" onMouseDown={e => e.stopPropagation()}>
            <button onClick={zoomOut} className="p-2 bg-white border rounded hover:bg-gray-50 text-sm"><ZoomOut size={20}/></button>
            <button onClick={resetTransform} className="p-2 bg-white border rounded hover:bg-gray-50 text-sm"><RefreshCw size={20}/></button>
            <button onClick={zoomIn} className="p-2 bg-white border rounded hover:bg-gray-50 text-sm"><ZoomIn size={20}/></button>
         </div>
         
-        {/* Hareket İpucu */}
+        {/* İpucu */}
         <div className="absolute top-4 right-4 bg-white/90 px-3 py-1.5 rounded-full shadow border text-xs text-gray-500 flex items-center gap-2 pointer-events-none z-20">
             <Move size={14} />
             Mouse ile sürükle / Tekerlek ile zoom
         </div>
       </div>
       
-      {/* --- EKİPMAN DETAY MODALI --- */}
+      {/* --- DETAY MODALI --- */}
       {selectedEquipmentId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm" onClick={() => setSelectedEquipmentId(null)}>
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
