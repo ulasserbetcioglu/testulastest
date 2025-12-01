@@ -55,54 +55,17 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(null);
 
-  // Resim Boyutları State'i - BU KRİTİK NOKTA
-  // Resmin doğal boyutlarını saklayarak koordinat sistemini buna göre kuracağız.
+  // Resim Boyutları State'i (EN ÖNEMLİ KISIM: Koordinatları eşitlemek için)
   const [imageDimensions, setImageDimensions] = useState<{ width: number, height: number } | null>(null);
 
   // Aktif Plan
   const currentPlan = plans.find(p => p.id === currentPlanId);
 
-  // Aktif Katın Arkaplan Resmini Bul
-  const currentBackgroundUrl = useMemo(() => {
-    if (!currentPlan) return null;
-    if (currentPlan.floors && currentPlan.floors.length > 0) {
-      return currentPlan.floors[activeFloorIndex]?.background;
-    }
-    return currentPlan.background_url;
-  }, [currentPlan, activeFloorIndex]);
-
-  // --- RESİM YÜKLEME VE BOYUT HESAPLAMA ---
-  useEffect(() => {
-    if (currentBackgroundUrl) {
-      const img = new Image();
-      img.src = currentBackgroundUrl;
-      img.onload = () => {
-        // Resmin orijinal boyutlarını alıyoruz
-        setImageDimensions({
-          width: img.naturalWidth,
-          height: img.naturalHeight
-        });
-      };
-    } else {
-      // Resim yoksa varsayılan bir boyut (örneğin veritabanındaki veya sabit)
-      setImageDimensions(null);
-    }
-  }, [currentBackgroundUrl]);
-
-
   // Aktif Kat Verisini Hesapla
   const activeFloorData = useMemo(() => {
     if (!currentPlan) return null;
     
-    // Varsayılan boyutlar (Resim yüklenene kadar veya resim yoksa)
-    const fallbackWidth = currentPlan.width || 1000;
-    const fallbackHeight = currentPlan.height || 800;
-
-    // Resim yüklendiyse onun boyutlarını, yoksa fallback kullan
-    const finalWidth = imageDimensions?.width || fallbackWidth;
-    const finalHeight = imageDimensions?.height || fallbackHeight;
-
-    // Çoklu kat yapısı
+    // Çoklu kat yapısı varsa
     if (currentPlan.floors && currentPlan.floors.length > 0) {
       const floor = currentPlan.floors[activeFloorIndex] || currentPlan.floors[0];
       
@@ -118,26 +81,45 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         background: floor.background,
         positions: derivedPositions,
         name: floor.name,
-        width: finalWidth,
-        height: finalHeight
+        // ÖNCELİK SIRASI: Resmin Doğal Boyutu > Veritabanı Boyutu > Varsayılan
+        width: imageDimensions?.width || floor.width || currentPlan.width || 1000, 
+        height: imageDimensions?.height || floor.height || currentPlan.height || 800
       };
     }
 
-    // Tek katlı yapı
+    // Tek katlı (eski) yapı
     return {
       elements: currentPlan.elements || [],
       background: currentPlan.background_url,
       positions: currentPlan.equipment_positions || {},
       name: currentPlan.title,
-      width: finalWidth,
-      height: finalHeight
+      width: imageDimensions?.width || currentPlan.width || 1000,
+      height: imageDimensions?.height || currentPlan.height || 800
     };
-  }, [currentPlan, activeFloorIndex, imageDimensions]);
+  }, [currentPlan, activeFloorIndex, imageDimensions]); // imageDimensions değişince yeniden hesapla
 
 
   useEffect(() => {
     fetchData();
   }, [branchId]);
+
+  // --- RESİM BOYUTLARINI ALGILA ---
+  // Arka plan resmi değiştiğinde veya kat değiştiğinde çalışır.
+  // Resmin doğal boyutlarını alıp state'e yazar. Böylece viewBox tam oturur.
+  useEffect(() => {
+    const bgUrl = currentPlan?.floors?.[activeFloorIndex]?.background || currentPlan?.background_url;
+    
+    if (bgUrl) {
+        const img = new Image();
+        img.src = bgUrl;
+        img.onload = () => {
+            setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+    } else {
+        // Resim yoksa null yap (varsayılan boyutlar kullanılır)
+        setImageDimensions(null);
+    }
+  }, [currentPlan, activeFloorIndex]); // Kat veya Plan değişince tetiklenir
 
   const fetchData = async () => {
     try {
@@ -361,13 +343,13 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         <div 
           className="relative bg-white shadow-2xl transition-transform duration-75 ease-linear origin-center" 
           style={{ 
-            // Burada genişlik ve yükseklik resmin GERÇEK boyutlarına eşitlendi
+            // Dinamik genişlik/yükseklik kullanımı
             width: activeFloorData?.width, 
             height: activeFloorData?.height, 
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` 
           }}
         >
-          {/* viewBox, resmin doğal boyutlarıyla 1:1 eşleşiyor */}
+          {/* viewBox'ı resmin gerçek boyutlarına eşitledik. Koordinat sistemi %100 doğru olacak. */}
           <svg 
             width={activeFloorData?.width}
             height={activeFloorData?.height}
@@ -388,8 +370,8 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                 x="0" y="0" 
                 width={activeFloorData.width}
                 height={activeFloorData.height}
-                // DÜZELTME: preserveAspectRatio KALDIRILDI
-                // viewBox zaten resim boyutunda olduğu için resim tam oturacak ve oran korunacak.
+                // DÜZELTME: preserveAspectRatio'yu kaldırdık veya varsayılana bıraktık.
+                // viewBox resmin boyutunda olduğu için resim tam oturur, esneme olmaz.
                 opacity="0.9"
               />
             ) : (
