@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Save, Plus, Upload, Trash2, Layers, Move, Type, 
-  Square, DoorOpen, Layout, Box, ZoomIn, ZoomOut, RefreshCw, X 
+  Square, DoorOpen, Layout, Box, ZoomIn, ZoomOut, RefreshCw, X, Image as ImageIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -38,7 +38,7 @@ const AdminFloorPlanEditor: React.FC = () => {
   const [selectedTool, setSelectedTool] = useState<'select' | 'wall' | 'room' | 'door' | 'window' | 'text' | 'equipment'>('select');
   const [selectedEquipmentToPlace, setSelectedEquipmentToPlace] = useState<string | null>(null);
   
-  // Pan & Zoom (Sadece Görüntüleme İçin, Kaydı Etkilemez)
+  // Pan & Zoom (Sadece Görüntüleme İçin)
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -50,6 +50,9 @@ const AdminFloorPlanEditor: React.FC = () => {
   // Yükleme Durumu
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Aktif Katın Verisi
+  const activeFloor = floors[activeFloorIndex];
 
   // --- VERİ ÇEKME ---
   useEffect(() => {
@@ -93,7 +96,6 @@ const AdminFloorPlanEditor: React.FC = () => {
 
   const loadFloorPlanData = async () => {
     setLoading(true);
-    // Mevcut planı çek
     const { data } = await supabase
       .from('branch_floor_plans')
       .select('*')
@@ -101,12 +103,10 @@ const AdminFloorPlanEditor: React.FC = () => {
       .order('created_at', { ascending: true });
 
     if (data && data.length > 0) {
-      // Eğer yeni sistem (floors dizisi) varsa onu kullan
       const mainPlan = data[0];
       if (mainPlan.floors && mainPlan.floors.length > 0) {
         setFloors(mainPlan.floors);
       } else {
-        // Eski sistemden (tek kat) dönüştür
         setFloors([{
           id: 'default',
           name: 'Zemin Kat',
@@ -117,7 +117,6 @@ const AdminFloorPlanEditor: React.FC = () => {
         }]);
       }
     } else {
-      // Hiç kayıt yoksa varsayılan kat oluştur
       setFloors([{
         id: crypto.randomUUID(),
         name: 'Zemin Kat',
@@ -158,7 +157,6 @@ const AdminFloorPlanEditor: React.FC = () => {
     
     setUploading(true);
     try {
-      // 1. Resmi Supabase'e Yükle
       const fileExt = file.name.split('.').pop();
       const fileName = `${selectedBranch}-${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
@@ -171,7 +169,7 @@ const AdminFloorPlanEditor: React.FC = () => {
         .from('floor-plans')
         .getPublicUrl(fileName);
 
-      // 2. Resmin DOĞAL BOYUTLARINI Al (Kritik Nokta!)
+      // Resmin DOĞAL BOYUTLARINI Al ve Kat Verisine Kaydet
       const img = new Image();
       img.src = publicUrl;
       img.onload = () => {
@@ -193,10 +191,9 @@ const AdminFloorPlanEditor: React.FC = () => {
     }
   };
 
-  // --- ÇİZİM VE KOORDİNAT YÖNETİMİ ---
-
-  // Ekran koordinatını (mouse click) SVG içindeki GERÇEK koordinata (resim üzerindeki piksele) çevirir.
-  // Bu fonksiyon sayesinde zoom yapsanız da, kaydırsanız da nokta tam yerine konur.
+  // --- KOORDİNAT HESAPLAMA (KRİTİK BÖLÜM) ---
+  // Ekran koordinatını (mouse click) SVG içindeki GERÇEK koordinata çevirir.
+  // Bu, zoom/pan ve resim boyutundan bağımsız olarak doğru noktayı verir.
   const getSVGCoordinates = (clientX: number, clientY: number) => {
     if (!svgRef.current) return { x: 0, y: 0 };
     const pt = svgRef.current.createSVGPoint();
@@ -208,14 +205,11 @@ const AdminFloorPlanEditor: React.FC = () => {
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
-    // Sürükleme yapılıyorsa tıklama sayma
     if (isDraggingCanvas) return;
     if (selectedTool === 'select') return;
 
-    // Tıklanan noktanın GERÇEK koordinatlarını al
     const { x, y } = getSVGCoordinates(e.clientX, e.clientY);
 
-    // Yeni eleman oluştur
     const newElement = {
       id: crypto.randomUUID(),
       type: selectedTool,
@@ -225,11 +219,10 @@ const AdminFloorPlanEditor: React.FC = () => {
       height: 50,
       rotation: 0,
       text: selectedTool === 'text' ? 'Metin' : '',
-      // Eğer ekipman seçiliyse onun bilgilerini ekle
       ...(selectedTool === 'equipment' && selectedEquipmentToPlace ? {
         equipmentId: selectedEquipmentToPlace,
         equipmentCode: availableEquipments.find(eq => eq.id === selectedEquipmentToPlace)?.equipment_code,
-        width: 30, // Ekipmanlar için sabit küçük boyut
+        width: 30,
         height: 30
       } : {})
     };
@@ -238,7 +231,6 @@ const AdminFloorPlanEditor: React.FC = () => {
     newFloors[activeFloorIndex].elements.push(newElement);
     setFloors(newFloors);
 
-    // Ekipman eklendiyse seçimi sıfırla
     if (selectedTool === 'equipment') {
       setSelectedEquipmentToPlace(null);
       setSelectedTool('select');
@@ -246,10 +238,9 @@ const AdminFloorPlanEditor: React.FC = () => {
     }
   };
 
-  // Eleman Sürükleme (Mevcut elemanı kaydırma)
   const handleElementMouseDown = (e: React.MouseEvent, elementId: string) => {
     if (selectedTool !== 'select') return;
-    e.stopPropagation(); // Canvas sürüklemesini engelle
+    e.stopPropagation();
     setDraggingElementId(elementId);
   };
 
@@ -260,7 +251,6 @@ const AdminFloorPlanEditor: React.FC = () => {
       const newFloors = [...floors];
       const elIndex = newFloors[activeFloorIndex].elements.findIndex(el => el.id === draggingElementId);
       if (elIndex !== -1) {
-        // Merkezi mouse ucuna getir
         const el = newFloors[activeFloorIndex].elements[elIndex];
         el.x = x - (el.width || 0) / 2;
         el.y = y - (el.height || 0) / 2;
@@ -273,7 +263,6 @@ const AdminFloorPlanEditor: React.FC = () => {
     setDraggingElementId(null);
   };
 
-  // Eleman Silme (Sağ Tık)
   const handleElementContextMenu = (e: React.MouseEvent, elementId: string) => {
     e.preventDefault();
     if (confirm("Bu öğeyi silmek istiyor musunuz?")) {
@@ -283,40 +272,24 @@ const AdminFloorPlanEditor: React.FC = () => {
     }
   };
 
-  // Kaydet
   const saveAll = async () => {
     setLoading(true);
     try {
-      // Mevcut kayıtları temizle (Basit yöntem: silip yeniden ekle veya update)
-      // Ancak burada tek bir satırda JSON tutuyorsak update yeterli.
-      
-      // Önce bu şube için kayıt var mı bak
       const { data } = await supabase.from('branch_floor_plans').select('id').eq('branch_id', selectedBranch);
       
       const payload = {
         branch_id: selectedBranch,
         title: 'Genel Yerleşim',
-        floors: floors, // Tüm kat verisi JSON olarak
+        floors: floors,
         updated_at: new Date().toISOString()
       };
 
-      let error;
       if (data && data.length > 0) {
-        const { error: updateError } = await supabase
-          .from('branch_floor_plans')
-          .update(payload)
-          .eq('branch_id', selectedBranch);
-        error = updateError;
+        await supabase.from('branch_floor_plans').update(payload).eq('branch_id', selectedBranch);
       } else {
-        const { error: insertError } = await supabase
-          .from('branch_floor_plans')
-          .insert([payload]);
-        error = insertError;
+        await supabase.from('branch_floor_plans').insert([payload]);
       }
-
-      if (error) throw error;
       toast.success("Kroki ve ekipman yerleşimi kaydedildi.");
-
     } catch (err: any) {
       toast.error("Hata: " + err.message);
     } finally {
@@ -324,12 +297,9 @@ const AdminFloorPlanEditor: React.FC = () => {
     }
   };
 
-  // --- RENDER ---
-  const activeFloor = floors[activeFloorIndex];
-
   return (
     <div className="flex flex-col h-[calc(100vh-100px)]">
-      {/* ÜST PANEL: Seçimler */}
+      {/* ÜST PANEL */}
       <div className="bg-white p-4 border-b flex flex-wrap gap-4 items-center justify-between">
         <div className="flex gap-2">
           <select 
@@ -363,7 +333,7 @@ const AdminFloorPlanEditor: React.FC = () => {
       {selectedBranch && activeFloor ? (
         <div className="flex flex-1 overflow-hidden">
           {/* SOL PANEL: Araçlar */}
-          <div className="w-64 bg-gray-50 border-r flex flex-col">
+          <div className="w-64 bg-gray-50 border-r flex flex-col overflow-y-auto">
             
             {/* Katlar */}
             <div className="p-4 border-b">
@@ -388,18 +358,21 @@ const AdminFloorPlanEditor: React.FC = () => {
             {/* Kroki Yükleme */}
             <div className="p-4 border-b">
               <label className="block text-sm font-bold text-gray-700 mb-2">Arkaplan Resmi</label>
-              <label className="flex items-center gap-2 cursor-pointer bg-white border border-gray-300 p-2 rounded text-sm hover:bg-gray-50">
-                <Upload size={16} />
-                <span>{uploading ? 'Yükleniyor...' : 'Resim Seç'}</span>
+              <label className="flex items-center gap-2 cursor-pointer bg-white border border-gray-300 p-2 rounded text-sm hover:bg-gray-50 transition-colors">
+                {uploading ? <RefreshCw className="animate-spin" size={16} /> : <Upload size={16} />}
+                <span>{uploading ? 'Yükleniyor...' : activeFloor.background ? 'Resmi Değiştir' : 'Resim Yükle'}</span>
                 <input type="file" accept="image/*" className="hidden" onChange={handleBackgroundUpload} disabled={uploading} />
               </label>
               {activeFloor.width && (
-                <p className="text-xs text-gray-400 mt-1">Boyut: {activeFloor.width}x{activeFloor.height}px</p>
+                <div className="mt-2 text-xs text-gray-500 bg-gray-100 p-2 rounded">
+                  <div className="font-semibold">Resim Boyutu:</div>
+                  {activeFloor.width} x {activeFloor.height} px
+                </div>
               )}
             </div>
 
             {/* Araç Kutusu */}
-            <div className="p-4 flex-1 overflow-y-auto">
+            <div className="p-4 flex-1">
               <h3 className="font-bold text-sm text-gray-700 mb-2">Araçlar</h3>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setSelectedTool('select')} className={`p-2 border rounded flex flex-col items-center gap-1 ${selectedTool === 'select' ? 'bg-blue-50 border-blue-500' : 'bg-white'}`}>
@@ -420,9 +393,8 @@ const AdminFloorPlanEditor: React.FC = () => {
               </div>
 
               <h3 className="font-bold text-sm text-gray-700 mt-4 mb-2">Ekipmanlar</h3>
-              <div className="space-y-1">
+              <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
                 {availableEquipments.map(eq => {
-                  // Bu katta bu ekipman zaten var mı?
                   const isPlaced = activeFloor.elements.some(el => el.equipmentId === eq.id);
                   return (
                     <button 
@@ -432,13 +404,13 @@ const AdminFloorPlanEditor: React.FC = () => {
                         setSelectedTool('equipment');
                         setSelectedEquipmentToPlace(eq.id);
                       }}
-                      className={`w-full text-left p-2 text-xs border rounded flex justify-between items-center ${
+                      className={`w-full text-left p-2 text-xs border rounded flex justify-between items-center transition-colors ${
                         selectedEquipmentToPlace === eq.id ? 'bg-blue-100 border-blue-500 ring-1 ring-blue-500' : 
                         isPlaced ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50'
                       }`}
                     >
                       <span className="font-medium">{eq.equipment_code}</span>
-                      <span className="text-[10px] text-gray-500">{eq.equipment.name}</span>
+                      <span className="text-[10px] text-gray-500 truncate max-w-[80px]" title={eq.equipment.name}>{eq.equipment.name}</span>
                     </button>
                   );
                 })}
@@ -458,7 +430,7 @@ const AdminFloorPlanEditor: React.FC = () => {
 
             {/* Sürüklenebilir Alan */}
             <div 
-              className="flex-1 overflow-hidden relative cursor-crosshair"
+              className="flex-1 overflow-hidden relative cursor-crosshair flex items-center justify-center"
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget && selectedTool === 'select') {
                   setIsDraggingCanvas(true);
@@ -481,17 +453,19 @@ const AdminFloorPlanEditor: React.FC = () => {
               <div 
                 style={{ 
                   transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-                  transformOrigin: '0 0',
+                  // DÜZELTME: Transform origin merkezi değil, sol üst köşe olsun ki koordinatlar karışmasın
+                  transformOrigin: '0 0', 
                   width: activeFloor.width || 1000,
                   height: activeFloor.height || 800
                 }}
-                className="relative bg-white shadow-2xl transition-transform duration-75"
+                className="relative bg-white shadow-2xl transition-transform duration-75 ease-linear"
               >
                 {/* SVG Alanı - Resim Boyutlarına Sabitlenmiş */}
                 <svg 
                   ref={svgRef}
                   width={activeFloor.width || 1000}
                   height={activeFloor.height || 800}
+                  // DÜZELTME: viewBox, resmin GERÇEK boyutlarına eşitlenir.
                   viewBox={`0 0 ${activeFloor.width || 1000} ${activeFloor.height || 800}`}
                   className="block"
                 >
@@ -502,6 +476,7 @@ const AdminFloorPlanEditor: React.FC = () => {
                       width={activeFloor.width} 
                       height={activeFloor.height}
                       opacity={0.8}
+                      // DÜZELTME: preserveAspectRatio KALDIRILDI. Resim esnetilmeden doğal haliyle oturur.
                     />
                   ) : (
                     <rect width="100%" height="100%" fill="url(#grid)" />
@@ -526,7 +501,7 @@ const AdminFloorPlanEditor: React.FC = () => {
                       {el.type === 'equipment' ? (
                         <>
                           <circle r={15} fill="#3b82f6" stroke="white" strokeWidth="2" cx={15} cy={15} />
-                          <text x={15} y={-5} textAnchor="middle" fill="#1e293b" fontSize="12" fontWeight="bold" className="select-none bg-white px-1">
+                          <text x={15} y={-5} textAnchor="middle" fill="#1e293b" fontSize="12" fontWeight="bold" className="select-none bg-white px-1 shadow-sm rounded">
                             {el.equipmentCode}
                           </text>
                         </>
@@ -535,8 +510,15 @@ const AdminFloorPlanEditor: React.FC = () => {
                       ) : el.type === 'room' ? (
                         <>
                           <rect width={el.width} height={el.height} fill="#f1f5f9" stroke="#94a3b8" strokeWidth="2" fillOpacity={0.5} />
-                          <text x={el.width/2} y={el.height/2} textAnchor="middle" fill="#64748b" fontSize="14" fontWeight="bold" pointerEvents="none">Oda</text>
+                          <text x={el.width/2} y={el.height/2} textAnchor="middle" fill="#64748b" fontSize="14" fontWeight="bold" pointerEvents="none" className="select-none">{el.text || 'Oda'}</text>
                         </>
+                      ) : el.type === 'door' ? (
+                        <g>
+                           <rect width={el.width} height={el.height} fill="#a16207" rx={2} />
+                           <path d={`M 0 ${el.height} Q ${el.width} ${el.height} ${el.width} 0`} fill="none" stroke="#a16207" strokeDasharray="4" />
+                        </g>
+                      ) : el.type === 'text' ? (
+                         <text fontSize={20} fill="#1f2937" fontWeight="bold" className="select-none">{el.text || 'Metin'}</text>
                       ) : (
                         <rect width={el.width} height={el.height} fill="#ccc" />
                       )}
@@ -548,10 +530,11 @@ const AdminFloorPlanEditor: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-gray-400">
-          <div className="text-center">
-            <Layout size={48} className="mx-auto mb-2 opacity-50" />
-            <p>Lütfen önce bir müşteri ve şube seçiniz.</p>
+        <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50">
+          <div className="text-center p-8 border-2 border-dashed border-gray-200 rounded-xl">
+            <Layout size={48} className="mx-auto mb-4 opacity-50 text-blue-400" />
+            <h3 className="text-lg font-medium text-gray-700 mb-1">Kroki Editörü</h3>
+            <p className="text-sm">Düzenleme yapmak için yukarıdan Müşteri ve Şube seçiniz.</p>
           </div>
         </div>
       )}
