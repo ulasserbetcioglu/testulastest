@@ -65,6 +65,7 @@ export type Treatment = {
   tur: string;
   durum: 'beklemede' | 'tamamlandi' | 'iptal';
   notlar: string;
+  items?: any[]; // Eklenen tedavi kalemleri
 };
 
 export type Offer = {
@@ -80,20 +81,20 @@ export type Offer = {
   aciklama: string;
 };
 
-export type Operator = { // Changed to export type
+export type Operator = {
   id: string;
   name: string;
   phone: string;
   email: string;
-  role?: string; // Made optional as it might come from profiles table
-  treatmentsCompleted?: number; // Made optional
-  auth_id?: string; // Added auth_id
-  assigned_customers?: string[]; // Added assigned_customers
-  assigned_branches?: string[]; // Added assigned_branches
-  status?: string; // Added status
-  created_at?: string; // Added created_at
-  updated_at?: string; // Added updated_at
-  total_leave_days?: number; // Added total_leave_days
+  role?: string;
+  treatmentsCompleted?: number;
+  auth_id?: string;
+  assigned_customers?: string[];
+  assigned_branches?: string[];
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  total_leave_days?: number;
 };
 
 type NavItem = {
@@ -134,14 +135,26 @@ export type DailyDistanceStats = {
   revenue?: number;
 };
 
-type FloorPlan = {
+// --- GÜNCELLENEN KISIM: FloorPlan Tipi ---
+export type FloorPlan = {
+  id?: string;
   width: number;
   height: number;
   background?: string;
-  elements: FloorPlanElement[];
+  elements: FloorPlanElement[]; // Tek katlı (Eski yapı uyumluluğu için)
+  floors?: FloorLayer[];        // Çok katlı (Yeni yapı)
 };
 
-type FloorPlanElement = {
+export type FloorLayer = {
+  id: string;
+  name: string;
+  elements: FloorPlanElement[];
+  background?: string;
+  width?: number; // Opsiyonel: Her katın kendi boyutu olabilir
+  height?: number;
+};
+
+export type FloorPlanElement = {
   id: string;
   type: 'wall' | 'door' | 'window' | 'equipment' | 'text' | 'room';
   x: number;
@@ -154,6 +167,7 @@ type FloorPlanElement = {
   equipmentCode?: string;
   hasActivity?: boolean;
   lastActivity?: boolean;
+  department?: string; // Ekipman bölümü
 };
 
 type BranchEquipment = {
