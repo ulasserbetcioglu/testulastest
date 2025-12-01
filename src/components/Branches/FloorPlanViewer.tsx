@@ -56,6 +56,9 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(null);
 
+  // Resim Boyutları State'i (Koordinatları eşitlemek için kritik)
+  const [imageSize, setImageSize] = useState<{ width: number, height: number } | null>(null);
+
   // Aktif Plan
   const currentPlan = plans.find(p => p.id === currentPlanId);
 
@@ -63,15 +66,14 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   const activeFloorData = useMemo(() => {
     if (!currentPlan) return null;
     
-    // Varsayılan boyutlar (Veritabanında yoksa)
+    // Varsayılan boyutlar (Resim yüklenene kadar geçici)
     const defaultWidth = 1000;
     const defaultHeight = 800;
 
-    // Çoklu kat yapısı varsa (Yeni Sistem)
+    // Çoklu kat yapısı varsa
     if (currentPlan.floors && currentPlan.floors.length > 0) {
       const floor = currentPlan.floors[activeFloorIndex] || currentPlan.floors[0];
       
-      // Floors içindeki elements dizisinden ekipman pozisyonlarını çıkarıyoruz
       const derivedPositions: Record<string, { x: number, y: number }> = {};
       floor.elements?.forEach((el: any) => {
         if (el.type === 'equipment' && el.equipmentId) {
@@ -84,33 +86,50 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         background: floor.background,
         positions: derivedPositions,
         name: floor.name,
-        // Katın boyutu varsa onu kullan, yoksa planın genel boyutunu kullan
-        width: floor.width || currentPlan.width || defaultWidth, 
-        height: floor.height || currentPlan.height || defaultHeight
+        // ÖNCELİK: Resmin doğal boyutu > Veritabanı boyutu > Varsayılan
+        // Bu sayede koordinat sistemi resimle birebir örtüşür.
+        width: imageSize?.width || floor.width || currentPlan.width || defaultWidth, 
+        height: imageSize?.height || floor.height || currentPlan.height || defaultHeight
       };
     }
 
-    // Tek katlı (Eski Sistem)
+    // Tek katlı yapı
     return {
       elements: currentPlan.elements || [],
       background: currentPlan.background_url,
       positions: currentPlan.equipment_positions || {},
       name: currentPlan.title,
-      width: currentPlan.width || defaultWidth,
-      height: currentPlan.height || defaultHeight
+      width: imageSize?.width || currentPlan.width || defaultWidth,
+      height: imageSize?.height || currentPlan.height || defaultHeight
     };
-  }, [currentPlan, activeFloorIndex]);
+  }, [currentPlan, activeFloorIndex, imageSize]);
 
 
   useEffect(() => {
     fetchData();
   }, [branchId]);
 
+  // Arkaplan resmi değiştiğinde doğal boyutlarını al
+  // Bu, koordinatların resim üzerindeki yerleşiminin %100 doğru olmasını sağlar.
+  useEffect(() => {
+    const bgUrl = currentPlan?.floors?.[activeFloorIndex]?.background || currentPlan?.background_url;
+    
+    if (bgUrl) {
+        const img = new Image();
+        img.src = bgUrl;
+        img.onload = () => {
+            // Resmin orijinal boyutlarını state'e kaydet
+            setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+    } else {
+        setImageSize(null);
+    }
+  }, [currentPlan, activeFloorIndex]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
       
-      // Krokileri Çek
       const { data: planData } = await supabase
         .from('branch_floor_plans')
         .select('*')
@@ -120,13 +139,12 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       if (planData && planData.length > 0) {
         setPlans(planData);
         setCurrentPlanId(planData[0].id);
-        setActiveFloorIndex(0); // İlk açılışta ilk katı seç
+        setActiveFloorIndex(0);
       } else {
         setPlans([]);
         setCurrentPlanId(null);
       }
 
-      // Ekipman Bilgilerini Çek
       const { data: eqData } = await supabase
         .from('branch_equipment')
         .select('id, equipment_code, equipment:equipment_id(name, type)')
@@ -138,7 +156,6 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
       });
       setEquipmentsMap(eqMap);
 
-      // Ziyaretleri Çek
       const { data: visitData } = await supabase
         .from('visits')
         .select('id, visit_date, equipment_checks, operator:operator_id(name)')
@@ -202,13 +219,13 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
   const handleWheel = (e: React.WheelEvent) => {
     if (e.target === containerRef.current || containerRef.current?.contains(e.target as Node)) {
         const scaleAmount = -e.deltaY * 0.001;
-        const newScale = Math.min(Math.max(0.5, transform.scale + scaleAmount), 4);
+        const newScale = Math.min(Math.max(0.1, transform.scale + scaleAmount), 10);
         setTransform(prev => ({ ...prev, scale: newScale }));
     }
   };
 
-  const zoomIn = () => setTransform(p => ({ ...p, scale: Math.min(4, p.scale + 0.2) }));
-  const zoomOut = () => setTransform(p => ({ ...p, scale: Math.max(0.5, p.scale - 0.2) }));
+  const zoomIn = () => setTransform(p => ({ ...p, scale: Math.min(10, p.scale + 0.2) }));
+  const zoomOut = () => setTransform(p => ({ ...p, scale: Math.max(0.1, p.scale - 0.2) }));
   const resetTransform = () => setTransform({ x: 0, y: 0, scale: 1 });
 
 
@@ -293,7 +310,7 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
             </div>
         </div>
 
-        {/* KAT SEÇİM BUTONLARI (Adminin eklediği katlar burada görünür) */}
+        {/* KAT SEÇİM BUTONLARI */}
         {currentPlan?.floors && currentPlan.floors.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-2 border-t pt-3">
                 {currentPlan.floors.map((floor, idx) => (
@@ -330,12 +347,13 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
         <div 
           className="relative bg-white shadow-2xl transition-transform duration-75 ease-linear origin-center" 
           style={{ 
-            width: activeFloorData?.width, // Planın gerçek genişliği
-            height: activeFloorData?.height, // Planın gerçek yüksekliği
+            // Burada genişlik/yükseklik veritabanından değil, resmin DOĞAL boyutundan gelir
+            width: activeFloorData?.width, 
+            height: activeFloorData?.height, 
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` 
           }}
         >
-          {/* SVG Ayarları: viewBox, boyutları sabitler. Bu sayede noktalar kaymaz. */}
+          {/* viewBox'ı resmin doğal boyutuna sabitledik. Koordinat sistemi artık resimle 1:1 eşleşir. */}
           <svg 
             width={activeFloorData?.width}
             height={activeFloorData?.height}
@@ -356,66 +374,21 @@ const FloorPlanViewer: React.FC<FloorPlanViewerProps> = ({ branchId }) => {
                 x="0" y="0" 
                 width={activeFloorData.width}
                 height={activeFloorData.height}
-                // DÜZELTME: preserveAspectRatio="none" resmi svg kutusuna tam olarak yayar.
-                // Admin tarafında resim esnetilerek işaretleme yapıldığı için burada da esnetilmeli.
-                preserveAspectRatio="none" 
+                // preserveAspectRatio="none" KALDIRILDI: viewBox zaten resim boyutunda olduğu için resim tam oturacak.
                 opacity="0.9"
               />
             ) : (
                <rect width="100%" height="100%" fill="url(#smallGrid)" />
             )}
 
-            {/* Mimari Elemanlar (Duvar, Kapı vb.) */}
+            {/* Mimari Elemanlar */}
             {activeFloorData?.elements?.map((el: any) => (
               <g key={el.id}>
-                {el.type === 'wall' && (
-                    <rect 
-                        x={el.x} y={el.y} width={el.width} height={el.height} 
-                        fill="#334155" rx={2} 
-                        transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`}
-                    />
-                )}
-                {el.type === 'room' && (
-                    <g transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`}>
-                        <rect 
-                            x={el.x} y={el.y} width={el.width} height={el.height} 
-                            fill="#f8fafc" fillOpacity={0.6} 
-                            stroke="#cbd5e1" strokeWidth="2" 
-                        />
-                        <text 
-                            x={el.x + 5} y={el.y + 20} 
-                            fontSize={el.fontSize || 14} 
-                            fill="#64748b" fontWeight="bold" 
-                        >
-                            {el.text || 'Oda'}
-                        </text>
-                    </g>
-                )}
-                {el.type === 'door' && (
-                    <g transform={`translate(${el.x}, ${el.y}) rotate(${el.rotation || 0}, ${el.width/2}, ${el.height/2})`}>
-                        <rect width={el.width} height={el.height} fill="#a16207" rx={2} />
-                        <path d={`M 0 ${el.height} Q ${el.width} ${el.height} ${el.width} 0`} fill="none" stroke="#a16207" strokeDasharray="4" />
-                    </g>
-                )}
-                {el.type === 'window' && (
-                    <rect 
-                        x={el.x} y={el.y} width={el.width} height={el.height} 
-                        fill="#bae6fd" stroke="#0ea5e9" strokeWidth="2" 
-                        transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`}
-                    />
-                )}
-                {el.type === 'text' && (
-                    <text 
-                        x={el.x} y={el.y + (el.fontSize || 14)} 
-                        fontSize={el.fontSize || 14} 
-                        fill="#374151" 
-                        fontWeight="600"
-                        transform={`rotate(${el.rotation || 0}, ${el.x}, ${el.y})`}
-                        style={{ userSelect: 'none' }}
-                    >
-                        {el.text || 'Metin'}
-                    </text>
-                )}
+                {el.type === 'wall' && <rect x={el.x} y={el.y} width={el.width} height={el.height} fill="#334155" rx={2} transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`} />}
+                {el.type === 'room' && <g transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`}><rect x={el.x} y={el.y} width={el.width} height={el.height} fill="#f8fafc" fillOpacity={0.6} stroke="#cbd5e1" strokeWidth="2" /><text x={el.x + 5} y={el.y + 20} fontSize={el.fontSize || 14} fill="#64748b" fontWeight="bold">{el.text || 'Oda'}</text></g>}
+                {el.type === 'door' && <g transform={`translate(${el.x}, ${el.y}) rotate(${el.rotation || 0}, ${el.width/2}, ${el.height/2})`}><rect width={el.width} height={el.height} fill="#a16207" rx={2} /><path d={`M 0 ${el.height} Q ${el.width} ${el.height} ${el.width} 0`} fill="none" stroke="#a16207" strokeDasharray="4" /></g>}
+                {el.type === 'window' && <rect x={el.x} y={el.y} width={el.width} height={el.height} fill="#bae6fd" stroke="#0ea5e9" strokeWidth="2" transform={`rotate(${el.rotation || 0}, ${el.x + el.width/2}, ${el.y + el.height/2})`} />}
+                {el.type === 'text' && <text x={el.x} y={el.y + (el.fontSize || 14)} fontSize={el.fontSize || 14} fill="#374151" fontWeight="600" transform={`rotate(${el.rotation || 0}, ${el.x}, ${el.y})`} style={{ userSelect: 'none' }}>{el.text || 'Metin'}</text>}
               </g>
             ))}
 
