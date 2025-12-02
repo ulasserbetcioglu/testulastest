@@ -115,8 +115,7 @@ import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
 import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
 import BarcodeTest from './pages/BarcodeTest';
-import AdminMaterialSalesReports from './pages/AdminMaterialSalesReports';
-import AdminMeetingMinutes from './pages/AdminMeetingMinutes'; // YENİ EKLENEN SAYFA
+import SatisGorusmeFormu from './pages/SatisGorusmeFormu'; // YENİ IMPORT
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -278,7 +277,7 @@ function App() {
           {/* Korumalı rapor görüntüleyici */}
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
 
-          {/* Barkod Test Sayfası */}
+          {/* --- ÖZEL MODÜLLER --- */}
           <Route path="/barkod-test" element={<BarcodeTest />} />
           
           {/* Admin Routes */}
@@ -363,12 +362,11 @@ function App() {
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
             <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
+            
             <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />
             
-            {/* YENİ EKLENEN ROTALAR */}
-            <Route path="malzeme-satis-raporlari" element={<AdminMaterialSalesReports />} />
-            <Route path="toplanti-tutanaklari" element={<AdminMeetingMinutes />} />
-            
+            {/* YENİ EKLENEN SATIŞ GÖRÜŞME FORMU ROTASI */}
+            <Route path="satis-gorusme-formu" element={<AdminRoute><SatisGorusmeFormu /></AdminRoute>} />
           </Route>
           
           {/* Operator Routes */}
