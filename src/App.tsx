@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { BarChart2 } from 'lucide-react';
 import { AuthProvider } from './components/Auth/AuthProvider';
 import Layout from './components/Layout/Layout';
 import OperatorLayout from './components/Layout/OperatorLayout';
@@ -27,6 +26,7 @@ import VisitForm from './pages/VisitForm';
 import VisitDetails from './pages/VisitDetails';
 import AdminCalendar from './pages/AdminCalendar';
 import AdminCalendarPlanning from './pages/AdminCalendarPlanning';
+import AdminMentorModule from './pages/AdminMentorModule'; // YENİ EKLENEN SAYFA
 import OperatorCalendar from './pages/OperatorCalendar';
 import OperatorCalendarPlanning from './pages/OperatorCalendarPlanning';
 import CustomerCalendar from './pages/CustomerCalendar';
@@ -114,10 +114,9 @@ import AdminPesticideReport from './pages/AdminPesticideReport';
 import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
 import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
-import BarcodeTest from './pages/BarcodeTest';
-import SatisGorusmeFormu from './pages/SatisGorusmeFormu'; // YENİ IMPORT
+import SatisGorusmeFormu from './pages/SatisGorusmeFormu'; 
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode, allowedUserTypes?: string[] }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
   const localSession = localStorage.getItem('local_session');
   return (supabaseSession || localSession) ? children : <Navigate to="/login" />;
@@ -144,6 +143,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           .single();
 
         if (profileError) {
+          // Fallback for admin email if profile not found/error
           setIsAdmin(user.email === 'admin@ilaclamatik.com');
         } else {
           setIsAdmin(profileData.role === 'admin');
@@ -160,7 +160,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, []);
 
   if (loading) {
-    return <div>Yükleniyor...</div>;
+    return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
   }
 
   return isAdmin ? children : <Navigate to="/" />;
@@ -252,7 +252,7 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }, [navigate]);
 
   if (loading) {
-    return <div>Yükleniyor...</div>;
+    return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
   }
 
   if (userRole === 'operator' || (userRole === 'user' && /^[^@]+@ilaclamatik\.com$/.test(currentUser?.email ?? '') && currentUser?.email !== 'admin@ilaclamatik.com')) {
@@ -276,98 +276,6 @@ function App() {
           <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
           {/* Korumalı rapor görüntüleyici */}
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
-
-          {/* --- ÖZEL MODÜLLER --- */}
-          <Route path="/barkod-test" element={<BarcodeTest />} />
-          
-          {/* Admin Routes */}
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <RoleBasedRoute>
-                  <Layout />
-                </RoleBasedRoute>
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="modules" element={<Modules />} />
-            <Route path="musteriler" element={<Customers />} />
-            <Route path="musteriler/:id" element={<CustomerDetails />} />
-            <Route path="ziyaretler" element={<AdminVisits />} />
-            <Route path="ziyaretler/yeni" element={<VisitForm />} />
-            <Route path="teklifler" element={<TekliflerListesi />} />
-            <Route path="teklifler/templates" element={<OfferTemplates />} />
-            <Route path="teklifler/new" element={<NewOffer />} />
-            <Route path="depolar" element={<Warehouses />} />
-            <Route path="depolar/transfer" element={<WarehouseTransfers />} />
-            <Route path="ucretli-malzemeler" element={<PaidMaterialSales />} />
-            <Route path="gelir-yonetimi" element={<AdminRevenue />} />
-            <Route path="dokumanlar" element={<Documents />} />
-            <Route path="sertifikalar" element={<Certificates />} />
-            <Route path="ayarlar" element={<Settings />} />
-            <Route path="bildirimler" element={<Notifications />} />
-            <Route path="bildirim-gonder" element={<AdminNotifications />} />
-            <Route path="tanimlamalar" element={<Definitions />} />
-            <Route path="takvim" element={<AdminCalendar />} />
-            <Route path="takvim-planlama" element={<AdminCalendarPlanning />} />
-            <Route path="operatorler" element={<AdminOperators />} />
-            <Route path="kullanicilar" element={<AdminUsers />} />      
-            <Route path="operator-mesafeleri" element={<AdminOperatorDistances />} />
-            <Route path="subeler" element={<AdminBranches />} /> 
-            <Route path="sube-fiyatlandirma" element={<AdminBranchPricing />} />
-            <Route path="fatura-export" element={<AdminRoute><InvoiceExport /></AdminRoute>} />
-            <Route path="faaliyet-rapor-takip" element={<ActivityReportsTracking />} />
-            <Route path="moduller/risk-degerlendirme" element={<RiskAssessmentModule />} />
-            <Route path="ucretli-ziyaretler" element={<PaidVisitsPage />} />
-            <Route path="trend-analizi" element={<AdminTrendAnalysisReport />} />
-            <Route path="urunler" element={<AdminProducts />} />
-            <Route path="toplu-silme" element={<BulkDeletePage />} />
-            <Route path="rota-optimizasyonu" element={<RouteOptimizationPage />} />
-            <Route path="canli-harita" element={<LiveTrackingMap />} />
-            <Route path="cari-satis-raporu" element={<CariSatisRaporu />} />
-            <Route path="yillik-kar-zarar" element={<YillikKarZararRaporu />} />
-            <Route path="karlilik-analizi" element={<ProfitabilityAnalysis />} />
-            <Route path="moduller/uv-lamba-raporu" element={<UvLampReport />} />
-            <Route path="sube-lokasyon" element={<SubeLokasyon />} />
-            <Route path="operator-performans" element={<OperatorPerformance />} />
-            <Route path="aylik-takvim-eposta" element={<AylikTakvimEposta />} />
-            <Route path="tahsilat-makbuzu" element={<OperatorCollectionReceipt />} />
-            <Route path="aylik-malzeme-eposta" element={<AylikMalzemeEposta />} />
-            <Route path="pazarlama-eposta" element={<PazarlamaEposta />} />
-            <Route path="ekipman-pazarlama" element={<EkipmanPazarlama />} />
-            <Route path="ekipman-yonetimi" element={<EkipmanYonetimi />} />
-            <Route path="hizmet-pazarlama" element={<HizmetPazarlama />} />
-            <Route path="gonderilen-epostalar" element={<GonderilenEpostalar />} />
-            <Route path="siparis-olustur" element={<SiparisOlusturma />} />
-            <Route path="tedarik-siparisi" element={<TedarikSiparisi />} />
-            <Route path="hizmet-yonetimi" element={<HizmetYonetimi />} />
-            <Route path="moduller/teklif-raporu" element={<ProposalReportModule />} />
-            <Route path="teklif-goruntule" element={<TeklifGoruntule />} />
-            <Route path="rapor/goruntule/:reportId" element={<ModulRaporGoruntuleme />} />
-            <Route path="rapor-goruntule" element={<RaporSecVeGoruntule />} />
-            <Route path="raporlar" element={<GenelRaporGoruntuleme />} />
-            <Route path="hizmet-pazarlama" element={<BilgilendirimePazarlama />} />
-            <Route path="eposta-pazarlama" element={<EpostaPazarlama />} />
-            <Route path="isletme-kesif" element={<IsletmeKesif />} />
-            <Route path="bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
-            <Route path="hizli-notlar" element={<AdminRoute><AdminQuickNotes /></AdminRoute>} />
-            <Route path="faturasiz-musteriler" element={<AdminRoute><UnbilledCustomers /></AdminRoute>} />
-            <Route path="admin/tahsilat-makbuzlari" element={<AdminRoute><AdminCollectionReceipts /></AdminRoute>} />
-            <Route path="admin/ziyaret-raporlari" element={<AdminRoute><AdminVisitReports /></AdminRoute>} />
-            <Route path="admin/mesai-cizelgeleri" element={<AdminRoute><AdminOperatorShifts /></AdminRoute>} />
-            <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
-            <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
-            <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
-            <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
-            <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
-            
-            <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />
-            
-            {/* YENİ EKLENEN SATIŞ GÖRÜŞME FORMU ROTASI */}
-            <Route path="satis-gorusme-formu" element={<AdminRoute><SatisGorusmeFormu /></AdminRoute>} />
-          </Route>
           
           {/* Operator Routes */}
           <Route
@@ -454,6 +362,99 @@ function App() {
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
             <Route path="trend-raporlari" element={<CustomerTrendReports />} />
             <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
+          </Route>
+
+          {/* Admin Routes (Catch-all for clean URLs) */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <RoleBasedRoute>
+                  <Layout />
+                </RoleBasedRoute>
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            {/* Added explicit route for /admin to show Dashboard */}
+            <Route path="admin" element={<Dashboard />} /> 
+            
+            <Route path="modules" element={<Modules />} />
+            <Route path="musteriler" element={<Customers />} />
+            <Route path="musteriler/:id" element={<CustomerDetails />} />
+            <Route path="ziyaretler" element={<AdminVisits />} />
+            <Route path="ziyaretler/yeni" element={<VisitForm />} />
+            <Route path="teklifler" element={<TekliflerListesi />} />
+            <Route path="teklifler/templates" element={<OfferTemplates />} />
+            <Route path="teklifler/new" element={<NewOffer />} />
+            <Route path="depolar" element={<Warehouses />} />
+            <Route path="depolar/transfer" element={<WarehouseTransfers />} />
+            <Route path="ucretli-malzemeler" element={<PaidMaterialSales />} />
+            <Route path="gelir-yonetimi" element={<AdminRevenue />} />
+            <Route path="dokumanlar" element={<Documents />} />
+            <Route path="sertifikalar" element={<Certificates />} />
+            <Route path="ayarlar" element={<Settings />} />
+            <Route path="bildirimler" element={<Notifications />} />
+            <Route path="bildirim-gonder" element={<AdminNotifications />} />
+            <Route path="tanimlamalar" element={<Definitions />} />
+            <Route path="takvim" element={<AdminCalendar />} />
+            <Route path="takvim-planlama" element={<AdminCalendarPlanning />} />
+            <Route path="operatorler" element={<AdminOperators />} />
+            <Route path="kullanicilar" element={<AdminUsers />} />      
+            <Route path="operator-mesafeleri" element={<AdminOperatorDistances />} />
+            <Route path="subeler" element={<AdminBranches />} /> 
+            <Route path="sube-fiyatlandirma" element={<AdminBranchPricing />} />
+            <Route path="fatura-export" element={<AdminRoute><InvoiceExport /></AdminRoute>} />
+            <Route path="faaliyet-rapor-takip" element={<ActivityReportsTracking />} />
+            <Route path="moduller/risk-degerlendirme" element={<RiskAssessmentModule />} />
+            <Route path="ucretli-ziyaretler" element={<PaidVisitsPage />} />
+            <Route path="trend-analizi" element={<AdminTrendAnalysisReport />} />
+            <Route path="urunler" element={<AdminProducts />} />
+            <Route path="toplu-silme" element={<BulkDeletePage />} />
+            <Route path="rota-optimizasyonu" element={<RouteOptimizationPage />} />
+            <Route path="canli-harita" element={<LiveTrackingMap />} />
+            <Route path="cari-satis-raporu" element={<CariSatisRaporu />} />
+            <Route path="yillik-kar-zarar" element={<YillikKarZararRaporu />} />
+            <Route path="karlilik-analizi" element={<ProfitabilityAnalysis />} />
+            <Route path="moduller/uv-lamba-raporu" element={<UvLampReport />} />
+            <Route path="sube-lokasyon" element={<SubeLokasyon />} />
+            <Route path="operator-performans" element={<OperatorPerformance />} />
+            <Route path="aylik-takvim-eposta" element={<AylikTakvimEposta />} />
+            <Route path="tahsilat-makbuzu" element={<OperatorCollectionReceipt />} />
+            <Route path="aylik-malzeme-eposta" element={<AylikMalzemeEposta />} />
+            <Route path="pazarlama-eposta" element={<PazarlamaEposta />} />
+            <Route path="ekipman-pazarlama" element={<EkipmanPazarlama />} />
+            <Route path="ekipman-yonetimi" element={<EkipmanYonetimi />} />
+            <Route path="hizmet-pazarlama" element={<HizmetPazarlama />} />
+            <Route path="gonderilen-epostalar" element={<GonderilenEpostalar />} />
+            <Route path="siparis-olustur" element={<SiparisOlusturma />} />
+            <Route path="tedarik-siparisi" element={<TedarikSiparisi />} />
+            <Route path="hizmet-yonetimi" element={<HizmetYonetimi />} />
+            <Route path="moduller/teklif-raporu" element={<ProposalReportModule />} />
+            <Route path="teklif-goruntule" element={<TeklifGoruntule />} />
+            <Route path="rapor/goruntule/:reportId" element={<ModulRaporGoruntuleme />} />
+            <Route path="rapor-goruntule" element={<RaporSecVeGoruntule />} />
+            <Route path="raporlar" element={<GenelRaporGoruntuleme />} />
+            <Route path="hizmet-pazarlama" element={<BilgilendirimePazarlama />} />
+            <Route path="eposta-pazarlama" element={<EpostaPazarlama />} />
+            <Route path="isletme-kesif" element={<IsletmeKesif />} />
+            <Route path="bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
+            <Route path="hizli-notlar" element={<AdminRoute><AdminQuickNotes /></AdminRoute>} />
+            <Route path="faturasiz-musteriler" element={<AdminRoute><UnbilledCustomers /></AdminRoute>} />
+            <Route path="admin/tahsilat-makbuzlari" element={<AdminRoute><AdminCollectionReceipts /></AdminRoute>} />
+            <Route path="admin/ziyaret-raporlari" element={<AdminRoute><AdminVisitReports /></AdminRoute>} />
+            <Route path="admin/mesai-cizelgeleri" element={<AdminRoute><AdminOperatorShifts /></AdminRoute>} />
+            <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
+            <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
+            
+            {/* Mentor Modülü */}
+            <Route path="/mentor-module" element={<AdminMentorModule />} />
+            
+            <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
+            <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
+            <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />  
+            <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />   
+            <Route path="satis-gorusme-formu" element={<AdminRoute><SatisGorusmeFormu /></AdminRoute>} />
           </Route>
         </Routes>
       </AuthProvider>
