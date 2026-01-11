@@ -1,19 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, SafeAreaView, StatusBar, ScrollView, Alert } from 'react-native';
-import { ArrowLeft, MessageSquare, User, Star, Save, Frown, Meh, Smile } from 'lucide-react-native';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, User, Save, Frown, Meh, Smile } from 'lucide-react';
 
-interface Props {
-  navigation: any;
-  route: {
-    params: {
-      customerName: string;
-      branchName: string;
-    }
-  };
-}
-
-const CustomerFeedbackForm: React.FC<Props> = ({ navigation, route }) => {
-  const { customerName, branchName } = route.params || { customerName: '', branchName: '' };
+const CustomerFeedbackForm = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Navigasyon parametrelerini güvenli şekilde alalım
+  const { customerName, branchName } = location.state || { customerName: '', branchName: '' };
 
   const [contactPerson, setContactPerson] = useState('');
   const [topic, setTopic] = useState('');
@@ -23,258 +16,147 @@ const CustomerFeedbackForm: React.FC<Props> = ({ navigation, route }) => {
 
   const handleSave = () => {
     if (!contactPerson || !details || !satisfaction) {
-      Alert.alert("Eksik Bilgi", "Lütfen kişi adı, detay ve memnuniyet durumunu giriniz.");
+      alert("Eksik Bilgi: Lütfen kişi adı, detay ve memnuniyet durumunu giriniz.");
       return;
     }
     
     // API Kayıt işlemi burada yapılır
-    Alert.alert(
-      "Geri Bildirim Kaydedildi", 
-      "Müşteri görüşü başarıyla sisteme işlendi.", 
-      [{ text: "Tamam", onPress: () => navigation.goBack() }]
-    );
+    alert("Geri Bildirim Kaydedildi: Müşteri görüşü başarıyla sisteme işlendi.");
+    navigate(-1); // Geri dön
   };
 
   const renderSatisfactionIcon = (level: number) => {
     const isActive = satisfaction === level;
-    const color = isActive ? '#fff' : (level === 1 ? '#EF4444' : level === 2 ? '#F59E0B' : '#22C55E');
-    const bgColor = isActive ? (level === 1 ? '#EF4444' : level === 2 ? '#F59E0B' : '#22C55E') : '#F1F5F9';
-
+    
     let Icon = Meh;
-    if (level === 1) Icon = Frown;
-    if (level === 3) Icon = Smile;
+    let activeBg = '';
+    let inactiveColor = 'text-slate-400';
+    let activeColor = 'text-white';
+    
+    if (level === 1) {
+      Icon = Frown;
+      activeBg = 'bg-red-500';
+      if (!isActive) inactiveColor = 'text-red-500';
+    } else if (level === 2) {
+      Icon = Meh;
+      activeBg = 'bg-amber-500';
+      if (!isActive) inactiveColor = 'text-amber-500';
+    } else {
+      Icon = Smile;
+      activeBg = 'bg-green-500';
+      if (!isActive) inactiveColor = 'text-green-500';
+    }
 
     return (
-      <TouchableOpacity 
-        style={[styles.faceButton, { backgroundColor: bgColor }]} 
-        onPress={() => setSatisfaction(level)}
+      <button 
+        className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all flex-1 ${isActive ? activeBg : 'bg-slate-50 border-slate-200'}`} 
+        onClick={() => setSatisfaction(level)}
       >
-        <Icon size={32} color={color} />
-        <Text style={[styles.faceText, isActive && { color: '#fff' }]}>
+        <Icon size={32} className={isActive ? activeColor : inactiveColor} />
+        <span className={`mt-2 text-xs font-semibold ${isActive ? 'text-white' : 'text-slate-500'}`}>
           {level === 1 ? 'Memnun Değil' : level === 2 ? 'Kısmen' : 'Memnun'}
-        </Text>
-      </TouchableOpacity>
+        </span>
+      </button>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-
+    <div className="min-h-screen bg-slate-50">
+      
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#0F172A" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Müşteri Görüş Formu</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm">
+        <button onClick={() => navigate(-1)} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
+          <ArrowLeft size={20} className="text-slate-700" />
+        </button>
+        <h1 className="text-lg font-bold text-slate-800">Müşteri Görüş Formu</h1>
+        <div className="w-10"></div>
+      </div>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <div className="max-w-2xl mx-auto p-4 pb-20">
         
         {/* Bildirim Tipi */}
-        <View style={styles.typeSelector}>
+        <div className="flex bg-slate-200 p-1 rounded-xl mb-6">
           {[
             { key: 'complaint', label: 'Şikayet' },
             { key: 'suggestion', label: 'Öneri' },
             { key: 'satisfaction', label: 'Memnuniyet' }
           ].map((item) => (
-            <TouchableOpacity 
+            <button 
               key={item.key}
-              style={[
-                styles.typeButton, 
-                type === item.key && styles.typeButtonActive,
-                type === item.key && { borderColor: item.key === 'complaint' ? '#EF4444' : '#3B82F6' } // Şikayet kırmızı, diğerleri mavi
-              ]}
-              onPress={() => setType(item.key as any)}
+              className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+                type === item.key 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              } ${
+                type === item.key && item.key === 'complaint' ? 'text-red-600' : ''
+              }`}
+              onClick={() => setType(item.key as any)}
             >
-              <Text style={[styles.typeText, type === item.key && styles.typeTextActive]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
+              {item.label}
+            </button>
           ))}
-        </View>
+        </div>
 
         {/* Görüşü Bildiren Kişi */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Görüşü Bildiren Yetkili</Text>
-          <View style={styles.inputContainer}>
-            <User size={20} color="#94A3B8" style={{ marginLeft: 10 }} />
-            <TextInput 
-              style={styles.input} 
+        <div className="mb-5">
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Görüşü Bildiren Yetkili</label>
+          <div className="flex items-center bg-white border border-slate-300 rounded-xl px-3 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+            <User size={18} className="text-slate-400" />
+            <input 
+              type="text"
+              className="w-full p-3 outline-none text-slate-900 placeholder:text-slate-400 bg-transparent" 
               placeholder="Ad Soyad" 
               value={contactPerson}
-              onChangeText={setContactPerson}
+              onChange={(e) => setContactPerson(e.target.value)}
             />
-          </View>
-        </View>
+          </div>
+        </div>
 
         {/* Konu Başlığı */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Konu Başlığı</Text>
-          <TextInput 
-            style={[styles.input, { paddingLeft: 12 }]} 
+        <div className="mb-5">
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Konu Başlığı</label>
+          <input 
+            type="text"
+            className="w-full p-3 bg-white border border-slate-300 rounded-xl outline-none text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" 
             placeholder="Örn: Geçen hafta yapılan uygulama hk." 
             value={topic}
-            onChangeText={setTopic}
+            onChange={(e) => setTopic(e.target.value)}
           />
-        </View>
+        </div>
 
         {/* Memnuniyet Düzeyi */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Genel Memnuniyet Durumu</Text>
-          <View style={styles.satisfactionRow}>
+        <div className="mb-5">
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Genel Memnuniyet Durumu</label>
+          <div className="flex gap-3">
             {renderSatisfactionIcon(1)}
             {renderSatisfactionIcon(2)}
             {renderSatisfactionIcon(3)}
-          </View>
-        </View>
+          </div>
+        </div>
 
         {/* Açıklama */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Detaylı Açıklama</Text>
-          <TextInput 
-            style={[styles.input, styles.textArea]} 
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-slate-700 mb-2">Detaylı Açıklama</label>
+          <textarea 
+            className="w-full p-3 min-h-[120px] bg-white border border-slate-300 rounded-xl outline-none text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y transition-all" 
             placeholder="Müşterinin ilettiği mesajı detaylıca yazınız..." 
-            multiline
-            numberOfLines={5}
-            textAlignVertical="top"
             value={details}
-            onChangeText={setDetails}
+            onChange={(e) => setDetails(e.target.value)}
           />
-        </View>
+        </div>
 
-        {/* Kaydet */}
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Save size={20} color="#fff" />
-          <Text style={styles.saveButtonText}>Formu Kaydet</Text>
-        </TouchableOpacity>
+        {/* Kaydet Butonu */}
+        <button 
+          onClick={handleSave}
+          className="w-full flex items-center justify-center p-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+        >
+          <Save size={20} className="mr-2" />
+          Formu Kaydet
+        </button>
 
-      </ScrollView>
-    </SafeAreaView>
+      </div>
+    </div>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  content: {
-    padding: 20,
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 4,
-  },
-  typeButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  typeButtonActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  typeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  typeTextActive: {
-    color: '#0F172A',
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-  },
-  input: {
-    flex: 1,
-    padding: 12,
-    fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  textArea: {
-    minHeight: 120,
-  },
-  satisfactionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  faceButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  faceText: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  saveButton: {
-    backgroundColor: '#0F172A',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 10,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-});
 
 export default CustomerFeedbackForm;
