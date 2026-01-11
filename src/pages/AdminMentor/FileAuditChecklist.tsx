@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, SafeAreaView, StatusBar, Modal, ScrollView, Alert } from 'react-native';
-import { ArrowLeft, CheckCircle2, XCircle, Info, AlertTriangle, ChevronDown, ChevronUp, Save } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, SafeAreaView, StatusBar, Alert } from 'react-native';
+import { ArrowLeft, CheckCircle2, XCircle, Info, ChevronDown, ChevronUp, Save } from 'lucide-react-native';
 
 interface Props {
   navigation: any;
@@ -74,17 +74,28 @@ const FileAuditChecklist: React.FC<Props> = ({ navigation, route }) => {
     return Math.round((answered / total) * 100);
   };
 
+  // --- GÜNCELLENEN SAVE FONKSİYONU ---
   const handleSave = () => {
-    const progress = calculateProgress();
-    Alert.alert(
-      "Denetim Kaydedilsin mi?",
-      `Toplam ${AUDIT_DATA.length} maddeden ${Object.keys(auditStatus).length} tanesi işaretlendi. (%${progress})`,
-      [
-        { text: "Vazgeç", style: "cancel" },
-        { text: "Kaydet ve Bitir", onPress: () => navigation.navigate('AdminMentorHome') } // Şimdilik anasayfaya atıyor
-      ]
-    );
+    // 1. Hesaplamaları yap
+    const totalItems = AUDIT_DATA.length;
+    const validCount = Object.values(auditStatus).filter(s => s === 'valid').length;
+    
+    // 2. Hatalı olanları bul (Rapor özetinde göstermek için)
+    const invalidItemsList = AUDIT_DATA.filter(item => auditStatus[item.id] === 'invalid').map(item => ({
+      code: item.code,
+      title: item.title
+    }));
+
+    // 3. Özete Git
+    navigation.navigate('AuditSummary', {
+      customerName,
+      branchName,
+      totalItems,
+      validCount,
+      invalidItems: invalidItemsList
+    });
   };
+  // ------------------------------------
 
   const renderItem = ({ item }: { item: AuditItem }) => {
     const status = auditStatus[item.id];
