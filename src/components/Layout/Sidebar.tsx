@@ -2,17 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Menu, X, Warehouse, CalendarRange, DollarSign,
-  Calendar, BarChart2, CheckSquare, Award, // Award burada
+  Calendar, BarChart2, CheckSquare, Award,
   FileText, FileInput as FileInvoice, Grid, LogOut,
   Users, Settings, UserCog, Route, Building, Home, CalendarClock, MapPin,
-  ChevronsLeft, ChevronsRight, ChevronRight, // ChevronRight burada eklendi
+  ChevronsLeft, ChevronsRight, ChevronRight,
   Mail, Package, MessageSquare, MailCheck, 
   BarChart3, TrendingUp, PlusCircle, NotebookPen, Wallet, ReceiptText, 
   Image as ImageIcon, Clock as ClockIcon, Car, Bug, Search
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
-// Menü yapısı
+// Menü yapısı - App.tsx rotalarıyla eşleştirildi
 const menuCategories = [
   {
     title: 'Ana Menü',
@@ -20,40 +20,40 @@ const menuCategories = [
     items: [
       { name: 'Panel', path: '/admin', icon: <Home size={20} /> },
       { name: 'Modüller', path: '/modules', icon: <Grid size={20} /> },
-      { name: 'Hızlı Notlar', path: '/admin/quick-notes', icon: <NotebookPen size={20} /> },
+      { name: 'Hızlı Notlar', path: '/hizli-notlar', icon: <NotebookPen size={20} /> },
     ]
   },
   {
     title: 'Müşteri İşlemleri',
     color: 'green',
     items: [
-      { name: 'Müşteriler', path: '/admin/customers', icon: <Users size={20} /> },
-      { name: 'Şubeler', path: '/admin/branches', icon: <Building size={20} /> },
-      { name: 'Şube Fiyatlandırma', path: '/admin/branch-pricing', icon: <DollarSign size={20} /> },
-      { name: 'Teklifler', path: '/admin/offers', icon: <FileText size={20} /> },
+      { name: 'Müşteriler', path: '/musteriler', icon: <Users size={20} /> },
+      { name: 'Şubeler', path: '/subeler', icon: <Building size={20} /> },
+      { name: 'Şube Fiyatlandırma', path: '/sube-fiyatlandirma', icon: <DollarSign size={20} /> },
+      { name: 'Teklifler', path: '/teklifler', icon: <FileText size={20} /> },
     ]
   },
   {
     title: 'Ziyaret Yönetimi',
     color: 'purple',
     items: [
-      { name: 'Ziyaretler', path: '/admin/visits', icon: <CalendarRange size={20} /> },
-      { name: 'Takvim', path: '/admin/calendar', icon: <Calendar size={20} /> },
-      { name: 'Takvim Planlama', path: '/admin/calendar-planning', icon: <CalendarRange size={20} /> },
+      { name: 'Ziyaretler', path: '/ziyaretler', icon: <CalendarRange size={20} /> },
+      { name: 'Takvim', path: '/takvim', icon: <Calendar size={20} /> },
+      { name: 'Takvim Planlama', path: '/takvim-planlama', icon: <CalendarRange size={20} /> },
       { name: 'Aylık Ziyaret Planı', path: '/admin/monthly-visit-schedule', icon: <CalendarClock size={20} /> },
       { name: 'Ziyaret Veri Girişi', path: '/admin/visit-data-entry', icon: <CheckSquare size={20} /> },
-      { name: 'Şube Lokasyon', path: '/admin/branch-locations', icon: <MapPin size={20} /> },
-      { name: 'Ziyaret Raporları', path: '/admin/visit-reports', icon: <ImageIcon size={20} /> },
+      { name: 'Şube Lokasyon', path: '/sube-lokasyon', icon: <MapPin size={20} /> },
+      { name: 'Ziyaret Raporları', path: '/admin/ziyaret-raporlari', icon: <ImageIcon size={20} /> },
     ]
   },
   {
     title: 'Operatör Yönetimi',
     color: 'orange',
     items: [
-      { name: 'Operatörler', path: '/admin/operators', icon: <UserCog size={20} /> },
-      { name: 'Performans', path: '/admin/operator-performance', icon: <BarChart3 size={20} /> },
-      { name: 'Mesafeler', path: '/admin/operator-distances', icon: <Route size={20} /> },
-      { name: 'Mesai Çizelgeleri', path: '/admin/operator-shifts', icon: <ClockIcon size={20} /> },
+      { name: 'Operatörler', path: '/operatorler', icon: <UserCog size={20} /> },
+      { name: 'Performans', path: '/operator-performans', icon: <BarChart3 size={20} /> },
+      { name: 'Mesafeler', path: '/operator-mesafeleri', icon: <Route size={20} /> },
+      { name: 'Mesai Çizelgeleri', path: '/admin/mesai-cizelgeleri', icon: <ClockIcon size={20} /> },
       { name: 'İzin Yönetimi', path: '/admin/operator-leaves', icon: <Calendar size={20} /> },
       { name: 'Araç Yönetimi', path: '/admin/vehicles', icon: <Car size={20} /> },
     ]
@@ -62,45 +62,45 @@ const menuCategories = [
     title: 'Finans',
     color: 'yellow',
     items: [
-      { name: 'Gelir Yönetimi', path: '/admin/revenue', icon: <DollarSign size={20} /> },
-      { name: 'Ücretli Malzemeler', path: '/admin/paid-materials', icon: <DollarSign size={20} /> },
-      { name: 'Faturasız Müşteriler', path: '/admin/unbilled-customers', icon: <Wallet size={20} /> },
-      { name: 'Tahsilat Makbuzları', path: '/admin/collection-receipts', icon: <ReceiptText size={20} /> },
+      { name: 'Gelir Yönetimi', path: '/gelir-yonetimi', icon: <DollarSign size={20} /> },
+      { name: 'Ücretli Malzemeler', path: '/ucretli-malzemeler', icon: <DollarSign size={20} /> },
+      { name: 'Faturasız Müşteriler', path: '/faturasiz-musteriler', icon: <Wallet size={20} /> },
+      { name: 'Tahsilat Makbuzları', path: '/admin/tahsilat-makbuzlari', icon: <ReceiptText size={20} /> },
     ]
   },
   {
     title: 'Raporlama & Analiz',
     color: 'indigo',
     items: [
-      { name: 'Cari Satış Raporu', path: '/admin/sales-report', icon: <BarChart2 size={20} /> },
-      { name: 'Yıllık Kar/Zarar', path: '/admin/profit-loss', icon: <TrendingUp size={20} /> },
-      { name: 'Karlılık Analizi', path: '/admin/profitability', icon: <DollarSign size={20} /> },
-      { name: 'Trend Analizi', path: '/admin/trend-analysis-report', icon: <TrendingUp size={20} /> },
-      { name: 'Faaliyet Raporu', path: '/admin/activity-reports', icon: <FileText size={20} /> },
-      { name: 'Pestisit Kullanım', path: '/admin/pesticide-report', icon: <Bug size={20} /> },
-      { name: 'Mentor Modülü', path: '/admin/mentor-module', icon: <Search size={20} /> },
+      { name: 'Cari Satış Raporu', path: '/cari-satis-raporu', icon: <BarChart2 size={20} /> },
+      { name: 'Yıllık Kar/Zarar', path: '/yillik-kar-zarar', icon: <TrendingUp size={20} /> },
+      { name: 'Karlılık Analizi', path: '/karlilik-analizi', icon: <DollarSign size={20} /> },
+      { name: 'Trend Analizi', path: '/trend-analizi', icon: <TrendingUp size={20} /> },
+      { name: 'Faaliyet Raporu', path: '/faaliyet-rapor-takip', icon: <FileText size={20} /> },
+      { name: 'Pestisit Kullanım', path: '/pestisit-raporu', icon: <Bug size={20} /> },
+      { name: 'Mentor Modülü', path: '/mentor-module', icon: <Search size={20} /> },
     ]
   },
   {
     title: 'Pazarlama',
     color: 'pink',
     items: [
-      { name: 'Takvim Gönder', path: '/admin/send-calendar', icon: <Mail size={20} /> },
-      { name: 'Ekipman Pazarlama', path: '/admin/equipment-marketing', icon: <Package size={20} /> },
-      { name: 'Hizmet Pazarlama', path: '/admin/service-marketing', icon: <MessageSquare size={20} /> },
-      { name: 'Gönderilen E-postalar', path: '/admin/sent-emails', icon: <MailCheck size={20} /> },
+      { name: 'Takvim Gönder', path: '/aylik-takvim-eposta', icon: <Mail size={20} /> },
+      { name: 'Ekipman Pazarlama', path: '/ekipman-pazarlama', icon: <Package size={20} /> },
+      { name: 'Hizmet Pazarlama', path: '/hizmet-pazarlama', icon: <MessageSquare size={20} /> },
+      { name: 'Gönderilen E-postalar', path: '/gonderilen-epostalar', icon: <MailCheck size={20} /> },
     ]
   },
   {
     title: 'Sistem Yönetimi',
     color: 'gray',
     items: [
-      { name: 'Depolar', path: '/admin/warehouses', icon: <Warehouse size={20} /> },
-      { name: 'Ekipman Yönetimi', path: '/admin/equipment', icon: <Package size={20} /> },
-      { name: 'Sertifikalar', path: '/admin/certificates', icon: <Award size={20} /> },
-      { name: 'Dökümanlar', path: '/admin/documents', icon: <FileText size={20} /> },
-      { name: 'Tanımlamalar', path: '/admin/definitions', icon: <Settings size={20} /> },
-      { name: 'Ayarlar', path: '/admin/settings', icon: <Settings size={20} /> },
+      { name: 'Depolar', path: '/depolar', icon: <Warehouse size={20} /> },
+      { name: 'Ekipman Yönetimi', path: '/ekipman-yonetimi', icon: <Package size={20} /> },
+      { name: 'Sertifikalar', path: '/sertifikalar', icon: <Award size={20} /> },
+      { name: 'Dökümanlar', path: '/dokumanlar', icon: <FileText size={20} /> },
+      { name: 'Tanımlamalar', path: '/tanimlamalar', icon: <Settings size={20} /> },
+      { name: 'Ayarlar', path: '/ayarlar', icon: <Settings size={20} /> },
     ]
   }
 ];
@@ -110,8 +110,8 @@ const adminCategory = {
   title: 'Admin Araçları',
   color: 'red',
   items: [
-    { name: 'Fatura Dışa Aktarma', path: '/admin/invoice-export', icon: <FileInvoice size={20} /> },
-    { name: 'Toplu Ziyaret Aktar', path: '/admin/bulk-visit-import', icon: <PlusCircle size={20} /> }
+    { name: 'Fatura Dışa Aktarma', path: '/fatura-export', icon: <FileInvoice size={20} /> },
+    { name: 'Toplu Ziyaret Aktar', path: '/bulk-visit-import', icon: <PlusCircle size={20} /> }
   ]
 };
 

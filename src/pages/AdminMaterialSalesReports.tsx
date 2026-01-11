@@ -469,7 +469,7 @@ const AdminMaterialSalesReports: React.FC = () => {
           )}
 
           {/* SEKME 3: PERSONEL LİSTESİ */}
-          {activeTab === 'personel' && (
+          {activeTab === 'operators' && (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 border rounded-lg">
                 <thead className="bg-gray-50">

@@ -1,10 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Printer, Building2, MapPin, Phone, Mail, User, 
   FileText, Plus, Trash2, Home, Store,
   FileSignature, CheckSquare, DollarSign, Award, ShieldCheck,
-  Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker
+  Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker,
+  Search, Loader2, Save, Filter
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
 
 // Kurumsal Yeşil Tonu
 const BRAND_GREEN = '#006837'; // Mentor Yeşili
@@ -13,7 +16,7 @@ const BRAND_LIGHT_GREEN = '#e6f4ea';
 // Logo URL
 const LOGO_URL = "https://pestmentor.com.tr/pestmentor-logo-png-297x97.webp";
 
-// --- TİP TANIMLAMALARI (TypeScript için) ---
+// --- TİP TANIMLAMALARI ---
 interface SettingsBase {
   dokumanNo: string;
   revizyonNo: string;
@@ -35,10 +38,11 @@ interface FormData12 {
   yetkiliUnvan: string;
   yetkiliTel: string;
   hizmetBaslangicTarihi: string;
+  [key: string]: string;
 }
 
 interface Branch {
-  id: number;
+  id: number | string;
   subeAdi: string;
   yetkili: string;
   metrekare: string;
@@ -91,14 +95,14 @@ interface LegendItem {
 }
 
 interface Station {
-  id: number;
+  id: number | string;
   no: string;
   location: string;
   type: string;
 }
 
 interface Product {
-  id: number;
+  id: number | string;
   urunAdi: string;
   aktifMadde: string;
   ruhsatNo: string;
@@ -106,25 +110,37 @@ interface Product {
   antidot: string;
 }
 
+interface CustomerSummary {
+  id: string;
+  cari_isim: string;
+}
+
 export default function AdminMentorModule() {
   // --- STATE YÖNETİMİ ---
-  const [activeTab, setActiveTab] = useState('home'); // 'home', '1.2', '1.3', '2.1', '3.1', '3.2', '4.1', '4.2', '5.2'
+  const [activeTab, setActiveTab] = useState('home');
+  const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  
+  // Şube Seçimi State'leri
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [customerBranches, setCustomerBranches] = useState<any[]>([]);
 
   // 1.2 MÜŞTERİ BİLGİLERİ VERİSİ
   const [formData12, setFormData12] = useState<FormData12>({
-    ticariUnvan: 'ÖRNEK GIDA TURİZM İNŞ. SAN. VE TİC. LTD. ŞTİ.',
-    faaliyetKonusu: 'Gıda Üretim ve Satış',
-    vergiDairesi: 'Zincirlikuyu V.D.',
-    vergiNo: '1234567890',
-    mersisNo: '0123456789000015',
-    adres: 'Organize Sanayi Bölgesi, 1. Cadde, No: 5, Başakşehir / İSTANBUL',
-    telefon: '0212 555 00 00',
-    faks: '0212 555 00 01',
-    eposta: 'info@ornekfirma.com',
-    webSitesi: 'www.ornekfirma.com',
-    yetkiliKisi: 'Ahmet YILMAZ',
-    yetkiliUnvan: 'İşletme Müdürü',
-    yetkiliTel: '0532 555 11 22',
+    ticariUnvan: '',
+    faaliyetKonusu: '',
+    vergiDairesi: '',
+    vergiNo: '',
+    mersisNo: '',
+    adres: '',
+    telefon: '',
+    faks: '',
+    eposta: '',
+    webSitesi: '',
+    yetkiliKisi: '',
+    yetkiliUnvan: '',
+    yetkiliTel: '',
     hizmetBaslangicTarihi: new Date().toISOString().split('T')[0]
   });
 
@@ -134,26 +150,8 @@ export default function AdminMentorModule() {
     yayinTarihi: '01.01.2024'
   });
 
-  // 1.3 ŞUBE BİLGİLERİ VERİSİ
-  const [branches, setBranches] = useState<Branch[]>([
-    {
-      id: 1,
-      subeAdi: 'Merkez Depo',
-      yetkili: 'Mehmet DEMİR',
-      metrekare: '1500',
-      adres: 'OSB 1. Cadde No:5 Başakşehir',
-      telefon: '0212 555 00 01'
-    },
-    {
-      id: 2,
-      subeAdi: 'Kadıköy Şube',
-      yetkili: 'Ayşe KAYA',
-      metrekare: '250',
-      adres: 'Bağdat Cad. No:10 Kadıköy',
-      telefon: '0216 333 44 55'
-    }
-  ]);
-
+  // 1.3 ŞUBE BİLGİLERİ VERİSİ (Tablo Görünümü İçin)
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [settings13, setSettings13] = useState<SettingsBase>({
     dokumanNo: '1.3',
     revizyonNo: '00',
@@ -165,11 +163,11 @@ export default function AdminMentorModule() {
     sozlesmeTarihi: new Date().toISOString().split('T')[0],
     sozlesmeNo: '2024-001',
     hizmetPeriyodu: 'Ayda 1 Kez (Periyodik)',
-    hizmetBedeli: '5.000',
+    hizmetBedeli: '0',
     paraBirimi: 'TL',
     sozlesmeSuresi: '1 Yıl',
-    baslangicTarihi: '01.01.2024',
-    bitisTarihi: '31.12.2024',
+    baslangicTarihi: new Date().toISOString().split('T')[0],
+    bitisTarihi: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
     odemeSekli: 'Hizmet sonrası fatura tarihinden itibaren 7 gün içinde banka havalesi.',
     kapsam: {
       kemirgen: true,
@@ -178,80 +176,17 @@ export default function AdminMentorModule() {
       dezenfeksiyon: false
     }
   });
+  const [settings21, setSettings21] = useState<SettingsBase>({ dokumanNo: '2.1', revizyonNo: '00', yayinTarihi: '01.01.2024' });
 
-  const [settings21, setSettings21] = useState<SettingsBase>({
-    dokumanNo: '2.1',
-    revizyonNo: '00',
-    yayinTarihi: '01.01.2024'
-  });
+  // 3.1 & 3.2 İZİN VE PERSONEL
+  const [permits, setPermits] = useState<Permit[]>([]);
+  const [settings31, setSettings31] = useState<SettingsBase>({ dokumanNo: '3.1', revizyonNo: '00', yayinTarihi: '01.01.2024' });
+  
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [settings32, setSettings32] = useState<SettingsBase>({ dokumanNo: '3.2', revizyonNo: '00', yayinTarihi: '01.01.2024' });
 
-  // 3.1 İZİN VE RUHSATLAR VERİSİ
-  const [permits, setPermits] = useState<Permit[]>([
-    {
-      id: 1,
-      belgeAdi: 'Biyosidal Ürün Uygulama İzin Belgesi',
-      belgeNo: '2023/158',
-      verilisTarihi: '15.05.2023',
-      gecerlilikTarihi: '15.05.2028',
-      verenKurum: 'T.C. Sağlık Bakanlığı'
-    },
-    {
-      id: 2,
-      belgeAdi: 'Mesul Müdürlük Belgesi',
-      belgeNo: 'MM-2023-001',
-      verilisTarihi: '10.02.2023',
-      gecerlilikTarihi: 'Süresiz',
-      verenKurum: 'T.C. Sağlık Bakanlığı'
-    },
-    {
-      id: 3,
-      belgeAdi: 'Vergi Levhası',
-      belgeNo: '1234567890',
-      verilisTarihi: '01.01.2024',
-      gecerlilikTarihi: '31.12.2024',
-      verenKurum: 'Gelir İdaresi Başkanlığı'
-    }
-  ]);
-
-  const [settings31, setSettings31] = useState<SettingsBase>({
-    dokumanNo: '3.1',
-    revizyonNo: '00',
-    yayinTarihi: '01.01.2024'
-  });
-
-  // 3.2 MESUL MÜDÜR VE OPERATÖR SERTİFİKALARI VERİSİ
-  const [staff, setStaff] = useState<Staff[]>([
-    {
-      id: 1,
-      adSoyad: 'Ali Veli',
-      gorev: 'Mesul Müdür',
-      sertifikaNo: 'MM-12345',
-      gecerlilikTarihi: 'Süresiz'
-    },
-    {
-      id: 2,
-      adSoyad: 'Hasan Hüseyin',
-      gorev: 'Biyosidal Ürün Uygulayıcı (Operatör)',
-      sertifikaNo: 'OP-67890',
-      gecerlilikTarihi: '10.10.2025'
-    },
-    {
-      id: 3,
-      adSoyad: 'Ayşe Fatma',
-      gorev: 'Biyosidal Ürün Uygulayıcı (Operatör)',
-      sertifikaNo: 'OP-11223',
-      gecerlilikTarihi: '20.12.2026'
-    }
-  ]);
-
-  const [settings32, setSettings32] = useState<SettingsBase>({
-    dokumanNo: '3.2',
-    revizyonNo: '00',
-    yayinTarihi: '01.01.2024'
-  });
-
-  // 4.1 ZARARLI MÜCADELESİ EKİPMAN KROKİSİ VERİSİ
-  const [krokiImage, setKrokiImage] = useState<string | null>(null); 
+  // 4.1 & 4.2 KROKİ VE EKİPMAN
+  const [krokiImage, setKrokiImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [legendItems, setLegendItems] = useState<LegendItem[]>([
     { id: 1, kod: 'Kİ', aciklama: 'Kemirgen İstasyonu (Rodent Station)', renk: '#000000', sekil: 'Kare' },
@@ -259,115 +194,199 @@ export default function AdminMentorModule() {
     { id: 3, kod: 'ILT', aciklama: 'Sinek Tutucu Cihaz (EFC)', renk: '#000000', sekil: 'Üçgen' },
     { id: 4, kod: 'FT', aciklama: 'Feromon Tuzak', renk: '#000000', sekil: 'Yıldız' },
   ]);
+  const [settings41, setSettings41] = useState<SettingsBase>({ dokumanNo: '4.1', revizyonNo: '00', yayinTarihi: '01.01.2024' });
 
-  const [settings41, setSettings41] = useState<SettingsBase>({
-    dokumanNo: '4.1',
-    revizyonNo: '00',
-    yayinTarihi: '01.01.2024'
-  });
-
-  // 4.2 EKİPMAN TAKİP FORMLARI VERİSİ
-  const [stations, setStations] = useState<Station[]>([]); 
+  const [stations, setStations] = useState<Station[]>([]);
   const [generator, setGenerator] = useState({ prefix: 'Kİ', start: 1, end: 10, type: 'Kemirgen İstasyonu' });
-   
-  const [settings42, setSettings42] = useState<SettingsBase>({
-    dokumanNo: '4.2',
-    revizyonNo: '00',
-    yayinTarihi: '01.01.2024'
-  });
+  const [settings42, setSettings42] = useState<SettingsBase>({ dokumanNo: '4.2', revizyonNo: '00', yayinTarihi: '01.01.2024' });
 
-  // 5.2 ONAYLI BİYOSİDAL ÜRÜN LİSTESİ VERİSİ
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: 1,
-      urunAdi: 'K-Othrine SC 50',
-      aktifMadde: 'Deltamethrin %5',
-      ruhsatNo: '2011/123',
-      hedefHasere: 'Yürüyen Haşereler',
-      antidot: 'Semptomatik tedavi'
-    },
-    {
-      id: 2,
-      urunAdi: 'Rodilon Pasta',
-      aktifMadde: 'Difethialone %0.0025',
-      ruhsatNo: '2015/456',
-      hedefHasere: 'Kemirgenler',
-      antidot: 'K1 Vitamini'
-    },
-    {
-      id: 3,
-      urunAdi: 'Biopren 6 EC',
-      aktifMadde: 'S-Methoprene %6',
-      ruhsatNo: '2018/789',
-      hedefHasere: 'Uçan ve Yürüyen (Larvasit)',
-      antidot: 'Semptomatik tedavi'
+  // 5.2 ÜRÜNLER
+  const [products, setProducts] = useState<Product[]>([]);
+  const [settings52, setSettings52] = useState<SettingsBase>({ dokumanNo: '5.2', revizyonNo: '00', yayinTarihi: '01.01.2024' });
+
+  // --- VERİ ÇEKME İŞLEMLERİ ---
+  useEffect(() => {
+    fetchCustomers();
+    fetchSystemProducts();
+    fetchOperators();
+  }, []);
+
+  useEffect(() => {
+    if (selectedCustomerId) {
+      fetchCustomerDetails(selectedCustomerId);
+      fetchCustomerBranches(selectedCustomerId);
+      // Müşteri değiştiğinde şube seçimini sıfırla
+      setSelectedBranchId('');
+      setStations([]);
+      setKrokiImage(null);
     }
-  ]);
+  }, [selectedCustomerId]);
 
-  const [settings52, setSettings52] = useState<SettingsBase>({
-    dokumanNo: '5.2',
-    revizyonNo: '00',
-    yayinTarihi: '01.01.2024'
-  });
+  useEffect(() => {
+    if (selectedBranchId) {
+      fetchBranchStations(selectedBranchId);
+      // Şube krokisini de burada çekebilirsiniz varsa
+      // fetchBranchFloorPlan(selectedBranchId);
+    } else {
+      setStations([]);
+    }
+  }, [selectedBranchId]);
+
+  const fetchCustomers = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('customers').select('id, cari_isim').order('cari_isim');
+    if (error) {
+      console.error('Error fetching customers:', error);
+      toast.error('Müşteri listesi alınamadı.');
+    } else {
+      setCustomers(data || []);
+    }
+    setLoading(false);
+  };
+
+  const fetchSystemProducts = async () => {
+    const { data, error } = await supabase.from('products').select('*').eq('category', 'pesticide'); 
+    if (!error && data) {
+      const mappedProducts: Product[] = data.map((p: any) => ({
+        id: p.id,
+        urunAdi: p.name,
+        aktifMadde: p.active_ingredient || '',
+        ruhsatNo: p.registration_number || '',
+        hedefHasere: p.target_pests || '',
+        antidot: p.antidote || ''
+      }));
+      setProducts(mappedProducts);
+    }
+  };
+
+  const fetchOperators = async () => {
+    const { data, error } = await supabase.from('operators').select('*');
+    if (!error && data) {
+        const mappedStaff: Staff[] = data.map((op: any) => ({
+            id: op.id,
+            adSoyad: op.full_name,
+            gorev: 'Biyosidal Ürün Uygulayıcı',
+            sertifikaNo: op.certification_number || '',
+            gecerlilikTarihi: ''
+        }));
+        setStaff(mappedStaff);
+    }
+  }
+
+  const fetchCustomerDetails = async (id: string) => {
+    const { data, error } = await supabase.from('customers').select('*').eq('id', id).single();
+    if (!error && data) {
+      setFormData12({
+        ticariUnvan: data.cari_isim,
+        faaliyetKonusu: '', 
+        vergiDairesi: data.vergi_dairesi || '',
+        vergiNo: data.vergi_no || '',
+        mersisNo: '', 
+        adres: data.fatura_adresi || data.address || '',
+        telefon: data.telefon || data.phone || '',
+        faks: '',
+        eposta: data.eposta || data.email || '',
+        webSitesi: '',
+        yetkiliKisi: data.yetkili_kisi || '',
+        yetkiliUnvan: '',
+        yetkiliTel: data.yetkili_telefon || '',
+        hizmetBaslangicTarihi: new Date().toISOString().split('T')[0]
+      });
+    }
+  };
+
+  const fetchCustomerBranches = async (customerId: string) => {
+    const { data, error } = await supabase.from('branches').select('*').eq('customer_id', customerId);
+    if (!error && data) {
+      // 1. Dropdown için ham veriyi sakla
+      setCustomerBranches(data);
+
+      // 2. Tablo görünümü (1.3) için formatla
+      const mappedBranches: Branch[] = data.map((b: any) => ({
+        id: b.id,
+        subeAdi: b.sube_adi || b.title || b.name,
+        yetkili: b.yetkili_kisi || '',
+        metrekare: '',
+        adres: b.adres || b.address || '',
+        telefon: b.telefon || b.phone || ''
+      }));
+      setBranches(mappedBranches);
+    }
+  };
+
+  const fetchBranchStations = async (branchId: string) => {
+    // Burada 'stations' tablosunu varsayıyoruz. Eğer farklı bir tablo ise adını güncelleyin.
+    // Örneğin: branch_equipment, devices vb.
+    // Eğer tablo adı 'stations' ise:
+    const { data, error } = await supabase
+      .from('stations') 
+      .select('*')
+      .eq('branch_id', branchId)
+      .order('kod', { ascending: true }); // Sıralama için 'kod' veya 'order' kullanın
+
+    if (error) {
+      console.error('İstasyonlar çekilirken hata:', error);
+      // Hata alırsak alternatif tablo adlarını deneyebiliriz veya boş bırakırız
+      setStations([]);
+    } else if (data) {
+      const mappedStations: Station[] = data.map((s: any) => ({
+        id: s.id,
+        no: s.kod || s.code || s.number || '-', 
+        location: s.lokasyon || s.location || '',
+        type: s.tur || s.type || ''
+      }));
+      setStations(mappedStations);
+      
+      if(mappedStations.length > 0) {
+        toast.success(`${mappedStations.length} adet ekipman yüklendi.`);
+      } else {
+        toast.info('Bu şubeye ait kayıtlı ekipman bulunamadı.');
+      }
+    }
+  };
 
   // --- HANDLERS ---
   const handleChange12 = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { const { name, value } = e.target; setFormData12(prev => ({ ...prev, [name]: value })); };
   const handleSettings12 = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setSettings12(prev => ({ ...prev, [name]: value })); };
+  
   const addBranch = () => { setBranches([...branches, { id: Date.now(), subeAdi: 'Yeni Şube', yetkili: '', metrekare: '', adres: '', telefon: '' }]); };
-  const updateBranch = (id: number, field: keyof Branch, value: string) => { setBranches(branches.map(b => b.id === id ? { ...b, [field]: value } : b)); };
-  const removeBranch = (id: number) => { setBranches(branches.filter(b => b.id !== id)); };
+  const updateBranch = (id: number | string, field: keyof Branch, value: string) => { setBranches(branches.map(b => b.id === id ? { ...b, [field]: value } : b)); };
+  const removeBranch = (id: number | string) => { setBranches(branches.filter(b => b.id !== id)); };
   const handleSettings13 = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setSettings13(prev => ({ ...prev, [name]: value })); };
+  
   const handleContractChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => { const { name, value } = e.target; setContractData(prev => ({ ...prev, [name]: value })); };
   const handleKapsamChange = (key: string) => { setContractData(prev => ({ ...prev, kapsam: { ...prev.kapsam, [key]: !prev.kapsam[key] } })); };
   const handleSettings21 = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setSettings21(prev => ({ ...prev, [name]: value })); };
+  
   const addPermit = () => { setPermits([...permits, { id: Date.now(), belgeAdi: 'Yeni Belge', belgeNo: '', verilisTarihi: '', gecerlilikTarihi: '', verenKurum: '' }]); };
   const updatePermit = (id: number, field: keyof Permit, value: string) => { setPermits(permits.map(p => p.id === id ? { ...p, [field]: value } : p)); };
   const removePermit = (id: number) => { setPermits(permits.filter(p => p.id !== id)); };
   const handleSettings31 = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setSettings31(prev => ({ ...prev, [name]: value })); };
+  
   const addStaff = () => { setStaff([...staff, { id: Date.now(), adSoyad: 'Yeni Personel', gorev: 'Operatör', sertifikaNo: '', gecerlilikTarihi: '' }]); };
   const updateStaff = (id: number, field: keyof Staff, value: string) => { setStaff(staff.map(s => s.id === id ? { ...s, [field]: value } : s)); };
   const removeStaff = (id: number) => { setStaff(staff.filter(s => s.id !== id)); };
   const handleSettings32 = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setSettings32(prev => ({ ...prev, [name]: value })); };
+  
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const imageUrl = URL.createObjectURL(file); setKrokiImage(imageUrl); } };
   const removeKrokiImage = () => { setKrokiImage(null); if(fileInputRef.current) fileInputRef.current.value = ""; };
   const handleSettings41 = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setSettings41(prev => ({ ...prev, [name]: value })); };
   const updateLegend = (id: number, field: keyof LegendItem, value: string) => { setLegendItems(legendItems.map(item => item.id === id ? { ...item, [field]: value } : item)); };
+  
   const generateStations = () => { const newStations: Station[] = []; const start = parseInt(generator.start.toString()); const end = parseInt(generator.end.toString()); if (isNaN(start) || isNaN(end) || start > end) return; for (let i = start; i <= end; i++) { const numStr = i < 10 ? `0${i}` : `${i}`; newStations.push({ id: Date.now() + i, no: `${generator.prefix}-${numStr}`, location: '', type: generator.type }); } setStations([...stations, ...newStations]); };
   const updateStation = (id: number, field: keyof Station, value: string) => { setStations(stations.map(s => s.id === id ? { ...s, [field]: value } : s)); };
   const removeStation = (id: number) => { setStations(stations.filter(s => s.id !== id)); };
   const clearStations = () => { if(window.confirm('Tüm listeyi silmek istediğinize emin misiniz?')) { setStations([]); } };
   const handleSettings42 = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setSettings42(prev => ({ ...prev, [name]: value })); };
 
-  // 5.2 Handlers
-  const addProduct = () => {
-    setProducts([...products, {
-      id: Date.now(),
-      urunAdi: 'Yeni Ürün',
-      aktifMadde: '',
-      ruhsatNo: '',
-      hedefHasere: '',
-      antidot: ''
-    }]);
-  };
+  const addProduct = () => { setProducts([...products, { id: Date.now(), urunAdi: 'Yeni Ürün', aktifMadde: '', ruhsatNo: '', hedefHasere: '', antidot: '' }]); };
+  const updateProduct = (id: number | string, field: keyof Product, value: string) => { setProducts(products.map(p => p.id === id ? { ...p, [field]: value } : p)); };
+  const removeProduct = (id: number | string) => { setProducts(products.filter(p => p.id !== id)); };
+  const handleSettings52 = (e: React.ChangeEvent<HTMLInputElement>) => { const { name, value } = e.target; setSettings52(prev => ({ ...prev, [name]: value })); };
 
-  const updateProduct = (id: number, field: keyof Product, value: string) => {
-    setProducts(products.map(p => p.id === id ? { ...p, [field]: value } : p));
-  };
+  const handlePrint = () => { window.print(); };
 
-  const removeProduct = (id: number) => {
-    setProducts(products.filter(p => p.id !== id));
-  };
-
-  const handleSettings52 = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setSettings52(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // --- ORTAK BİLEŞENLER ---
+  // --- ORTAK BİLEŞEN: HEADER ---
   const A4Header = ({ title, settings }: { title: string, settings: SettingsBase }) => (
     <div className="border-2 border-black mb-6">
       <div className="flex">
@@ -398,47 +417,122 @@ export default function AdminMentorModule() {
         <p className="text-xl italic font-bold" style={{ color: BRAND_GREEN }}>"Leave pest to us."</p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-6xl">
-        <button onClick={() => setActiveTab('1.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
-          <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Building2 size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-          <h2 className="text-sm font-bold mb-2 text-gray-800">1.2. Müşteri Bilgileri</h2>
-        </button>
+      {/* SEÇİM ALANI */}
+      <div className="w-full max-w-xl mb-8 space-y-4">
+        {/* Müşteri Seçimi */}
+        <div className="relative">
+            <div className="absolute left-3 top-2.5 text-gray-400 pointer-events-none">
+              <Building2 size={16} />
+            </div>
+            <select 
+                value={selectedCustomerId} 
+                onChange={(e) => setSelectedCustomerId(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-transparent appearance-none bg-white text-sm font-medium transition-colors hover:border-green-400"
+            >
+                <option value="">1. Adım: Müşteri Seçiniz...</option>
+                {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.cari_isim}</option>
+                ))}
+            </select>
+        </div>
 
-        <button onClick={() => setActiveTab('1.3')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
-           <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Store size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-          <h2 className="text-sm font-bold mb-2 text-gray-800">1.3. Şube Bilgileri</h2>
-        </button>
-
-        <button onClick={() => setActiveTab('2.1')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
-           <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><FileSignature size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-          <h2 className="text-sm font-bold mb-2 text-gray-800">2.1. Hizmet Sözleşmesi</h2>
-        </button>
-
-        <button onClick={() => setActiveTab('3.1')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
-           <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Award size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-          <h2 className="text-sm font-bold mb-2 text-gray-800">3.1. İzin ve Ruhsatlar</h2>
-        </button>
-
-        <button onClick={() => setActiveTab('3.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
-           <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Users size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-          <h2 className="text-sm font-bold mb-2 text-gray-800">3.2. Sertifikalar</h2>
-        </button>
-
-        <button onClick={() => setActiveTab('4.1')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
-           <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Map size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-          <h2 className="text-sm font-bold mb-2 text-gray-800">4.1. Ekipman Krokisi</h2>
-        </button>
-
-        <button onClick={() => setActiveTab('4.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
-           <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><ClipboardList size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-          <h2 className="text-sm font-bold mb-2 text-gray-800">4.2. Ekipman Takip</h2>
-        </button>
-
-        <button onClick={() => setActiveTab('5.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
-           <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Beaker size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-          <h2 className="text-sm font-bold mb-2 text-gray-800">5.2. Biyosidal Ürünler</h2>
-        </button>
+        {/* Şube Seçimi (Sadece müşteri seçiliyse görünür) */}
+        {selectedCustomerId && (
+          <div className="relative animate-in slide-in-from-top-2 duration-300">
+             <div className="absolute left-3 top-2.5 text-gray-400 pointer-events-none">
+               <Store size={16} />
+             </div>
+             <select 
+                 value={selectedBranchId} 
+                 onChange={(e) => setSelectedBranchId(e.target.value)}
+                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 focus:border-transparent appearance-none bg-white text-sm font-medium transition-colors hover:border-green-400"
+             >
+                 <option value="">2. Adım: Şube Seçiniz (Ekipman ve Krokiler İçin)</option>
+                 {customerBranches.map(b => (
+                     <option key={b.id} value={b.id}>{b.sube_adi}</option>
+                 ))}
+             </select>
+          </div>
+        )}
       </div>
+
+      {!selectedCustomerId && (
+          <div className="text-center text-gray-500 bg-yellow-50 p-6 rounded-lg border border-yellow-200 max-w-lg">
+             <Filter className="mx-auto mb-2 text-yellow-600" size={24} />
+              <p className="font-medium text-yellow-800">Lütfen İşlem Yapmak İçin Müşteri Seçiniz</p>
+              <p className="text-sm mt-1">Sol menüdeki formları görüntülemek ve düzenlemek için önce bir müşteri seçimi yapmalısınız.</p>
+          </div>
+      )}
+      
+      {selectedCustomerId && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-6xl animate-in fade-in zoom-in duration-300">
+            {/* MÜŞTERİ BAZLI MODÜLLER */}
+            <div className="col-span-full mb-2">
+               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest border-b pb-2">Genel / Müşteri Bazlı Dokümanlar</h3>
+            </div>
+            
+            <button onClick={() => setActiveTab('1.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Building2 size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">1.2. Müşteri Bilgileri</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('1.3')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Store size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">1.3. Şube Bilgileri</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('2.1')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><FileSignature size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">2.1. Hizmet Sözleşmesi</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('3.1')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Award size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">3.1. İzin ve Ruhsatlar</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('3.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Users size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">3.2. Sertifikalar</h2>
+            </button>
+
+             <button onClick={() => setActiveTab('5.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Beaker size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">5.2. Biyosidal Ürünler</h2>
+            </button>
+
+            {/* ŞUBE BAZLI MODÜLLER */}
+            <div className="col-span-full mt-6 mb-2">
+               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest border-b pb-2 flex justify-between">
+                 <span>Şube Bazlı Dokümanlar</span>
+                 {!selectedBranchId && <span className="text-red-500 normal-case font-normal">* Şube seçimi gereklidir</span>}
+               </h3>
+            </div>
+
+            <button 
+              onClick={() => {
+                if(!selectedBranchId) { toast.error("Lütfen önce şube seçiniz."); return; }
+                setActiveTab('4.1');
+              }} 
+              className={`group bg-white p-6 rounded-xl shadow-md transition-all border-2 border-transparent flex flex-col items-center text-center h-full ${selectedBranchId ? 'hover:shadow-xl hover:border-green-600 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+            >
+            <div className={`bg-green-100 p-4 rounded-full mb-4 transition-colors ${selectedBranchId ? 'group-hover:bg-green-600 group-hover:text-white' : ''}`}><Map size={32} color={BRAND_GREEN} className={selectedBranchId ? "group-hover:text-white" : ""} style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">4.1. Ekipman Krokisi</h2>
+            </button>
+
+            <button 
+               onClick={() => {
+                if(!selectedBranchId) { toast.error("Lütfen önce şube seçiniz."); return; }
+                setActiveTab('4.2');
+              }} 
+              className={`group bg-white p-6 rounded-xl shadow-md transition-all border-2 border-transparent flex flex-col items-center text-center h-full ${selectedBranchId ? 'hover:shadow-xl hover:border-green-600 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+            >
+            <div className={`bg-green-100 p-4 rounded-full mb-4 transition-colors ${selectedBranchId ? 'group-hover:bg-green-600 group-hover:text-white' : ''}`}><ClipboardList size={32} color={BRAND_GREEN} className={selectedBranchId ? "group-hover:text-white" : ""} style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">4.2. Ekipman Takip</h2>
+            </button>
+
+        </div>
+      )}
     </div>
   );
 
@@ -491,7 +585,9 @@ export default function AdminMentorModule() {
 
   const renderEditor13 = () => (
     <div className="space-y-6">
-      <div className="bg-green-50 p-3 rounded border border-green-200 text-sm text-green-800 mb-4">Firmanın hizmet verilen şubelerini buradan ekleyin. A4 çıktıda tablo olarak listelenecektir.</div>
+      <div className="bg-green-50 p-3 rounded border border-green-200 text-sm text-green-800 mb-4">
+        Firmanın şubeleri otomatik olarak veritabanından çekilmiştir. Gerekirse manuel ekleme yapabilirsiniz.
+      </div>
       <div className="flex justify-between items-center border-b pb-2 mb-4"><h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: BRAND_GREEN }}><Store size={16} /> Şube Listesi</h2><button onClick={addBranch} className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700 transition"><Plus size={16}/></button></div>
       <div className="space-y-4">{branches.map((branch, index) => (<div key={branch.id} className="p-3 bg-white border rounded shadow-sm relative group"><div className="absolute top-2 right-2 flex gap-2"><span className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-mono">#{index + 1}</span><button onClick={() => removeBranch(branch.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button></div><div className="space-y-2 mt-2"><input type="text" placeholder="Şube Adı" value={branch.subeAdi} onChange={(e) => updateBranch(branch.id, 'subeAdi', e.target.value)} className="w-full p-2 border rounded text-sm font-semibold outline-none focus:border-green-600" /><div className="grid grid-cols-2 gap-2"><input type="text" placeholder="Şube Yetkilisi" value={branch.yetkili} onChange={(e) => updateBranch(branch.id, 'yetkili', e.target.value)} className="w-full p-2 border rounded text-xs outline-none focus:border-green-600" /><input type="text" placeholder="Metrekare (m²)" value={branch.metrekare} onChange={(e) => updateBranch(branch.id, 'metrekare', e.target.value)} className="w-full p-2 border rounded text-xs outline-none focus:border-green-600" /></div><div className="grid grid-cols-2 gap-2"><input type="text" placeholder="Telefon" value={branch.telefon} onChange={(e) => updateBranch(branch.id, 'telefon', e.target.value)} className="w-full p-2 border rounded text-xs outline-none focus:border-green-600" /></div><textarea placeholder="Şube Açık Adresi" value={branch.adres} onChange={(e) => updateBranch(branch.id, 'adres', e.target.value)} rows={2} className="w-full p-2 border rounded text-xs outline-none focus:border-green-600" /></div></div>))}</div>
       <section><h2 className="text-sm font-semibold uppercase tracking-wider mb-3 flex items-center gap-2 border-t pt-4" style={{ color: BRAND_GREEN }}><FileText size={16} /> Doküman Ayarları</h2><div className="grid grid-cols-3 gap-2"><input type="text" name="dokumanNo" value={settings13.dokumanNo} onChange={handleSettings13} className="p-2 border rounded text-sm" placeholder="No" /><input type="text" name="yayinTarihi" value={settings13.yayinTarihi} onChange={handleSettings13} className="p-2 border rounded text-sm" placeholder="Tarih" /><input type="text" name="revizyonNo" value={settings13.revizyonNo} onChange={handleSettings13} className="p-2 border rounded text-sm" placeholder="Rev" /></div></section>
@@ -519,7 +615,7 @@ export default function AdminMentorModule() {
 
   const renderEditor32 = () => (
     <div className="space-y-6">
-      <div className="bg-green-50 p-3 rounded border border-green-200 text-sm text-green-800 mb-4">Hizmeti veren firmanın mesul müdürü ve biyosidal ürün uygulayıcı personelinin sertifika bilgilerini buradan yönetebilirsiniz.</div>
+      <div className="bg-green-50 p-3 rounded border border-green-200 text-sm text-green-800 mb-4">Sistemdeki operatörler otomatik olarak listelenmiştir.</div>
       <div className="flex justify-between items-center border-b pb-2 mb-4"><h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: BRAND_GREEN }}><Users size={16} /> Personel Listesi</h2><button onClick={addStaff} className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700 transition"><Plus size={16}/></button></div>
       <div className="space-y-4">{staff.map((s, index) => (<div key={s.id} className="p-3 bg-white border rounded shadow-sm relative group"><div className="absolute top-2 right-2 flex gap-2"><span className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-mono">#{index + 1}</span><button onClick={() => removeStaff(s.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button></div><div className="space-y-2 mt-2"><input type="text" placeholder="Adı Soyadı" value={s.adSoyad} onChange={(e) => updateStaff(s.id, 'adSoyad', e.target.value)} className="w-full p-2 border rounded text-sm font-semibold outline-none focus:border-green-600" /><div><label className="text-[10px] text-gray-500 pl-1">Görevi</label><select value={s.gorev} onChange={(e) => updateStaff(s.id, 'gorev', e.target.value)} className="w-full p-2 border rounded text-sm outline-none focus:border-green-600"><option>Mesul Müdür</option><option>Biyosidal Ürün Uygulayıcı (Operatör)</option></select></div><div className="grid grid-cols-2 gap-2"><div><label className="text-[10px] text-gray-500 pl-1">Sertifika No</label><input type="text" placeholder="Örn: MM-12345" value={s.sertifikaNo} onChange={(e) => updateStaff(s.id, 'sertifikaNo', e.target.value)} className="w-full p-2 border rounded text-xs outline-none focus:border-green-600" /></div><div><label className="text-[10px] text-gray-500 pl-1">Geçerlilik Tarihi</label><input type="text" placeholder="Örn: 20.12.2026" value={s.gecerlilikTarihi} onChange={(e) => updateStaff(s.id, 'gecerlilikTarihi', e.target.value)} className="w-full p-2 border rounded text-xs outline-none focus:border-green-600" /></div></div></div></div>))}</div>
       <section><h2 className="text-sm font-semibold uppercase tracking-wider mb-3 flex items-center gap-2 border-t pt-4" style={{ color: BRAND_GREEN }}><FileText size={16} /> Doküman Ayarları</h2><div className="grid grid-cols-3 gap-2"><input type="text" name="dokumanNo" value={settings32.dokumanNo} onChange={handleSettings32} className="p-2 border rounded text-sm" placeholder="No" /><input type="text" name="yayinTarihi" value={settings32.yayinTarihi} onChange={handleSettings32} className="p-2 border rounded text-sm" placeholder="Tarih" /><input type="text" name="revizyonNo" value={settings32.revizyonNo} onChange={handleSettings32} className="p-2 border rounded text-sm" placeholder="Rev" /></div></section>
@@ -528,7 +624,11 @@ export default function AdminMentorModule() {
 
   const renderEditor41 = () => (
     <div className="space-y-6">
-      <div className="bg-green-50 p-3 rounded border border-green-200 text-sm text-green-800 mb-4">İşletmenin yerleşim planını (krokisini) yükleyin. Sağ tarafta A4 üzerine yerleşecek ve altına otomatik lejant eklenecektir.</div>
+      <div className="bg-green-50 p-3 rounded border border-green-200 text-sm text-green-800 mb-4">
+        {selectedBranchId 
+         ? "Seçilen şubenin krokisi aşağıdadır. Değişiklik yapmak için yeni bir görsel yükleyebilirsiniz."
+         : "Lütfen önce bir şube seçiniz."}
+      </div>
       <section><h2 className="text-sm font-semibold uppercase tracking-wider mb-3 flex items-center gap-2" style={{ color: BRAND_GREEN }}><Upload size={16} /> Kroki Görseli</h2><div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-green-500 transition-colors bg-white">{krokiImage ? (<div className="w-full"><img src={krokiImage} alt="Kroki Önizleme" className="max-h-40 mx-auto mb-2 shadow-sm border" /><button onClick={removeKrokiImage} className="text-xs text-red-500 hover:text-red-700 underline font-semibold">Görseli Kaldır</button></div>) : (<><ImageIcon size={32} className="text-gray-400 mb-2" /><label className="cursor-pointer"><span className="text-green-600 font-semibold text-sm hover:underline">Görsel Seç</span><input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" /></label><p className="text-xs text-gray-400 mt-1">PNG, JPG formatında kat planı.</p></>)}</div></section>
       <section><h2 className="text-sm font-semibold uppercase tracking-wider mb-3 flex items-center gap-2 border-t pt-4" style={{ color: BRAND_GREEN }}><Map size={16} /> Lejant (İşaret Dili)</h2><div className="space-y-3">{legendItems.map(item => (<div key={item.id} className="p-2 border rounded bg-white flex flex-col gap-2"><div className="flex justify-between items-center"><span className="font-bold text-sm bg-gray-100 px-2 rounded text-gray-700">{item.kod}</span></div><input type="text" value={item.aciklama} onChange={(e) => updateLegend(item.id, 'aciklama', e.target.value)} className="w-full p-1 border rounded text-xs" /></div>))}</div><div className="text-[10px] text-gray-400 mt-2 italic">* Lejant maddeleri standarttır, açıklamalarını düzenleyebilirsiniz.</div></section>
       <section><h2 className="text-sm font-semibold uppercase tracking-wider mb-3 flex items-center gap-2 border-t pt-4" style={{ color: BRAND_GREEN }}><FileText size={16} /> Doküman Ayarları</h2><div className="grid grid-cols-3 gap-2"><input type="text" name="dokumanNo" value={settings41.dokumanNo} onChange={handleSettings41} className="p-2 border rounded text-sm" placeholder="No" /><input type="text" name="yayinTarihi" value={settings41.yayinTarihi} onChange={handleSettings41} className="p-2 border rounded text-sm" placeholder="Tarih" /><input type="text" name="revizyonNo" value={settings41.revizyonNo} onChange={handleSettings41} className="p-2 border rounded text-sm" placeholder="Rev" /></div></section>
@@ -538,7 +638,9 @@ export default function AdminMentorModule() {
   const renderEditor42 = () => (
     <div className="space-y-6">
       <div className="bg-green-50 p-3 rounded border border-green-200 text-sm text-green-800 mb-4">
-        Sahada kullanılacak boş "Ekipman Takip Formu" oluşturun. İstasyonları tek tek girmek yerine otomatik oluşturucuyu kullanabilirsiniz.
+        {selectedBranchId 
+         ? "Bu şubedeki kayıtlı ekipmanlar listelenmiştir. Otomatik oluşturucuyu kullanarak yeni ekipmanlar ekleyebilirsiniz."
+         : "Lütfen önce bir şube seçiniz."}
       </div>
       
       {/* Otomatik Oluşturucu */}
@@ -587,7 +689,7 @@ export default function AdminMentorModule() {
         
         {stations.length === 0 ? (
             <div className="text-center text-gray-400 py-8 text-sm border-2 border-dashed rounded">
-                Henüz istasyon eklenmedi.
+                {selectedBranchId ? "Bu şubede kayıtlı istasyon bulunamadı." : "İstasyonları görmek için şube seçiniz."}
             </div>
         ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
@@ -620,7 +722,7 @@ export default function AdminMentorModule() {
   const renderEditor52 = () => (
     <div className="space-y-6">
       <div className="bg-green-50 p-3 rounded border border-green-200 text-sm text-green-800 mb-4">
-        İşletmede kullanılması planlanan tüm biyosidal ürünleri (ilaçları) buradan listeye ekleyebilirsiniz.
+        Ürün listesi veritabanındaki "pesticide" kategorisindeki ürünlerden otomatik çekilmiştir.
       </div>
       
       <div className="flex justify-between items-center border-b pb-2 mb-4">
@@ -753,7 +855,6 @@ export default function AdminMentorModule() {
   );
 
   // --- APP LAYOUT ---
-  // Not: Main layout içinde çalışacağı için h-screen'i kaldırdık ve flex-1 verdik.
   return (
     <div className="flex h-[calc(100vh-64px)] bg-gray-100 font-sans text-gray-900 overflow-hidden">
       
@@ -767,15 +868,23 @@ export default function AdminMentorModule() {
         </div>
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <button onClick={() => setActiveTab('home')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'home' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><Home size={18} /> Ana Sayfa</button>
+          
+          <div className={`mt-2 p-2 rounded border border-green-100 ${selectedCustomerId ? 'bg-green-50' : 'bg-gray-50'}`}>
+            <div className="text-xs font-bold uppercase text-gray-500 mb-1">Seçili Müşteri</div>
+            <div className="text-sm font-semibold text-gray-800 truncate">
+                {customers.find(c => c.id === selectedCustomerId)?.cari_isim || 'Seçilmedi'}
+            </div>
+          </div>
+
           <div className="pt-4 pb-2 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Modüller</div>
-          <button onClick={() => setActiveTab('1.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '1.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><Building2 size={18} /> 1.2 Müşteri Bilgileri</button>
-          <button onClick={() => setActiveTab('1.3')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '1.3' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><Store size={18} /> 1.3 Şube Bilgileri</button>
-          <button onClick={() => setActiveTab('2.1')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '2.1' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><FileSignature size={18} /> 2.1 Hizmet Sözleşmesi</button>
-          <button onClick={() => setActiveTab('3.1')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '3.1' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><Award size={18} /> 3.1 İzin ve Ruhsatlar</button>
-          <button onClick={() => setActiveTab('3.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '3.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><Users size={18} /> 3.2 Sertifikalar</button>
-          <button onClick={() => setActiveTab('4.1')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '4.1' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><Map size={18} /> 4.1 Ekipman Krokisi</button>
-          <button onClick={() => setActiveTab('4.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '4.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><ClipboardList size={18} /> 4.2 Ekipman Takip</button>
-          <button onClick={() => setActiveTab('5.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '5.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}><Beaker size={18} /> 5.2 Biyosidal Ürünler</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('1.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '1.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><Building2 size={18} /> 1.2 Müşteri Bilgileri</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('1.3')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '1.3' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><Store size={18} /> 1.3 Şube Bilgileri</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('2.1')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '2.1' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><FileSignature size={18} /> 2.1 Hizmet Sözleşmesi</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('3.1')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '3.1' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><Award size={18} /> 3.1 İzin ve Ruhsatlar</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('3.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '3.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><Users size={18} /> 3.2 Sertifikalar</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('4.1')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '4.1' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><Map size={18} /> 4.1 Ekipman Krokisi</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('4.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '4.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><ClipboardList size={18} /> 4.2 Ekipman Takip</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('5.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '5.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><Beaker size={18} /> 5.2 Biyosidal Ürünler</button>
         </nav>
         <div className="p-4 border-t border-gray-100">{activeTab !== 'home' && (<button onClick={handlePrint} className="w-full flex justify-center items-center gap-2 bg-green-700 hover:bg-green-800 text-white py-2 px-4 rounded-lg shadow transition text-sm font-medium"><Printer size={16} /> Yazdır (PDF)</button>)}</div>
       </aside>
