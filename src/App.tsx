@@ -26,7 +26,27 @@ import VisitForm from './pages/VisitForm';
 import VisitDetails from './pages/VisitDetails';
 import AdminCalendar from './pages/AdminCalendar';
 import AdminCalendarPlanning from './pages/AdminCalendarPlanning';
-import AdminMentorModule from './pages/AdminMentorModule'; // YENİ EKLENEN SAYFA
+
+// --- YENİ EKLENEN ADMIN MENTOR MODÜLÜ IMPORTLARI ---
+import AdminMentorHome from './pages/AdminMentor/AdminMentorHome';
+import CustomerSelection from './pages/AdminMentor/CustomerSelection';
+import BranchSelection from './pages/AdminMentor/BranchSelection';
+import AuditMenu from './pages/AdminMentor/AuditMenu';
+import FileAuditChecklist from './pages/AdminMentor/FileAuditChecklist';
+import AuditSummary from './pages/AdminMentor/AuditSummary';
+// Mentor Formları
+import StationControl from './pages/AdminMentor/Forms/StationControl';
+import BiocidalApplicationForm from './pages/AdminMentor/Forms/BiocidalApplicationForm';
+import ApprovedProductList from './pages/AdminMentor/Forms/ApprovedProductList';
+import ProductUsageCard from './pages/AdminMentor/Forms/ProductUsageCard';
+import WasteDisposalLog from './pages/AdminMentor/Forms/WasteDisposalLog';
+import LicenseManager from './pages/AdminMentor/Forms/LicenseManager';
+import CustomerInfoView from './pages/AdminMentor/Forms/CustomerInfoView';
+import RiskActionPlan from './pages/AdminMentor/Forms/RiskActionPlan';
+import CustomerFeedbackForm from './pages/AdminMentor/Forms/CustomerFeedbackForm';
+import DocumentCheckDetail from './pages/AdminMentor/Forms/DocumentCheckDetail';
+// ---------------------------------------------------
+
 import OperatorCalendar from './pages/OperatorCalendar';
 import OperatorCalendarPlanning from './pages/OperatorCalendarPlanning';
 import CustomerCalendar from './pages/CustomerCalendar';
@@ -66,7 +86,6 @@ import ActivityReportsTracking from './pages/ActivityReportsTracking';
 import RiskAssessmentModule from './pages/modules/RiskAssessmentModule';
 import ProposalReportModule from './pages/modules/ProposalReportModule';
 import PaidVisitsPage from './pages/PaidVisitsPage';
-import TrendAnalysisReport from './pages/TrendAnalysisReport';
 import AdminProducts from './pages/AdminProducts';
 import BulkDeletePage from './pages/BulkDeletePage';
 import RouteOptimizationPage from './pages/RouteOptimizationPage';
@@ -115,7 +134,7 @@ import AdminPesticideReport from './pages/AdminPesticideReport';
 import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
 import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
-import SatisGorusmeFormu from './pages/SatisGorusmeFormu'; 
+import SatisGorusmeFormu from './pages/SatisGorusmeFormu';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode, allowedUserTypes?: string[] }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -144,7 +163,6 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           .single();
 
         if (profileError) {
-          // Fallback for admin email if profile not found/error
           setIsAdmin(user.email === 'admin@ilaclamatik.com');
         } else {
           setIsAdmin(profileData.role === 'admin');
@@ -275,7 +293,6 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
-          {/* Korumalı rapor görüntüleyici */}
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
           
           {/* Operator Routes */}
@@ -365,7 +382,7 @@ function App() {
             <Route path="trend-report/:reportId" element={<CustomerTrendReportView />} />
           </Route>
 
-          {/* Admin Routes (Catch-all for clean URLs) */}
+          {/* Admin Routes */}
           <Route
             path="/*"
             element={
@@ -377,7 +394,6 @@ function App() {
             }
           >
             <Route index element={<Dashboard />} />
-            {/* Added explicit route for /admin to show Dashboard */}
             <Route path="admin" element={<Dashboard />} /> 
             
             <Route path="modules" element={<Modules />} />
@@ -448,15 +464,40 @@ function App() {
             <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             
-            {/* Mentor Modülü - Faaliyet Dosyası */}
-            <Route path="mentor-module" element={<AdminMentorModule />} />
-            <Route path="admin/faaliyet-dosyasi" element={<AdminRoute><AdminMentorModule /></AdminRoute>} />
-            <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
+            {/* --- ADMIN MENTOR MODULE ROUTES START --- */}
+            {/* Ana Giriş */}
+            <Route path="admin/mentor" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
+            {/* Seçim Ekranları */}
+            <Route path="admin/mentor/customer-selection" element={<AdminRoute><CustomerSelection /></AdminRoute>} />
+            <Route path="admin/mentor/branch-selection" element={<AdminRoute><BranchSelection /></AdminRoute>} />
+            <Route path="admin/mentor/audit-menu" element={<AdminRoute><AuditMenu /></AdminRoute>} />
+            
+            {/* Denetim & Özet */}
+            <Route path="admin/mentor/file-audit" element={<AdminRoute><FileAuditChecklist /></AdminRoute>} />
+            <Route path="admin/mentor/audit-summary" element={<AdminRoute><AuditSummary /></AdminRoute>} />
+            
+            {/* Özel Formlar (Forms Klasörü) */}
+            <Route path="admin/mentor/StationControl" element={<AdminRoute><StationControl /></AdminRoute>} />
+            <Route path="admin/mentor/BiocidalApplicationForm" element={<AdminRoute><BiocidalApplicationForm /></AdminRoute>} />
+            <Route path="admin/mentor/ApprovedProductList" element={<AdminRoute><ApprovedProductList /></AdminRoute>} />
+            <Route path="admin/mentor/ProductUsageCard" element={<AdminRoute><ProductUsageCard /></AdminRoute>} />
+            <Route path="admin/mentor/WasteDisposalLog" element={<AdminRoute><WasteDisposalLog /></AdminRoute>} />
+            <Route path="admin/mentor/LicenseManager" element={<AdminRoute><LicenseManager /></AdminRoute>} />
+            <Route path="admin/mentor/CustomerInfoView" element={<AdminRoute><CustomerInfoView /></AdminRoute>} />
+            <Route path="admin/mentor/RiskActionPlan" element={<AdminRoute><RiskActionPlan /></AdminRoute>} />
+            <Route path="admin/mentor/CustomerFeedbackForm" element={<AdminRoute><CustomerFeedbackForm /></AdminRoute>} />
+            <Route path="admin/mentor/DocumentCheckDetail" element={<AdminRoute><DocumentCheckDetail /></AdminRoute>} />
+            
+            {/* Eski Rotalar (Geriye uyumluluk için, gerekirse kaldırılabilir) */}
+            <Route path="mentor-module" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
+            <Route path="admin/faaliyet-dosyasi" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
+            {/* --- ADMIN MENTOR MODULE ROUTES END --- */}
 
+            <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
             <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />  
-            <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />   
+            <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />    
             <Route path="satis-gorusme-formu" element={<AdminRoute><SatisGorusmeFormu /></AdminRoute>} />
           </Route>
         </Routes>
