@@ -47,8 +47,8 @@ export default function AdminMentorModule() {
   });
   const [settings12, setSettings12] = useState<SettingsBase>({ dokumanNo: '1.2', revizyonNo: '00', yayinTarihi: '01.01.2024' });
 
-  // 1.3 ŞUBE BİLGİLERİ
-  const [branches, setBranches] = useState<any[]>([]); 
+  // 1.3 ŞUBE BİLGİLERİ (Tablo Verisi)
+  const [branchListData, setBranchListData] = useState<any[]>([]); 
   const [settings13, setSettings13] = useState<SettingsBase>({ dokumanNo: '1.3', revizyonNo: '00', yayinTarihi: '01.01.2024' });
 
   // 2.1 SÖZLEŞME
@@ -121,7 +121,19 @@ export default function AdminMentorModule() {
     if (selectedCustomerId) {
       const loadCustomerData = async () => {
         const { data: branchData } = await supabase.from('branches').select('id, sube_adi').eq('customer_id', selectedCustomerId);
-        if (branchData) setCustomerBranches(branchData);
+        if (branchData) {
+          setCustomerBranches(branchData);
+          // 1.3 için şube listesini hazırla
+           const mappedBranches = branchData.map((b: any) => ({
+             id: b.id,
+             subeAdi: b.sube_adi,
+             yetkili: '',
+             metrekare: '',
+             adres: '',
+             telefon: ''
+           }));
+           setBranchListData(mappedBranches);
+        }
       };
       loadCustomerData();
       
@@ -163,7 +175,7 @@ export default function AdminMentorModule() {
       if (data) {
         if (formType === '1.1') { setDocumentContents(data.content); setSettings11(data.settings); }
         if (formType === '1.2') { setFormData12(data.content); setSettings12(data.settings); }
-        if (formType === '1.3') { setBranches(data.content); setSettings13(data.settings); }
+        if (formType === '1.3') { setBranchListData(data.content); setSettings13(data.settings); }
         if (formType === '2.1') { setContractData(data.content); setSettings21(data.settings); }
         if (formType === '3.1') { setPermits(data.content); setSettings31(data.settings); }
         if (formType === '3.2') { setStaff(data.content); setSettings32(data.settings); }
@@ -175,7 +187,7 @@ export default function AdminMentorModule() {
         if (formType === '6.1') { setWasteRecords(data.content); setSettings61(data.settings); }
       }
     } catch (err) {
-      console.log('Veri yok veya hata:', err);
+      console.log(`Veri yok veya hata (${formType}):`, err);
     }
   };
 
@@ -189,7 +201,7 @@ export default function AdminMentorModule() {
 
     if (activeTab === '1.1') { contentToSave = documentContents; settingsToSave = settings11; }
     else if (activeTab === '1.2') { contentToSave = formData12; settingsToSave = settings12; }
-    else if (activeTab === '1.3') { contentToSave = branches; settingsToSave = settings13; }
+    else if (activeTab === '1.3') { contentToSave = branchListData; settingsToSave = settings13; }
     else if (activeTab === '2.1') { contentToSave = contractData; settingsToSave = settings21; }
     else if (activeTab === '3.1') { contentToSave = permits; settingsToSave = settings31; }
     else if (activeTab === '3.2') { contentToSave = staff; settingsToSave = settings32; }
@@ -234,9 +246,9 @@ export default function AdminMentorModule() {
   const handleSettings12 = (e: any) => setSettings12({ ...settings12, [e.target.name]: e.target.value });
 
   // 1.3 Handlers
-  const addBranch = () => setBranches([...branches, { id: Date.now(), subeAdi: 'Yeni Şube', yetkili: '', metrekare: '', adres: '', telefon: '' }]);
-  const removeBranch = (id: number) => setBranches(branches.filter(b => b.id !== id));
-  const updateBranch = (id: number, field: string, value: any) => setBranches(branches.map(b => b.id === id ? { ...b, [field]: value } : b));
+  const addBranch = () => setBranchListData([...branchListData, { id: Date.now(), subeAdi: 'Yeni Şube', yetkili: '', metrekare: '', adres: '', telefon: '' }]);
+  const removeBranch = (id: number) => setBranchListData(branchListData.filter(b => b.id !== id));
+  const updateBranch = (id: number, field: string, value: any) => setBranchListData(branchListData.map(b => b.id === id ? { ...b, [field]: value } : b));
   const handleSettings13 = (e: any) => setSettings13({ ...settings13, [e.target.name]: e.target.value });
 
   // 2.1 Handlers
@@ -329,7 +341,7 @@ export default function AdminMentorModule() {
   const renderEditor13 = () => (
     <div className="space-y-4">
       <div className="flex justify-between"><h2 className="text-sm font-bold" style={{ color: BRAND_GREEN }}>Şube Listesi</h2><button onClick={addBranch} className="bg-green-600 text-white p-1 rounded"><Plus size={16}/></button></div>
-      {branches.map(b => (<div key={b.id} className="p-2 border rounded relative"><button onClick={() => removeBranch(b.id)} className="absolute top-1 right-1 text-red-500"><Trash2 size={14}/></button><input className="w-full mb-1 p-1 border rounded" placeholder="Şube Adı" value={b.subeAdi} onChange={e => updateBranch(b.id, 'subeAdi', e.target.value)} /><input className="w-full p-1 border rounded" placeholder="Yetkili" value={b.yetkili} onChange={e => updateBranch(b.id, 'yetkili', e.target.value)} /></div>))}
+      {branchListData.map(b => (<div key={b.id} className="p-2 border rounded relative"><button onClick={() => removeBranch(b.id)} className="absolute top-1 right-1 text-red-500"><Trash2 size={14}/></button><input className="w-full mb-1 p-1 border rounded" placeholder="Şube Adı" value={b.subeAdi} onChange={e => updateBranch(b.id, 'subeAdi', e.target.value)} /><input className="w-full p-1 border rounded" placeholder="Yetkili" value={b.yetkili} onChange={e => updateBranch(b.id, 'yetkili', e.target.value)} /></div>))}
       <div className="mt-4 border-t pt-4"><label className="text-xs">Doküman No</label><input className="w-full p-1 border rounded" name="dokumanNo" value={settings13.dokumanNo} onChange={handleSettings13} /></div>
     </div>
   );
@@ -513,7 +525,7 @@ export default function AdminMentorModule() {
            {/* Önizlemeler */}
            {activeTab === '1.1' && <Preview11 data={documentContents} settings={settings11} customerName={customers.find(c => c.id === selectedCustomerId)?.cari_isim || ''} />}
            {activeTab === '1.2' && <Preview12 data={formData12} settings={settings12} />}
-           {activeTab === '1.3' && <Preview13 data={branches} settings={settings13} customerName={customers.find(c => c.id === selectedCustomerId)?.cari_isim || ''} />}
+           {activeTab === '1.3' && <Preview13 data={branchListData} settings={settings13} customerName={customers.find(c => c.id === selectedCustomerId)?.cari_isim || ''} />}
            {activeTab === '2.1' && <Preview21 data={contractData} settings={settings21} customerName={customers.find(c => c.id === selectedCustomerId)?.cari_isim || ''} customerAddress={formData12.adres} customerAuth={formData12.yetkiliKisi} />}
            {activeTab === '3.1' && <Preview31 data={permits} settings={settings31} />}
            {activeTab === '3.2' && <Preview32 data={staff} settings={settings32} />}
