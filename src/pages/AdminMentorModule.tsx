@@ -322,33 +322,47 @@ export default function AdminMentorModule() {
   };
 
   const fetchBranchStations = async (branchId: string) => {
-    // Burada 'stations' tablosunu varsayıyoruz. Eğer farklı bir tablo ise adını güncelleyin.
-    // Örneğin: branch_equipment, devices vb.
-    // Eğer tablo adı 'stations' ise:
-    const { data, error } = await supabase
-      .from('stations') 
-      .select('*')
-      .eq('branch_id', branchId)
-      .order('kod', { ascending: true }); // Sıralama için 'kod' veya 'order' kullanın
+    try {
+      const { data, error } = await supabase
+        .from('branch_equipment')
+        .select(`
+          id,
+          equipment_code,
+          department,
+          equipment:equipment_id (
+            id,
+            name,
+            category
+          )
+        `)
+        .eq('branch_id', branchId)
+        .order('equipment_code', { ascending: true });
 
-    if (error) {
-      console.error('İstasyonlar çekilirken hata:', error);
-      // Hata alırsak alternatif tablo adlarını deneyebiliriz veya boş bırakırız
-      setStations([]);
-    } else if (data) {
-      const mappedStations: Station[] = data.map((s: any) => ({
-        id: s.id,
-        no: s.kod || s.code || s.number || '-', 
-        location: s.lokasyon || s.location || '',
-        type: s.tur || s.type || ''
-      }));
-      setStations(mappedStations);
-      
-      if(mappedStations.length > 0) {
+      if (error) {
+        console.error('Ekipmanlar çekilirken hata:', error);
+        setStations([]);
+        toast.error('Ekipmanlar yüklenemedi');
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const mappedStations: Station[] = data.map((item: any) => ({
+          id: item.id,
+          no: item.equipment_code || '',
+          location: item.department || '',
+          type: item.equipment?.name || ''
+        }));
+
+        setStations(mappedStations);
         toast.success(`${mappedStations.length} adet ekipman yüklendi.`);
       } else {
+        setStations([]);
         toast.info('Bu şubeye ait kayıtlı ekipman bulunamadı.');
       }
+    } catch (err) {
+      console.error('Beklenmeyen hata:', err);
+      setStations([]);
+      toast.error('Ekipmanlar yüklenirken hata oluştu');
     }
   };
 
