@@ -35,16 +35,15 @@ const BranchSelection: React.FC<Props> = ({ navigation, route }) => {
     { id: '105', name: 'Dış Saha & Bahçe', type: 'Dış Alan', manager: 'Güvenlik Birimi', lastAuditStatus: 'success' },
   ];
 
-  const handleSelectBranch = (branch: Branch) => {
-    console.log(`Seçilen Şube: ${branch.name}`);
-    // 1.3 Adımına (İşlem Seçimi / Denetim Başlatma) gidiyoruz
-    // navigation.navigate('AuditAction', { 
-    //   customerId, 
-    //   customerName,
-    //   branchId: branch.id,
-    //   branchName: branch.name
-    // });
-  };
+const handleSelectBranch = (branch: Branch) => {
+  // 1.3 Adımına (Dosya Denetim Listesi) gidiyoruz
+  navigation.navigate('FileAuditChecklist', { 
+    customerId, 
+    customerName,
+    branchId: branch.id,
+    branchName: branch.name
+  });
+};
 
   const renderStatusIcon = (status: string) => {
     switch (status) {
