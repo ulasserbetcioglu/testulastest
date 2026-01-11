@@ -78,7 +78,7 @@ const menuCategories = [
       { name: 'Trend Analizi', path: '/trend-analizi', icon: <TrendingUp size={20} /> },
       { name: 'Faaliyet Raporu', path: '/faaliyet-rapor-takip', icon: <FileText size={20} /> },
       { name: 'Pestisit Kullanım', path: '/pestisit-raporu', icon: <Bug size={20} /> },
-      { name: 'Faaliyet Dosyası', path: '/admin/faaliyet-dosyasi', icon: <FileText size={20} /> },
+      { name: 'Faaliyet Dosyası', path: '/mentor-module', icon: <FileText size={20} /> },
       { name: 'Modül Raporları', path: '/admin/modul-raporlari', icon: <Grid size={20} /> },
     ]
   },

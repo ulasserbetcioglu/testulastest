@@ -204,6 +204,11 @@ export default function AdminMentorModule() {
   const [products, setProducts] = useState<Product[]>([]);
   const [settings52, setSettings52] = useState<SettingsBase>({ dokumanNo: '5.2', revizyonNo: '00', yayinTarihi: '01.01.2024' });
 
+  // KAYDEDİLMİŞ FAALİYET DOSYALARI
+  const [savedFiles, setSavedFiles] = useState<any[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+
   // --- VERİ ÇEKME İŞLEMLERİ ---
   useEffect(() => {
     fetchCustomers();
@@ -215,10 +220,12 @@ export default function AdminMentorModule() {
     if (selectedCustomerId) {
       fetchCustomerDetails(selectedCustomerId);
       fetchCustomerBranches(selectedCustomerId);
+      fetchSavedFiles(selectedCustomerId);
       // Müşteri değiştiğinde şube seçimini sıfırla
       setSelectedBranchId('');
       setStations([]);
       setKrokiImage(null);
+      setSelectedFileId('');
     }
   }, [selectedCustomerId]);
 
@@ -386,6 +393,149 @@ export default function AdminMentorModule() {
 
   const handlePrint = () => { window.print(); };
 
+  const handleSave = async () => {
+    if (!selectedCustomerId) {
+      toast.error('Lütfen önce bir müşteri seçin');
+      return;
+    }
+
+    const title = `${formData12.ticariUnvan} - Faaliyet Dosyası - ${new Date().toLocaleDateString('tr-TR')}`;
+
+    const formDataToSave = {
+      formData12,
+      branches,
+      contractData,
+      permits,
+      staff,
+      legendItems,
+      stations,
+      products,
+      krokiImage,
+      settings12,
+      settings13,
+      settings21,
+      settings31,
+      settings32,
+      settings41,
+      settings42,
+      settings52
+    };
+
+    try {
+      setIsSaving(true);
+
+      if (selectedFileId) {
+        const { error } = await supabase
+          .from('activity_files')
+          .update({
+            title,
+            form_data: formDataToSave,
+            branch_id: selectedBranchId || null,
+            updated_at: new Date().toISOString(),
+            status: 'published'
+          })
+          .eq('id', selectedFileId);
+
+        if (error) throw error;
+        toast.success('Faaliyet dosyası güncellendi');
+      } else {
+        const { data, error } = await supabase
+          .from('activity_files')
+          .insert({
+            customer_id: selectedCustomerId,
+            branch_id: selectedBranchId || null,
+            title,
+            form_data: formDataToSave,
+            status: 'published'
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setSelectedFileId(data.id);
+          toast.success('Faaliyet dosyası kaydedildi');
+        }
+      }
+
+      fetchSavedFiles(selectedCustomerId);
+    } catch (error) {
+      console.error('Save error:', error);
+      toast.error('Kaydederken hata oluştu');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const fetchSavedFiles = async (customerId: string) => {
+    try {
+      let query = supabase
+        .from('activity_files')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false });
+
+      if (selectedBranchId) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setSavedFiles(data || []);
+    } catch (error) {
+      console.error('Error fetching saved files:', error);
+    }
+  };
+
+  const loadSavedFile = (file: any) => {
+    if (file.form_data) {
+      const data = file.form_data;
+      if (data.formData12) setFormData12(data.formData12);
+      if (data.branches) setBranches(data.branches);
+      if (data.contractData) setContractData(data.contractData);
+      if (data.permits) setPermits(data.permits);
+      if (data.staff) setStaff(data.staff);
+      if (data.legendItems) setLegendItems(data.legendItems);
+      if (data.stations) setStations(data.stations);
+      if (data.products) setProducts(data.products);
+      if (data.krokiImage) setKrokiImage(data.krokiImage);
+      if (data.settings12) setSettings12(data.settings12);
+      if (data.settings13) setSettings13(data.settings13);
+      if (data.settings21) setSettings21(data.settings21);
+      if (data.settings31) setSettings31(data.settings31);
+      if (data.settings32) setSettings32(data.settings32);
+      if (data.settings41) setSettings41(data.settings41);
+      if (data.settings42) setSettings42(data.settings42);
+      if (data.settings52) setSettings52(data.settings52);
+
+      setSelectedFileId(file.id);
+      toast.success('Faaliyet dosyası yüklendi');
+    }
+  };
+
+  const deleteSavedFile = async (fileId: string) => {
+    if (!confirm('Bu faaliyet dosyasını silmek istediğinize emin misiniz?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('activity_files')
+        .delete()
+        .eq('id', fileId);
+
+      if (error) throw error;
+
+      toast.success('Faaliyet dosyası silindi');
+      if (selectedFileId === fileId) {
+        setSelectedFileId('');
+      }
+      fetchSavedFiles(selectedCustomerId);
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('Silerken hata oluştu');
+    }
+  };
+
   // --- ORTAK BİLEŞEN: HEADER ---
   const A4Header = ({ title, settings }: { title: string, settings: SettingsBase }) => (
     <div className="border-2 border-black mb-6">
@@ -461,6 +611,49 @@ export default function AdminMentorModule() {
              <Filter className="mx-auto mb-2 text-yellow-600" size={24} />
               <p className="font-medium text-yellow-800">Lütfen İşlem Yapmak İçin Müşteri Seçiniz</p>
               <p className="text-sm mt-1">Sol menüdeki formları görüntülemek ve düzenlemek için önce bir müşteri seçimi yapmalısınız.</p>
+          </div>
+      )}
+
+      {selectedCustomerId && savedFiles.length > 0 && (
+          <div className="w-full max-w-4xl mt-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <FileText size={24} />
+              Kaydedilmiş Faaliyet Dosyaları
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {savedFiles.map(file => (
+                <div
+                  key={file.id}
+                  className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900 flex-1">{file.title}</h3>
+                    <button
+                      onClick={() => deleteSavedFile(file.id)}
+                      className="text-red-600 hover:text-red-800"
+                      title="Sil"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">
+                    {new Date(file.created_at).toLocaleDateString('tr-TR', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                  <button
+                    onClick={() => loadSavedFile(file)}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Yükle ve Düzenle
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
       )}
       
@@ -886,7 +1079,26 @@ export default function AdminMentorModule() {
           <button disabled={!selectedCustomerId} onClick={() => setActiveTab('4.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '4.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><ClipboardList size={18} /> 4.2 Ekipman Takip</button>
           <button disabled={!selectedCustomerId} onClick={() => setActiveTab('5.2')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === '5.2' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><Beaker size={18} /> 5.2 Biyosidal Ürünler</button>
         </nav>
-        <div className="p-4 border-t border-gray-100">{activeTab !== 'home' && (<button onClick={handlePrint} className="w-full flex justify-center items-center gap-2 bg-green-700 hover:bg-green-800 text-white py-2 px-4 rounded-lg shadow transition text-sm font-medium"><Printer size={16} /> Yazdır (PDF)</button>)}</div>
+        <div className="p-4 border-t border-gray-100 space-y-2">
+          {activeTab !== 'home' && (
+            <>
+              <button
+                onClick={handleSave}
+                disabled={isSaving || !selectedCustomerId}
+                className="w-full flex justify-center items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg shadow transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {isSaving ? 'Kaydediliyor...' : (selectedFileId ? 'Güncelle' : 'Kaydet')}
+              </button>
+              <button
+                onClick={handlePrint}
+                className="w-full flex justify-center items-center gap-2 bg-green-700 hover:bg-green-800 text-white py-2 px-4 rounded-lg shadow transition text-sm font-medium"
+              >
+                <Printer size={16} /> Yazdır (PDF)
+              </button>
+            </>
+          )}
+        </div>
       </aside>
 
       {/* MAIN CONTENT */}

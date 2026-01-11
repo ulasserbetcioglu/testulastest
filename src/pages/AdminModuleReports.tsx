@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 interface ModuleReport {
   id: string;
-  type: 'risk_assessment' | 'proposal' | 'uv_lamp';
+  type: 'risk_assessment' | 'proposal' | 'uv_lamp' | 'activity_file';
   title: string;
   date: string;
   report_url: string | null;
@@ -132,6 +132,33 @@ const AdminModuleReports: React.FC = () => {
         });
       }
 
+      // Fetch Activity Files
+      let activityQuery = supabase
+        .from('activity_files')
+        .select('id, created_at, title, status, report_url, customer_id, branch_id')
+        .order('created_at', { ascending: false });
+
+      if (selectedCustomerId) {
+        activityQuery = activityQuery.eq('customer_id', selectedCustomerId);
+      }
+
+      const { data: activityData, error: activityError } = await activityQuery;
+
+      if (!activityError && activityData) {
+        activityData.forEach(item => {
+          allReports.push({
+            id: item.id,
+            type: 'activity_file',
+            title: item.title || 'Faaliyet Dosyası',
+            date: item.created_at,
+            report_url: item.report_url,
+            customer_id: item.customer_id,
+            branch_id: item.branch_id,
+            status: item.status || 'published'
+          });
+        });
+      }
+
       const filteredReports = selectedType === 'all'
         ? allReports
         : allReports.filter(r => r.type === selectedType);
@@ -155,6 +182,8 @@ const AdminModuleReports: React.FC = () => {
         return 'Teklif Raporu';
       case 'uv_lamp':
         return 'UV Lamba';
+      case 'activity_file':
+        return 'Faaliyet Dosyası';
       default:
         return type;
     }
@@ -168,6 +197,8 @@ const AdminModuleReports: React.FC = () => {
         return 'bg-green-100 text-green-800';
       case 'uv_lamp':
         return 'bg-amber-100 text-amber-800';
+      case 'activity_file':
+        return 'bg-teal-100 text-teal-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -301,6 +332,16 @@ const AdminModuleReports: React.FC = () => {
             }`}
           >
             UV Lamba Raporları
+          </button>
+          <button
+            onClick={() => setSelectedType('activity_file')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              selectedType === 'activity_file'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Faaliyet Dosyaları
           </button>
         </div>
       </div>

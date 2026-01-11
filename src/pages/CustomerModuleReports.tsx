@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 
 interface ModuleReport {
   id: string;
-  type: 'risk_assessment' | 'proposal' | 'uv_lamp';
+  type: 'risk_assessment' | 'proposal' | 'uv_lamp' | 'activity_file';
   title: string;
   date: string;
   report_url: string | null;
@@ -100,6 +100,26 @@ const CustomerModuleReports: React.FC = () => {
         });
       }
 
+      // Fetch Activity Files
+      const { data: activityData, error: activityError } = await supabase
+        .from('activity_files')
+        .select('id, created_at, title, status, report_url')
+        .eq('customer_id', user.customer_id)
+        .order('created_at', { ascending: false });
+
+      if (!activityError && activityData) {
+        activityData.forEach(item => {
+          allReports.push({
+            id: item.id,
+            type: 'activity_file',
+            title: item.title || 'Faaliyet Dosyası',
+            date: item.created_at,
+            report_url: item.report_url,
+            status: item.status || 'published'
+          });
+        });
+      }
+
       // Filter and sort
       const filteredReports = selectedType === 'all'
         ? allReports
@@ -124,6 +144,8 @@ const CustomerModuleReports: React.FC = () => {
         return 'Teklif Raporu';
       case 'uv_lamp':
         return 'UV Lamba';
+      case 'activity_file':
+        return 'Faaliyet Dosyası';
       default:
         return type;
     }
@@ -136,7 +158,9 @@ const CustomerModuleReports: React.FC = () => {
       case 'proposal':
         return 'bg-green-100 text-green-800';
       case 'uv_lamp':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-amber-100 text-amber-800';
+      case 'activity_file':
+        return 'bg-teal-100 text-teal-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -238,6 +262,16 @@ const CustomerModuleReports: React.FC = () => {
             }`}
           >
             UV Lamba Raporları
+          </button>
+          <button
+            onClick={() => setSelectedType('activity_file')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              selectedType === 'activity_file'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Faaliyet Dosyaları
           </button>
         </div>
       </div>
