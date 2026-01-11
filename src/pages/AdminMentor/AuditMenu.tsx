@@ -171,6 +171,33 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       targetScreen: 'CustomerFeedbackForm', // ÖZEL FORM EKRANI
       highlight: true
     },
+    // AuditMenu.tsx içinde:
+
+    {
+      id: '10',
+      code: '5.2',
+      title: 'ONAYLI BİYOSİDAL ÜRÜN LİSTESİ',
+      desc: 'İşletmede planlanan ilaçların toplu listesi.',
+      icon: <FlaskConical size={24} color="#64748B" />, 
+      targetScreen: 'ApprovedProductList' // <-- GÜNCELLENDİ (Yeni form)
+    },
+    {
+      id: '11',
+      code: '5.3',
+      title: 'BİYOSİDAL ÜRÜN KULLANIM KARTI',
+      desc: 'Stok takibi ve yıllık kümülatif kullanım.',
+      icon: <FileText size={24} color="#64748B" />, 
+      targetScreen: 'ProductUsageCard' // <-- GÜNCELLENDİ (Yeni form)
+    },
+    // ...
+    {
+      id: '15',
+      code: '5.5',
+      title: 'BİYOSİDAL ÜRÜN GRUPLARI',
+      desc: 'Kullanılan ürün grupları listesi.',
+      icon: <FlaskConical size={24} color="#64748B" />, 
+      targetScreen: 'ApprovedProductList' // <-- Aynı sayfaya yönlendirebilirsin
+    },
     {
       id: '19',
       code: '4.3',
