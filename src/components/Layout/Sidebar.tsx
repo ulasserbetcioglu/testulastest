@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Menu, X, Warehouse, CalendarRange, DollarSign,
-  Calendar, BarChart2, CheckSquare, Award, // Award buraya eklendi
+  Calendar, BarChart2, CheckSquare, Award, // Award burada
   FileText, FileInput as FileInvoice, Grid, LogOut,
   Users, Settings, UserCog, Route, Building, Home, CalendarClock, MapPin,
-  ChevronsLeft, ChevronsRight, Mail, Package, MessageSquare, MailCheck, 
+  ChevronsLeft, ChevronsRight, ChevronRight, // ChevronRight burada eklendi
+  Mail, Package, MessageSquare, MailCheck, 
   BarChart3, TrendingUp, PlusCircle, NotebookPen, Wallet, ReceiptText, 
   Image as ImageIcon, Clock as ClockIcon, Car, Bug, Search
 } from 'lucide-react';
