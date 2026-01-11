@@ -889,8 +889,31 @@ export default function AdminMentorModule() {
                 {stations.map((station, index) => (
                     <div key={station.id} className="flex items-center gap-2 bg-white p-2 border rounded text-sm">
                         <span className="bg-gray-100 text-gray-600 font-mono text-xs px-2 py-1 rounded w-8 text-center">{index+1}</span>
-                        <input type="text" value={station.no} onChange={(e) => updateStation(station.id, 'no', e.target.value)} className="w-20 font-bold p-1 border rounded text-center" />
-                        <input type="text" placeholder="Lokasyon (Opsiyonel)" value={station.location} onChange={(e) => updateStation(station.id, 'location', e.target.value)} className="flex-1 p-1 border rounded" />
+                        <input
+                          type="text"
+                          value={station.no}
+                          onChange={(e) => updateStation(station.id, 'no', e.target.value)}
+                          className="w-20 font-bold p-1 border rounded text-center"
+                          placeholder="No"
+                        />
+                        <select
+                          value={station.type}
+                          onChange={(e) => updateStation(station.id, 'type', e.target.value)}
+                          className="w-40 p-1 border rounded text-xs"
+                        >
+                          <option value="">Tip Seçin</option>
+                          <option value="Kemirgen İstasyonu">Kemirgen İstasyonu</option>
+                          <option value="Yürüyen Haşere İstasyonu">Yürüyen Haşere</option>
+                          <option value="Sinek Tutucu Cihaz (EFC)">Sinek Tutucu (ILT)</option>
+                          <option value="Feromon Tuzak">Feromon Tuzak</option>
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Lokasyon"
+                          value={station.location}
+                          onChange={(e) => updateStation(station.id, 'location', e.target.value)}
+                          className="flex-1 p-1 border rounded"
+                        />
                         <button onClick={() => removeStation(station.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={14} /></button>
                     </div>
                 ))}
