@@ -28,7 +28,7 @@ export const A4Header = ({ title, settings }: { title: string, settings: Setting
         <div className="border-b border-black p-1 flex justify-between"><span className="font-bold">Doküman No:</span><span>{settings.dokumanNo}</span></div>
         <div className="border-b border-black p-1 flex justify-between"><span className="font-bold">Yayın Tarihi:</span><span>{settings.yayinTarihi}</span></div>
         <div className="border-b border-black p-1 flex justify-between"><span className="font-bold">Revizyon No:</span><span>{settings.revizyonNo}</span></div>
-        <div className="p-1 flex justify-between"><span className="font-bold">Sayfa No:</span><span>1 / 1</span></div>
+        <div className="p-1 flex justify-between"><span className="font-bold">Sayfa No:</span><span>{settings.sayfaNo || '1 / 1'}</span></div>
       </div>
     </div>
   </div>
