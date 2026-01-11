@@ -44,6 +44,7 @@ import CustomerDocuments from './pages/CustomerDocuments';
 import BranchDocuments from './pages/BranchDocuments';
 import OperatorDocuments from './pages/OperatorDocuments';
 import CustomerModuleReports from './pages/CustomerModuleReports';
+import AdminModuleReports from './pages/AdminModuleReports';
 import CustomerTrendAnalysis from './pages/CustomerTrendAnalysis';
 import CustomerTrendReports from './pages/CustomerTrendReports';
 import CustomerTrendReportView from './pages/CustomerTrendReportView';
@@ -447,9 +448,11 @@ function App() {
             <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             
-            {/* Mentor Modülü */}
+            {/* Mentor Modülü - Faaliyet Dosyası */}
             <Route path="mentor-module" element={<AdminMentorModule />} />
-            
+            <Route path="admin/faaliyet-dosyasi" element={<AdminRoute><AdminMentorModule /></AdminRoute>} />
+            <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
+
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
             <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />  

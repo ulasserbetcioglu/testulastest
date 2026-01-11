@@ -16,7 +16,29 @@ const ModulesPage = () => {
   }, [user, refreshModuleAccess]);
 
   const modules = [
-    // YENİ MODÜL EKLENDİ
+    {
+      id: 'activity-file',
+      title: 'Faaliyet Dosyası Modülü',
+      description: 'Müşterileriniz için kapsamlı faaliyet dosyası hazırlayın. Müşteri bilgileri, şube detayları, hizmet sözleşmesi, izinler, personel bilgileri, kroki ve ekipman listesi içeren profesyonel dokümantasyon.',
+      icon: FileText,
+      color: 'bg-teal-600',
+      features: [
+        'Müşteri ve şube bilgileri',
+        'Hizmet sözleşmesi',
+        'İzin ve personel yönetimi',
+        'Kroki ve ekipman planlaması',
+        'Ürün ve materyal listesi',
+        'Profesyonel PDF çıktı'
+      ],
+      process: [
+        'Müşteri seçin',
+        'Bilgileri girin ve düzenleyin',
+        'Kroki yükleyin',
+        'Faaliyet dosyasını oluşturun'
+      ],
+      link: '/admin/faaliyet-dosyasi',
+      path: '/admin/faaliyet-dosyasi'
+    },
     {
       id: 'service-plan-report',
       title: 'Hizmet Planı Rapor Modülü',
