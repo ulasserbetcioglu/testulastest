@@ -21,7 +21,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
 
   const navParams = { customerId, customerName, branchId, branchName };
 
-  // PDF'teki tam liste ve ilgili ekran eşleşmeleri
+  // PDF LİSTESİNE GÖRE YAPILANDIRILMIŞ MENÜ
   const MENU_ITEMS = [
     {
       id: '1',
@@ -29,7 +29,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'FAALİYET DOSYASI İÇERİĞİ',
       desc: 'Dosyanın içindekiler kısmı ve sayfa numaraları.',
       icon: <FileText size={24} color="#64748B" />, 
-      targetScreen: 'FileAuditChecklist' 
+      targetScreen: 'DocumentCheckDetail' // Standart Kontrol
     },
     {
       id: '2',
@@ -37,7 +37,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'MÜŞTERİ BİLGİLERİ',
       desc: 'Ticari ünvan, vergi dairesi ve iletişim bilgileri.',
       icon: <Info size={24} color="#3B82F6" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '3',
@@ -45,7 +45,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'MÜŞTERİ ŞUBELERİNİN BİLGİLERİ',
       desc: 'Şube yetkilisi, m² ve özel konum bilgileri.',
       icon: <Map size={24} color="#3B82F6" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '4',
@@ -53,7 +53,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'HİZMET SÖZLEŞMESİ',
       desc: 'Kapsam, süre ve garanti koşullarını belirleyen belge.',
       icon: <ShieldCheck size={24} color="#8B5CF6" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '5',
@@ -61,7 +61,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'İZİN VE RUHSATLAR',
       desc: 'Biyosidal Ürün Uygulama İzin Belgesi.',
       icon: <FileText size={24} color="#F59E0B" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '6',
@@ -69,7 +69,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'MESUL MÜDÜR VE OPERATÖR BELGELERİ',
       desc: 'Diploma, sertifika ve uygulayıcı belgeleri.',
       icon: <FileText size={24} color="#F59E0B" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '7',
@@ -77,7 +77,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'EKİPMAN KROKİSİ (YERLEŞİM PLANI)',
       desc: 'İstasyon ve cihazların yerleşim planı (Harita).',
       icon: <Map size={24} color="#10B981" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '8',
@@ -85,7 +85,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'EKİPMAN TAKİP FORMLARI',
       desc: 'İstasyon kontrolü, kırık/sağlam ve aktivite takibi.',
       icon: <ScanLine size={24} color="#EF4444" />, 
-      targetScreen: 'StationControl', // ÖZEL FORM
+      targetScreen: 'StationControl', // ÖZEL FORM EKRANI
       highlight: true
     },
     {
@@ -94,7 +94,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'EK-1 UYGULAMA İŞLEM FORMU',
       desc: 'Yapılan ilaçlama, miktar ve yöntem bilgileri.',
       icon: <FlaskConical size={24} color="#10B981" />, 
-      targetScreen: 'BiocidalApplicationForm', // ÖZEL FORM
+      targetScreen: 'BiocidalApplicationForm', // ÖZEL FORM EKRANI
       highlight: true
     },
     {
@@ -103,7 +103,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'ONAYLI BİYOSİDAL ÜRÜN LİSTESİ',
       desc: 'İşletmede planlanan ilaçların toplu listesi.',
       icon: <FlaskConical size={24} color="#64748B" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '11',
@@ -111,7 +111,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'BİYOSİDAL ÜRÜN KULLANIM KARTI',
       desc: 'Stok takibi ve yıllık kümülatif kullanım.',
       icon: <FileText size={24} color="#64748B" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '12',
@@ -119,7 +119,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'RUHSAT, MSDS VE ETİKETLER',
       desc: 'İlaç ruhsatları, güvenlik bilgi formları ve etiketler.',
       icon: <FileText size={24} color="#64748B" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '13',
@@ -127,7 +127,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'ATIK İMHA BELGESİ',
       desc: 'Boş ambalaj ve atıkların lisanslı firmaya teslimi.',
       icon: <Trash2 size={24} color="#EF4444" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '14',
@@ -135,7 +135,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'FUMİGASYON RUHSATI',
       desc: 'Varsa fumigasyon işlem ruhsatı.',
       icon: <FileText size={24} color="#F59E0B" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '15',
@@ -143,7 +143,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'BİYOSİDAL ÜRÜN GRUPLARI',
       desc: 'Kullanılan ürün grupları listesi.',
       icon: <FlaskConical size={24} color="#64748B" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '16',
@@ -151,7 +151,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'TREND ANALİZ & RİSK DEĞERLENDİRME',
       desc: 'Aktivite trendleri ve risk aksiyon planı.',
       icon: <ClipboardList size={24} color="#F59E0B" />, 
-      targetScreen: 'RiskActionPlan', // ÖZEL FORM
+      targetScreen: 'RiskActionPlan', // ÖZEL FORM EKRANI
       highlight: true
     },
     {
@@ -160,7 +160,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'MALİ SORUMLULUK SİGORTASI',
       desc: 'Zarar tazmin sigorta poliçesi.',
       icon: <ShieldCheck size={24} color="#3B82F6" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
     {
       id: '18',
@@ -168,7 +168,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'ŞİKAYET VE MEMNUNİYET FORMLARI',
       desc: 'Müşteri geri bildirimleri ve çözüm kayıtları.',
       icon: <MessageSquare size={24} color="#EF4444" />, 
-      targetScreen: 'CustomerFeedbackForm', // ÖZEL FORM
+      targetScreen: 'CustomerFeedbackForm', // ÖZEL FORM EKRANI
       highlight: true
     },
     {
@@ -177,14 +177,20 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'ACİL DURUM BİLGİLENDİRME',
       desc: 'Acil çağrı ve prosedür bilgileri.',
       icon: <Info size={24} color="#EF4444" />, 
-      targetScreen: 'FileAuditChecklist'
+      targetScreen: 'DocumentCheckDetail'
     },
   ];
 
   const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity 
       style={[styles.card, item.highlight && styles.highlightCard]}
-      onPress={() => navigation.navigate(item.targetScreen, navParams)}
+      onPress={() => navigation.navigate(item.targetScreen, {
+        ...navParams,
+        // Detay sayfasına gidecekse bu bilgileri de gönderiyoruz
+        title: item.title,
+        code: item.code,
+        desc: item.desc
+      })}
       activeOpacity={0.7}
     >
       <View style={styles.iconContainer}>
