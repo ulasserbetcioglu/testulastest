@@ -2258,8 +2258,3 @@ export default function AdminMentorModule() {
 
 
 
-
-
-
-
-şu yukarıdaki yapıştırdığım siktiğimin kodunu düzgün ver renderHome sıkıntılı
