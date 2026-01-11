@@ -442,26 +442,31 @@ export default function AdminMentorModule() {
         </div>
         
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <button onClick={() => setActiveTab('home')} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium hover:bg-gray-50"><Home size={18} /> Ana Sayfa</button>
-          
+          <button onClick={() => setActiveTab('home')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'home' ? 'bg-green-50 text-green-700' : 'text-gray-600 hover:bg-gray-50'}`}>
+            <Home size={18} /> Ana Sayfa
+          </button>
+
+          {/* Müşteri Seçimi Göstergesi */}
           <div className={`mt-2 p-2 rounded border border-green-100 ${selectedCustomerId ? 'bg-green-50' : 'bg-gray-50'}`}>
             <div className="text-xs font-bold uppercase text-gray-500 mb-1">Seçili Müşteri</div>
-            <div className="text-sm font-semibold text-gray-800 truncate">{customers.find(c => c.id === selectedCustomerId)?.cari_isim || 'Seçilmedi'}</div>
+            <div className="text-sm font-semibold text-gray-800 truncate">
+                {customers.find(c => c.id === selectedCustomerId)?.cari_isim || 'Seçilmedi'}
+            </div>
           </div>
 
           <div className="pt-4 pb-2 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Modüller</div>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('1.1')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><BookOpen size={16} /> 1.1 İçindekiler</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('1.2')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><Building2 size={16} /> 1.2 Müşteri Bilgileri</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('1.3')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><Store size={16} /> 1.3 Şube Bilgileri</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('2.1')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><FileSignature size={16} /> 2.1 Sözleşme</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('3.1')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><Award size={16} /> 3.1 İzinler</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('3.2')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><Users size={16} /> 3.2 Sertifikalar</button>
-          <button disabled={!selectedBranchId} onClick={() => setActiveTab('4.1')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><Map size={16} /> 4.1 Kroki</button>
-          <button disabled={!selectedBranchId} onClick={() => setActiveTab('4.2')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><ClipboardList size={16} /> 4.2 Takip</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('5.1')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><FileText size={16} /> 5.1 EK-1 Form</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('5.2')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><Beaker size={16} /> 5.2 Ürün Listesi</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('5.3')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><Package size={16} /> 5.3 Kullanım Kartı</button>
-          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('6.1')} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"><AlertTriangle size={16} /> 6.1 Atık İmha</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('1.1')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '1.1' ? 'bg-green-100' : ''}`}><BookOpen size={16} /> 1.1 İçindekiler</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('1.2')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '1.2' ? 'bg-green-100' : ''}`}><Building2 size={16} /> 1.2 Müşteri Bilgileri</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('1.3')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '1.3' ? 'bg-green-100' : ''}`}><Store size={16} /> 1.3 Şube Bilgileri</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('2.1')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '2.1' ? 'bg-green-100' : ''}`}><FileSignature size={16} /> 2.1 Sözleşme</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('3.1')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '3.1' ? 'bg-green-100' : ''}`}><Award size={16} /> 3.1 İzinler</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('3.2')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '3.2' ? 'bg-green-100' : ''}`}><Users size={16} /> 3.2 Sertifikalar</button>
+          <button disabled={!selectedBranchId} onClick={() => setActiveTab('4.1')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '4.1' ? 'bg-green-100' : ''}`}><Map size={16} /> 4.1 Kroki</button>
+          <button disabled={!selectedBranchId} onClick={() => setActiveTab('4.2')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '4.2' ? 'bg-green-100' : ''}`}><ClipboardList size={16} /> 4.2 Takip</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('5.1')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '5.1' ? 'bg-green-100' : ''}`}><FileText size={16} /> 5.1 EK-1 Form</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('5.2')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '5.2' ? 'bg-green-100' : ''}`}><Beaker size={16} /> 5.2 Ürün Listesi</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('5.3')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '5.3' ? 'bg-green-100' : ''}`}><Package size={16} /> 5.3 Kullanım Kartı</button>
+          <button disabled={!selectedCustomerId} onClick={() => setActiveTab('6.1')} className={`w-full flex items-center gap-3 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === '6.1' ? 'bg-green-100' : ''}`}><AlertTriangle size={16} /> 6.1 Atık İmha</button>
         </nav>
 
         <div className="p-4 border-t border-gray-100 flex gap-2">
@@ -482,7 +487,21 @@ export default function AdminMentorModule() {
       <main className="flex-1 flex overflow-hidden relative">
         {/* SOL PANEL (Editör) */}
         {activeTab !== 'home' && (
-          <div className="w-[400px] bg-white border-r border-gray-200 overflow-y-auto h-full p-6 print:hidden z-10">
+          <div className="w-[400px] bg-white border-r border-gray-200 overflow-y-auto h-full p-6 print:hidden z-10 animate-in slide-in-from-left duration-300">
+            <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2 pb-4 border-b">
+              {activeTab === '1.1' && 'Faaliyet Dosyası İçeriği Düzenle'}
+              {activeTab === '1.2' && 'Müşteri Bilgileri Düzenle'}
+              {activeTab === '1.3' && 'Şube Bilgileri Düzenle'}
+              {activeTab === '2.1' && 'Hizmet Sözleşmesi Düzenle'}
+              {activeTab === '3.1' && 'İzin ve Ruhsatları Düzenle'}
+              {activeTab === '3.2' && 'Sertifikaları Düzenle'}
+              {activeTab === '4.1' && 'Kroki ve Lejant Düzenle'}
+              {activeTab === '4.2' && 'Takip Formu Düzenle'}
+              {activeTab === '5.1' && 'EK-1 İşlem Formu Düzenle'}
+              {activeTab === '5.2' && 'Biyosidal Ürün Listesi Düzenle'}
+              {activeTab === '5.3' && 'Kullanım Kartı Düzenle'}
+              {activeTab === '6.1' && 'Atık İmha Belgesi Düzenle'}
+            </h2>
             {activeTab === '1.1' && renderEditor11()}
             {activeTab === '1.2' && renderEditor12()}
             {activeTab === '1.3' && renderEditor13()}
@@ -537,6 +556,27 @@ export default function AdminMentorModule() {
            {activeTab === '6.1' && <Preview61 records={wasteRecords} settings={settings61} customerName={customers.find(c => c.id === selectedCustomerId)?.cari_isim || ''} />}
         </div>
       </main>
+
+      <style>{`
+        @media print {
+          @page { size: A4; margin: 0; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .print\\:hidden { display: none !important; }
+          .print\\:block { display: block !important; }
+          .flex-1.bg-gray-500 {
+            background-color: white !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            display: block !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+          }
+          .shadow-2xl { box-shadow: none !important; }
+        }
+      `}</style>
     </div>
   );
 }
