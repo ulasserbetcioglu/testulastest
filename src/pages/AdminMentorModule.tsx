@@ -4,7 +4,7 @@ import {
   FileText, Plus, Trash2, Home, Layout, Store, ChevronRight,
   FileSignature, CheckSquare, Calendar, DollarSign, Award, ShieldCheck,
   Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker,
-  BookOpen, Package, AlertTriangle, Filter
+  BookOpen, Package, AlertTriangle, Filter, renderHome
 } from 'lucide-react';
 
 // Kurumsal Yeşil Tonu
