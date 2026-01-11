@@ -3,15 +3,22 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './components/Auth/AuthProvider';
+import { supabase } from './lib/supabase';
+
+// --- LAYOUTS ---
 import Layout from './components/Layout/Layout';
 import OperatorLayout from './components/Layout/OperatorLayout';
 import CustomerLayout from './components/Layout/CustomerLayout';
 import BranchLayout from './components/Layout/BranchLayout';
+
+// --- AUTH & DASHBOARDS ---
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import OperatorDashboard from './pages/OperatorDashboard';
 import CustomerDashboard from './pages/CustomerDashboard';
 import BranchDashboard from './pages/BranchDashboard';
+
+// --- ADMIN PAGES ---
 import Customers from './pages/Customers';
 import CustomerDetails from './components/Customers/CustomerDetails';
 import Offers from './pages/Offers';
@@ -26,8 +33,70 @@ import VisitForm from './pages/VisitForm';
 import VisitDetails from './pages/VisitDetails';
 import AdminCalendar from './pages/AdminCalendar';
 import AdminCalendarPlanning from './pages/AdminCalendarPlanning';
+import PaidMaterialSales from './pages/PaidMaterialSales';
+import AdminRevenue from './pages/AdminRevenue';
+import Documents from './pages/Documents';
+import Certificates from './pages/Certificates';
+import Settings from './pages/Settings';
+import Notifications from './pages/Notifications';
+import AdminNotifications from './pages/AdminNotifications';
+import AdminOperators from './pages/AdminOperators';
+import AdminUsers from './pages/AdminUsers';
+import AdminOperatorDistances from './pages/AdminOperatorDistances';
+import AdminBranches from './pages/AdminBranches';
+import AdminBranchPricing from './pages/AdminBranchPricing';
+import InvoiceExport from './pages/InvoiceExport';
+import Modules from './pages/Modules';
+import ActivityReportsTracking from './pages/ActivityReportsTracking';
+import RiskAssessmentModule from './pages/modules/RiskAssessmentModule';
+import PaidVisitsPage from './pages/PaidVisitsPage';
+import AdminProducts from './pages/AdminProducts';
+import BulkDeletePage from './pages/BulkDeletePage';
+import RouteOptimizationPage from './pages/RouteOptimizationPage';
+import LiveTrackingMap from './pages/LiveTrackingMap';
+import CariSatisRaporu from './pages/CariSatisRaporu';
+import YillikKarZararRaporu from './pages/YillikKarZararRaporu';
+import ProfitabilityAnalysis from './pages/ProfitabilityAnalysis';
+import UvLampReport from './pages/modules/UvLampReport';
+import SubeLokasyon from './pages/SubeLokasyon';
+import OperatorPerformance from './pages/OperatorPerformance';
+import AylikTakvimEposta from './pages/AylikTakvimEposta';
+import OperatorCollectionReceipt from './pages/OperatorCollectionReceipt';
+import AylikMalzemeEposta from './pages/AylikMalzemeEposta';
+import PazarlamaEposta from './pages/PazarlamaEposta';
+import EkipmanPazarlama from './pages/EkipmanPazarlama';
+import EkipmanYonetimi from './pages/EkipmanYonetimi';
+import HizmetPazarlama from './pages/HizmetPazarlama';
+import GonderilenEpostalar from './pages/GonderilenEpostalar';
+import TedarikSiparisi from './pages/TedarikSiparisi';
+import SiparisOlusturma from './pages/SiparisOlusturma';
+import HizmetYonetimi from './pages/HizmetYonetimi';
+import ProposalReportModule from './pages/modules/ProposalReportModule';
+import TeklifGoruntule from './pages/TeklifGoruntule';
+import ModulRaporGoruntuleme from './pages/ModulRaporGoruntuleme';
+import RaporSecVeGoruntule from './pages/RaporSecVeGoruntule';
+import GenelRaporGoruntuleme from './pages/GenelRaporGoruntuleme';
+import BilgilendirimePazarlama from './pages/BilgilendirimePazarlama';
+import EpostaPazarlama from './pages/EpostaPazarlama';
+import IsletmeKesif from './components/IsletmeKesif';
+import BulkVisitImport from './pages/BulkVisitImport';
+import AdminQuickNotes from './pages/AdminQuickNotes';
+import UnbilledCustomers from './pages/UnbilledCustomers';
+import AdminCollectionReceipts from './pages/AdminCollectionReceipts';
+import AdminVisitReports from './pages/AdminVisitReports';
+import AdminOperatorShifts from './pages/AdminOperatorShifts';
+import AdminOperatorLeaves from './pages/AdminOperatorLeaves';
+import AdminVehicles from './pages/AdminVehicles';
+import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
+import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
+import AdminPesticideReport from './pages/AdminPesticideReport';
+import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
+import SatisGorusmeFormu from './pages/SatisGorusmeFormu';
+import AdminTrendAnalysisReport from './pages/AdminTrendAnalysisReport';
+import AdminModuleReports from './pages/AdminModuleReports';
+import TekliflerListesi from './pages/TekliflerListesi';
 
-// --- YENİ EKLENEN ADMIN MENTOR MODÜLÜ IMPORTLARI ---
+// --- ADMIN MENTOR MODULE IMPORTLARI ---
 import AdminMentorHome from './pages/AdminMentor/AdminMentorHome';
 import CustomerSelection from './pages/AdminMentor/CustomerSelection';
 import BranchSelection from './pages/AdminMentor/BranchSelection';
@@ -45,96 +114,41 @@ import CustomerInfoView from './pages/AdminMentor/Forms/CustomerInfoView';
 import RiskActionPlan from './pages/AdminMentor/Forms/RiskActionPlan';
 import CustomerFeedbackForm from './pages/AdminMentor/Forms/CustomerFeedbackForm';
 import DocumentCheckDetail from './pages/AdminMentor/Forms/DocumentCheckDetail';
-// ---------------------------------------------------
 
+// --- OPERATOR PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
 import OperatorCalendarPlanning from './pages/OperatorCalendarPlanning';
-import CustomerCalendar from './pages/CustomerCalendar';
-import BranchCalendar from './pages/BranchCalendar';
-import PaidMaterialSales from './pages/PaidMaterialSales';
 import OperatorPaidMaterials from './pages/OperatorPaidMaterials';
 import OperatorMaterialUsage from './pages/OperatorMaterialUsage';
-import CustomerPaidMaterials from './pages/CustomerPaidMaterials';
-import BranchPaidMaterials from './pages/BranchPaidMaterials';
 import CorrectiveActions from './pages/CorrectiveActions';
+import OperatorDocuments from './pages/OperatorDocuments';
+import OperatorDailyChecklist from './pages/OperatorDailyChecklist';
+import OperatorQuickNotes from './pages/OperatorQuickNotes';
+import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm';
+
+// --- CUSTOMER PAGES ---
+import CustomerCalendar from './pages/CustomerCalendar';
+import CustomerPaidMaterials from './pages/CustomerPaidMaterials';
 import CustomerVisits from './pages/CustomerVisits';
 import CustomerDOF from './pages/CustomerDOF';
-import Documents from './pages/Documents';
 import CustomerDocuments from './pages/CustomerDocuments';
-import BranchDocuments from './pages/BranchDocuments';
-import OperatorDocuments from './pages/OperatorDocuments';
 import CustomerModuleReports from './pages/CustomerModuleReports';
-import AdminModuleReports from './pages/AdminModuleReports';
 import CustomerTrendAnalysis from './pages/CustomerTrendAnalysis';
 import CustomerTrendReports from './pages/CustomerTrendReports';
 import CustomerTrendReportView from './pages/CustomerTrendReportView';
-import AdminTrendAnalysisReport from './pages/AdminTrendAnalysisReport';
-import Settings from './pages/Settings';
-import Notifications from './pages/Notifications';
-import AdminNotifications from './pages/AdminNotifications';
-import Certificates from './pages/Certificates';
 import CustomerCertificates from './pages/CustomerCertificates';
-import AdminRevenue from './pages/AdminRevenue';
-import AdminOperators from './pages/AdminOperators';
-import AdminUsers from './pages/AdminUsers';
-import AdminOperatorDistances from './pages/AdminOperatorDistances';
-import AdminBranchPricing from './pages/AdminBranchPricing';
-import OperatorDailyChecklist from './pages/OperatorDailyChecklist';
-import InvoiceExport from './pages/InvoiceExport';
-import Modules from './pages/Modules';
-import ActivityReportsTracking from './pages/ActivityReportsTracking';
-import RiskAssessmentModule from './pages/modules/RiskAssessmentModule';
-import ProposalReportModule from './pages/modules/ProposalReportModule';
-import PaidVisitsPage from './pages/PaidVisitsPage';
-import AdminProducts from './pages/AdminProducts';
-import BulkDeletePage from './pages/BulkDeletePage';
-import RouteOptimizationPage from './pages/RouteOptimizationPage';
-import LiveTrackingMap from './pages/LiveTrackingMap';
-import CariSatisRaporu from './pages/CariSatisRaporu';
-import UvLampReport from './pages/modules/UvLampReport';
-import SubeLokasyon from './pages/SubeLokasyon';
-import OperatorPerformance from './pages/OperatorPerformance';
-import AylikTakvimEposta from './pages/AylikTakvimEposta';
-import OperatorCollectionReceipt from './pages/OperatorCollectionReceipt';
-import AylikMalzemeEposta from './pages/AylikMalzemeEposta';
-import PazarlamaEposta from './pages/PazarlamaEposta';
-import EkipmanPazarlama from './pages/EkipmanPazarlama';
-import EkipmanYonetimi from './pages/EkipmanYonetimi';
-import HizmetPazarlama from './pages/HizmetPazarlama';
-import GonderilenEpostalar from './pages/GonderilenEpostalar';
-import TedarikSiparisi from './pages/TedarikSiparisi';
-import SiparisOlusturma from './pages/SiparisOlusturma';
-import HizmetYonetimi from './pages/HizmetYonetimi';
-import TeklifGoruntule from './pages/TeklifGoruntule';
-import TekliflerListesi from './pages/TekliflerListesi';
-import IsletmeKesif from './components/IsletmeKesif';
-import ModulRaporGoruntuleme from './pages/ModulRaporGoruntuleme';
-import RaporSecVeGoruntule from './pages/RaporSecVeGoruntule';
-import GenelRaporGoruntuleme from './pages/GenelRaporGoruntuleme';
-import BilgilendirimePazarlama from './pages/BilgilendirimePazarlama';
-import EpostaPazarlama from './pages/EpostaPazarlama';
-import { supabase } from './lib/supabase';
-import YillikKarZararRaporu from './pages/YillikKarZararRaporu';
-import ProfitabilityAnalysis from './pages/ProfitabilityAnalysis';
-import BulkVisitImport from './pages/BulkVisitImport';
-import AdminBranches from './pages/AdminBranches';
-import OperatorQuickNotes from './pages/OperatorQuickNotes';
-import AdminQuickNotes from './pages/AdminQuickNotes';
-import UnbilledCustomers from './pages/UnbilledCustomers';
-import AdminCollectionReceipts from './pages/AdminCollectionReceipts';
-import AdminVisitReports from './pages/AdminVisitReports';
-import AdminOperatorShifts from './pages/AdminOperatorShifts';
-import ProtectedReportViewer from './components/ProtectedReportViewer';
-import AdminOperatorLeaves from './pages/AdminOperatorLeaves';
-import AdminVehicles from './pages/AdminVehicles';
-import AdminMonthlyVisitSchedule from './pages/AdminMonthlyVisitSchedule';
-import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm';
 import PesticideUsageReport from './pages/PesticideUsageReport';
-import AdminPesticideReport from './pages/AdminPesticideReport';
-import AdminFloorPlanEditor from './pages/AdminFloorPlanEditor';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
-import AdminVisitDataEntry from './pages/AdminVisitDataEntry';
-import SatisGorusmeFormu from './pages/SatisGorusmeFormu';
+
+// --- BRANCH PAGES ---
+import BranchCalendar from './pages/BranchCalendar';
+import BranchPaidMaterials from './pages/BranchPaidMaterials';
+import BranchDocuments from './pages/BranchDocuments';
+
+import ProtectedReportViewer from './components/ProtectedReportViewer';
+
+
+// --- GÜVENLİK BİLEŞENLERİ (Security Components) ---
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode, allowedUserTypes?: string[] }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -284,6 +298,8 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   return children;
 };
+
+// --- ANA APP BİLEŞENİ ---
 
 function App() {
   return (
@@ -465,8 +481,11 @@ function App() {
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             
             {/* --- ADMIN MENTOR MODULE ROUTES START --- */}
+            {/* Bu rotalar, AdminMentorHome.tsx içindeki navigasyon linkleriyle eşleşir */}
+            
             {/* Ana Giriş */}
             <Route path="admin/mentor" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
+            
             {/* Seçim Ekranları */}
             <Route path="admin/mentor/customer-selection" element={<AdminRoute><CustomerSelection /></AdminRoute>} />
             <Route path="admin/mentor/branch-selection" element={<AdminRoute><BranchSelection /></AdminRoute>} />
@@ -476,7 +495,7 @@ function App() {
             <Route path="admin/mentor/file-audit" element={<AdminRoute><FileAuditChecklist /></AdminRoute>} />
             <Route path="admin/mentor/audit-summary" element={<AdminRoute><AuditSummary /></AdminRoute>} />
             
-            {/* Özel Formlar (Forms Klasörü) */}
+            {/* Özel Formlar */}
             <Route path="admin/mentor/StationControl" element={<AdminRoute><StationControl /></AdminRoute>} />
             <Route path="admin/mentor/BiocidalApplicationForm" element={<AdminRoute><BiocidalApplicationForm /></AdminRoute>} />
             <Route path="admin/mentor/ApprovedProductList" element={<AdminRoute><ApprovedProductList /></AdminRoute>} />
@@ -488,7 +507,7 @@ function App() {
             <Route path="admin/mentor/CustomerFeedbackForm" element={<AdminRoute><CustomerFeedbackForm /></AdminRoute>} />
             <Route path="admin/mentor/DocumentCheckDetail" element={<AdminRoute><DocumentCheckDetail /></AdminRoute>} />
             
-            {/* Eski Rotalar (Geriye uyumluluk için, gerekirse kaldırılabilir) */}
+            {/* Eski Rotalar (Geriye uyumluluk için) */}
             <Route path="mentor-module" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
             <Route path="admin/faaliyet-dosyasi" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
             {/* --- ADMIN MENTOR MODULE ROUTES END --- */}
