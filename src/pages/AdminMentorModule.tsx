@@ -1,5 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, Building2, MapPin, Phone, Mail, User, FileText, Plus, Trash2, Home, Store, Ligature as FileSignature, CheckSquare, DollarSign, Award, ShieldCheck, Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker, Search, Loader2, Save, Filter } from 'lucide-react';
+import { 
+  Printer, Building2, MapPin, Phone, Mail, User, 
+  FileText, Plus, Trash2, Home, Store,
+  FileSignature, CheckSquare, DollarSign, Award, ShieldCheck,
+  Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker,
+  Search, Loader2, Save, Filter
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 
@@ -203,11 +209,6 @@ export default function AdminMentorModule() {
   const [selectedFileId, setSelectedFileId] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // DOKÜMAN YÜKLEME STATES
-  const [uploadingDocs, setUploadingDocs] = useState<{[key: string]: boolean}>({});
-  const [uploadedDocs, setUploadedDocs] = useState<{[key: string]: any[]}>({});
-  const fileInputRefs = useRef<{[key: string]: HTMLInputElement | null}>({});
-
   // --- VERİ ÇEKME İŞLEMLERİ ---
   useEffect(() => {
     fetchCustomers();
@@ -278,119 +279,6 @@ export default function AdminMentorModule() {
         setStaff(mappedStaff);
     }
   }
-
-  // DOKÜMAN YÜKLEME FONKSİYONLARI
-  const handleDocumentUpload = async (moduleId: string, file: File) => {
-    if (!selectedCustomerId || !file) return;
-
-    try {
-      setUploadingDocs(prev => ({ ...prev, [moduleId]: true }));
-
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${file.name}`;
-      const filePath = `${selectedCustomerId}/${moduleId}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('mentor-documents')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        toast.error('Dosya yüklenemedi: ' + uploadError.message);
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('mentor-documents')
-        .getPublicUrl(filePath);
-
-      const newDoc = {
-        id: Date.now(),
-        name: file.name,
-        url: publicUrl,
-        path: filePath,
-        uploadDate: new Date().toISOString()
-      };
-
-      setUploadedDocs(prev => ({
-        ...prev,
-        [moduleId]: [...(prev[moduleId] || []), newDoc]
-      }));
-
-      toast.success('Dosya başarıyla yüklendi');
-    } catch (error: any) {
-      console.error('Error uploading document:', error);
-      toast.error('Dosya yüklenirken hata oluştu');
-    } finally {
-      setUploadingDocs(prev => ({ ...prev, [moduleId]: false }));
-    }
-  };
-
-  const handleDocumentDelete = async (moduleId: string, docPath: string, docId: number) => {
-    try {
-      const { error } = await supabase.storage
-        .from('mentor-documents')
-        .remove([docPath]);
-
-      if (error) {
-        console.error('Delete error:', error);
-        toast.error('Dosya silinemedi');
-        return;
-      }
-
-      setUploadedDocs(prev => ({
-        ...prev,
-        [moduleId]: (prev[moduleId] || []).filter(doc => doc.id !== docId)
-      }));
-
-      toast.success('Dosya silindi');
-    } catch (error) {
-      console.error('Error deleting document:', error);
-      toast.error('Dosya silinirken hata oluştu');
-    }
-  };
-
-  const fetchModuleDocuments = async (moduleId: string) => {
-    if (!selectedCustomerId) return;
-
-    try {
-      const { data, error } = await supabase.storage
-        .from('mentor-documents')
-        .list(`${selectedCustomerId}/${moduleId}`);
-
-      if (error) {
-        console.error('Error fetching documents:', error);
-        return;
-      }
-
-      if (data) {
-        const docs = data.map((file: any) => {
-          const filePath = `${selectedCustomerId}/${moduleId}/${file.name}`;
-          const { data: { publicUrl } } = supabase.storage
-            .from('mentor-documents')
-            .getPublicUrl(filePath);
-
-          return {
-            id: Date.now() + Math.random(),
-            name: file.name,
-            url: publicUrl,
-            path: filePath,
-            uploadDate: file.created_at
-          };
-        });
-
-        setUploadedDocs(prev => ({
-          ...prev,
-          [moduleId]: docs
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching module documents:', error);
-    }
-  };
 
   const fetchCustomerDetails = async (id: string) => {
     const { data, error } = await supabase.from('customers').select('*').eq('id', id).single();
@@ -1127,7 +1015,7 @@ export default function AdminMentorModule() {
   // PREVIEWS
   const renderA4_12 = () => (<div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}><A4Header title="MÜŞTERİ BİLGİ FORMU" settings={settings12} /><div className="flex-grow"><p className="mb-6 text-sm">Aşağıdaki bilgiler, hizmet sözleşmesinin hazırlanması ve yasal bildirimlerin yapılabilmesi için hizmet alan firma (Müşteri) tarafından beyan edilmiştir.</p><table className="w-full border-collapse border border-black text-sm"><tbody><tr><td className="border border-black font-bold p-3 w-1/3 align-top" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>FİRMA TİCARİ ÜNVANI</td><td className="border border-black p-3 uppercase font-semibold">{formData12.ticariUnvan}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3 align-top" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>FAALİYET KONUSU</td><td className="border border-black p-3">{formData12.faaliyetKonusu}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3 align-top" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>AÇIK ADRES (MERKEZ)</td><td className="border border-black p-3">{formData12.adres}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>VERGİ DAİRESİ</td><td className="border border-black p-3">{formData12.vergiDairesi}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>VERGİ NUMARASI</td><td className="border border-black p-3 font-mono">{formData12.vergiNo}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>MERSİS NUMARASI</td><td className="border border-black p-3 font-mono">{formData12.mersisNo}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>TELEFON</td><td className="border border-black p-3">{formData12.telefon}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>E-POSTA</td><td className="border border-black p-3">{formData12.eposta}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3 align-top py-6" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>YETKİLİ KİŞİ / ÜNVAN</td><td className="border border-black p-3 py-6"><div className="font-bold">{formData12.yetkiliKisi}</div><div className="text-gray-600 italic">{formData12.yetkiliUnvan}</div></td></tr><tr><td className="border border-black font-bold p-3 w-1/3" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>YETKİLİ CEP TEL</td><td className="border border-black p-3">{formData12.yetkiliTel}</td></tr><tr><td className="border border-black font-bold p-3 w-1/3" style={{ backgroundColor: BRAND_LIGHT_GREEN }}>HİZMET BAŞLANGIÇ</td><td className="border border-black p-3">{formData12.hizmetBaslangicTarihi.split('-').reverse().join('.')}</td></tr></tbody></table><div className="mt-16 flex justify-between px-4"><div className="text-center w-1/3"><h4 className="font-bold mb-1">MÜŞTERİ YETKİLİSİ</h4><div className="text-xs mb-8">(Kaşe - İmza)</div><div className="border-b border-black w-full"></div><div className="text-xs mt-1">{formData12.yetkiliKisi}</div></div><div className="text-center w-1/3"><h4 className="font-bold mb-1">MENTOR YETKİLİSİ</h4><div className="text-xs mb-8">(Kaşe - İmza)</div><div className="border-b border-black w-full"></div><div className="text-xs mt-1">Operasyon Müdürü</div></div></div></div><div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-4">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır. İzinsiz çoğaltılamaz.</div></div>);
   const renderA4_13 = () => (<div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}><A4Header title="MÜŞTERİ ŞUBELERİNİN BİLGİLERİ" settings={settings13} /><div className="flex-grow"><div className="mb-4 text-sm font-bold uppercase border-b border-gray-400 pb-1">Firma: {formData12.ticariUnvan}</div><table className="w-full border-collapse border border-black text-xs"><thead><tr style={{ backgroundColor: BRAND_LIGHT_GREEN }}><th className="border border-black p-2 w-10 text-center">NO</th><th className="border border-black p-2 text-left">ŞUBE ADI</th><th className="border border-black p-2 text-left">ŞUBE YETKİLİSİ</th><th className="border border-black p-2 w-16 text-center">ALAN (m²)</th><th className="border border-black p-2 text-left">İLETİŞİM / ADRES</th></tr></thead><tbody>{branches.map((branch, index) => (<tr key={branch.id}><td className="border border-black p-2 text-center font-bold">{index + 1}</td><td className="border border-black p-2 font-semibold">{branch.subeAdi}</td><td className="border border-black p-2">{branch.yetkili}</td><td className="border border-black p-2 text-center">{branch.metrekare}</td><td className="border border-black p-2"><div><strong>Tel:</strong> {branch.telefon}</div><div className="italic text-[10px] mt-1">{branch.adres}</div></td></tr>))}{[...Array(Math.max(0, 15 - branches.length))].map((_, i) => (<tr key={`empty-${i}`}><td className="border border-black p-4 text-center text-gray-300">{branches.length + i + 1}</td><td className="border border-black p-4"></td><td className="border border-black p-4"></td><td className="border border-black p-4"></td><td className="border border-black p-4"></td></tr>))}</tbody></table><div className="mt-4 text-xs text-gray-600">* Yukarıda belirtilen şubelerde yapılacak olan pest kontrol hizmeti, ana sözleşmede belirtilen şartlar dahilinde gerçekleştirilecektir.</div></div><div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-auto">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır. İzinsiz çoğaltılamaz.</div></div>);
-  const renderA4_21 = () => (<div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}><A4Header title="HİZMET SÖZLEŞMESİ" settings={settings21} /><div className="flex-grow text-sm leading-relaxed text-justify"><h3 className="font-bold mb-2">1. TARAFLAR</h3><p className="mb-4">Bir tarafta <strong>MENTOR ÇEVRE SAĞLIĞI HİZMETLERİ</strong> (Bundan böyle "Yüklenici\" olarak anılacaktır) ile diğer tarafta <strong>{formData12.ticariUnvan}</strong> (Bundan böyle "İşveren" olarak anılacaktır) arasında aşağıda belirtilen şartlarda anlaşmaya varılmıştır.</p><h3 className="font-bold mb-2">2. HİZMETİN KONUSU</h3><p className="mb-4">İşveren'in <strong>{formData12.adres}</strong> adresindeki tesislerinde/iş yerinde, halk sağlığını tehdit eden vektörlerle (zararlılarla) mücadele kapsamında, Sağlık Bakanlığı mevzuatına uygun olarak ilaçlama ve pest kontrol hizmetinin verilmesidir.</p><h3 className="font-bold mb-2">3. HİZMETİN KAPSAMI</h3><p className="mb-4">Bu sözleşme kapsamında aşağıdaki zararlılarla mücadele edilecektir:<ul className="list-disc pl-6 mt-1 space-y-1">{contractData.kapsam.kemirgen && <li>Kemirgenler (Rattus norvegicus, Rattus rattus, Mus musculus)</li>}{contractData.kapsam.yuruyenHasere && <li>Yürüyen Haşereler (Hamamböceği, Karınca, Örümcek vb.)</li>}{contractData.kapsam.ucanHasere && <li>Uçan Haşereler (Karasinek, Sivrisinek vb. - Larva mücadelesi dahil)</li>}{contractData.kapsam.dezenfeksiyon && <li>Dezenfeksiyon Hizmeti (Virüs ve bakterilere karşı ortam dezenfeksiyonu)</li>}</ul></p><h3 className="font-bold mb-2">4. HİZMET PERİYODU VE SÜRESİ</h3><p className="mb-4">Hizmet, <strong>{contractData.baslangicTarihi}</strong> ile <strong>{contractData.bitisTarihi}</strong> tarihleri arasında geçerlidir. Uygulama periyodu: <strong>{contractData.hizmetPeriyodu}</strong> olarak belirlenmiştir. Acil durumlarda (garanti kapsamındaki çağrılarda) Yüklenici, ekstra ücret talep etmeden 24-48 saat içinde müdahale edecektir.</p><h3 className="font-bold mb-2">5. HİZMET BEDELİ VE ÖDEME KOŞULLARI</h3><p className="mb-4">Sözleşme konusu hizmet bedeli, uygulama başına/aylık <strong>{contractData.hizmetBedeli} {contractData.paraBirimi} + KDV</strong> olarak belirlenmiştir. Ödeme, {contractData.odemeSekli}</p><h3 className="font-bold mb-2">6. TARAFLARIN YÜKÜMLÜLÜKLERİ</h3><p className="mb-2"><strong>Yüklenici:</strong> Sağlık Bakanlığı onaylı biyosidal ürünleri kullanmakla, uygulamayı sertifikalı personel ile yapmakla ve yapılan işlemi EK-1 Biyosidal Ürün Uygulama İşlem Formu ile belgelemekle yükümlüdür.</p><p className="mb-4"><strong>İşveren:</strong> Uygulama öncesi ve sonrası Yüklenici'nin belirteceği güvenlik tedbirlerine (gıda maddelerinin korunması, temizlik vb.) uymakla ve Yüklenici personeline çalışma sahasında kolaylık sağlamakla yükümlüdür.</p><div className="mt-8 border border-gray-300 p-4 bg-gray-50 text-xs"><strong>Not:</strong> Bu sözleşme iki nüsha olarak düzenlenmiş olup, taraflarca okunarak {contractData.sozlesmeTarihi.split('-').reverse().join('.')} tarihinde imza altına alınmıştır. Anlaşmazlık durumunda İstanbul Mahkemeleri yetkilidir.</div><div className="mt-12 flex justify-between px-8"><div className="text-center w-1/3"><h4 className="font-bold mb-1">İŞVEREN (MÜŞTERİ)</h4><div className="text-xs mb-8">Kaşe - İmza</div><div className="border-b border-black w-full"></div><div className="text-xs mt-1">{formData12.yetkiliKisi}</div></div><div className="text-center w-1/3"><h4 className="font-bold mb-1">YÜKLENİCİ (MENTOR)</h4><div className="text-xs mb-8">Kaşe - İmza</div><div className="border-b border-black w-full"></div><div className="text-xs mt-1">Şirket Müdürü</div></div></div></div><div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-auto">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır. İzinsiz çoğaltılamaz.</div></div>);
+  const renderA4_21 = () => (<div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}><A4Header title="HİZMET SÖZLEŞMESİ" settings={settings21} /><div className="flex-grow text-sm leading-relaxed text-justify"><h3 className="font-bold mb-2">1. TARAFLAR</h3><p className="mb-4">Bir tarafta <strong>MENTOR ÇEVRE SAĞLIĞI HİZMETLERİ</strong> (Bundan böyle "Yüklenici" olarak anılacaktır) ile diğer tarafta <strong>{formData12.ticariUnvan}</strong> (Bundan böyle "İşveren" olarak anılacaktır) arasında aşağıda belirtilen şartlarda anlaşmaya varılmıştır.</p><h3 className="font-bold mb-2">2. HİZMETİN KONUSU</h3><p className="mb-4">İşveren'in <strong>{formData12.adres}</strong> adresindeki tesislerinde/iş yerinde, halk sağlığını tehdit eden vektörlerle (zararlılarla) mücadele kapsamında, Sağlık Bakanlığı mevzuatına uygun olarak ilaçlama ve pest kontrol hizmetinin verilmesidir.</p><h3 className="font-bold mb-2">3. HİZMETİN KAPSAMI</h3><p className="mb-4">Bu sözleşme kapsamında aşağıdaki zararlılarla mücadele edilecektir:<ul className="list-disc pl-6 mt-1 space-y-1">{contractData.kapsam.kemirgen && <li>Kemirgenler (Rattus norvegicus, Rattus rattus, Mus musculus)</li>}{contractData.kapsam.yuruyenHasere && <li>Yürüyen Haşereler (Hamamböceği, Karınca, Örümcek vb.)</li>}{contractData.kapsam.ucanHasere && <li>Uçan Haşereler (Karasinek, Sivrisinek vb. - Larva mücadelesi dahil)</li>}{contractData.kapsam.dezenfeksiyon && <li>Dezenfeksiyon Hizmeti (Virüs ve bakterilere karşı ortam dezenfeksiyonu)</li>}</ul></p><h3 className="font-bold mb-2">4. HİZMET PERİYODU VE SÜRESİ</h3><p className="mb-4">Hizmet, <strong>{contractData.baslangicTarihi}</strong> ile <strong>{contractData.bitisTarihi}</strong> tarihleri arasında geçerlidir. Uygulama periyodu: <strong>{contractData.hizmetPeriyodu}</strong> olarak belirlenmiştir. Acil durumlarda (garanti kapsamındaki çağrılarda) Yüklenici, ekstra ücret talep etmeden 24-48 saat içinde müdahale edecektir.</p><h3 className="font-bold mb-2">5. HİZMET BEDELİ VE ÖDEME KOŞULLARI</h3><p className="mb-4">Sözleşme konusu hizmet bedeli, uygulama başına/aylık <strong>{contractData.hizmetBedeli} {contractData.paraBirimi} + KDV</strong> olarak belirlenmiştir. Ödeme, {contractData.odemeSekli}</p><h3 className="font-bold mb-2">6. TARAFLARIN YÜKÜMLÜLÜKLERİ</h3><p className="mb-2"><strong>Yüklenici:</strong> Sağlık Bakanlığı onaylı biyosidal ürünleri kullanmakla, uygulamayı sertifikalı personel ile yapmakla ve yapılan işlemi EK-1 Biyosidal Ürün Uygulama İşlem Formu ile belgelemekle yükümlüdür.</p><p className="mb-4"><strong>İşveren:</strong> Uygulama öncesi ve sonrası Yüklenici'nin belirteceği güvenlik tedbirlerine (gıda maddelerinin korunması, temizlik vb.) uymakla ve Yüklenici personeline çalışma sahasında kolaylık sağlamakla yükümlüdür.</p><div className="mt-8 border border-gray-300 p-4 bg-gray-50 text-xs"><strong>Not:</strong> Bu sözleşme iki nüsha olarak düzenlenmiş olup, taraflarca okunarak {contractData.sozlesmeTarihi.split('-').reverse().join('.')} tarihinde imza altına alınmıştır. Anlaşmazlık durumunda İstanbul Mahkemeleri yetkilidir.</div><div className="mt-12 flex justify-between px-8"><div className="text-center w-1/3"><h4 className="font-bold mb-1">İŞVEREN (MÜŞTERİ)</h4><div className="text-xs mb-8">Kaşe - İmza</div><div className="border-b border-black w-full"></div><div className="text-xs mt-1">{formData12.yetkiliKisi}</div></div><div className="text-center w-1/3"><h4 className="font-bold mb-1">YÜKLENİCİ (MENTOR)</h4><div className="text-xs mb-8">Kaşe - İmza</div><div className="border-b border-black w-full"></div><div className="text-xs mt-1">Şirket Müdürü</div></div></div></div><div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-auto">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır. İzinsiz çoğaltılamaz.</div></div>);
   const renderA4_31 = () => (<div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}><A4Header title="İZİN VE RUHSATLAR" settings={settings31} /><div className="flex-grow"><div className="mb-6 p-4 bg-gray-50 border border-gray-200 text-sm italic">Bu bölümde yer alan belgeler, firmanın yasal olarak pest kontrol hizmeti verebilmesi için gerekli olan resmi izin ve ruhsatları kapsamaktadır. İlgili belgelerin suretleri aşağıda listelenmiştir.</div><table className="w-full border-collapse border border-black text-sm"><thead><tr style={{ backgroundColor: BRAND_LIGHT_GREEN }}><th className="border border-black p-3 text-left w-1/3">BELGE ADI</th><th className="border border-black p-3 text-left">BELGE NUMARASI</th><th className="border border-black p-3 text-center">TARİH</th><th className="border border-black p-3 text-left">VEREN KURUM</th></tr></thead><tbody>{permits.map(permit => (<tr key={permit.id}><td className="border border-black p-3 font-bold">{permit.belgeAdi}</td><td className="border border-black p-3 font-mono">{permit.belgeNo}</td><td className="border border-black p-3 text-center"><div>{permit.verilisTarihi}</div><div className="text-[10px] text-gray-500">(Geçerlilik: {permit.gecerlilikTarihi})</div></td><td className="border border-black p-3">{permit.verenKurum}</td></tr>))}{[...Array(Math.max(0, 8 - permits.length))].map((_, i) => (<tr key={`empty-${i}`}><td className="border border-black p-4"></td><td className="border border-black p-4"></td><td className="border border-black p-4"></td><td className="border border-black p-4"></td></tr>))}</tbody></table><div className="mt-12 text-center border-t border-b border-black py-8 bg-gray-50"><h3 className="font-bold text-lg mb-2 text-gray-800">EKLER</h3><p className="text-sm text-gray-600">Bu kapak sayfasının arkasında, yukarıda listelenen belgelerin fotokopileri/suretleri yer almaktadır.</p><div className="flex justify-center gap-4 mt-4"><ShieldCheck size={32} className="text-gray-300" /><ShieldCheck size={32} className="text-gray-300" /><ShieldCheck size={32} className="text-gray-300" /></div></div></div><div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-auto">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır. İzinsiz çoğaltılamaz.</div></div>);
   const renderA4_32 = () => (<div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}><A4Header title="MESUL MÜDÜR VE OPERATÖR SERTİFİKALARI" settings={settings32} /><div className="flex-grow"><div className="mb-6 p-4 bg-gray-50 border border-gray-200 text-sm italic">Bu bölümde, hizmeti planlayan mesul müdür ve sahada fiilen uygulamayı yapan operatörlerin yetkinliklerini gösteren Sağlık Bakanlığı onaylı sertifikalarının suretleri yer almaktadır.</div><table className="w-full border-collapse border border-black text-sm"><thead><tr style={{ backgroundColor: BRAND_LIGHT_GREEN }}><th className="border border-black p-3 text-left w-1/4">ADI SOYADI</th><th className="border border-black p-3 text-left w-1/3">GÖREVİ</th><th className="border border-black p-3 text-left">SERTİFİKA NO</th><th className="border border-black p-3 text-center">GEÇERLİLİK TARİHİ</th></tr></thead><tbody>{staff.map(s => (<tr key={s.id}><td className="border border-black p-3 font-bold">{s.adSoyad}</td><td className="border border-black p-3">{s.gorev}</td><td className="border border-black p-3 font-mono">{s.sertifikaNo}</td><td className="border border-black p-3 text-center">{s.gecerlilikTarihi}</td></tr>))}{[...Array(Math.max(0, 8 - staff.length))].map((_, i) => (<tr key={`empty-${i}`}><td className="border border-black p-4"></td><td className="border border-black p-4"></td><td className="border border-black p-4"></td><td className="border border-black p-4"></td></tr>))}</tbody></table><div className="mt-12 text-center border-t border-b border-black py-8 bg-gray-50"><h3 className="font-bold text-lg mb-2 text-gray-800">EKLER</h3><p className="text-sm text-gray-600">Bu kapak sayfasının arkasında, yukarıda listelenen personelin sertifika fotokopileri/suretleri yer almaktadır.</p><div className="flex justify-center gap-4 mt-4"><Users size={32} className="text-gray-300" /><Users size={32} className="text-gray-300" /><Users size={32} className="text-gray-300" /></div></div></div><div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-auto">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır. İzinsiz çoğaltılamaz.</div></div>);
   const renderA4_41 = () => (<div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}><A4Header title="ZARARLI MÜCADELESİ EKİPMAN KROKİSİ" settings={settings41} /><div className="flex-grow flex flex-col"><div className="mb-2 text-sm font-bold uppercase border-b border-gray-400 pb-1">Firma: {formData12.ticariUnvan}</div><div className="flex-1 border-2 border-dashed border-gray-300 rounded flex items-center justify-center relative overflow-hidden mb-4">{krokiImage ? (<img src={krokiImage} alt="Kroki" className="max-w-full max-h-full object-contain" />) : (<div className="text-gray-300 text-center"><Map size={48} className="mx-auto mb-2 opacity-20" /><p className="text-sm">Kroki Görseli Yüklenmedi</p></div>)}</div><div className="border border-black p-2 mt-auto"><h4 className="font-bold border-b border-black mb-2 pb-1 text-sm bg-gray-100 px-1">LEJANT / İŞARET DİLİ</h4><div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">{legendItems.map(item => (<div key={item.id} className="flex items-center gap-2"><div className="font-bold border border-black w-8 h-6 flex items-center justify-center bg-white">{item.kod}</div><span>{item.aciklama}</span></div>))}</div></div></div><div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-2">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır. İzinsiz çoğaltılamaz.</div></div>);
