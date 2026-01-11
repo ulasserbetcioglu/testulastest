@@ -4,7 +4,7 @@ import {
   FileText, Plus, Trash2, Home, Layout, Store, ChevronRight,
   FileSignature, CheckSquare, Calendar, DollarSign, Award, ShieldCheck,
   Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker,
-  BookOpen, Package, AlertTriangle, Filter
+  BookOpen, Package, AlertTriangle, Filter, Save, Download
 } from 'lucide-react';
 
 // Kurumsal Yeşil Tonu
@@ -125,6 +125,7 @@ interface ApplicationRecord {
   müşteri_yetkilisi: string;
   müşteri_imza: boolean;
   operatör_imza: boolean;
+  [key: string]: any; 
 }
 
 interface UsageCard {
@@ -672,8 +673,236 @@ export default function AdminMentorModule() {
     </div>
   );
 
-  // --- A4 PREVIEW RENDERLARI ---
+  // --- EDİTÖR FONKSİYONLARI (KAYIP OLANLARIN EKLENMESİ) ---
 
+  const renderHome = () => (
+    <div className="w-full max-w-4xl p-6 bg-white rounded-lg shadow-lg">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">Hoşgeldiniz, Yönetici Paneli</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h3 className="font-bold text-lg mb-2 text-blue-800">Müşteri Seçimi</h3>
+          <p className="text-sm text-gray-600 mb-4">İşlem yapmak istediğiniz müşteriyi seçiniz.</p>
+          <div className="space-y-2">
+            {customers.map(customer => (
+              <button 
+                key={customer.id} 
+                onClick={() => setSelectedCustomerId(customer.id)}
+                className={`w-full text-left px-4 py-2 rounded border ${selectedCustomerId === customer.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-gray-50'}`}
+              >
+                {customer.cari_isim}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h3 className="font-bold text-lg mb-2 text-green-800">Hızlı İşlemler</h3>
+          <ul className="text-sm space-y-2">
+            <li className="flex items-center gap-2"><Plus size={16}/> Yeni EK-1 Formu Oluştur</li>
+            <li className="flex items-center gap-2"><Settings size={16}/> Sistem Ayarları</li>
+            <li className="flex items-center gap-2"><Users size={16}/> Personel Yönetimi</li>
+          </ul>
+        </div>
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <h3 className="font-bold text-lg mb-2 text-yellow-800">Durum Özeti</h3>
+            <div className="text-sm">
+                <p>Aktif Şantiye: <strong>{customerBranches.length}</strong></p>
+                <p>Tanımlı Ürün: <strong>{products.length}</strong></p>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderEditor11 = () => (
+    <div className="space-y-4">
+      <div className="text-xs font-bold text-gray-500 uppercase">Doküman Ayarları</div>
+      <div className="grid grid-cols-2 gap-2">
+        <input type="text" name="dokumanNo" value={settings11.dokumanNo} onChange={handleSettings11} className="border p-2 rounded text-sm" placeholder="Doküman No" />
+        <input type="text" name="yayinTarihi" value={settings11.yayinTarihi} onChange={handleSettings11} className="border p-2 rounded text-sm" placeholder="Yayın Tarihi" />
+      </div>
+      <hr />
+      <div className="space-y-2">
+        {documentContents.map(doc => (
+            <div key={doc.id} className="border p-2 rounded text-sm bg-gray-50">
+                <input value={doc.baslik} onChange={(e) => updateDocumentEntry(doc.id, 'baslik', e.target.value)} className="w-full font-bold mb-1 bg-transparent border-b" />
+                <textarea value={doc.aciklama} onChange={(e) => updateDocumentEntry(doc.id, 'aciklama', e.target.value)} className="w-full text-xs bg-transparent border-b mb-1" />
+                <select value={doc.durum} onChange={(e) => updateDocumentEntry(doc.id, 'durum', e.target.value as any)} className="text-xs p-1 border rounded">
+                    <option value="mevcut">Mevcut</option>
+                    <option value="eksik">Eksik</option>
+                    <option value="beklemede">Beklemede</option>
+                </select>
+            </div>
+        ))}
+        <button onClick={addDocumentEntry} className="w-full py-2 bg-blue-100 text-blue-700 rounded text-sm font-bold flex items-center justify-center gap-2"><Plus size={16}/> Yeni Satır Ekle</button>
+      </div>
+    </div>
+  );
+
+  const renderEditor12 = () => (
+    <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-3">
+            <input type="text" name="ticariUnvan" value={formData12.ticariUnvan} onChange={handleChange12} placeholder="Ticari Ünvan" className="border p-2 rounded w-full text-sm" />
+            <input type="text" name="yetkiliKisi" value={formData12.yetkiliKisi} onChange={handleChange12} placeholder="Yetkili Kişi" className="border p-2 rounded w-full text-sm" />
+            <input type="text" name="adres" value={formData12.adres} onChange={handleChange12} placeholder="Adres" className="border p-2 rounded w-full text-sm" />
+            <input type="text" name="vergiNo" value={formData12.vergiNo} onChange={handleChange12} placeholder="Vergi No" className="border p-2 rounded w-full text-sm" />
+            <input type="email" name="eposta" value={formData12.eposta} onChange={handleChange12} placeholder="E-Posta" className="border p-2 rounded w-full text-sm" />
+        </div>
+    </div>
+  );
+
+  const renderEditor13 = () => (
+      <div className="space-y-4">
+          {branches.map(branch => (
+              <div key={branch.id} className="border p-3 rounded bg-gray-50 relative">
+                  <button onClick={() => removeBranch(branch.id)} className="absolute top-2 right-2 text-red-500"><Trash2 size={14}/></button>
+                  <input value={branch.subeAdi} onChange={(e) => updateBranch(branch.id, 'subeAdi', e.target.value)} className="w-full border p-1 mb-2 text-sm font-bold" placeholder="Şube Adı" />
+                  <input value={branch.yetkili} onChange={(e) => updateBranch(branch.id, 'yetkili', e.target.value)} className="w-full border p-1 mb-2 text-sm" placeholder="Yetkili" />
+                  <input value={branch.telefon} onChange={(e) => updateBranch(branch.id, 'telefon', e.target.value)} className="w-full border p-1 text-sm" placeholder="Telefon" />
+              </div>
+          ))}
+          <button onClick={addBranch} className="w-full py-2 bg-green-100 text-green-700 rounded flex justify-center items-center gap-2"><Plus size={16}/> Şube Ekle</button>
+      </div>
+  );
+
+  const renderEditor21 = () => (
+      <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs">Başlangıç</label>
+              <label className="text-xs">Bitiş</label>
+              <input type="date" name="baslangicTarihi" value={contractData.baslangicTarihi} onChange={handleContractChange} className="border p-2 rounded text-sm" />
+              <input type="date" name="bitisTarihi" value={contractData.bitisTarihi} onChange={handleContractChange} className="border p-2 rounded text-sm" />
+          </div>
+          <input type="text" name="hizmetBedeli" value={contractData.hizmetBedeli} onChange={handleContractChange} placeholder="Hizmet Bedeli" className="border p-2 rounded w-full text-sm" />
+          <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={contractData.kapsam.kemirgen} onChange={() => handleKapsamChange('kemirgen')} /> Kemirgen</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={contractData.kapsam.yuruyenHasere} onChange={() => handleKapsamChange('yuruyenHasere')} /> Yürüyen Haşere</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={contractData.kapsam.ucanHasere} onChange={() => handleKapsamChange('ucanHasere')} /> Uçan Haşere</label>
+          </div>
+      </div>
+  );
+
+  const renderEditor31 = () => (
+      <div className="space-y-4">
+          {permits.map(permit => (
+              <div key={permit.id} className="border p-2 rounded bg-gray-50 text-sm">
+                  <input value={permit.belgeAdi} onChange={(e) => updatePermit(permit.id, 'belgeAdi', e.target.value)} className="w-full border-b mb-1 font-bold" />
+                  <input value={permit.belgeNo} onChange={(e) => updatePermit(permit.id, 'belgeNo', e.target.value)} className="w-full border-b mb-1" placeholder="No" />
+              </div>
+          ))}
+          <button onClick={addPermit} className="w-full py-2 bg-blue-100 text-blue-700 rounded flex justify-center items-center gap-2"><Plus size={16}/> Belge Ekle</button>
+      </div>
+  );
+
+  const renderEditor32 = () => (
+    <div className="space-y-4">
+        {staff.map(s => (
+            <div key={s.id} className="border p-2 rounded bg-gray-50 text-sm">
+                <input value={s.adSoyad} onChange={(e) => updateStaff(s.id, 'adSoyad', e.target.value)} className="w-full border-b mb-1 font-bold" />
+                <input value={s.gorev} onChange={(e) => updateStaff(s.id, 'gorev', e.target.value)} className="w-full border-b mb-1" />
+                <input value={s.sertifikaNo} onChange={(e) => updateStaff(s.id, 'sertifikaNo', e.target.value)} className="w-full border-b" placeholder="Sertifika No" />
+            </div>
+        ))}
+        <button onClick={addStaff} className="w-full py-2 bg-blue-100 text-blue-700 rounded flex justify-center items-center gap-2"><Plus size={16}/> Personel Ekle</button>
+    </div>
+  );
+
+  const renderEditor41 = () => (
+      <div className="space-y-4">
+          <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="w-full text-xs" />
+          {krokiImage && <button onClick={removeKrokiImage} className="text-red-500 text-xs underline">Krokiyi Kaldır</button>}
+          <hr />
+          <div className="text-xs font-bold">Lejant Düzenle</div>
+          {legendItems.map(item => (
+              <div key={item.id} className="flex gap-2 text-sm">
+                  <input value={item.kod} onChange={(e) => updateLegend(item.id, 'kod', e.target.value)} className="w-10 border p-1" />
+                  <input value={item.aciklama} onChange={(e) => updateLegend(item.id, 'aciklama', e.target.value)} className="flex-1 border p-1" />
+              </div>
+          ))}
+      </div>
+  );
+
+  const renderEditor42 = () => (
+      <div className="space-y-4">
+          <div className="border p-2 rounded bg-gray-100">
+              <div className="text-xs font-bold mb-2">Otomatik Oluşturucu</div>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                  <input value={generator.prefix} onChange={(e) => setGenerator(prev => ({...prev, prefix: e.target.value}))} className="border p-1 text-sm" placeholder="Örn: Kİ" />
+                  <input type="number" value={generator.start} onChange={(e) => setGenerator(prev => ({...prev, start: parseInt(e.target.value)}))} className="border p-1 text-sm" />
+                  <input type="number" value={generator.end} onChange={(e) => setGenerator(prev => ({...prev, end: parseInt(e.target.value)}))} className="border p-1 text-sm" />
+              </div>
+              <button onClick={generateStations} className="w-full bg-black text-white py-1 rounded text-xs">Oluştur</button>
+          </div>
+          <div className="max-h-64 overflow-y-auto space-y-1">
+              {stations.map(s => (
+                  <div key={s.id} className="flex justify-between items-center text-xs border-b p-1">
+                      <span>{s.no}</span>
+                      <button onClick={() => removeStation(s.id as number)} className="text-red-500"><Trash2 size={12}/></button>
+                  </div>
+              ))}
+          </div>
+          <button onClick={clearStations} className="w-full bg-red-100 text-red-600 py-2 rounded text-sm">Tümünü Temizle</button>
+      </div>
+  );
+
+  const renderEditor51 = () => (
+    <div className="space-y-3 text-sm">
+        <input type="date" name="uygulama_tarihi" value={currentApplication.uygulama_tarihi} onChange={handleApplicationChange} className="w-full border p-2 rounded" />
+        <div className="grid grid-cols-2 gap-2">
+            <input type="time" name="baslangic_saati" value={currentApplication.baslangic_saati} onChange={handleApplicationChange} className="border p-2 rounded" />
+            <input type="time" name="bitis_saati" value={currentApplication.bitis_saati} onChange={handleApplicationChange} className="border p-2 rounded" />
+        </div>
+        <select name="hedef_hasere" value={currentApplication.hedef_hasere} onChange={handleApplicationChange} className="w-full border p-2 rounded">
+            <option>Kemirgen</option>
+            <option>Yürüyen Haşere</option>
+            <option>Uçan Haşere</option>
+        </select>
+        <textarea name="uygulanan_alan" value={currentApplication.uygulanan_alan} onChange={handleApplicationChange} placeholder="Uygulanan Alanlar" className="w-full border p-2 rounded" />
+        <button onClick={saveApplicationRecord} className="w-full bg-green-600 text-white py-2 rounded">Kaydet</button>
+    </div>
+  );
+
+  const renderEditor52 = () => (
+      <div className="space-y-4">
+          {products.map(p => (
+              <div key={p.id} className="border p-2 rounded bg-gray-50 text-sm">
+                  <input value={p.urunAdi} onChange={(e) => updateProduct(p.id, 'urunAdi', e.target.value)} className="w-full font-bold border-b mb-1" />
+                  <input value={p.aktifMadde} onChange={(e) => updateProduct(p.id, 'aktifMadde', e.target.value)} className="w-full border-b mb-1" placeholder="Aktif Madde" />
+                  <input value={p.ruhsatNo} onChange={(e) => updateProduct(p.id, 'ruhsatNo', e.target.value)} className="w-full border-b" placeholder="Ruhsat No" />
+              </div>
+          ))}
+          <button onClick={addProduct} className="w-full py-2 bg-blue-100 text-blue-700 rounded flex justify-center items-center gap-2"><Plus size={16}/> Ürün Ekle</button>
+      </div>
+  );
+
+  const renderEditor53 = () => (
+    <div className="space-y-4">
+        {usageCards.map(card => (
+            <div key={card.id} className="border p-2 rounded bg-gray-50 text-sm">
+                <input value={card.urun_adi} onChange={(e) => {
+                    const newCards = usageCards.map(c => c.id === card.id ? {...c, urun_adi: e.target.value} : c);
+                    setUsageCards(newCards);
+                }} className="w-full font-bold border-b mb-1" placeholder="Ürün Adı" />
+            </div>
+        ))}
+        <button onClick={addUsageCard} className="w-full py-2 bg-blue-100 text-blue-700 rounded flex justify-center items-center gap-2"><Plus size={16}/> Stok Kartı Ekle</button>
+    </div>
+  );
+
+  const renderEditor61 = () => (
+    <div className="space-y-4">
+        {wasteRecords.map(rec => (
+            <div key={rec.id} className="border p-2 rounded bg-gray-50 text-sm relative">
+                <button onClick={() => removeWasteRecord(rec.id)} className="absolute top-1 right-1 text-red-500"><Trash2 size={12}/></button>
+                <input value={rec.atik_turu} onChange={(e) => updateWasteRecord(rec.id, 'atik_turu', e.target.value)} className="w-full border-b mb-1" placeholder="Atık Türü" />
+                <input value={rec.miktar} onChange={(e) => updateWasteRecord(rec.id, 'miktar', e.target.value)} className="w-full border-b mb-1" placeholder="Miktar" />
+            </div>
+        ))}
+        <button onClick={addWasteRecord} className="w-full py-2 bg-blue-100 text-blue-700 rounded flex justify-center items-center gap-2"><Plus size={16}/> Atık Kaydı Ekle</button>
+    </div>
+  );
+
+  // --- A4 RENDERLARI (EKSİK OLANLAR) ---
+  
   // 1.1 A4
   const renderA4_11 = () => (
     <div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
@@ -978,6 +1207,76 @@ export default function AdminMentorModule() {
     </div>
   );
 
+  // 5.1 A4 (YENİ EKLENDİ)
+  const renderA4_51 = () => (
+    <div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+      <A4Header title="BİYOSİDAL ÜRÜN UYGULAMA İŞLEM FORMU (EK-1)" settings={settings51} />
+      <div className="flex-grow flex flex-col text-xs">
+          {/* Üst Bilgiler */}
+          <div className="border border-black mb-2">
+              <div className="flex border-b border-black">
+                  <div className="w-1/2 p-2 border-r border-black"><span className="font-bold">Hizmet Alan Firma:</span> {formData12.ticariUnvan}</div>
+                  <div className="w-1/2 p-2"><span className="font-bold">Tarih:</span> {currentApplication.uygulama_tarihi}</div>
+              </div>
+              <div className="flex border-b border-black">
+                  <div className="w-full p-2"><span className="font-bold">Adres:</span> {formData12.adres}</div>
+              </div>
+              <div className="flex">
+                  <div className="w-1/3 p-2 border-r border-black"><span className="font-bold">Başlangıç Saati:</span> {currentApplication.baslangic_saati}</div>
+                  <div className="w-1/3 p-2 border-r border-black"><span className="font-bold">Bitiş Saati:</span> {currentApplication.bitis_saati}</div>
+                  <div className="w-1/3 p-2"><span className="font-bold">Hava Durumu:</span> {currentApplication.hava_durumu}</div>
+              </div>
+          </div>
+
+          {/* Tespitler */}
+          <div className="border border-black mb-2 p-2 min-h-[100px]">
+              <div className="font-bold border-b border-gray-300 mb-1">TESPİT EDİLEN ZARARLILAR VE YOĞUNLUK ALANLARI:</div>
+              <p>{currentApplication.uygulanan_alan || 'Herhangi bir aktivite tespit edilmemiştir.'}</p>
+          </div>
+
+          {/* Uygulama Detayları */}
+          <table className="w-full border-collapse border border-black mb-4">
+              <thead>
+                  <tr style={{ backgroundColor: BRAND_LIGHT_GREEN }}>
+                      <th className="border border-black p-1">UYGULAMA ALANI</th>
+                      <th className="border border-black p-1">HEDEF HAŞERE</th>
+                      <th className="border border-black p-1">KULLANILAN ÜRÜN</th>
+                      <th className="border border-black p-1">YÖNTEM</th>
+                      <th className="border border-black p-1">MİKTAR</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  <tr className="h-12">
+                      <td className="border border-black p-1 text-center">{currentApplication.uygulanan_alan}</td>
+                      <td className="border border-black p-1 text-center">{currentApplication.hedef_hasere}</td>
+                      <td className="border border-black p-1 text-center">{currentApplication.kullanilan_urun}</td>
+                      <td className="border border-black p-1 text-center">{currentApplication.uygulama_metodu}</td>
+                      <td className="border border-black p-1 text-center">{currentApplication.dozaj}</td>
+                  </tr>
+                  <tr className="h-12"><td className="border border-black"></td><td className="border border-black"></td><td className="border border-black"></td><td className="border border-black"></td><td className="border border-black"></td></tr>
+                  <tr className="h-12"><td className="border border-black"></td><td className="border border-black"></td><td className="border border-black"></td><td className="border border-black"></td><td className="border border-black"></td></tr>
+              </tbody>
+          </table>
+
+          {/* İmzalar */}
+          <div className="mt-auto flex justify-between gap-4">
+              <div className="w-1/2 border border-black p-2 h-24 text-center">
+                  <div className="font-bold border-b border-black mb-2">UYGULAMAYI YAPAN (MENTOR)</div>
+                  <div className="text-xs">İmza</div>
+              </div>
+              <div className="w-1/2 border border-black p-2 h-24 text-center">
+                  <div className="font-bold border-b border-black mb-2">ONAYLAYAN (MÜŞTERİ)</div>
+                  <div className="text-xs">İmza</div>
+              </div>
+          </div>
+          <div className="mt-2 text-[10px] text-justify">
+            * Yapılan uygulama sonrası, kullanılan biyosidal ürünlerin etkinlik süresi boyunca (ıslak yüzeyler kuruyana kadar) uygulama yapılan alanlara temas edilmemeli ve gıda maddeleri açıkta bırakılmamalıdır. Acil durumlarda 114 UZEM'i arayınız.
+          </div>
+      </div>
+      <div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-2">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır.</div>
+    </div>
+  );
+
   // 5.2 A4
   const renderA4_52 = () => (
     <div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
@@ -1012,6 +1311,93 @@ export default function AdminMentorModule() {
         <div className="mt-4 text-xs text-gray-600">* Listede belirtilen ürünlerin Malzeme Güvenlik Bilgi Formları (MSDS) ve Etiket örnekleri dosya ekinde mevcuttur.</div>
       </div>
       <div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-auto">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır. İzinsiz çoğaltılamaz.</div>
+    </div>
+  );
+
+  // 5.3 A4 (YENİ EKLENDİ)
+  const renderA4_53 = () => (
+    <div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+        <A4Header title="BİYOSİDAL ÜRÜN STOK TAKİP KARTI" settings={settings53} />
+        <div className="flex-grow grid grid-cols-2 gap-8 content-start">
+            {usageCards.map(card => (
+                <div key={card.id} className="border border-black">
+                    <div className="bg-gray-100 border-b border-black p-2 text-center font-bold text-sm uppercase">{card.urun_adi}</div>
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-black">
+                                <th className="border-r border-black p-1">Tarih</th>
+                                <th className="border-r border-black p-1">Miktar</th>
+                                <th className="p-1">Kalan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="border-b border-gray-200"><td className="p-1 border-r text-center">01.01.2024</td><td className="p-1 border-r text-center">-</td><td className="p-1 text-center font-bold">Tam</td></tr>
+                            <tr className="border-b border-gray-200"><td className="p-1 border-r text-center">&nbsp;</td><td className="p-1 border-r text-center"></td><td className="p-1 text-center"></td></tr>
+                            <tr className="border-b border-gray-200"><td className="p-1 border-r text-center">&nbsp;</td><td className="p-1 border-r text-center"></td><td className="p-1 text-center"></td></tr>
+                            <tr className="border-b border-gray-200"><td className="p-1 border-r text-center">&nbsp;</td><td className="p-1 border-r text-center"></td><td className="p-1 text-center"></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            ))}
+        </div>
+        <div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-auto">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır.</div>
+    </div>
+  );
+
+  // 6.1 A4 (YENİ EKLENDİ)
+  const renderA4_61 = () => (
+    <div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+        <A4Header title="ATIK TESLİM VE İMHA TUTANAĞI" settings={settings61} />
+        <div className="flex-grow">
+            <div className="mb-6">
+                <p className="text-sm mb-4">Aşağıda cins ve miktarı belirtilen tehlikeli atıklar (boş kimyasal ambalajları), mevzuata uygun şekilde bertaraf edilmek üzere lisanslı atık firmasına teslim edilmiştir.</p>
+                <table className="w-full border-collapse border border-black text-sm">
+                    <thead>
+                        <tr style={{ backgroundColor: BRAND_LIGHT_GREEN }}>
+                            <th className="border border-black p-2">ATIK KODU</th>
+                            <th className="border border-black p-2">ATIK TÜRÜ</th>
+                            <th className="border border-black p-2">MİKTAR (KG/ADET)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {wasteRecords.length === 0 ? (
+                            <tr><td colSpan={3} className="p-4 text-center">Henüz atık kaydı girilmedi.</td></tr>
+                        ) : (
+                            wasteRecords.map(w => (
+                                <tr key={w.id}>
+                                    <td className="border border-black p-2 text-center">15 01 10*</td>
+                                    <td className="border border-black p-2">{w.atik_turu}</td>
+                                    <td className="border border-black p-2 text-center font-bold">{w.miktar}</td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div className="mt-12 border border-black p-4">
+                <h4 className="font-bold border-b border-gray-300 mb-4 pb-2">TESLİM BİLGİLERİ</h4>
+                <div className="grid grid-cols-2 gap-8">
+                    <div>
+                        <div className="font-bold mb-1">ATIK ÜRETİCİSİ (MENTOR):</div>
+                        <div className="text-xs">
+                            <p>Adres: ...</p>
+                            <p>Vergi No: ...</p>
+                            <div className="mt-4 border-t border-black w-32 pt-1 text-center">İmza / Kaşe</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="font-bold mb-1">LİSANSLI TAŞIYICI FİRMA:</div>
+                        <div className="text-xs">
+                            <p>Firma Adı: ...</p>
+                            <p>Lisans No: ...</p>
+                            <div className="mt-4 border-t border-black w-32 pt-1 text-center">İmza / Kaşe</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div className="border-t-2 border-black pt-2 text-center text-xs text-gray-500 mt-auto">Bu form, MENTOR Çevre Sağlığı Hizmetleri kalite yönetim sisteminin bir parçasıdır.</div>
     </div>
   );
 
