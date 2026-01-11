@@ -1,6 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, FlatList } from 'react-native';
-import { ArrowLeft, FileText, ScanLine, FlaskConical, ClipboardList, MessageSquare, Map, ShieldCheck, Trash2, Info, ChevronRight } from 'lucide-react-native';
+import { 
+  ArrowLeft, FileText, ScanLine, FlaskConical, ClipboardList, 
+  MessageSquare, Map, ShieldCheck, Trash2, Info, ChevronRight, 
+  User, CheckCircle2 
+} from 'lucide-react-native';
 
 interface Props {
   navigation: any;
@@ -21,7 +25,20 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
 
   const navParams = { customerId, customerName, branchId, branchName };
 
-  // PDF LİSTESİNE GÖRE YAPILANDIRILMIŞ MENÜ
+  /**
+   * TAM LİSTE EŞLEŞTİRMESİ:
+   * * 1.1, 2.1, 4.1, 17, 19 -> DocumentCheckDetail (Standart Fotoğraflı Kontrol)
+   * 1.2, 1.3             -> CustomerInfoView (Firma Bilgileri)
+   * 3.1, 3.2, 5.4, 14    -> LicenseManager (Ruhsat Takibi)
+   * 4.2                  -> StationControl (İstasyon Takip)
+   * 4.3 (Risk)           -> RiskActionPlan (Trend & Risk)
+   * 4.3 (Şikayet)        -> CustomerFeedbackForm (Müşteri Şikayet)
+   * 5.1                  -> BiocidalApplicationForm (Uygulama Formu)
+   * 5.2, 5.5             -> ApprovedProductList (Onaylı Ürünler)
+   * 5.3                  -> ProductUsageCard (Stok/Kullanım)
+   * 6.1                  -> WasteDisposalLog (Atık Takip)
+   */
+
   const MENU_ITEMS = [
     {
       id: '1',
@@ -29,15 +46,15 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'FAALİYET DOSYASI İÇERİĞİ',
       desc: 'Dosyanın içindekiler kısmı ve sayfa numaraları.',
       icon: <FileText size={24} color="#64748B" />, 
-      targetScreen: 'DocumentCheckDetail' // Standart Kontrol
+      targetScreen: 'DocumentCheckDetail' 
     },
     {
       id: '2',
       code: '1.2',
       title: 'MÜŞTERİ BİLGİLERİ',
       desc: 'Ticari ünvan, vergi dairesi ve iletişim bilgileri.',
-      icon: <Info size={24} color="#3B82F6" />, 
-      targetScreen: 'DocumentCheckDetail'
+      icon: <User size={24} color="#3B82F6" />, 
+      targetScreen: 'CustomerInfoView' // YENİ
     },
     {
       id: '3',
@@ -45,7 +62,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'MÜŞTERİ ŞUBELERİNİN BİLGİLERİ',
       desc: 'Şube yetkilisi, m² ve özel konum bilgileri.',
       icon: <Map size={24} color="#3B82F6" />, 
-      targetScreen: 'DocumentCheckDetail'
+      targetScreen: 'CustomerInfoView' // YENİ
     },
     {
       id: '4',
@@ -60,16 +77,16 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       code: '3.1',
       title: 'İZİN VE RUHSATLAR',
       desc: 'Biyosidal Ürün Uygulama İzin Belgesi.',
-      icon: <FileText size={24} color="#F59E0B" />, 
-      targetScreen: 'DocumentCheckDetail'
+      icon: <CheckCircle2 size={24} color="#F59E0B" />, 
+      targetScreen: 'LicenseManager' // YENİ
     },
     {
       id: '6',
       code: '3.2',
       title: 'MESUL MÜDÜR VE OPERATÖR BELGELERİ',
       desc: 'Diploma, sertifika ve uygulayıcı belgeleri.',
-      icon: <FileText size={24} color="#F59E0B" />, 
-      targetScreen: 'DocumentCheckDetail'
+      icon: <CheckCircle2 size={24} color="#F59E0B" />, 
+      targetScreen: 'LicenseManager' // YENİ
     },
     {
       id: '7',
@@ -85,7 +102,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'EKİPMAN TAKİP FORMLARI',
       desc: 'İstasyon kontrolü, kırık/sağlam ve aktivite takibi.',
       icon: <ScanLine size={24} color="#EF4444" />, 
-      targetScreen: 'StationControl', // ÖZEL FORM EKRANI
+      targetScreen: 'StationControl', // ÖZEL FORM
       highlight: true
     },
     {
@@ -94,7 +111,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'EK-1 UYGULAMA İŞLEM FORMU',
       desc: 'Yapılan ilaçlama, miktar ve yöntem bilgileri.',
       icon: <FlaskConical size={24} color="#10B981" />, 
-      targetScreen: 'BiocidalApplicationForm', // ÖZEL FORM EKRANI
+      targetScreen: 'BiocidalApplicationForm', // ÖZEL FORM
       highlight: true
     },
     {
@@ -103,7 +120,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'ONAYLI BİYOSİDAL ÜRÜN LİSTESİ',
       desc: 'İşletmede planlanan ilaçların toplu listesi.',
       icon: <FlaskConical size={24} color="#64748B" />, 
-      targetScreen: 'DocumentCheckDetail'
+      targetScreen: 'ApprovedProductList' // YENİ
     },
     {
       id: '11',
@@ -111,7 +128,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'BİYOSİDAL ÜRÜN KULLANIM KARTI',
       desc: 'Stok takibi ve yıllık kümülatif kullanım.',
       icon: <FileText size={24} color="#64748B" />, 
-      targetScreen: 'DocumentCheckDetail'
+      targetScreen: 'ProductUsageCard' // YENİ
     },
     {
       id: '12',
@@ -119,7 +136,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'RUHSAT, MSDS VE ETİKETLER',
       desc: 'İlaç ruhsatları, güvenlik bilgi formları ve etiketler.',
       icon: <FileText size={24} color="#64748B" />, 
-      targetScreen: 'DocumentCheckDetail'
+      targetScreen: 'LicenseManager' // YENİ
     },
     {
       id: '13',
@@ -127,15 +144,15 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'ATIK İMHA BELGESİ',
       desc: 'Boş ambalaj ve atıkların lisanslı firmaya teslimi.',
       icon: <Trash2 size={24} color="#EF4444" />, 
-      targetScreen: 'DocumentCheckDetail'
+      targetScreen: 'WasteDisposalLog' // YENİ
     },
     {
       id: '14',
       code: '3.2',
       title: 'FUMİGASYON RUHSATI',
       desc: 'Varsa fumigasyon işlem ruhsatı.',
-      icon: <FileText size={24} color="#F59E0B" />, 
-      targetScreen: 'DocumentCheckDetail'
+      icon: <CheckCircle2 size={24} color="#F59E0B" />, 
+      targetScreen: 'LicenseManager' // YENİ
     },
     {
       id: '15',
@@ -143,7 +160,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'BİYOSİDAL ÜRÜN GRUPLARI',
       desc: 'Kullanılan ürün grupları listesi.',
       icon: <FlaskConical size={24} color="#64748B" />, 
-      targetScreen: 'DocumentCheckDetail'
+      targetScreen: 'ApprovedProductList' // YENİ
     },
     {
       id: '16',
@@ -151,7 +168,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'TREND ANALİZ & RİSK DEĞERLENDİRME',
       desc: 'Aktivite trendleri ve risk aksiyon planı.',
       icon: <ClipboardList size={24} color="#F59E0B" />, 
-      targetScreen: 'RiskActionPlan', // ÖZEL FORM EKRANI
+      targetScreen: 'RiskActionPlan', // ÖZEL FORM
       highlight: true
     },
     {
@@ -168,35 +185,8 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       title: 'ŞİKAYET VE MEMNUNİYET FORMLARI',
       desc: 'Müşteri geri bildirimleri ve çözüm kayıtları.',
       icon: <MessageSquare size={24} color="#EF4444" />, 
-      targetScreen: 'CustomerFeedbackForm', // ÖZEL FORM EKRANI
+      targetScreen: 'CustomerFeedbackForm', // ÖZEL FORM
       highlight: true
-    },
-    // AuditMenu.tsx içinde:
-
-    {
-      id: '10',
-      code: '5.2',
-      title: 'ONAYLI BİYOSİDAL ÜRÜN LİSTESİ',
-      desc: 'İşletmede planlanan ilaçların toplu listesi.',
-      icon: <FlaskConical size={24} color="#64748B" />, 
-      targetScreen: 'ApprovedProductList' // <-- GÜNCELLENDİ (Yeni form)
-    },
-    {
-      id: '11',
-      code: '5.3',
-      title: 'BİYOSİDAL ÜRÜN KULLANIM KARTI',
-      desc: 'Stok takibi ve yıllık kümülatif kullanım.',
-      icon: <FileText size={24} color="#64748B" />, 
-      targetScreen: 'ProductUsageCard' // <-- GÜNCELLENDİ (Yeni form)
-    },
-    // ...
-    {
-      id: '15',
-      code: '5.5',
-      title: 'BİYOSİDAL ÜRÜN GRUPLARI',
-      desc: 'Kullanılan ürün grupları listesi.',
-      icon: <FlaskConical size={24} color="#64748B" />, 
-      targetScreen: 'ApprovedProductList' // <-- Aynı sayfaya yönlendirebilirsin
     },
     {
       id: '19',
@@ -213,7 +203,7 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
       style={[styles.card, item.highlight && styles.highlightCard]}
       onPress={() => navigation.navigate(item.targetScreen, {
         ...navParams,
-        // Detay sayfasına gidecekse bu bilgileri de gönderiyoruz
+        // Detay sayfasına gidecekse (DocumentCheckDetail) bu bilgileri gönder:
         title: item.title,
         code: item.code,
         desc: item.desc
@@ -260,7 +250,10 @@ const AuditMenu: React.FC<Props> = ({ navigation, route }) => {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <Text style={styles.listHeader}>Faaliyet Dosyası İçeriği [1-19]</Text>
+            <View style={styles.listHeaderContainer}>
+                <Text style={styles.listHeader}>Faaliyet Dosyası İçeriği [1-19]</Text>
+                <Text style={styles.listSubHeader}>Kontrol etmek veya işlem yapmak istediğiniz maddeyi seçiniz.</Text>
+            </View>
           }
         />
       </View>
@@ -306,12 +299,19 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+  listHeaderContainer: {
+    marginBottom: 16,
+  },
   listHeader: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#94A3B8',
-    marginBottom: 12,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
     textTransform: 'uppercase',
+  },
+  listSubHeader: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 4,
   },
   card: {
     flexDirection: 'row',
@@ -329,8 +329,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   highlightCard: {
-    borderColor: '#BFDBFE', // Mavi çerçeve ile form sayfalarını öne çıkarıyoruz
-    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE', // Mavi çerçeve
+    backgroundColor: '#EFF6FF', // Hafif mavi arka plan
   },
   iconContainer: {
     width: 40,
@@ -362,15 +362,15 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   cardTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
     flex: 1,
   },
   cardSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
-    lineHeight: 16,
+    lineHeight: 14,
   },
 });
 
