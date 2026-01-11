@@ -6,6 +6,13 @@ import {
   Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker,
   BookOpen, Package, AlertTriangle, Filter, Save, Download
 } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+// --- SUPABASE AYARLARI ---
+// Lütfen .env dosyanızdaki değişkenlerin doğru olduğundan emin olun
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Kurumsal Yeşil Tonu
 const BRAND_GREEN = '#006837'; // Mentor Yeşili
@@ -173,23 +180,25 @@ export default function AdminMentorModule() {
   
   // Şube Seçimi State'leri
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  
+  // Veritabanından gelen ham veri
   const [customerBranches, setCustomerBranches] = useState<any[]>([]);
 
   // MEVCUT STATE'LER
   const [formData12, setFormData12] = useState<FormData12>({
-    ticariUnvan: 'ÖRNEK GIDA TURİZM İNŞ. SAN. VE TİC. LTD. ŞTİ.',
-    faaliyetKonusu: 'Gıda Üretim ve Satış',
-    vergiDairesi: 'Zincirlikuyu V.D.',
-    vergiNo: '1234567890',
-    mersisNo: '0123456789000015',
-    adres: 'Organize Sanayi Bölgesi, 1. Cadde, No: 5, Başakşehir / İSTANBUL',
-    telefon: '0212 555 00 00',
-    faks: '0212 555 00 01',
-    eposta: 'info@ornekfirma.com',
-    webSitesi: 'www.ornekfirma.com',
-    yetkiliKisi: 'Ahmet YILMAZ',
-    yetkiliUnvan: 'İşletme Müdürü',
-    yetkiliTel: '0532 555 11 22',
+    ticariUnvan: '',
+    faaliyetKonusu: '',
+    vergiDairesi: '',
+    vergiNo: '',
+    mersisNo: '',
+    adres: '',
+    telefon: '',
+    faks: '',
+    eposta: '',
+    webSitesi: '',
+    yetkiliKisi: '',
+    yetkiliUnvan: '',
+    yetkiliTel: '',
     hizmetBaslangicTarihi: new Date().toISOString().split('T')[0]
   });
 
@@ -272,7 +281,7 @@ export default function AdminMentorModule() {
 
   // --- VERİ ÇEKME İŞLEMLERİ ---
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(); // customers tablosundan çek
     fetchSystemProducts();
     fetchOperators();
     initializeDocumentContents();
@@ -280,8 +289,8 @@ export default function AdminMentorModule() {
 
   useEffect(() => {
     if (selectedCustomerId) {
-      fetchCustomerDetails(selectedCustomerId);
-      fetchCustomerBranches(selectedCustomerId);
+      fetchCustomerDetails(selectedCustomerId); // customers tablosundan detay çek
+      fetchCustomerBranches(selectedCustomerId); // branches tablosundan şubeleri çek
       setSelectedBranchId('');
       setStations([]);
       setKrokiImage(null);
@@ -315,19 +324,94 @@ export default function AdminMentorModule() {
     setDocumentContents(defaultContents);
   };
 
+  // --- TABLO VERİLERİNİ ÇEKME (GÜNCELLENDİ) ---
   const fetchCustomers = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setCustomers([
-        { id: '1', cari_isim: 'ABC Gıda Market Zinciri' },
-        { id: '2', cari_isim: 'XYZ Restaurant' },
-        { id: '3', cari_isim: 'DEF Otel İşletmeleri' }
-      ]);
+    try {
+      // 'customers' tablosundan id ve cari_isim (veya ticari_unvan) çekiyoruz
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id, cari_isim'); 
+      
+      if (error) throw error;
+      setCustomers(data || []);
+    } catch (error) {
+      console.error('Müşteriler çekilemedi:', error);
+      // Hata durumunda boş bırakma veya uyarı gösterme
+      setCustomers([]);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
+  };
+
+  const fetchCustomerDetails = async (id: string) => {
+    try {
+      // Seçili müşteri detaylarını customers tablosundan al
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        // Tablodan gelen verileri form yapısına eşle
+        // NOT: Veritabanı kolon isimlerinizin (örn: tax_office) aşağıdakilerle eşleşmesi gerekir
+        // Eşleşmiyorsa data.vergi_dairesi yerine data.tax_office gibi düzeltin.
+        setFormData12({
+          ticariUnvan: data.ticari_unvan || data.cari_isim || '',
+          faaliyetKonusu: data.faaliyet_konusu || '',
+          vergiDairesi: data.vergi_dairesi || '',
+          vergiNo: data.vergi_no || '',
+          mersisNo: data.mersis_no || '',
+          adres: data.adres || '',
+          telefon: data.telefon || '',
+          faks: data.faks || '',
+          eposta: data.eposta || '',
+          webSitesi: data.web_sitesi || '',
+          yetkiliKisi: data.yetkili_kisi || '',
+          yetkiliUnvan: data.yetkili_unvan || '',
+          yetkiliTel: data.yetkili_tel || '',
+          hizmetBaslangicTarihi: data.hizmet_baslangic_tarihi || new Date().toISOString().split('T')[0]
+        });
+      }
+    } catch (error) {
+      console.error('Müşteri detayı çekilemedi:', error);
+    }
+  };
+
+  const fetchCustomerBranches = async (customerId: string) => {
+    try {
+      // 'branches' tablosundan bu müşteriye (customer_id) ait şubeleri çek
+      const { data, error } = await supabase
+        .from('branches')
+        .select('*')
+        .eq('customer_id', customerId); // Tablonuzda müşteri id kolonu 'customer_id' olmalı
+
+      if (error) throw error;
+
+      setCustomerBranches(data || []);
+
+      // Arayüz için formatlama
+      const mappedBranches: Branch[] = (data || []).map((b: any) => ({
+        id: b.id,
+        subeAdi: b.sube_adi || b.name, // Kolon adı sube_adi veya name olabilir
+        yetkili: b.yetkili_kisi || b.yetkili || '',
+        metrekare: b.metrekare || '',
+        adres: b.adres || '',
+        telefon: b.telefon || ''
+      }));
+      setBranches(mappedBranches);
+    } catch (error) {
+      console.error('Şubeler çekilemedi:', error);
+      setBranches([]);
+    }
   };
 
   const fetchSystemProducts = async () => {
+    // Burada da dilerseniz 'products' tablosundan çekebilirsiniz.
+    // Şimdilik statik bırakıyorum, istenirse burası da supabase.from('products')... yapılabilir.
     const mappedProducts: Product[] = [
       { id: 1, urunAdi: 'K-Othrine SC 25', aktifMadde: 'Deltamethrin %2.5', ruhsatNo: '2011/BYS/123', hedefHasere: 'Yürüyen Haşere', antidot: 'Semptomatik Tedavi' },
       { id: 2, urunAdi: 'Racumin Paste', aktifMadde: 'Coumatetralyl %0.375', ruhsatNo: '2010/BYS/456', hedefHasere: 'Kemirgen', antidot: 'Vitamin K1' }
@@ -336,6 +420,7 @@ export default function AdminMentorModule() {
   };
 
   const fetchOperators = async () => {
+     // Personel listesini de veritabanından çekmek isterseniz burayı güncelleyebilirsiniz.
     const mappedStaff: Staff[] = [
       { id: 1, adSoyad: 'Ahmet Yılmaz', gorev: 'Mesul Müdür', sertifikaNo: 'MM-12345', gecerlilikTarihi: '15.06.2026' },
       { id: 2, adSoyad: 'Mehmet Demir', gorev: 'Biyosidal Ürün Uygulayıcı', sertifikaNo: 'BUU-67890', gecerlilikTarihi: '20.12.2025' }
@@ -343,44 +428,9 @@ export default function AdminMentorModule() {
     setStaff(mappedStaff);
   };
 
-  const fetchCustomerDetails = async (id: string) => {
-    setFormData12({
-      ticariUnvan: 'ABC GIDA MARKET ZİNCİRİ A.Ş.',
-      faaliyetKonusu: 'Perakende Gıda Satış',
-      vergiDairesi: 'Beşiktaş',
-      vergiNo: '1234567890',
-      mersisNo: '0123456789012345',
-      adres: 'Levent Mahallesi, Büyükdere Cad. No:123 Şişli/İSTANBUL',
-      telefon: '0212 123 45 67',
-      faks: '0212 123 45 68',
-      eposta: 'info@abcgida.com',
-      webSitesi: 'www.abcgida.com',
-      yetkiliKisi: 'Ali Veli',
-      yetkiliUnvan: 'Genel Müdür',
-      yetkiliTel: '0532 123 45 67',
-      hizmetBaslangicTarihi: '2024-01-15'
-    });
-  };
-
-  const fetchCustomerBranches = async (customerId: string) => {
-    const data = [
-      { id: '1', sube_adi: 'Levent Şubesi', yetkili_kisi: 'Fatma Demir', adres: 'Levent Mah. 1. Sok. No:5', telefon: '0212 111 22 33' },
-      { id: '2', sube_adi: 'Etiler Şubesi', yetkili_kisi: 'Can Yılmaz', adres: 'Etiler Mah. 2. Cad. No:15', telefon: '0212 444 55 66' }
-    ];
-    setCustomerBranches(data);
-
-    const mappedBranches: Branch[] = data.map((b: any) => ({
-      id: b.id,
-      subeAdi: b.sube_adi,
-      yetkili: b.yetkili_kisi,
-      metrekare: '250',
-      adres: b.adres,
-      telefon: b.telefon
-    }));
-    setBranches(mappedBranches);
-  };
 
   const fetchBranchStations = async (branchId: string) => {
+    // İleride burası da 'stations' tablosundan çekilebilir
     const data = [
       { id: '1', kod: 'Kİ-01', lokasyon: 'Giriş Kapısı', tur: 'Kemirgen İstasyonu' },
       { id: '2', kod: 'Kİ-02', lokasyon: 'Depo', tur: 'Kemirgen İstasyonu' },
@@ -408,6 +458,7 @@ export default function AdminMentorModule() {
   };
   
   const addBranch = () => { 
+    // Not: Gerçek uygulamada burada veritabanına INSERT işlemi yapılmalı
     setBranches([...branches, { id: Date.now(), subeAdi: 'Yeni Şube', yetkili: '', metrekare: '', adres: '', telefon: '' }]); 
   };
 
@@ -673,7 +724,7 @@ export default function AdminMentorModule() {
     </div>
   );
 
-  // --- EDİTÖR FONKSİYONLARI (KAYIP OLANLARIN EKLENMESİ) ---
+  // --- EDİTÖR FONKSİYONLARI ---
 
   const renderHome = () => (
     <div className="w-full max-w-4xl p-6 bg-white rounded-lg shadow-lg">
@@ -682,8 +733,8 @@ export default function AdminMentorModule() {
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h3 className="font-bold text-lg mb-2 text-blue-800">Müşteri Seçimi</h3>
           <p className="text-sm text-gray-600 mb-4">İşlem yapmak istediğiniz müşteriyi seçiniz.</p>
-          <div className="space-y-2">
-            {customers.map(customer => (
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {loading ? <div className="text-sm">Yükleniyor...</div> : customers.map(customer => (
               <button 
                 key={customer.id} 
                 onClick={() => setSelectedCustomerId(customer.id)}
@@ -692,6 +743,7 @@ export default function AdminMentorModule() {
                 {customer.cari_isim}
               </button>
             ))}
+            {customers.length === 0 && !loading && <div className="text-xs text-red-500">Müşteri bulunamadı.</div>}
           </div>
         </div>
         <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
@@ -752,6 +804,7 @@ export default function AdminMentorModule() {
 
   const renderEditor13 = () => (
       <div className="space-y-4">
+          {branches.length === 0 && <div className="text-xs text-gray-500 italic p-2 border border-dashed text-center">Bu müşteriye ait şube kaydı bulunamadı.</div>}
           {branches.map(branch => (
               <div key={branch.id} className="border p-3 rounded bg-gray-50 relative">
                   <button onClick={() => removeBranch(branch.id)} className="absolute top-2 right-2 text-red-500"><Trash2 size={14}/></button>
@@ -901,8 +954,8 @@ export default function AdminMentorModule() {
     </div>
   );
 
-  // --- A4 RENDERLARI (EKSİK OLANLAR) ---
-  
+  // --- A4 PREVIEW RENDERLARI ---
+
   // 1.1 A4
   const renderA4_11 = () => (
     <div className="bg-white shadow-2xl print:shadow-none w-[210mm] min-h-[297mm] p-[15mm] text-black box-border flex flex-col relative" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
@@ -1003,6 +1056,9 @@ export default function AdminMentorModule() {
                 <td className="border border-black p-2"><div><strong>Tel:</strong> {branch.telefon}</div><div className="italic text-[10px] mt-1">{branch.adres}</div></td>
               </tr>
             ))}
+            {branches.length === 0 && (
+                <tr><td colSpan={5} className="p-4 text-center text-gray-500 italic">Kayıtlı şube bulunamadı.</td></tr>
+            )}
           </tbody>
         </table>
         <div className="mt-4 text-xs text-gray-600">* Yukarıda belirtilen şubelerde yapılacak olan pest kontrol hizmeti, ana sözleşmede belirtilen şartlar dahilinde gerçekleştirilecektir.</div>
