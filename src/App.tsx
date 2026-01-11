@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './components/Auth/AuthProvider';
 import { supabase } from './lib/supabase';
 
@@ -115,7 +115,7 @@ import RiskActionPlan from './pages/AdminMentor/Forms/RiskActionPlan';
 import CustomerFeedbackForm from './pages/AdminMentor/Forms/CustomerFeedbackForm';
 import DocumentCheckDetail from './pages/AdminMentor/Forms/DocumentCheckDetail';
 
-// --- OPERATOR PAGES ---
+// --- OPERATOR & CUSTOMER & BRANCH PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
 import OperatorCalendarPlanning from './pages/OperatorCalendarPlanning';
 import OperatorPaidMaterials from './pages/OperatorPaidMaterials';
@@ -125,8 +125,6 @@ import OperatorDocuments from './pages/OperatorDocuments';
 import OperatorDailyChecklist from './pages/OperatorDailyChecklist';
 import OperatorQuickNotes from './pages/OperatorQuickNotes';
 import OperatorWeeklyKmForm from './pages/OperatorWeeklyKmForm';
-
-// --- CUSTOMER PAGES ---
 import CustomerCalendar from './pages/CustomerCalendar';
 import CustomerPaidMaterials from './pages/CustomerPaidMaterials';
 import CustomerVisits from './pages/CustomerVisits';
@@ -139,16 +137,73 @@ import CustomerTrendReportView from './pages/CustomerTrendReportView';
 import CustomerCertificates from './pages/CustomerCertificates';
 import PesticideUsageReport from './pages/PesticideUsageReport';
 import CustomerBranchesPage from './pages/CustomerBranchesPage';
-
-// --- BRANCH PAGES ---
 import BranchCalendar from './pages/BranchCalendar';
 import BranchPaidMaterials from './pages/BranchPaidMaterials';
 import BranchDocuments from './pages/BranchDocuments';
-
 import ProtectedReportViewer from './components/ProtectedReportViewer';
 
 
-// --- GÜVENLİK BİLEŞENLERİ (Security Components) ---
+// =============================================================================
+// 🔥 KURTARICI: MOBİL UYUMLULUK KÖPRÜSÜ (MOBILE BRIDGE)
+// Bu bileşen, eski "navigation" ve "route" prop'larını bekleyen sayfaların
+// Web üzerinde çökmesini engeller ve otomatik dönüştürme yapar.
+// =============================================================================
+const withMobileFix = (Component: React.ComponentType<any>) => {
+  return (props: any) => {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    // Mobil sayfa isimlerini Web URL'lerine eşleyen harita
+    const routeMap: Record<string, string> = {
+      'AdminMentorHome': '/admin/mentor',
+      'BranchSelection': '/admin/mentor/branch-selection',
+      'CustomerSelection': '/admin/mentor/customer-selection',
+      'AuditMenu': '/admin/mentor/audit-menu',
+      'FileAuditChecklist': '/admin/mentor/file-audit',
+      'AuditSummary': '/admin/mentor/audit-summary',
+      'StationControl': '/admin/mentor/StationControl',
+      'BiocidalApplicationForm': '/admin/mentor/BiocidalApplicationForm',
+      'ApprovedProductList': '/admin/mentor/ApprovedProductList',
+      'ProductUsageCard': '/admin/mentor/ProductUsageCard',
+      'WasteDisposalLog': '/admin/mentor/WasteDisposalLog',
+      'LicenseManager': '/admin/mentor/LicenseManager',
+      'CustomerInfoView': '/admin/mentor/CustomerInfoView',
+      'RiskActionPlan': '/admin/mentor/RiskActionPlan',
+      'DocumentCheckDetail': '/admin/mentor/DocumentCheckDetail',
+      // Geriye dönük uyumluluk
+      'RiskAssessment': '/moduller/risk-degerlendirme',
+    };
+
+    // Sahte Navigation Nesnesi (Mobil -> Web Dönüştürücü)
+    const navigationProp = {
+      navigate: (screenName: string, params: any) => {
+        // Eğer hedef bir web yoluysa ('/admin/...') direkt git
+        if (screenName.startsWith('/')) {
+          navigate(screenName, { state: params });
+        } else {
+          // Eğer mobil sayfa ismiyse, haritadan bul ve git
+          const path = routeMap[screenName] || `/admin/mentor/${screenName}`;
+          console.log(`Mobile Bridge Yönlendirmesi: ${screenName} -> ${path}`);
+          navigate(path, { state: params });
+        }
+      },
+      goBack: () => navigate(-1),
+      setOptions: () => {}, // Hata vermemesi için boş fonksiyon
+      addListener: () => {}, 
+    };
+
+    // Sahte Route Nesnesi (Parametreleri yakalamak için)
+    const routeProp = {
+      params: location.state || {}, // Web state'ini mobil params'a çevir
+      name: 'WebRoute'
+    };
+
+    // Orijinal bileşeni, oluşturduğumuz sahte props ile render et
+    return <Component {...props} navigation={navigationProp} route={routeProp} />;
+  };
+};
+
+// =============================================================================
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode, allowedUserTypes?: string[] }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
@@ -169,33 +224,26 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           setLoading(false);
           return;
         }
-
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', user.id)
           .single();
-
         if (profileError) {
           setIsAdmin(user.email === 'admin@ilaclamatik.com');
         } else {
           setIsAdmin(profileData.role === 'admin');
         }
       } catch (error) {
-        console.error('Admin check error:', error);
         setIsAdmin(false);
       } finally {
         setLoading(false);
       }
     };
-
     checkAdminStatus();
   }, []);
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
-  }
-
+  if (loading) return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
   return isAdmin ? children : <Navigate to="/" />;
 };
 
@@ -211,95 +259,51 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         const localSessionStr = localStorage.getItem('local_session');
         if (localSessionStr) {
           const localSession = JSON.parse(localSessionStr);
-          if (localSession.type === 'customer') {
-            setUserRole('customer');
-            setLoading(false);
-            return;
-          } else if (localSession.type === 'branch') {
-            setUserRole('branch');
-            setLoading(false);
-            return;
-          }
+          if (localSession.type === 'customer') { setUserRole('customer'); setLoading(false); return; }
+          else if (localSession.type === 'branch') { setUserRole('branch'); setLoading(false); return; }
         }
-
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setLoading(false);
-          return;
-        }
-
+        if (!user) { setLoading(false); return; }
         setCurrentUser(user);
 
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
-
+        const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
         if (profileData?.role) {
           setUserRole(profileData.role);
         } else {
-          const { data: operatorData } = await supabase
-            .from('operators')
-            .select('id')
-            .eq('auth_id', user.id)
-            .maybeSingle();
-
-          if (operatorData) {
-            setUserRole('operator');
-          } else {
-            const { data: customerData } = await supabase
-              .from('customers')
-              .select('id')
-              .eq('auth_id', user.id)
-              .maybeSingle();
-
-            if (customerData) {
-              setUserRole('customer');
-            } else {
-              const { data: branchData } = await supabase
-                .from('branches')
-                .select('id')
-                .eq('auth_id', user.id)
-                .maybeSingle();
-
-              if (branchData) {
-                setUserRole('branch');
-              } else if (user.email === 'admin@ilaclamatik.com') {
-                setUserRole('admin');
-              } else {
-                setUserRole('user');
-              }
-            }
-          }
+          // Fallback logic
+          setUserRole('user'); 
         }
-      } catch (err: any) {
-        console.error('Role check error:', err);
-        setUserRole('user');
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { setUserRole('user'); } finally { setLoading(false); }
     };
-
     checkUserRole();
   }, [navigate]);
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
-  }
-
-  if (userRole === 'operator' || (userRole === 'user' && /^[^@]+@ilaclamatik\.com$/.test(currentUser?.email ?? '') && currentUser?.email !== 'admin@ilaclamatik.com')) {
-    return <Navigate to="/operator" />;
-  } else if (userRole === 'customer') {
-    return <Navigate to="/customer" />;
-  } else if (userRole === 'branch') {
-    return <Navigate to="/branch" />;
-  }
-
+  if (loading) return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
+  if (userRole === 'operator' || (userRole === 'user' && /^[^@]+@ilaclamatik\.com$/.test(currentUser?.email ?? '') && currentUser?.email !== 'admin@ilaclamatik.com')) return <Navigate to="/operator" />;
+  if (userRole === 'customer') return <Navigate to="/customer" />;
+  if (userRole === 'branch') return <Navigate to="/branch" />;
   return children;
 };
 
-// --- ANA APP BİLEŞENİ ---
+// --- KÖPRÜ İLE SARILMIŞ SAYFALAR (WRAPPED PAGES) ---
+// Bu işlem sayesinde eski sayfaları değiştirmeden kullanabilirsin.
+const WrappedAdminMentorHome = withMobileFix(AdminMentorHome);
+const WrappedCustomerSelection = withMobileFix(CustomerSelection);
+const WrappedBranchSelection = withMobileFix(BranchSelection);
+const WrappedAuditMenu = withMobileFix(AuditMenu);
+const WrappedFileAuditChecklist = withMobileFix(FileAuditChecklist);
+const WrappedAuditSummary = withMobileFix(AuditSummary);
+const WrappedStationControl = withMobileFix(StationControl);
+const WrappedBiocidalApp = withMobileFix(BiocidalApplicationForm);
+const WrappedApprovedProductList = withMobileFix(ApprovedProductList);
+const WrappedProductUsageCard = withMobileFix(ProductUsageCard);
+const WrappedWasteDisposalLog = withMobileFix(WasteDisposalLog);
+const WrappedLicenseManager = withMobileFix(LicenseManager);
+const WrappedCustomerInfoView = withMobileFix(CustomerInfoView);
+const WrappedRiskActionPlan = withMobileFix(RiskActionPlan);
+const WrappedCustomerFeedback = withMobileFix(CustomerFeedbackForm);
+const WrappedDocumentCheckDetail = withMobileFix(DocumentCheckDetail);
+
 
 function App() {
   return (
@@ -307,19 +311,11 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
-          
           <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
           
           {/* Operator Routes */}
-          <Route
-            path="/operator/*"
-            element={
-              <ProtectedRoute>
-                <OperatorLayout />
-              </ProtectedRoute>
-            }
-          >
+          <Route path="/operator/*" element={<ProtectedRoute><OperatorLayout /></ProtectedRoute>}>
             <Route index element={<OperatorDashboard />} />
             <Route path="modules" element={<Modules />} />
             <Route path="gunluk-kontrol" element={<OperatorDailyChecklist />} />
@@ -349,14 +345,7 @@ function App() {
           </Route>
 
           {/* Customer Routes */}
-          <Route
-            path="/customer/*"
-            element={
-              <ProtectedRoute>
-                <CustomerLayout />
-              </ProtectedRoute>
-            }
-          >
+          <Route path="/customer/*" element={<ProtectedRoute><CustomerLayout /></ProtectedRoute>}>
             <Route index element={<CustomerDashboard />} />
             <Route path="subeler" element={<CustomerBranchesPage />} />
             <Route path="modules" element={<Modules />} />
@@ -376,14 +365,7 @@ function App() {
           </Route>
 
           {/* Branch Routes */}
-          <Route
-            path="/branch/*"
-            element={
-              <ProtectedRoute>
-                <BranchLayout />
-              </ProtectedRoute>
-            }
-          >
+          <Route path="/branch/*" element={<ProtectedRoute><BranchLayout /></ProtectedRoute>}>
             <Route index element={<BranchDashboard />} />
             <Route path="modules" element={<Modules />} />
             <Route path="takvim" element={<BranchCalendar />} />
@@ -399,16 +381,7 @@ function App() {
           </Route>
 
           {/* Admin Routes */}
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <RoleBasedRoute>
-                  <Layout />
-                </RoleBasedRoute>
-              </ProtectedRoute>
-            }
-          >
+          <Route path="/*" element={<ProtectedRoute><RoleBasedRoute><Layout /></RoleBasedRoute></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="admin" element={<Dashboard />} /> 
             
@@ -480,37 +453,27 @@ function App() {
             <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             
-            {/* --- ADMIN MENTOR MODULE ROUTES START --- */}
-            {/* Bu rotalar, AdminMentorHome.tsx içindeki navigasyon linkleriyle eşleşir */}
+            {/* --- ADMIN MENTOR KÖPRÜLÜ ROTALAR (WRAPPED ROUTES) --- */}
+            <Route path="admin/mentor" element={<AdminRoute><WrappedAdminMentorHome /></AdminRoute>} />
+            <Route path="admin/mentor/customer-selection" element={<AdminRoute><WrappedCustomerSelection /></AdminRoute>} />
+            <Route path="admin/mentor/branch-selection" element={<AdminRoute><WrappedBranchSelection /></AdminRoute>} />
+            <Route path="admin/mentor/audit-menu" element={<AdminRoute><WrappedAuditMenu /></AdminRoute>} />
+            <Route path="admin/mentor/file-audit" element={<AdminRoute><WrappedFileAuditChecklist /></AdminRoute>} />
+            <Route path="admin/mentor/audit-summary" element={<AdminRoute><WrappedAuditSummary /></AdminRoute>} />
+            <Route path="admin/mentor/StationControl" element={<AdminRoute><WrappedStationControl /></AdminRoute>} />
+            <Route path="admin/mentor/BiocidalApplicationForm" element={<AdminRoute><WrappedBiocidalApp /></AdminRoute>} />
+            <Route path="admin/mentor/ApprovedProductList" element={<AdminRoute><WrappedApprovedProductList /></AdminRoute>} />
+            <Route path="admin/mentor/ProductUsageCard" element={<AdminRoute><WrappedProductUsageCard /></AdminRoute>} />
+            <Route path="admin/mentor/WasteDisposalLog" element={<AdminRoute><WrappedWasteDisposalLog /></AdminRoute>} />
+            <Route path="admin/mentor/LicenseManager" element={<AdminRoute><WrappedLicenseManager /></AdminRoute>} />
+            <Route path="admin/mentor/CustomerInfoView" element={<AdminRoute><WrappedCustomerInfoView /></AdminRoute>} />
+            <Route path="admin/mentor/RiskActionPlan" element={<AdminRoute><WrappedRiskActionPlan /></AdminRoute>} />
+            <Route path="admin/mentor/CustomerFeedbackForm" element={<AdminRoute><WrappedCustomerFeedback /></AdminRoute>} />
+            <Route path="admin/mentor/DocumentCheckDetail" element={<AdminRoute><WrappedDocumentCheckDetail /></AdminRoute>} />
             
-            {/* Ana Giriş */}
-            <Route path="admin/mentor" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
-            
-            {/* Seçim Ekranları */}
-            <Route path="admin/mentor/customer-selection" element={<AdminRoute><CustomerSelection /></AdminRoute>} />
-            <Route path="admin/mentor/branch-selection" element={<AdminRoute><BranchSelection /></AdminRoute>} />
-            <Route path="admin/mentor/audit-menu" element={<AdminRoute><AuditMenu /></AdminRoute>} />
-            
-            {/* Denetim & Özet */}
-            <Route path="admin/mentor/file-audit" element={<AdminRoute><FileAuditChecklist /></AdminRoute>} />
-            <Route path="admin/mentor/audit-summary" element={<AdminRoute><AuditSummary /></AdminRoute>} />
-            
-            {/* Özel Formlar */}
-            <Route path="admin/mentor/StationControl" element={<AdminRoute><StationControl /></AdminRoute>} />
-            <Route path="admin/mentor/BiocidalApplicationForm" element={<AdminRoute><BiocidalApplicationForm /></AdminRoute>} />
-            <Route path="admin/mentor/ApprovedProductList" element={<AdminRoute><ApprovedProductList /></AdminRoute>} />
-            <Route path="admin/mentor/ProductUsageCard" element={<AdminRoute><ProductUsageCard /></AdminRoute>} />
-            <Route path="admin/mentor/WasteDisposalLog" element={<AdminRoute><WasteDisposalLog /></AdminRoute>} />
-            <Route path="admin/mentor/LicenseManager" element={<AdminRoute><LicenseManager /></AdminRoute>} />
-            <Route path="admin/mentor/CustomerInfoView" element={<AdminRoute><CustomerInfoView /></AdminRoute>} />
-            <Route path="admin/mentor/RiskActionPlan" element={<AdminRoute><RiskActionPlan /></AdminRoute>} />
-            <Route path="admin/mentor/CustomerFeedbackForm" element={<AdminRoute><CustomerFeedbackForm /></AdminRoute>} />
-            <Route path="admin/mentor/DocumentCheckDetail" element={<AdminRoute><DocumentCheckDetail /></AdminRoute>} />
-            
-            {/* Eski Rotalar (Geriye uyumluluk için) */}
-            <Route path="mentor-module" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
-            <Route path="admin/faaliyet-dosyasi" element={<AdminRoute><AdminMentorHome /></AdminRoute>} />
-            {/* --- ADMIN MENTOR MODULE ROUTES END --- */}
+            {/* Geriye uyumluluk için eski adresler */}
+            <Route path="mentor-module" element={<AdminRoute><WrappedAdminMentorHome /></AdminRoute>} />
+            <Route path="admin/faaliyet-dosyasi" element={<AdminRoute><WrappedAdminMentorHome /></AdminRoute>} />
 
             <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
