@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, StatusBar } from 'react-native';
 import { Users, FileText, ClipboardCheck, Settings, LogOut, ChevronRight } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 
 // Navigation prop tipi (Basit kullanım için any, detaylı navigasyon yapısında güncellenebilir)
 interface Props {
