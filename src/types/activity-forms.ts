@@ -19,6 +19,7 @@ export interface FormData12 {
   yetkiliUnvan: string;
   yetkiliTel: string;
   hizmetBaslangicTarihi: string;
+  [key: string]: string;
 }
 
 export interface ContractData {
