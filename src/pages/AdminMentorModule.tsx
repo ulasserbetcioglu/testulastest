@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, Building2, MapPin, Phone, Mail, User, FileText, Plus, Trash2, Home, Store, Ligature as FileSignature, CheckSquare, DollarSign, Award, ShieldCheck, Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker, Search, Loader2, Save, Filter } from 'lucide-react';
+import { Printer, Building2, MapPin, Phone, Mail, User, FileText, Plus, Trash2, Home, Store, Ligature as FileSignature, CheckSquare, DollarSign, Award, ShieldCheck, Users, Map, Upload, Image as ImageIcon, ClipboardList, Settings, Beaker, Search, Loader2, Save, Filter, ListChecks } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 
