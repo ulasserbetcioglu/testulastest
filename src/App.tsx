@@ -448,7 +448,7 @@ function App() {
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             
             {/* Mentor Modülü */}
-            <Route path="/mentor-module" element={<AdminMentorModule />} />
+            <Route path="mentor-module" element={<AdminMentorModule />} />
             
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
