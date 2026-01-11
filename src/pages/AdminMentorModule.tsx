@@ -810,14 +810,69 @@ export default function AdminMentorModule() {
             <h2 className="text-sm font-bold mb-2 text-gray-800">3.1. İzin ve Ruhsatlar</h2>
             </button>
 
+            <button onClick={() => setActiveTab('1.1')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><ListChecks size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">1.1. Faaliyet Dosyası İçeriği</h2>
+            </button>
+
             <button onClick={() => setActiveTab('3.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
             <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Users size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
             <h2 className="text-sm font-bold mb-2 text-gray-800">3.2. Sertifikalar</h2>
             </button>
 
-             <button onClick={() => setActiveTab('5.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <button onClick={() => setActiveTab('3.3')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><FlaskConical size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">3.3. Fumigasyon Ruhsatı</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('5.1')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><FileText size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">5.1. Faaliyet Raporu (EK-1)</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('5.2')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
             <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Beaker size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
-            <h2 className="text-sm font-bold mb-2 text-gray-800">5.2. Biyosidal Ürünler</h2>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">5.2. Onaylı Biyosidal Ürünler</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('5.3')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Package size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">5.3. Ürün Kullanım Kartı</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('5.4')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><ShieldCheck size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">5.4. Ruhsat, MSDS & Etiket</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('5.5')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Settings size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">5.5. Ürün Grupları Listesi</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('6.1')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Recycle size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">6.1. Atık İmha Belgesi</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('4.3')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><TrendingUp size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">4.3. Trend Analiz & Risk</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('4.4')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><Shield size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">4.4. Sigorta Poliçesi</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('4.5')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><MessageSquare size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">4.5. Şikayet & Öneri</h2>
+            </button>
+
+            <button onClick={() => setActiveTab('4.6')} className="group bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-2 border-transparent hover:border-green-600 flex flex-col items-center text-center h-full">
+            <div className="bg-green-100 p-4 rounded-full mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors"><PhoneAlert size={32} color={BRAND_GREEN} className="group-hover:text-white" style={{ color: 'inherit' }} /></div>
+            <h2 className="text-sm font-bold mb-2 text-gray-800">4.6. Acil Çağrı Bilgileri</h2>
             </button>
 
             {/* ŞUBE BAZLI MODÜLLER */}
