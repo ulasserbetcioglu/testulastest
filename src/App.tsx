@@ -96,25 +96,6 @@ import AdminTrendAnalysisReport from './pages/AdminTrendAnalysisReport';
 import AdminModuleReports from './pages/AdminModuleReports';
 import TekliflerListesi from './pages/TekliflerListesi';
 
-// --- ADMIN MENTOR MODULE IMPORTLARI ---
-import AdminMentorHome from './pages/AdminMentor/AdminMentorHome';
-import CustomerSelection from './pages/AdminMentor/CustomerSelection';
-import BranchSelection from './pages/AdminMentor/BranchSelection';
-import AuditMenu from './pages/AdminMentor/AuditMenu';
-import FileAuditChecklist from './pages/AdminMentor/FileAuditChecklist';
-import AuditSummary from './pages/AdminMentor/AuditSummary';
-// Mentor Formları
-import StationControl from './pages/AdminMentor/Forms/StationControl';
-import BiocidalApplicationForm from './pages/AdminMentor/Forms/BiocidalApplicationForm';
-import ApprovedProductList from './pages/AdminMentor/Forms/ApprovedProductList';
-import ProductUsageCard from './pages/AdminMentor/Forms/ProductUsageCard';
-import WasteDisposalLog from './pages/AdminMentor/Forms/WasteDisposalLog';
-import LicenseManager from './pages/AdminMentor/Forms/LicenseManager';
-import CustomerInfoView from './pages/AdminMentor/Forms/CustomerInfoView';
-import RiskActionPlan from './pages/AdminMentor/Forms/RiskActionPlan';
-import CustomerFeedbackForm from './pages/AdminMentor/Forms/CustomerFeedbackForm';
-import DocumentCheckDetail from './pages/AdminMentor/Forms/DocumentCheckDetail';
-
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
 import OperatorCalendarPlanning from './pages/OperatorCalendarPlanning';
