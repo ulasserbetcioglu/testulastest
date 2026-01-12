@@ -453,27 +453,6 @@ function App() {
             <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
             
-            {/* --- ADMIN MENTOR KÖPRÜLÜ ROTALAR (WRAPPED ROUTES) --- */}
-            <Route path="admin/mentor" element={<AdminRoute><WrappedAdminMentorHome /></AdminRoute>} />
-            <Route path="admin/mentor/customer-selection" element={<AdminRoute><WrappedCustomerSelection /></AdminRoute>} />
-            <Route path="admin/mentor/branch-selection" element={<AdminRoute><WrappedBranchSelection /></AdminRoute>} />
-            <Route path="admin/mentor/audit-menu" element={<AdminRoute><WrappedAuditMenu /></AdminRoute>} />
-            <Route path="admin/mentor/file-audit" element={<AdminRoute><WrappedFileAuditChecklist /></AdminRoute>} />
-            <Route path="admin/mentor/audit-summary" element={<AdminRoute><WrappedAuditSummary /></AdminRoute>} />
-            <Route path="admin/mentor/StationControl" element={<AdminRoute><WrappedStationControl /></AdminRoute>} />
-            <Route path="admin/mentor/BiocidalApplicationForm" element={<AdminRoute><WrappedBiocidalApp /></AdminRoute>} />
-            <Route path="admin/mentor/ApprovedProductList" element={<AdminRoute><WrappedApprovedProductList /></AdminRoute>} />
-            <Route path="admin/mentor/ProductUsageCard" element={<AdminRoute><WrappedProductUsageCard /></AdminRoute>} />
-            <Route path="admin/mentor/WasteDisposalLog" element={<AdminRoute><WrappedWasteDisposalLog /></AdminRoute>} />
-            <Route path="admin/mentor/LicenseManager" element={<AdminRoute><WrappedLicenseManager /></AdminRoute>} />
-            <Route path="admin/mentor/CustomerInfoView" element={<AdminRoute><WrappedCustomerInfoView /></AdminRoute>} />
-            <Route path="admin/mentor/RiskActionPlan" element={<AdminRoute><WrappedRiskActionPlan /></AdminRoute>} />
-            <Route path="admin/mentor/CustomerFeedbackForm" element={<AdminRoute><WrappedCustomerFeedback /></AdminRoute>} />
-            <Route path="admin/mentor/DocumentCheckDetail" element={<AdminRoute><WrappedDocumentCheckDetail /></AdminRoute>} />
-            
-            {/* Geriye uyumluluk için eski adresler */}
-            <Route path="mentor-module" element={<AdminRoute><WrappedAdminMentorHome /></AdminRoute>} />
-            <Route path="admin/faaliyet-dosyasi" element={<AdminRoute><WrappedAdminMentorHome /></AdminRoute>} />
 
             <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
