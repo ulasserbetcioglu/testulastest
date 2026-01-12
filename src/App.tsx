@@ -153,26 +153,6 @@ const withMobileFix = (Component: React.ComponentType<any>) => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Mobil sayfa isimlerini Web URL'lerine eşleyen harita
-    const routeMap: Record<string, string> = {
-      'AdminMentorHome': '/admin/mentor',
-      'BranchSelection': '/admin/mentor/branch-selection',
-      'CustomerSelection': '/admin/mentor/customer-selection',
-      'AuditMenu': '/admin/mentor/audit-menu',
-      'FileAuditChecklist': '/admin/mentor/file-audit',
-      'AuditSummary': '/admin/mentor/audit-summary',
-      'StationControl': '/admin/mentor/StationControl',
-      'BiocidalApplicationForm': '/admin/mentor/BiocidalApplicationForm',
-      'ApprovedProductList': '/admin/mentor/ApprovedProductList',
-      'ProductUsageCard': '/admin/mentor/ProductUsageCard',
-      'WasteDisposalLog': '/admin/mentor/WasteDisposalLog',
-      'LicenseManager': '/admin/mentor/LicenseManager',
-      'CustomerInfoView': '/admin/mentor/CustomerInfoView',
-      'RiskActionPlan': '/admin/mentor/RiskActionPlan',
-      'DocumentCheckDetail': '/admin/mentor/DocumentCheckDetail',
-      // Geriye dönük uyumluluk
-      'RiskAssessment': '/moduller/risk-degerlendirme',
-    };
 
     // Sahte Navigation Nesnesi (Mobil -> Web Dönüştürücü)
     const navigationProp = {
