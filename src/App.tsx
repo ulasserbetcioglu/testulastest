@@ -246,26 +246,6 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return children;
 };
 
-// --- KÖPRÜ İLE SARILMIŞ SAYFALAR (WRAPPED PAGES) ---
-// Bu işlem sayesinde eski sayfaları değiştirmeden kullanabilirsin.
-const WrappedAdminMentorHome = withMobileFix(AdminMentorHome);
-const WrappedCustomerSelection = withMobileFix(CustomerSelection);
-const WrappedBranchSelection = withMobileFix(BranchSelection);
-const WrappedAuditMenu = withMobileFix(AuditMenu);
-const WrappedFileAuditChecklist = withMobileFix(FileAuditChecklist);
-const WrappedAuditSummary = withMobileFix(AuditSummary);
-const WrappedStationControl = withMobileFix(StationControl);
-const WrappedBiocidalApp = withMobileFix(BiocidalApplicationForm);
-const WrappedApprovedProductList = withMobileFix(ApprovedProductList);
-const WrappedProductUsageCard = withMobileFix(ProductUsageCard);
-const WrappedWasteDisposalLog = withMobileFix(WasteDisposalLog);
-const WrappedLicenseManager = withMobileFix(LicenseManager);
-const WrappedCustomerInfoView = withMobileFix(CustomerInfoView);
-const WrappedRiskActionPlan = withMobileFix(RiskActionPlan);
-const WrappedCustomerFeedback = withMobileFix(CustomerFeedbackForm);
-const WrappedDocumentCheckDetail = withMobileFix(DocumentCheckDetail);
-
-
 function App() {
   return (
     <Router>
