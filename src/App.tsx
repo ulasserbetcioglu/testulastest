@@ -394,6 +394,7 @@ function App() {
             <Route path="admin/mesai-cizelgeleri" element={<AdminRoute><AdminOperatorShifts /></AdminRoute>} />
             <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
+            <Route path="admin/yillik-rapor" element={<AnnualVisitReport />} />
             
 
             <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
