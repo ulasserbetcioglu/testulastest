@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { 
   Maximize2, ZoomIn, ZoomOut, MapPin, Phone, Mail, Globe, 
-  Loader2, Layers, ChevronDown, Calendar, AlertCircle
+  Loader2, Layers, ChevronDown, Calendar, AlertCircle, Download
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { toJpeg } from 'html-to-image';
+import { toast } from 'sonner';
 
 // --- Interfaces ---
 interface Equipment {
@@ -55,8 +57,12 @@ interface ViewerProps {
 
 const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [scale, setScale] = useState(0.8);
   
+  // Ref (Resim çıktısı almak için)
+  const paperRef = useRef<HTMLDivElement>(null);
+
   // Veri State'leri
   const [plans, setPlans] = useState<FloorPlan[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
@@ -88,10 +94,9 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
     const activeIds = new Set<string>();
 
     Object.entries(visit.equipment_checks).forEach(([eqId, checkData]: [string, any]) => {
-      // Aktivite kontrol mantığı (Trend analizindeki mantığın aynısı)
       const hasActivity = Object.values(checkData).some(val => 
         val === true || val === 'true' || val === 'var' || val === 'evet' || 
-        (typeof val === 'number' && val > 0) // Sayısal yakalama varsa (fare vb.)
+        (typeof val === 'number' && val > 0)
       );
 
       if (hasActivity) {
@@ -100,16 +105,20 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
     });
 
     setActiveEquipmentIds(activeIds);
-
   }, [selectedVisitId, visits]);
 
   const fetchAllData = async () => {
     try {
       setLoading(true);
 
-      // 1. Şirket Ayarları
-      const { data: companyData } = await supabase.from('company_settings').select('*').single();
-      if (companyData) setCompanySettings(companyData);
+      // 1. Şirket Ayarları (Try-Catch ile sarıldı, hata olsa bile devam etsin)
+      try {
+        const { data: companyData, error } = await supabase.from('company_settings').select('*').single();
+        if (error) console.error("Şirket bilgisi çekilemedi (RLS hatası olabilir):", error);
+        if (companyData) setCompanySettings(companyData);
+      } catch (e) {
+        console.error("Şirket ayarları hatası:", e);
+      }
 
       // 2. Şube Bilgisi
       const { data: branchData } = await supabase
@@ -144,7 +153,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
         setCurrentPlanId(planData[0].id);
       }
 
-      // 5. Tamamlanmış Ziyaretler (Son 20 ziyaret)
+      // 5. Tamamlanmış Ziyaretler
       const { data: visitData } = await supabase
         .from('visits')
         .select('id, visit_date, equipment_checks')
@@ -156,11 +165,38 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
       setVisits(visitData || []);
 
     } catch (error) {
-      console.error("Veri çekme hatası:", error);
+      console.error("Genel veri çekme hatası:", error);
+      toast.error("Veriler yüklenirken bir hata oluştu.");
     } finally {
       setLoading(false);
     }
   };
+
+  // --- JPEG İndirme Fonksiyonu ---
+  const handleDownload = useCallback(async () => {
+    if (paperRef.current === null) return;
+    
+    setDownloading(true);
+    try {
+      // Kaliteyi artırmak için pixelRatio ve quality ayarları
+      const dataUrl = await toJpeg(paperRef.current, { 
+        quality: 0.95, 
+        backgroundColor: '#ffffff',
+        pixelRatio: 2 // Daha yüksek çözünürlük için
+      });
+      
+      const link = document.createElement('a');
+      link.download = `kroki-${currentPlanId}-${format(new Date(), 'dd-MM-yyyy')}.jpg`;
+      link.href = dataUrl;
+      link.click();
+      toast.success("Kroki görseli indirildi.");
+    } catch (err) {
+      console.error("Resim oluşturma hatası:", err);
+      toast.error("Resim oluşturulurken hata oluştu.");
+    } finally {
+      setDownloading(false);
+    }
+  }, [currentPlanId]);
 
   const currentPlan = plans.find(p => p.id === currentPlanId);
   const normalize = (v: number, min = 1) => (Number.isFinite(v) ? Math.max(min, v) : min);
@@ -179,7 +215,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
   return (
     <div className="flex flex-col items-center bg-gray-100 rounded-lg border border-gray-200 overflow-hidden" style={{ minHeight: '600px' }}>
       
-      {/* Yanıp Sönme Animasyonu için Style */}
+      {/* Yanıp Sönme Animasyonu */}
       <style>{`
         @keyframes pulse-red {
           0% { stroke-width: 0; stroke-opacity: 1; }
@@ -196,9 +232,9 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
       {/* --- Toolbar --- */}
       <div className="w-full bg-white border-b px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3 shadow-sm z-10">
         
-        <div className="flex items-center gap-4 w-full md:w-auto">
+        <div className="flex items-center gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
           {/* Kat Seçimi */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Layers size={16} className="text-gray-400" />
             <div className="relative">
               <select 
@@ -216,8 +252,8 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
             </div>
           </div>
 
-          {/* Tarih Seçimi (Aktivite Gösterimi) */}
-          <div className="flex items-center gap-2 border-l pl-4 ml-2">
+          {/* Tarih Seçimi */}
+          <div className="flex items-center gap-2 border-l pl-4 ml-2 flex-shrink-0">
             <Calendar size={16} className={selectedVisitId ? "text-blue-600" : "text-gray-400"} />
             <div className="relative">
               <select 
@@ -243,33 +279,48 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
           </div>
 
           {selectedVisitId && (
-            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded flex items-center gap-1 animate-in fade-in">
+            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded flex items-center gap-1 animate-in fade-in whitespace-nowrap">
               <AlertCircle size={12} />
-              <span>{activeEquipmentIds.size} nokta tespit edildi</span>
+              <span>{activeEquipmentIds.size} nokta</span>
             </div>
           )}
         </div>
 
-        {/* Zoom Kontrolleri */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded p-1 border">
-          <button onClick={() => setScale(s => Math.max(0.3, s - 0.1))} className="p-1 hover:bg-white rounded text-gray-600" title="Küçült">
-            <ZoomOut size={16} />
+        {/* Sağ Taraf: Zoom ve İndirme */}
+        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+          
+          {/* İndirme Butonu */}
+          <button 
+            onClick={handleDownload}
+            disabled={downloading}
+            className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            <span className="hidden sm:inline">JPEG İndir</span>
           </button>
-          <span className="text-xs w-10 text-center font-mono text-gray-600">{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale(s => Math.min(2, s + 0.1))} className="p-1 hover:bg-white rounded text-gray-600" title="Büyüt">
-            <ZoomIn size={16} />
-          </button>
-          <button onClick={() => setScale(0.8)} className="p-1 hover:bg-white rounded text-gray-600 ml-1 border-l border-gray-300" title="Sıfırla">
-            <Maximize2 size={16} />
-          </button>
+
+          {/* Zoom Kontrolleri */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded p-1 border">
+            <button onClick={() => setScale(s => Math.max(0.3, s - 0.1))} className="p-1 hover:bg-white rounded text-gray-600">
+              <ZoomOut size={16} />
+            </button>
+            <span className="text-xs w-10 text-center font-mono text-gray-600">{Math.round(scale * 100)}%</span>
+            <button onClick={() => setScale(s => Math.min(2, s + 0.1))} className="p-1 hover:bg-white rounded text-gray-600">
+              <ZoomIn size={16} />
+            </button>
+            <button onClick={() => setScale(0.8)} className="p-1 hover:bg-white rounded text-gray-600 ml-1 border-l border-gray-300">
+              <Maximize2 size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* --- Canvas Container --- */}
       <div className="flex-1 w-full overflow-auto bg-gray-200/50 p-8 flex justify-center items-start">
         
-        {/* --- THE PAPER --- */}
+        {/* --- THE PAPER (Resim Çıktısı Alınacak Alan) --- */}
         <div 
+          ref={paperRef}
           className="bg-white shadow-2xl relative transition-transform duration-200 ease-out origin-top"
           style={{ 
             width: 1000, 
@@ -282,21 +333,23 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
           {/* 1. Header (Logo & Bilgi) */}
           <div className="absolute top-0 left-0 right-0 h-24 bg-white/95 border-b px-8 flex justify-between items-center z-20">
             <div className="flex items-center gap-5">
-              {/* Logo Kontrolü */}
               {companySettings?.logo_url ? (
-                <img src={companySettings.logo_url} className="h-16 object-contain max-w-[200px]" alt="Firma Logo" />
+                <img src={companySettings.logo_url} className="h-16 object-contain max-w-[200px]" alt="Logo" />
               ) : (
-                <div className="w-16 h-16 bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-400 rounded border border-dashed">
-                  LOGO YOK
+                <div className="h-16 flex flex-col justify-center">
+                   <h1 className="text-xl font-bold uppercase text-gray-900">{companySettings?.company_name || 'İlaçlama Firması'}</h1>
                 </div>
               )}
               
-              <div>
-                <h1 className="text-xl font-bold uppercase text-gray-900">{companySettings?.company_name || 'İlaçlama Firması'}</h1>
-                <h2 className="text-sm text-gray-600 font-medium mt-1">
-                  {branchInfo?.customer?.kisa_isim || 'Müşteri'} - {branchInfo?.sube_adi || 'Şube'}
-                </h2>
-              </div>
+              {/* Logo varsa ismi gizleyip sadece şube bilgisini gösterebiliriz veya ikisini de gösterebiliriz */}
+              {companySettings?.logo_url && (
+                <div>
+                  <h1 className="text-lg font-bold uppercase text-gray-800">{companySettings.company_name}</h1>
+                  <h2 className="text-sm text-gray-600 font-medium">
+                    {branchInfo?.customer?.kisa_isim} - {branchInfo?.sube_adi}
+                  </h2>
+                </div>
+              )}
             </div>
 
             <div className="text-right">
@@ -305,8 +358,8 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
               </div>
               <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider">
                 {selectedVisitId 
-                  ? `${format(parseISO(visits.find(v => v.id === selectedVisitId)?.visit_date || ''), 'dd.MM.yyyy')} Durumu` 
-                  : 'Genel Yerleşim Planı'
+                  ? `${format(parseISO(visits.find(v => v.id === selectedVisitId)?.visit_date || ''), 'dd.MM.yyyy')} Raporu` 
+                  : 'Yerleşim Planı'
                 }
               </div>
             </div>
@@ -315,22 +368,19 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
           {/* 2. Drawing Area (SVG) */}
           <div className="absolute top-24 bottom-16 left-0 right-0 bg-gray-50 overflow-hidden">
             
-            {/* Arkaplan Resmi */}
-            {currentPlan.background_url && (
+            {currentPlan.background_url ? (
               <img 
                 src={currentPlan.background_url} 
                 className="absolute top-0 left-0 w-full h-full object-contain opacity-90 pointer-events-none select-none"
-                alt="Plan"
+                alt="Plan Arkaplan"
               />
-            )}
-
-            {!currentPlan.background_url && (
+            ) : (
                <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
             )}
 
             <svg width="100%" height="100%" className="absolute top-0 left-0">
               
-              {/* --- Çizim Elemanları --- */}
+              {/* Elemanlar */}
               {currentPlan.elements.map((el) => (
                 <g key={el.id} transform={`translate(${el.x}, ${el.y})`}>
                   {el.type === 'wall' && <rect width={normalize(el.width)} height={normalize(el.height)} fill="#334155" />}
@@ -348,7 +398,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
                 </g>
               ))}
 
-              {/* --- Ekipmanlar ve Aktivite Animasyonu --- */}
+              {/* Ekipmanlar */}
               {Object.entries(currentPlan.equipment_positions).map(([eqId, pos]) => {
                 const eqInfo = equipments.find(e => e.id === eqId);
                 const isActive = activeEquipmentIds.has(eqId);
@@ -356,26 +406,23 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
                 return (
                   <g key={eqId} transform={`translate(${pos.x}, ${pos.y})`}>
                     
-                    {/* AKTİVİTE VARSA YANIP SÖNEN HALKA */}
+                    {/* Aktivite Animasyonu */}
                     {isActive && (
                       <circle cx="0" cy="0" r="14" className="blinking-dot" fill="none" />
                     )}
 
-                    {/* Ana Nokta (Aktifse Kırmızı, Değilse Mavi) */}
                     <circle 
                       r="14" 
                       fill={isActive ? "#ef4444" : "#2563eb"} 
                       stroke="white" 
                       strokeWidth="3" 
-                      className="drop-shadow-sm transition-colors duration-300" 
+                      className="drop-shadow-sm" 
                     />
                     
-                    {/* Ekipman Kodu */}
                     <text x="0" y="5" textAnchor="middle" fill="white" fontSize="11" fontWeight="900" style={{ userSelect: 'none' }}>
                       {eqInfo?.equipment_code.substring(0, 2) || 'EQ'}
                     </text>
 
-                    {/* Alt Etiket */}
                     <rect x="-22" y="20" width="44" height="18" rx="4" fill="white" stroke={isActive ? "#ef4444" : "#e5e7eb"} strokeWidth={isActive ? 2 : 1} className="shadow-sm" />
                     <text x="0" y="33" textAnchor="middle" fontSize="10" fontWeight="bold" fill={isActive ? "#ef4444" : "#374151"} style={{ userSelect: 'none' }}>
                       {eqInfo?.equipment_code || '??'}
@@ -386,32 +433,25 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
             </svg>
           </div>
 
-          {/* 3. Footer (Şirket Bilgileri) */}
+          {/* 3. Footer */}
           <div className="absolute bottom-0 left-0 right-0 h-16 bg-white border-t flex justify-between items-center px-8 text-xs text-gray-500 z-20">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-blue-50 text-blue-600 rounded-full">
                 <MapPin size={14} />
               </div>
-              <span className="font-medium">{companySettings?.address || 'Şirket adresi girilmemiş.'}</span>
+              <span className="font-medium">{companySettings?.address || 'Adres bilgisi mevcut değil.'}</span>
             </div>
 
             <div className="flex items-center gap-6">
               {companySettings?.phone && (
-                <span className="flex items-center gap-1.5 hover:text-blue-600 transition-colors">
-                  <Phone size={14} /> {companySettings.phone}
-                </span>
+                <span className="flex items-center gap-1.5"><Phone size={14} /> {companySettings.phone}</span>
               )}
               {companySettings?.email && (
-                <span className="flex items-center gap-1.5 hover:text-blue-600 transition-colors">
-                  <Mail size={14} /> {companySettings.email}
-                </span>
+                <span className="flex items-center gap-1.5"><Mail size={14} /> {companySettings.email}</span>
               )}
               {companySettings?.website && (
-                <span className="flex items-center gap-1.5 hover:text-blue-600 transition-colors">
-                  <Globe size={14} /> {companySettings.website}
-                </span>
+                <span className="flex items-center gap-1.5"><Globe size={14} /> {companySettings.website}</span>
               )}
-              {!companySettings && <span>İletişim bilgileri yüklenemedi.</span>}
             </div>
           </div>
 
