@@ -5,8 +5,8 @@ import {
   Loader2, Layers, ChevronDown, Calendar, AlertCircle, Download
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { tr } from 'date-fns/locale';
-import { toJpeg } from 'html-to-image';
+// DİKKAT: html-to-image yerine html2canvas eklendi
+import html2canvas from 'html2canvas'; 
 import { toast } from 'sonner';
 
 // --- Interfaces ---
@@ -60,7 +60,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
   const [downloading, setDownloading] = useState(false);
   const [scale, setScale] = useState(0.8);
   
-  // Ref (Resim çıktısı almak için)
+  // Ref: Resim çıktısı alınacak kapsayıcı
   const paperRef = useRef<HTMLDivElement>(null);
 
   // Veri State'leri
@@ -81,7 +81,6 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
     }
   }, [branchId]);
 
-  // Seçilen ziyaret değiştiğinde aktif ekipmanları hesapla
   useEffect(() => {
     if (!selectedVisitId) {
       setActiveEquipmentIds(new Set());
@@ -111,16 +110,16 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
     try {
       setLoading(true);
 
-      // 1. Şirket Ayarları (Try-Catch ile sarıldı, hata olsa bile devam etsin)
+      // Şirket Ayarları
       try {
         const { data: companyData, error } = await supabase.from('company_settings').select('*').single();
-        if (error) console.error("Şirket bilgisi çekilemedi (RLS hatası olabilir):", error);
+        if (error) console.error("Şirket bilgisi hatası:", error);
         if (companyData) setCompanySettings(companyData);
       } catch (e) {
         console.error("Şirket ayarları hatası:", e);
       }
 
-      // 2. Şube Bilgisi
+      // Şube Bilgisi
       const { data: branchData } = await supabase
         .from('branches')
         .select('sube_adi, customer:customer_id(kisa_isim)')
@@ -128,14 +127,14 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
         .single();
       if (branchData) setBranchInfo(branchData);
 
-      // 3. Ekipman Listesi
+      // Ekipman Listesi
       const { data: eqData } = await supabase
         .from('branch_equipment')
         .select('id, equipment_code, equipment:equipment_id(name, type)')
         .eq('branch_id', branchId);
       setEquipments(eqData || []);
 
-      // 4. Kat Planları
+      // Kat Planları
       const { data: planData } = await supabase
         .from('branch_floor_plans')
         .select('*')
@@ -153,7 +152,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
         setCurrentPlanId(planData[0].id);
       }
 
-      // 5. Tamamlanmış Ziyaretler
+      // Ziyaretler
       const { data: visitData } = await supabase
         .from('visits')
         .select('id, visit_date, equipment_checks')
@@ -165,34 +164,38 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
       setVisits(visitData || []);
 
     } catch (error) {
-      console.error("Genel veri çekme hatası:", error);
+      console.error("Veri çekme hatası:", error);
       toast.error("Veriler yüklenirken bir hata oluştu.");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- JPEG İndirme Fonksiyonu ---
+  // --- GÜNCELLENMİŞ İNDİRME FONKSİYONU (html2canvas) ---
   const handleDownload = useCallback(async () => {
-    if (paperRef.current === null) return;
+    if (!paperRef.current) return;
     
     setDownloading(true);
     try {
-      // Kaliteyi artırmak için pixelRatio ve quality ayarları
-      const dataUrl = await toJpeg(paperRef.current, { 
-        quality: 0.95, 
-        backgroundColor: '#ffffff',
-        pixelRatio: 2 // Daha yüksek çözünürlük için
+      // html2canvas ile div'i yakala
+      const canvas = await html2canvas(paperRef.current, {
+        scale: 2, // Yüksek çözünürlük için (Retina ekran kalitesi)
+        useCORS: true, // Eğer logo/arkaplan başka domainden geliyorsa gerekli
+        backgroundColor: '#ffffff', // Şeffaf olmaması için beyaz zemin
+        logging: false, // Konsol kirliliğini önle
       });
       
+      // Canvas'ı resme çevir ve indir
+      const image = canvas.toDataURL("image/jpeg", 0.9); // 0.9 kalite
       const link = document.createElement('a');
       link.download = `kroki-${currentPlanId}-${format(new Date(), 'dd-MM-yyyy')}.jpg`;
-      link.href = dataUrl;
+      link.href = image;
       link.click();
-      toast.success("Kroki görseli indirildi.");
+      
+      toast.success("Kroki görseli başarıyla indirildi.");
     } catch (err) {
       console.error("Resim oluşturma hatası:", err);
-      toast.error("Resim oluşturulurken hata oluştu.");
+      toast.error("Görsel oluşturulurken bir hata oluştu.");
     } finally {
       setDownloading(false);
     }
@@ -286,20 +289,20 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
           )}
         </div>
 
-        {/* Sağ Taraf: Zoom ve İndirme */}
+        {/* Sağ Taraf */}
         <div className="flex items-center gap-3 w-full md:w-auto justify-end">
           
           {/* İndirme Butonu */}
           <button 
             onClick={handleDownload}
             disabled={downloading}
-            className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors disabled:opacity-50 shadow-sm"
           >
             {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             <span className="hidden sm:inline">JPEG İndir</span>
           </button>
 
-          {/* Zoom Kontrolleri */}
+          {/* Zoom */}
           <div className="flex items-center gap-1 bg-gray-100 rounded p-1 border">
             <button onClick={() => setScale(s => Math.max(0.3, s - 0.1))} className="p-1 hover:bg-white rounded text-gray-600">
               <ZoomOut size={16} />
@@ -318,7 +321,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
       {/* --- Canvas Container --- */}
       <div className="flex-1 w-full overflow-auto bg-gray-200/50 p-8 flex justify-center items-start">
         
-        {/* --- THE PAPER (Resim Çıktısı Alınacak Alan) --- */}
+        {/* --- THE PAPER --- */}
         <div 
           ref={paperRef}
           className="bg-white shadow-2xl relative transition-transform duration-200 ease-out origin-top"
@@ -330,18 +333,23 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
           }}
         >
           
-          {/* 1. Header (Logo & Bilgi) */}
+          {/* Header */}
           <div className="absolute top-0 left-0 right-0 h-24 bg-white/95 border-b px-8 flex justify-between items-center z-20">
             <div className="flex items-center gap-5">
               {companySettings?.logo_url ? (
-                <img src={companySettings.logo_url} className="h-16 object-contain max-w-[200px]" alt="Logo" />
+                // CORS hatasını önlemek için crossOrigin="anonymous" eklendi
+                <img 
+                  src={companySettings.logo_url} 
+                  className="h-16 object-contain max-w-[200px]" 
+                  alt="Logo" 
+                  crossOrigin="anonymous" 
+                />
               ) : (
                 <div className="h-16 flex flex-col justify-center">
                    <h1 className="text-xl font-bold uppercase text-gray-900">{companySettings?.company_name || 'İlaçlama Firması'}</h1>
                 </div>
               )}
               
-              {/* Logo varsa ismi gizleyip sadece şube bilgisini gösterebiliriz veya ikisini de gösterebiliriz */}
               {companySettings?.logo_url && (
                 <div>
                   <h1 className="text-lg font-bold uppercase text-gray-800">{companySettings.company_name}</h1>
@@ -365,7 +373,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
             </div>
           </div>
 
-          {/* 2. Drawing Area (SVG) */}
+          {/* Drawing Area */}
           <div className="absolute top-24 bottom-16 left-0 right-0 bg-gray-50 overflow-hidden">
             
             {currentPlan.background_url ? (
@@ -373,6 +381,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
                 src={currentPlan.background_url} 
                 className="absolute top-0 left-0 w-full h-full object-contain opacity-90 pointer-events-none select-none"
                 alt="Plan Arkaplan"
+                crossOrigin="anonymous"
               />
             ) : (
                <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
@@ -380,7 +389,6 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
 
             <svg width="100%" height="100%" className="absolute top-0 left-0">
               
-              {/* Elemanlar */}
               {currentPlan.elements.map((el) => (
                 <g key={el.id} transform={`translate(${el.x}, ${el.y})`}>
                   {el.type === 'wall' && <rect width={normalize(el.width)} height={normalize(el.height)} fill="#334155" />}
@@ -398,7 +406,6 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
                 </g>
               ))}
 
-              {/* Ekipmanlar */}
               {Object.entries(currentPlan.equipment_positions).map(([eqId, pos]) => {
                 const eqInfo = equipments.find(e => e.id === eqId);
                 const isActive = activeEquipmentIds.has(eqId);
@@ -406,7 +413,6 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
                 return (
                   <g key={eqId} transform={`translate(${pos.x}, ${pos.y})`}>
                     
-                    {/* Aktivite Animasyonu */}
                     {isActive && (
                       <circle cx="0" cy="0" r="14" className="blinking-dot" fill="none" />
                     )}
@@ -433,7 +439,7 @@ const FloorPlanViewer: React.FC<ViewerProps> = ({ branchId }) => {
             </svg>
           </div>
 
-          {/* 3. Footer */}
+          {/* Footer */}
           <div className="absolute bottom-0 left-0 right-0 h-16 bg-white border-t flex justify-between items-center px-8 text-xs text-gray-500 z-20">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-blue-50 text-blue-600 rounded-full">
