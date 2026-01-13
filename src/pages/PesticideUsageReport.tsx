@@ -1,14 +1,16 @@
 // src/pages/PesticideUsageReport.tsx
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, Download, Calendar, Bug, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Download, Calendar, Bug, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import html2canvas from 'html2canvas';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-// import { useAuth } from '../components/Auth/AuthProvider'; // <-- KULLANILMIYOR
-import { localAuth } from '../lib/localAuth'; // ✅ DÜZELTME: Sadece localAuth kullanılıyor
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { localAuth } from '../lib/localAuth';
+import { toast } from 'sonner';
+
+// 
 
 // Rapor verisinin arayüzü
 interface PesticideUsage {
@@ -39,85 +41,55 @@ const PesticideUsageReport: React.FC = () => {
   const [userRole, setUserRole] = useState<'customer' | 'branch' | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
 
-  const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'));
+  // Varsayılan tarih aralığı: Son 3 ay (Veri görebilmek için genişletildi)
+  const [startDate, setStartDate] = useState(format(new Date(new Date().setMonth(new Date().getMonth() - 3)), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  
   const [companySettings, setCompanySettings] = useState<CompanySettings>({ company_name: 'İlaçlamatik', logo_url: '', website: 'www.ilaclamatik.com' });
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // 1. Aşama: Kullanıcı profili bulma (SADECE localAuth kullanarak)
+  // 1. Profil ve Ayarları Getir
   useEffect(() => {
-    const fetchUserProfile = () => {
+    const fetchInitData = async () => {
       setIsProfileLoading(true);
       try {
-        // ✅ DÜZELTME: Profil tespiti localAuth'tan yapılıyor
+        // Profil Tespiti
         const localSession = localAuth.getSession();
         
-        if (localSession && localSession.type === 'customer') {
+        if (localSession?.type === 'customer' && localSession.id) {
           setUserRole('customer');
-          // localAuth.ts'nizin 'id' (Müşteri UUID) sakladığını varsayıyoruz.
-          if (!localSession.id) {
-             setError("localAuth oturumunda profil ID (localSession.id) bulunamadı. Lütfen Login.tsx veya localAuth.ts dosyanızı kontrol edin.");
-             return;
-          }
           setProfileId(localSession.id);
-
-        } else if (localSession && localSession.type === 'branch') {
+        } else if (localSession?.type === 'branch' && localSession.id) {
           setUserRole('branch');
-           // localAuth.ts'nizin 'id' (Şube UUID) sakladığını varsayıyoruz.
-          if (!localSession.id) {
-             setError("localAuth oturumunda profil ID (localSession.id) bulunamadı. Lütfen Login.tsx veya localAuth.ts dosyanızı kontrol edin.");
-             return;
-          }
           setProfileId(localSession.id);
-
         } else {
-          setError('Geçerli bir Müşteri veya Şube oturumu (localAuth) bulunamadı.');
+          setError('Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.');
         }
 
+        // Şirket Ayarları
+        const { data } = await supabase.from('company_settings').select('company_name, logo_url, website').single();
+        if (data) {
+          setCompanySettings({
+            company_name: data.company_name || 'İlaçlamatik',
+            logo_url: data.logo_url || '',
+            website: data.website || ''
+          });
+        }
       } catch (err: any) {
-        console.error("Profil alınırken hata oluştu:", err);
-        setError(`Profil bilgisi alınamadı: ${err.message}`);
+        console.error("Başlangıç verisi hatası:", err);
       } finally {
-        setIsProfileLoading(false); // Profil yüklemesi bitti
+        setIsProfileLoading(false);
       }
     };
 
-    fetchUserProfile();
-    fetchCompanySettings();
-  }, []); // Sadece sayfa yüklendiğinde bir kez çalışır
+    fetchInitData();
+  }, []);
 
-  const fetchCompanySettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('company_settings')
-        .select('company_name, logo_url, website')
-        .eq('id', 1)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        setCompanySettings({
-          company_name: data.company_name || 'İlaçlamatik',
-          logo_url: data.logo_url || '',
-          website: data.website || 'www.ilaclamatik.com'
-        });
-      }
-    } catch (err: any) {
-      console.error('Şirket ayarları yüklenirken hata:', err);
-    }
-  };
-
-  // 2. Aşama: Rapor verisini çek
+  // 2. Rapor Verisini Çek
   const fetchReportData = useCallback(async () => {
-    if (isProfileLoading || !profileId || !userRole) {
-      if (!isProfileLoading && !profileId) {
-          setError(prevError => prevError || "Raporu getirmek için profil ID bulunamadı.");
-      }
-      return;
-    }
-
+    if (isProfileLoading || !profileId || !userRole) return;
     if (!startDate || !endDate) {
-      setError("Lütfen geçerli bir tarih aralığı seçin.");
+      toast.error("Lütfen tarih aralığı seçin.");
       return;
     }
 
@@ -126,50 +98,51 @@ const PesticideUsageReport: React.FC = () => {
     setReportData([]); 
 
     try {
-      // ADIM 1: Önce tarih aralığına ve role uyan ZİYARET ID'lerini bul.
+      console.log("1. Rapor sorgusu başlıyor...", { userRole, profileId, startDate, endDate });
+
+      // ADIM 1: İlgili Ziyaretleri Bul
       let visitQuery = supabase
         .from('visits')
         .select('id') 
         .gte('visit_date', startDate) 
         .lte('visit_date', new Date(endDate + 'T23:59:59').toISOString())
-        .eq('status', 'completed');
+        .eq('status', 'completed'); // Sadece tamamlanmış ziyaretler
 
       if (userRole === 'customer') {
-        const { data: branches, error: branchError } = await supabase
-            .from('branches')
-            .select('id')
-            .eq('customer_id', profileId);
-
-        if (branchError) throw branchError;
-
-        const branchIds = branches.map(b => b.id);
-        visitQuery = visitQuery.or(
-            `customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',') || 'null'})`
-        );
-
-      } else { // userRole === 'branch'
+        // Müşteriye ait şubeleri bul
+        const { data: branches } = await supabase.from('branches').select('id').eq('customer_id', profileId);
+        const branchIds = branches?.map(b => b.id) || [];
+        
+        // Hem müşteri ID'si hem de şube ID'leri ile eşleşen ziyaretler (Supabase OR syntax)
+        if (branchIds.length > 0) {
+           visitQuery = visitQuery.or(`customer_id.eq.${profileId},branch_id.in.(${branchIds.join(',')})`);
+        } else {
+           visitQuery = visitQuery.eq('customer_id', profileId);
+        }
+      } else {
         visitQuery = visitQuery.eq('branch_id', profileId);
       }
 
       const { data: visitsData, error: visitsError } = await visitQuery;
+
       if (visitsError) throw visitsError;
+      
+      console.log(`2. Bulunan Ziyaret Sayısı: ${visitsData?.length || 0}`);
 
       if (!visitsData || visitsData.length === 0) {
+        toast.info("Seçilen tarih aralığında tamamlanmış ziyaret bulunamadı.");
         setReportData([]); 
         return; 
       }
 
       const visitIds = visitsData.map(v => v.id);
 
-      // ADIM 2: 'biocidal_products_usage' tablosunu bu ZİYARET ID'leri ile sorgula.
-      const { data, error: queryError } = await supabase
+      // ADIM 2: Kullanılan Ürünleri Bul
+      // NOT: Veritabanı ilişkileri (Foreign Keys) doğru kurulmuş olmalı.
+      const { data: usageData, error: usageError } = await supabase
         .from('biocidal_products_usage')
         .select(`
-          id,
-          created_at,
-          quantity,
-          unit,
-          dosage,
+          id, created_at, quantity, unit, dosage,
           product:biocidal_products (name, active_ingredient),
           operator:operators (name),
           customer:customers (kisa_isim),
@@ -179,411 +152,222 @@ const PesticideUsageReport: React.FC = () => {
         .in('visit_id', visitIds)
         .order('created_at', { ascending: false });
 
-      if (queryError) throw queryError;
-
-      if (!data || data.length === 0) {
-        console.log('Pestisit Raporu - Hiç veri bulunamadı');
-        setReportData([]);
-        return;
+      if (usageError) {
+        console.error("Biyosidal veri hatası:", usageError);
+        throw usageError;
       }
 
-      const formattedData = data.map(item => ({
+      console.log(`3. Bulunan Kullanım Kaydı: ${usageData?.length || 0}`, usageData);
+
+      if (!usageData || usageData.length === 0) {
+        // Veri yoksa uyar ama hata fırlatma
+        console.warn("Ziyaret var ancak 'biocidal_products_usage' tablosunda kayıt yok.");
+      }
+
+      const formattedData = (usageData || []).map(item => ({
         id: item.id,
         created_at: item.created_at,
-        product_name: item.product?.name || 'Bilinmeyen Ürün',
-        active_ingredient: item.product?.active_ingredient || null,
-        quantity: item.quantity,
-        unit: item.unit,
-        dosage: item.dosage,
-        customer_name: item.customer?.kisa_isim || 'N/A',
-        branch_name: item.branch?.sube_adi || null,
-        operator_name: item.operator?.name || 'N/A',
+        // Eğer ilişki null dönerse 'Silinmiş Ürün' yazsın
+        product_name: item.product?.name || 'Belirtilmemiş Ürün', 
+        active_ingredient: item.product?.active_ingredient || '-',
+        quantity: item.quantity || 0,
+        unit: item.unit || 'adet',
+        dosage: item.dosage || '-',
+        customer_name: item.customer?.kisa_isim || '-',
+        branch_name: item.branch?.sube_adi || '-',
+        operator_name: item.operator?.name || '-',
         visit_date: item.visit?.visit_date || item.created_at,
       }));
 
-      console.log('Pestisit Raporu - Ham Veri:', data);
-      console.log('Pestisit Raporu - Formatlanmış Veri:', formattedData);
       setReportData(formattedData);
 
     } catch (err: any) {
-      console.error('Rapor verisi alınırken hata:', err);
-      setError(err.message);
+      console.error('Rapor hatası:', err);
+      setError("Veriler çekilirken bir hata oluştu. Lütfen konsolu kontrol edin.");
+      toast.error("Veri hatası: " + err.message);
     } finally {
       setIsReportLoading(false); 
     }
   }, [profileId, userRole, startDate, endDate, isProfileLoading]);
 
-  // Raporu otomatik çekmek için
-  useEffect(() => {
-    if (!isProfileLoading && profileId) {
-      fetchReportData();
-    }
-  }, [isProfileLoading, profileId, fetchReportData, startDate, endDate]); 
+  // Sayfa açılınca veya filtre değişince otomatik çekme
+  // useEffect(() => {
+  //   if (!isProfileLoading && profileId) {
+  //     fetchReportData();
+  //   }
+  // }, [isProfileLoading, profileId]); 
+  // NOT: Otomatik çekmeyi kapattım, butona basınca çeksin, performans için daha iyi.
 
   const exportToExcel = () => {
     const dataToExport = reportData.map(item => ({
       'Tarih': format(new Date(item.visit_date), 'dd/MM/yyyy'),
-      'Müşteri': item.customer_name,
-      'Şube': item.branch_name || '-',
-      'Ürün Adı': item.product_name,
-      'Aktif Madde': item.active_ingredient || '-',
-      'Doz': item.dosage || '-',
-      'Miktar': item.quantity !== null && item.quantity !== undefined ? item.quantity : 0,
-      'Birim': item.unit || 'adet',
-      'Uygulayan Operatör': item.operator_name,
+      'Şube': item.branch_name,
+      'Ürün': item.product_name,
+      'Aktif Madde': item.active_ingredient,
+      'Miktar': `${item.quantity} ${item.unit}`,
+      'Doz': item.dosage,
+      'Uygulayan': item.operator_name,
     }));
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Pestisit Kullanım Raporu');
-    XLSX.writeFile(wb, `Pestisit_Kullanim_Raporu_${startDate}_${endDate}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Rapor');
+    XLSX.writeFile(wb, `Pestisit_Rapor_${startDate}.xlsx`);
   };
 
-  // Grafik verilerini hazırla
   const chartData = useMemo(() => {
-    if (reportData.length === 0) return { daily: [], monthly: [], yearly: [] };
-
-    const dailyMap = new Map<string, number>();
-    const monthlyMap = new Map<string, number>();
-    const yearlyMap = new Map<string, number>();
-
+    if (reportData.length === 0) return [];
+    
+    // Ürün bazlı toplam kullanım miktarları
+    const productMap = new Map<string, number>();
+    
     reportData.forEach(item => {
-      try {
-        if (!item.visit_date) return;
-
-        const date = new Date(item.visit_date);
-        if (isNaN(date.getTime())) return;
-
-        const dayKey = format(date, 'dd/MM/yyyy');
-        const monthKey = format(date, 'MM/yyyy');
-        const yearKey = format(date, 'yyyy');
-        const quantity = item.quantity || 0;
-
-        dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + quantity);
-        monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + quantity);
-        yearlyMap.set(yearKey, (yearlyMap.get(yearKey) || 0) + quantity);
-      } catch (err) {
-        console.error('Tarih parse hatası:', item.visit_date, err);
-      }
+      const current = productMap.get(item.product_name) || 0;
+      productMap.set(item.product_name, current + item.quantity);
     });
 
-    return {
-      daily: Array.from(dailyMap.entries())
-        .map(([date, total]) => ({ date, total }))
-        .sort((a, b) => a.date.localeCompare(b.date)),
-      monthly: Array.from(monthlyMap.entries())
-        .map(([date, total]) => ({ date, total }))
-        .sort((a, b) => a.date.localeCompare(b.date)),
-      yearly: Array.from(yearlyMap.entries())
-        .map(([date, total]) => ({ date, total }))
-        .sort((a, b) => a.date.localeCompare(b.date))
-    };
+    return Array.from(productMap.entries()).map(([name, total]) => ({
+      name,
+      total
+    }));
   }, [reportData]);
 
   const exportToJPEG = async () => {
     if (!reportRef.current) return;
-
     try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 3,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        imageTimeout: 0,
-      });
-
-      const imageData = canvas.toDataURL('image/jpeg', 0.95);
+      const canvas = await html2canvas(reportRef.current, { scale: 2, backgroundColor: '#fff' });
       const link = document.createElement('a');
-      const fileName = `Pestisit_Raporu_${startDate}_${endDate}.jpg`;
-
-      link.download = fileName;
-      link.href = imageData;
+      link.download = `Rapor-${startDate}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.9);
       link.click();
-    } catch (err) {
-      console.error('JPEG export hatası:', err);
-      setError('JPEG olarak dışa aktarma başarısız oldu.');
-    }
+    } catch (e) { console.error(e); }
   };
 
-  const isLoading = isProfileLoading || isReportLoading;
-
-  // JSX (Görünüm)
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h2 className="text-2xl font-semibold flex items-center gap-3">
-          <Bug className="w-7 h-7 text-green-700" />
-          Pestisit Kullanım Raporu
+      
+      {/* --- Header --- */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+        <h2 className="text-2xl font-bold flex items-center gap-2 text-gray-800">
+          <Bug className="text-green-600" /> Biyosidal Ürün Kullanım Raporu
         </h2>
         <div className="flex gap-2">
-          <button
-            onClick={exportToJPEG}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
-            disabled={isLoading || reportData.length === 0}
-          >
-            <ImageIcon size={20} />
-            JPEG
+          <button onClick={exportToJPEG} disabled={reportData.length === 0} className="btn-secondary flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50">
+            <ImageIcon size={18} /> JPEG
           </button>
-          <button
-            onClick={exportToExcel}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-            disabled={isLoading || reportData.length === 0}
-          >
-            <Download size={20} />
-            Excel
+          <button onClick={exportToExcel} disabled={reportData.length === 0} className="btn-primary flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50">
+            <Download size={18} /> Excel
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md p-4 space-y-4">
-        <h3 className="font-medium">Filtreler</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label htmlFor="start-date" className="block text-sm font-medium text-gray-700 mb-1">Başlangıç Tarihi</label>
-            <input
-              type="date"
-              id="start-date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-            />
-          </div>
-          <div>
-            <label htmlFor="end-date" className="block text-sm font-medium text-gray-700 mb-1">Bitiş Tarihi</label>
-            <input
-              type="date"
-              id="end-date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg"
-            />
-          </div>
-          <div className="self-end">
-            <button
-              onClick={fetchReportData} 
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-              disabled={isLoading} 
-            >
-              {isLoading ? <Loader2 className="animate-spin" /> : <Calendar size={20} />}
-              Raporu Getir
-            </button>
-          </div>
+      {/* --- Filtreler --- */}
+      <div className="bg-white p-4 rounded-lg shadow-sm border grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Başlangıç</label>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-2 border rounded" />
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Bitiş</label>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-2 border rounded" />
+        </div>
+        <button 
+          onClick={fetchReportData} 
+          disabled={isReportLoading || isProfileLoading}
+          className="w-full p-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex justify-center items-center gap-2 disabled:bg-gray-400"
+        >
+          {isReportLoading ? <Loader2 className="animate-spin" /> : <Calendar size={18} />}
+          Raporu Getir
+        </button>
       </div>
 
-      {/* Hata mesajı */}
-      {!isLoading && error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
-          Hata: {error}
+      {/* --- Uyarı / Hata Alanı --- */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 text-red-700">
+          <p className="font-bold">Hata</p>
+          <p>{error}</p>
         </div>
       )}
 
-      {/* Yükleniyor durumu */}
-      {isLoading && (
-        <div className="flex justify-center items-center p-8">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
-          <span className="ml-3 text-gray-600">
-            {isProfileLoading ? "Profil doğrulanıyor..." : "Rapor yükleniyor..."}
-          </span>
-        </div>
-      )}
-
-      {/* Rapor Tablosu */}
-      {!isLoading && !error && (
-        <div ref={reportRef} className="bg-white rounded-lg shadow-md overflow-hidden">
-          {/* Rapor Başlığı - Profesyonel Görünüm */}
-          <div className="p-8 bg-gradient-to-r from-green-50 to-blue-50 border-b-4 border-green-600">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
-                {companySettings.logo_url && (
-                  <img
-                    src={companySettings.logo_url}
-                    alt={`${companySettings.company_name} Logo`}
-                    className="h-16 w-auto object-contain"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                )}
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-800">{companySettings.company_name}</h1>
-                  <p className="text-sm text-gray-600">Profesyonel Pest Kontrol Hizmetleri</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-600">Rapor Tarihi</p>
-                <p className="text-lg font-semibold text-gray-800">
-                  {format(new Date(), 'dd/MM/yyyy', { locale: tr })}
-                </p>
-              </div>
-            </div>
-
-            <div className="border-t border-green-200 pt-4">
-              <h2 className="text-2xl font-bold text-green-800 mb-3 flex items-center gap-2">
-                <Bug className="w-6 h-6" />
-                BİYOSİDAL ÜRÜN KULLANIM RAPORU
-              </h2>
-
-              <div className="grid grid-cols-1 gap-2 text-sm">
-                <div>
-                  <span className="font-semibold text-gray-700">Rapor Dönemi:</span>
-                  <span className="ml-2 text-gray-900">
-                    {format(new Date(startDate), 'dd/MM/yyyy', { locale: tr })} - {format(new Date(endDate), 'dd/MM/yyyy', { locale: tr })}
-                  </span>
-                </div>
-              </div>
+      {/* --- Rapor İçeriği --- */}
+      <div ref={reportRef} className="bg-white rounded-lg shadow-lg overflow-hidden min-h-[400px]">
+        
+        {/* Rapor Header (Logo vs) */}
+        <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            {companySettings.logo_url && (
+              <img src={companySettings.logo_url} alt="Logo" className="h-12 object-contain" crossOrigin="anonymous" />
+            )}
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">{companySettings.company_name}</h1>
+              <p className="text-xs text-gray-500">Kullanım Detay Raporu</p>
             </div>
           </div>
+          <div className="text-right">
+             <div className="text-sm text-gray-500">Dönem</div>
+             <div className="font-semibold">{format(new Date(startDate), 'dd.MM.yyyy')} - {format(new Date(endDate), 'dd.MM.yyyy')}</div>
+          </div>
+        </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-green-700">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Tarih</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Lokasyon</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Biyosidal Ürün</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Aktif Madde</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Doz</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Miktar</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Uygulayan Operatör</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {reportData.length === 0 ? (
+        {/* --- Veri Tablosu veya Boş Durum --- */}
+        {isReportLoading ? (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+            <Loader2 className="w-10 h-10 animate-spin mb-2 text-blue-500" />
+            <p>Veriler işleniyor...</p>
+          </div>
+        ) : reportData.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+            <AlertTriangle className="w-12 h-12 mb-2 opacity-50" />
+            <p>Bu tarih aralığında kayıtlı pestisit kullanımı bulunamadı.</p>
+            <p className="text-sm mt-1">Lütfen tarihi genişletmeyi veya 'biocidal_products_usage' tablosunu kontrol etmeyi deneyin.</p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-100">
                   <tr>
-                    <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                      Belirtilen tarihler arasında pestisit kullanımı bulunamadı.
-                    </td>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Tarih</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Şube</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Ürün</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Aktif Madde</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Miktar</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase">Uygulayan</th>
                   </tr>
-                ) : (
-                  reportData.map((item, index) => (
-                    <tr key={item.id} className={`hover:bg-green-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
-                        {format(new Date(item.visit_date), 'dd/MM/yyyy')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        {item.branch_name || item.customer_name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                          {item.product_name}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {item.active_ingredient || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {item.dosage || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className="font-bold text-green-700 text-base">
-                          {item.quantity !== null && item.quantity !== undefined ? item.quantity : '0'}
-                        </span>
-                        {' '}
-                        <span className="text-gray-600 font-medium">
-                          {item.unit || 'adet'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {item.operator_name}
-                      </td>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {reportData.map((row) => (
+                    <tr key={row.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-900">{format(new Date(row.visit_date), 'dd.MM.yyyy')}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{row.branch_name}</td>
+                      <td className="px-6 py-4 text-sm text-blue-600 font-medium">{row.product_name}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{row.active_ingredient}</td>
+                      <td className="px-6 py-4 text-sm text-gray-800 font-bold">{row.quantity} <span className="text-xs font-normal text-gray-500">{row.unit}</span></td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{row.operator_name}</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {/* Kullanım Grafikleri */}
-          {reportData.length > 0 && (
-            <div className="p-6 bg-white border-t">
-              <h3 className="text-xl font-bold text-gray-800 mb-6">Biyosidal Ürün Kullanım İstatistikleri</h3>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Günlük Kullanım */}
-                {chartData.daily.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Günlük Kullanım</h4>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={chartData.daily}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 10 }}
-                          angle={-45}
-                          textAnchor="end"
-                          height={80}
-                        />
-                        <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip />
-                        <Bar dataKey="total" fill="#16a34a" name="Toplam Miktar" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* Aylık Kullanım */}
-                {chartData.monthly.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Aylık Kullanım</h4>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={chartData.monthly}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 10 }}
-                          angle={-45}
-                          textAnchor="end"
-                          height={80}
-                        />
-                        <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip />
-                        <Bar dataKey="total" fill="#2563eb" name="Toplam Miktar" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* Yıllık Kullanım */}
-                {chartData.yearly.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Yıllık Kullanım</h4>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={chartData.yearly}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 12 }}
-                        />
-                        <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip />
-                        <Bar dataKey="total" fill="#dc2626" name="Toplam Miktar" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
+            {/* --- Grafikler --- */}
+            <div className="p-6 border-t bg-gray-50">
+              <h3 className="font-bold text-gray-700 mb-4">Ürün Bazlı Tüketim Özeti</h3>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{fontSize: 12}} />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} name="Miktar" />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
-          )}
-
-          {reportData.length > 0 && (
-            <div className="p-6 bg-gradient-to-r from-green-50 to-blue-50 border-t-2 border-green-600">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Toplam Kayıt Sayısı</p>
-                  <p className="text-2xl font-bold text-green-700">{reportData.length}</p>
-                </div>
-                <div className="text-right text-sm text-gray-600">
-                  <p>Bu rapor {companySettings.company_name} tarafından</p>
-                  <p>elektronik ortamda oluşturulmuştur.</p>
-                  <p className="mt-2 font-semibold">{companySettings.website}</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
