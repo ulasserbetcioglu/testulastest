@@ -26,6 +26,7 @@
     "react": "^18.2.0",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
+    "react-dnd-touch-backend": "^16.0.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
     "react-native-safe-area-context": "^5.6.2",
