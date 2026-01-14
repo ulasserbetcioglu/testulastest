@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { AlertCircle, Search, Filter, Download, CheckCircle, Clock, X } from 'lucide-react';
+import { AlertCircle, Search, Filter, Download, CheckCircle, Clock, X, Image as ImageIcon, ExternalLink } from 'lucide-react';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
 import * as XLSX from 'xlsx';
 
@@ -24,6 +24,7 @@ interface CorrectiveAction {
   related_standard: string;
   status: 'open' | 'in_progress' | 'completed' | 'verified';
   created_at: string;
+  photo_url: string | null; // Yeni eklenen alan
 }
 
 const CorrectiveActions: React.FC = () => {
@@ -54,20 +55,10 @@ const CorrectiveActions: React.FC = () => {
         .from('operators')
         .select('id')
         .eq('auth_id', user.id)
-        .single();
+        .maybeSingle(); // maybeSingle hata fırlatmaz, null döner
 
-      if (!operatorData) throw new Error('Operatör kaydı bulunamadı');
-
-      // Get visits for this operator
-      const { data: visitsData } = await supabase
-        .from('visits')
-        .select('id')
-        .eq('operator_id', operatorData.id);
-
-      const visitIds = visitsData?.map(v => v.id) || [];
-
-      // Get all corrective actions created by this operator or related to their visits
-      const { data, error } = await supabase
+      // Eğer operatör değilse (Admin ise) tüm kayıtları görebilsin diye logic'i esnetiyoruz
+      let query = supabase
         .from('corrective_actions')
         .select(`
           id,
@@ -83,11 +74,26 @@ const CorrectiveActions: React.FC = () => {
           related_standard,
           status,
           created_at,
+          photo_url,
           customer:customer_id (kisa_isim),
           branch:branch_id (sube_adi)
         `)
-        .or(`created_by.eq.${user.id},visit_id.in.(${visitIds.join(',')})`)
         .order('created_at', { ascending: false });
+
+      // Sadece operatör ise filtrele
+      if (operatorData) {
+        const { data: visitsData } = await supabase
+          .from('visits')
+          .select('id')
+          .eq('operator_id', operatorData.id);
+        
+        const visitIds = visitsData?.map(v => v.id) || [];
+        
+        // Operatörün oluşturdukları VEYA operatörün ziyaretlerine bağlı olanlar
+        query = query.or(`created_by.eq.${user.id},visit_id.in.(${visitIds.length > 0 ? visitIds.join(',') : 'null'})`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setActions(data || []);
@@ -122,104 +128,48 @@ const CorrectiveActions: React.FC = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'open':
-        return (
-          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs flex items-center">
-            <Clock className="w-3 h-3 mr-1" />
-            Açık
-          </span>
-        );
+        return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs flex items-center w-fit"><Clock className="w-3 h-3 mr-1" /> Açık</span>;
       case 'in_progress':
-        return (
-          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center">
-            <Clock className="w-3 h-3 mr-1" />
-            Devam Ediyor
-          </span>
-        );
+        return <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center w-fit"><Clock className="w-3 h-3 mr-1" /> Devam Ediyor</span>;
       case 'completed':
-        return (
-          <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Tamamlandı
-          </span>
-        );
+        return <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center w-fit"><CheckCircle className="w-3 h-3 mr-1" /> Tamamlandı</span>;
       case 'verified':
-        return (
-          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs flex items-center">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Doğrulandı
-          </span>
-        );
+        return <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs flex items-center w-fit"><CheckCircle className="w-3 h-3 mr-1" /> Doğrulandı</span>;
       default:
         return null;
     }
   };
 
   const getNonComplianceTypeBadge = (type: string) => {
-    switch (type) {
-      case 'kritik':
-        return (
-          <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">
-            Kritik
-          </span>
-        );
-      case 'major':
-        return (
-          <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">
-            Majör
-          </span>
-        );
-      case 'minor':
-        return (
-          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
-            Minör
-          </span>
-        );
-      default:
-        return null;
-    }
-  };
+    const types: Record<string, { label: string, color: string }> = {
+      'kritik': { label: 'Kritik', color: 'bg-red-100 text-red-800' },
+      'major': { label: 'Majör', color: 'bg-orange-100 text-orange-800' },
+      'minor': { label: 'Minör', color: 'bg-yellow-100 text-yellow-800' },
+      'kemirgen': { label: 'Kemirgen', color: 'bg-gray-100 text-gray-800' },
+      'yuruyen': { label: 'Yürüyen Haşere', color: 'bg-amber-100 text-amber-800' },
+      'uckun': { label: 'Uçkun Haşere', color: 'bg-sky-100 text-sky-800' },
+      'ambar': { label: 'Ambar Zararlısı', color: 'bg-brown-100 text-brown-800' }, // Custom color class might need Tailwind config
+      'surungen': { label: 'Sürüngen', color: 'bg-emerald-100 text-emerald-800' },
+      'yapisal': { label: 'Yapısal', color: 'bg-slate-100 text-slate-800' },
+      'hijyen': { label: 'Hijyen', color: 'bg-teal-100 text-teal-800' },
+      'depolama': { label: 'Depolama', color: 'bg-indigo-100 text-indigo-800' },
+      'dis_alan': { label: 'Dış Alan', color: 'bg-lime-100 text-lime-800' },
+    };
 
-  const getStandardBadge = (standard: string) => {
-    switch (standard) {
-      case 'haccp':
-        return (
-          <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-            HACCP
-          </span>
-        );
-      case 'brc':
-        return (
-          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-            BRC
-          </span>
-        );
-      case 'aib':
-        return (
-          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
-            AIB
-          </span>
-        );
-      case 'iso22000':
-        return (
-          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
-            ISO 22000
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">
-            Diğer
-          </span>
-        );
-    }
+    const info = types[type] || { label: type, color: 'bg-gray-100 text-gray-800' };
+
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${info.color}`}>
+        {info.label}
+      </span>
+    );
   };
 
   const exportToExcel = () => {
     const data = filteredActions.map(action => ({
       'Müşteri': action.customer.kisa_isim,
       'Şube': action.branch?.sube_adi || '-',
-      'Uygunsuzluk Tipi': action.non_compliance_type === 'kritik' ? 'Kritik' : 
-                         action.non_compliance_type === 'major' ? 'Majör' : 'Minör',
+      'Uygunsuzluk Tipi': action.non_compliance_type,
       'Uygunsuzluk Tanımı': action.non_compliance_description,
       'Kök Neden Analizi': action.root_cause_analysis,
       'Düzeltici Faaliyet': action.corrective_action,
@@ -229,9 +179,10 @@ const CorrectiveActions: React.FC = () => {
       'Tamamlanma Tarihi': action.completion_date ? new Date(action.completion_date).toLocaleDateString('tr-TR') : '-',
       'İlgili Standart': action.related_standard.toUpperCase(),
       'Durum': action.status === 'open' ? 'Açık' : 
-              action.status === 'in_progress' ? 'Devam Ediyor' : 
-              action.status === 'completed' ? 'Tamamlandı' : 'Doğrulandı',
-      'Oluşturma Tarihi': new Date(action.created_at).toLocaleDateString('tr-TR')
+               action.status === 'in_progress' ? 'Devam Ediyor' : 
+               action.status === 'completed' ? 'Tamamlandı' : 'Doğrulandı',
+      'Oluşturma Tarihi': new Date(action.created_at).toLocaleDateString('tr-TR'),
+      'Fotoğraf': action.photo_url ? 'Var' : 'Yok'
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -257,24 +208,24 @@ const CorrectiveActions: React.FC = () => {
     return matchesSearch && matchesStatus && matchesStandard && matchesStartDate && matchesEndDate;
   });
 
-  if (loading) return <div>Yükleniyor...</div>;
-  if (error) return <div>Hata: {error}</div>;
+  if (loading) return <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
+  if (error) return <div className="p-4 bg-red-50 text-red-700 rounded-lg">Hata: {error}</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <h1 className="text-2xl font-bold text-gray-800">DÜZELTİCİ ÖNLEYİCİ FAALİYETLER</h1>
         <div className="flex gap-2">
           <button
             onClick={exportToExcel}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm"
           >
             <Download size={20} />
-            Excel
+            <span className="hidden sm:inline">Excel</span>
           </button>
           <button
             onClick={() => setShowActionModal(true)}
-            className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2 shadow-sm"
           >
             <AlertCircle size={20} />
             Yeni DÖF
@@ -282,21 +233,21 @@ const CorrectiveActions: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Ara..."
+              placeholder="Müşteri, şube veya içerik ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             />
             <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${showFilters ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-300 hover:bg-gray-50'}`}
           >
             <Filter className="w-5 h-5" />
             Filtrele
@@ -304,17 +255,15 @@ const CorrectiveActions: React.FC = () => {
         </div>
 
         {showFilters && (
-          <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Durum
-              </label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Durum</label>
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
               >
-                <option value="">Tüm Durumlar</option>
+                <option value="">Tümü</option>
                 <option value="open">Açık</option>
                 <option value="in_progress">Devam Ediyor</option>
                 <option value="completed">Tamamlandı</option>
@@ -323,15 +272,13 @@ const CorrectiveActions: React.FC = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Standart
-              </label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Standart</label>
               <select
                 value={selectedStandard}
                 onChange={(e) => setSelectedStandard(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
               >
-                <option value="">Tüm Standartlar</option>
+                <option value="">Tümü</option>
                 <option value="haccp">HACCP</option>
                 <option value="brc">BRC</option>
                 <option value="aib">AIB</option>
@@ -341,131 +288,97 @@ const CorrectiveActions: React.FC = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Başlangıç Tarihi
-              </label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Başlangıç Tarihi</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Bitiş Tarihi
-              </label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Bitiş Tarihi</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
               />
             </div>
           </div>
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Müşteri/Şube
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Uygunsuzluk
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sorumlu
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Termin
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Standart
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Durum
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  İşlemler
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Müşteri/Şube</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uygunsuzluk</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sorumlu</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Termin</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Fotoğraf</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredActions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                    Düzeltici önleyici faaliyet bulunamadı
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    <div className="flex flex-col items-center justify-center">
+                      <AlertCircle className="w-12 h-12 text-gray-300 mb-2" />
+                      <p>Kayıt bulunamadı</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 filteredActions.map((action) => (
-                  <tr key={action.id} className="hover:bg-gray-50">
+                  <tr key={action.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {action.customer.kisa_isim}
-                      </div>
-                      {action.branch && (
-                        <div className="text-sm text-gray-500">
-                          {action.branch.sube_adi}
-                        </div>
-                      )}
+                      <div className="text-sm font-medium text-gray-900">{action.customer.kisa_isim}</div>
+                      {action.branch && <div className="text-xs text-gray-500">{action.branch.sube_adi}</div>}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center">
+                      <div className="flex flex-col gap-1">
                         {getNonComplianceTypeBadge(action.non_compliance_type)}
-                        <span className="ml-2 text-sm text-gray-900 line-clamp-1">
+                        <span className="text-sm text-gray-600 line-clamp-1" title={action.non_compliance_description}>
                           {action.non_compliance_description}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
+                    <td className="px-6 py-4 text-sm text-gray-600">
                       {action.responsible}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-600">
                       {new Date(action.due_date).toLocaleDateString('tr-TR')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {getStandardBadge(action.related_standard)}
+                    <td className="px-6 py-4 text-center">
+                      {action.photo_url ? (
+                        <ImageIcon size={18} className="text-blue-500 mx-auto" />
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       {getStatusBadge(action.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
+                      <div className="flex justify-end gap-2">
                         <button
                           onClick={() => setSelectedAction(action)}
-                          className="text-green-600 hover:text-green-900"
+                          className="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-xs"
                         >
                           Detay
                         </button>
+                        {/* Hızlı Aksiyon Butonları */}
                         {action.status === 'open' && (
-                          <button
-                            onClick={() => handleUpdateStatus(action.id, 'in_progress')}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            Başlat
-                          </button>
+                          <button onClick={() => handleUpdateStatus(action.id, 'in_progress')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs">Başlat</button>
                         )}
                         {action.status === 'in_progress' && (
-                          <button
-                            onClick={() => handleUpdateStatus(action.id, 'completed')}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Tamamla
-                          </button>
-                        )}
-                        {action.status === 'completed' && (
-                          <button
-                            onClick={() => handleUpdateStatus(action.id, 'verified')}
-                            className="text-purple-600 hover:text-purple-900"
-                          >
-                            Doğrula
-                          </button>
+                          <button onClick={() => handleUpdateStatus(action.id, 'completed')} className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-xs">Tamamla</button>
                         )}
                       </div>
                     </td>
@@ -477,143 +390,135 @@ const CorrectiveActions: React.FC = () => {
         </div>
       </div>
 
-      {/* Düzeltici Önleyici Faaliyet Modal */}
       <CorrectiveActionModal
         isOpen={showActionModal}
         onClose={() => setShowActionModal(false)}
         onSave={fetchActions}
       />
 
-      {/* Action Detail Modal */}
+      {/* DETAY MODALI */}
       {selectedAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Düzeltici Önleyici Faaliyet Detayı</h2>
-              <button
-                onClick={() => setSelectedAction(null)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={24} />
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+            <div className="flex justify-between items-center p-5 border-b sticky top-0 bg-white z-10">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">DÖF Detayı</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm text-gray-500">{new Date(selectedAction.created_at).toLocaleDateString('tr-TR')}</span>
+                  {getStatusBadge(selectedAction.status)}
+                </div>
+              </div>
+              <button onClick={() => setSelectedAction(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <X size={24} className="text-gray-500" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-6 space-y-6">
+              
+              {/* Lokasyon Bilgisi */}
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Müşteri</h3>
-                  <p className="mt-1">{selectedAction.customer.kisa_isim}</p>
+                  <h3 className="text-xs font-bold text-gray-500 uppercase mb-1">Müşteri</h3>
+                  <p className="font-medium text-gray-900">{selectedAction.customer.kisa_isim}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Şube</h3>
-                  <p className="mt-1">{selectedAction.branch?.sube_adi || '-'}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Uygunsuzluk Tipi</h3>
-                  <div className="mt-1">{getNonComplianceTypeBadge(selectedAction.non_compliance_type)}</div>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">İlgili Standart</h3>
-                  <div className="mt-1">{getStandardBadge(selectedAction.related_standard)}</div>
+                  <h3 className="text-xs font-bold text-gray-500 uppercase mb-1">Şube</h3>
+                  <p className="font-medium text-gray-900">{selectedAction.branch?.sube_adi || '-'}</p>
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Uygunsuzluk Tanımı</h3>
-                <p className="mt-1 text-gray-700 bg-gray-50 p-2 rounded">
-                  {selectedAction.non_compliance_description}
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Kök Neden Analizi</h3>
-                <p className="mt-1 text-gray-700 bg-gray-50 p-2 rounded">
-                  {selectedAction.root_cause_analysis}
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Düzeltici Faaliyet</h3>
-                <p className="mt-1 text-gray-700 bg-gray-50 p-2 rounded">
-                  {selectedAction.corrective_action}
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Önleyici Faaliyet</h3>
-                <p className="mt-1 text-gray-700 bg-gray-50 p-2 rounded">
-                  {selectedAction.preventive_action}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              {/* FOTOĞRAF ALANI (YENİ) */}
+              {selectedAction.photo_url && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500">Sorumlu</h3>
-                  <p className="mt-1">{selectedAction.responsible}</p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Termin Tarihi</h3>
-                  <p className="mt-1">{new Date(selectedAction.due_date).toLocaleDateString('tr-TR')}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500">Durum</h3>
-                  <div className="mt-1">{getStatusBadge(selectedAction.status)}</div>
-                </div>
-                {selectedAction.completion_date && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-500">Tamamlanma Tarihi</h3>
-                    <p className="mt-1">{new Date(selectedAction.completion_date).toLocaleDateString('tr-TR')}</p>
+                  <h3 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+                    <ImageIcon size={18} className="text-blue-600" />
+                    Kanıt Fotoğrafı
+                  </h3>
+                  <div className="relative group rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                    <img 
+                      src={selectedAction.photo_url} 
+                      alt="DÖF Kanıt" 
+                      className="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <a 
+                      href={selectedAction.photo_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="absolute top-3 right-3 bg-white/90 p-2 rounded-full shadow-lg hover:bg-blue-600 hover:text-white transition-colors"
+                      title="Tam boy görüntüle"
+                    >
+                      <ExternalLink size={18} />
+                    </a>
                   </div>
-                )}
+                </div>
+              )}
+
+              {/* Detaylar */}
+              <div className="space-y-4">
+                <div className="p-4 rounded-lg border border-red-100 bg-red-50/50">
+                  <h3 className="text-sm font-bold text-red-800 mb-1">Uygunsuzluk Tanımı ({selectedAction.non_compliance_type})</h3>
+                  <p className="text-sm text-gray-800 leading-relaxed">{selectedAction.non_compliance_description}</p>
+                </div>
+
+                <div className="p-4 rounded-lg border border-orange-100 bg-orange-50/50">
+                  <h3 className="text-sm font-bold text-orange-800 mb-1">Kök Neden Analizi</h3>
+                  <p className="text-sm text-gray-800 leading-relaxed">{selectedAction.root_cause_analysis}</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-lg border border-blue-100 bg-blue-50/50">
+                    <h3 className="text-sm font-bold text-blue-800 mb-1">Düzeltici Faaliyet</h3>
+                    <p className="text-sm text-gray-800">{selectedAction.corrective_action}</p>
+                  </div>
+                  <div className="p-4 rounded-lg border border-green-100 bg-green-50/50">
+                    <h3 className="text-sm font-bold text-green-800 mb-1">Önleyici Faaliyet</h3>
+                    <p className="text-sm text-gray-800">{selectedAction.preventive_action}</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <button
-                  onClick={() => setSelectedAction(null)}
-                  className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-                >
-                  Kapat
-                </button>
-                {selectedAction.status === 'open' && (
-                  <button
-                    onClick={() => {
-                      handleUpdateStatus(selectedAction.id, 'in_progress');
-                      setSelectedAction(null);
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    Başlat
-                  </button>
-                )}
-                {selectedAction.status === 'in_progress' && (
-                  <button
-                    onClick={() => {
-                      handleUpdateStatus(selectedAction.id, 'completed');
-                      setSelectedAction(null);
-                    }}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                  >
-                    Tamamla
-                  </button>
-                )}
-                {selectedAction.status === 'completed' && (
-                  <button
-                    onClick={() => {
-                      handleUpdateStatus(selectedAction.id, 'verified');
-                      setSelectedAction(null);
-                    }}
-                    className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-                  >
-                    Doğrula
-                  </button>
-                )}
+              {/* Alt Bilgiler */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm border-t pt-4">
+                <div>
+                  <span className="block text-xs text-gray-500 font-semibold uppercase">Sorumlu</span>
+                  <span className="text-gray-900">{selectedAction.responsible}</span>
+                </div>
+                <div>
+                  <span className="block text-xs text-gray-500 font-semibold uppercase">Termin</span>
+                  <span className="text-gray-900">{new Date(selectedAction.due_date).toLocaleDateString('tr-TR')}</span>
+                </div>
+                <div>
+                  <span className="block text-xs text-gray-500 font-semibold uppercase">Standart</span>
+                  <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-medium">{selectedAction.related_standard.toUpperCase()}</span>
+                </div>
+                <div>
+                  <span className="block text-xs text-gray-500 font-semibold uppercase">Tamamlanma</span>
+                  <span className="text-gray-900">{selectedAction.completion_date ? new Date(selectedAction.completion_date).toLocaleDateString('tr-TR') : '-'}</span>
+                </div>
               </div>
+
+            </div>
+
+            <div className="p-5 border-t bg-gray-50 flex justify-end gap-3 sticky bottom-0">
+              <button
+                onClick={() => setSelectedAction(null)}
+                className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm shadow-sm"
+              >
+                Kapat
+              </button>
+              {selectedAction.status !== 'verified' && (
+                <button
+                  onClick={() => {
+                    const nextStatus = selectedAction.status === 'open' ? 'in_progress' : 
+                                     selectedAction.status === 'in_progress' ? 'completed' : 'verified';
+                    handleUpdateStatus(selectedAction.id, nextStatus);
+                    setSelectedAction(null);
+                  }}
+                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm shadow-md"
+                >
+                  Sonraki Aşamaya Geç
+                </button>
+              )}
             </div>
           </div>
         </div>
