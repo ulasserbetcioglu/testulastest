@@ -6,11 +6,12 @@ import { tr } from 'date-fns/locale';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { 
   Search, Filter, Plus, X, ChevronLeft, ChevronRight, Calendar, Trash2, User, 
-  FileImage, FileText, Menu, List, Grid, CheckCircle, Copy, Building, Users, AlertCircle 
+  FileImage, FileText, Menu, List, Grid, CheckCircle, Copy, Building, Users, AlertCircle, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
 
 // --- TİP TANIMLARI ---
 const ItemTypes = {
@@ -288,7 +289,7 @@ const AdminCalendarPlanning = () => {
 
   // Modals
   const [bulkAddModalOpen, setBulkAddModalOpen] = useState(false);
-  const [transferModalOpen, setTransferModalOpen] = useState(false); // Yeni Modal State
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState<Date | null>(null);
 
   const calendarRef = useRef(null);
@@ -322,7 +323,6 @@ const AdminCalendarPlanning = () => {
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
 
-      // Sadece gerekli verileri çek
       const [custData, branchData, opData, visitData] = await Promise.all([
         supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
         supabase.from('branches').select('id, customer_id, sube_adi, customers(kisa_isim)').order('sube_adi'),
@@ -337,7 +337,6 @@ const AdminCalendarPlanning = () => {
       setBranches(branchData.data?.map(b => ({ ...b, customer: b.customers })) || []);
       setOperators(opData.data || []);
       
-      // Operatör filtresi varsa client-side filtrele
       let vData = visitData.data || [];
       if (selectedOperator) {
         vData = vData.filter(v => v.operator_id === selectedOperator);
@@ -363,10 +362,8 @@ const AdminCalendarPlanning = () => {
         const { error } = await supabaseAdmin.from('visits').update({ visit_date: dateStr }).eq('id', item.id);
         if (error) throw error;
         toast.success('Ziyaret taşındı');
-        // Optimistic update
         setVisits(prev => prev.map(v => v.id === item.id ? { ...v, visit_date: dateStr } : v));
       } else {
-        // Yeni oluşturma
         if (!selectedOperator) return toast.error('Önce bir operatör seçin!');
         createVisitBatch([{
           customer_id: item.type === 'branch' ? item.customer_id : item.id,
@@ -410,21 +407,18 @@ const AdminCalendarPlanning = () => {
     createVisitBatch(newVisits);
   };
 
-  // --- GÜNCELLENMİŞ AKTARIM MANTIĞI ---
   const handleTransferSubmit = async ({ operatorId, customerId, branchId }) => {
     setIsTransferring(true);
     try {
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
       
-      // 1. Sorguyu Dinamik Oluştur
       let query = supabase
         .from('visits')
-        .select('customer_id, branch_id, visit_date, visit_type, operator_id') // operator_id'yi de çekiyoruz
+        .select('customer_id, branch_id, visit_date, visit_type, operator_id')
         .gte('visit_date', start.toISOString())
         .lte('visit_date', end.toISOString());
 
-      // Filtreleri Uygula
       if (operatorId) query = query.eq('operator_id', operatorId);
       if (customerId) query = query.eq('customer_id', customerId);
       if (branchId) query = query.eq('branch_id', branchId);
@@ -453,7 +447,7 @@ const AdminCalendarPlanning = () => {
           newVisitsPayload.push({
             customer_id: visit.customer_id,
             branch_id: visit.branch_id,
-            operator_id: visit.operator_id, // Kaynaktaki operatörü koru (veya yeni bir mantık eklenebilir)
+            operator_id: visit.operator_id,
             visit_date: format(targetDate, 'yyyy-MM-dd'),
             visit_type: visit.visit_type,
             status: 'planned'
@@ -480,6 +474,73 @@ const AdminCalendarPlanning = () => {
     await supabaseAdmin.from('visits').delete().eq('id', id);
     setVisits(prev => prev.filter(v => v.id !== id));
     toast.success('Silindi');
+  };
+
+  // --- EXCEL TAKVİM EXPORT (GELİŞMİŞ FORMAT) ---
+  const exportCalendarToExcel = async () => {
+    if (!selectedOperator) return toast.error('Lütfen Excel çıktısı için bir operatör seçin.');
+
+    const operatorName = operators.find(o => o.id === selectedOperator)?.name || 'Bilinmeyen';
+    const monthName = format(currentDate, 'MMMM yyyy', { locale: tr });
+    const rows = [];
+
+    rows.push([`${operatorName} - ${monthName} Ziyaret Takvimi`]);
+    rows.push([]);
+
+    // Gün Başlıkları
+    const daysHeader = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+    rows.push(daysHeader);
+
+    // Takvim Oluşturma
+    const start = startOfMonth(currentDate);
+    const end = endOfMonth(currentDate);
+    const days = eachDayOfInterval({ start, end });
+
+    let currentWeek = new Array(7).fill(""); 
+    let startDayIndex = getDay(start) - 1; 
+    if (startDayIndex === -1) startDayIndex = 6;
+
+    days.forEach((day, index) => {
+        const dayIndex = (startDayIndex + index) % 7;
+        
+        const dayVisits = visits.filter(v => 
+            v.operator_id === selectedOperator && 
+            isSameDay(parseISO(v.visit_date), day)
+        );
+
+        let cellContent = `📅 ${format(day, 'd')}\n`;
+        if (dayVisits.length > 0) cellContent += '────────────────\n';
+        
+        dayVisits.forEach(v => {
+            const customer = v.customer?.kisa_isim || 'Müşteri';
+            const branch = v.branch ? v.branch.sube_adi : '';
+            const status = v.status === 'completed' ? ' ✅' : '';
+            
+            // Alt alta düzen (Müşteri \n Şube)
+            cellContent += `🔸 ${customer}${status}\n`;
+            if (branch) {
+                cellContent += `     📍 ${branch}\n`;
+            }
+            cellContent += `\n`; // Boşluk
+        });
+
+        currentWeek[dayIndex] = cellContent;
+
+        if (dayIndex === 6 || index === days.length - 1) {
+            rows.push([...currentWeek]);
+            currentWeek = new Array(7).fill("");
+        }
+    });
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+
+    // Sütun Genişliği (Print için geniş)
+    worksheet['!cols'] = Array(7).fill({ wch: 35 });
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Ziyaret Takvimi");
+    XLSX.writeFile(workbook, `Ziyaret_Takvimi_${operatorName}_${monthName}.xlsx`);
+    toast.success('Excel takvimi indirildi.');
   };
 
   const handleExport = async (type) => {
@@ -552,13 +613,17 @@ const AdminCalendarPlanning = () => {
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isTransferring ? <span className="animate-spin">⏳</span> : <Copy size={16} />}
-              <span className="hidden md:inline">Sonraki Aya Aktar</span>
+              <span className="hidden md:inline">Sonraki Ay</span>
             </button>
             <div className="bg-gray-100 p-1 rounded-xl flex">
               <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><Grid size={18}/></button>
               <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><List size={18}/></button>
             </div>
-            <button onClick={() => handleExport('pdf')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="PDF İndir"><FileText size={20}/></button>
+            
+            <div className="flex gap-1">
+                <button onClick={() => handleExport('pdf')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="PDF İndir"><FileText size={20}/></button>
+                <button onClick={exportCalendarToExcel} disabled={!selectedOperator} className="p-2 text-green-600 hover:bg-green-50 rounded-lg disabled:opacity-50" title="Excel Takvim İndir"><FileSpreadsheet size={20}/></button>
+            </div>
           </div>
         </div>
 
