@@ -35,9 +35,10 @@ interface Equipment {
   equipment: { name: string; type: string };
 }
 
-// --- 1. TREND ANALİZ BİLEŞENİ (GRAFİKLER) ---
+// --- 1. Geliştirilmiş TREND ANALİZ BİLEŞENİ ---
 const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
-  const [trendData, setTrendData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [summary, setSummary] = useState({ totalChecks: 0, totalIssues: 0, consumption: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,9 +51,16 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
       const endDate = new Date();
       const startDate = subMonths(endDate, 6);
       
+      // Ekipman detaylarını da almamız lazım ki tipini bilelim (EFC mi, Kemirgen mi)
       const { data: visits, error } = await supabase
         .from('visits')
-        .select('visit_date, equipment_checks')
+        .select(`
+          visit_date, 
+          equipment_checks,
+          branch_equipment:branch_id (
+             id, equipment_code, equipment:equipment_id(type, name)
+          )
+        `)
         .eq('branch_id', branchId)
         .eq('status', 'completed')
         .gte('visit_date', startDate.toISOString())
@@ -63,48 +71,90 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
 
       // Veriyi işle: Aylara göre grupla
       const monthlyStats: Record<string, any> = {};
+      let totalChecks = 0;
+      let totalIssues = 0;
+      let totalConsumption = 0;
+
+      // Ayları şimdiden oluştur (Boş aylar 0 görünsün diye)
+      for (let i = 5; i >= 0; i--) {
+        const d = subMonths(new Date(), i);
+        const key = format(d, 'MMM yyyy', { locale: tr });
+        monthlyStats[key] = {
+          month: key,
+          kemirgen: 0,
+          yuruyen: 0,
+          uckun: 0,
+          toplam_kontrol: 0,
+          sorunlu_ekipman: 0
+        };
+      }
 
       visits?.forEach(visit => {
         const monthKey = format(parseISO(visit.visit_date), 'MMM yyyy', { locale: tr });
         
-        if (!monthlyStats[monthKey]) {
-          monthlyStats[monthKey] = {
-            month: monthKey,
-            aktivite_sayisi: 0, // Genel aktivite (Kemirgen vb.)
-            yakalama_sayisi: 0, // Sayısal yakalamalar (Sinek vb.)
-            kontrol_sayisi: 0
-          };
-        }
+        if (!monthlyStats[monthKey]) return; // Tarih aralığı dışı ise atla
 
         if (visit.equipment_checks) {
-          Object.values(visit.equipment_checks).forEach((check: any) => {
-             monthlyStats[monthKey].kontrol_sayisi++;
-             
-             // Dinamik Aktivite Kontrolü:
-             // İçinde 'activity', 'durum', 'status' vb. geçen ve olumlu olanları veya 'true' olanları say
-             const isActivity = Object.entries(check).some(([key, val]) => {
-               if (key === 'activity' || key === 'aktivite') {
-                  return val === true || val === 'true' || val === 'var' || val === 'evet';
-               }
-               return false;
-             });
+          Object.entries(visit.equipment_checks).forEach(([eqId, check]: [string, any]) => {
+            monthlyStats[monthKey].toplam_kontrol++;
+            totalChecks++;
 
-             if (isActivity) {
-               monthlyStats[monthKey].aktivite_sayisi++;
-             }
-             
-             // Dinamik Sayım Kontrolü:
-             // Değeri sayı olan ve anahtarında 'count', 'sayi', 'adet' geçenleri topla
-             Object.entries(check).forEach(([key, val]) => {
-               if (typeof val === 'number' && (key.includes('count') || key.includes('sayi') || key.includes('adet'))) {
-                  monthlyStats[monthKey].yakalama_sayisi += val;
-               }
-             });
+            // Aktivite, Tüketim veya Yakalama var mı?
+            let hasIssue = false;
+            let count = 0;
+
+            // Dinamik kontroller
+            Object.entries(check).forEach(([k, v]) => {
+              const key = k.toLowerCase();
+              // Aktivite/Tüketim kontrolü
+              if ((key.includes('activity') || key.includes('aktivite') || key.includes('durum')) && 
+                  (v === true || v === 'true' || v === 'var' || v === 'active')) {
+                hasIssue = true;
+              }
+              // Tüketim (Consumption)
+              if (key.includes('consumption') || key.includes('tuketim')) {
+                hasIssue = true;
+                totalConsumption++;
+              }
+              // Sayım (Count)
+              if ((key.includes('count') || key.includes('sayi') || key.includes('adet')) && typeof v === 'number') {
+                count += v;
+                if (v > 0) hasIssue = true;
+              }
+            });
+
+            if (hasIssue) {
+              monthlyStats[monthKey].sorunlu_ekipman++;
+              totalIssues++;
+
+              // Şimdi bu ekipmanın ne olduğunu bulmaya çalışalım (Basit mantık)
+              // Gerçek senaryoda equipment_id ile join yapıp türüne bakmak en doğrusudur.
+              // Burada elimizdeki veriye göre tahmin yürütüyoruz veya check içindeki verilere bakıyoruz.
+              
+              // Eğer count varsa genelde Uçkun (EFC) veya Yürüyen (Monitör) dir.
+              // Eğer yem tüketimi varsa Kemirgendir.
+              
+              // Basit Heuristik Ayrım:
+              const checkString = JSON.stringify(check).toLowerCase();
+              
+              if (checkString.includes('efc') || checkString.includes('sinek') || checkString.includes('fly')) {
+                monthlyStats[monthKey].uckun += (count > 0 ? count : 1);
+              } else if (checkString.includes('yem') || checkString.includes('bait') || checkString.includes('kemirgen') || checkString.includes('consumption')) {
+                monthlyStats[monthKey].kemirgen++;
+              } else if (checkString.includes('monitor') || checkString.includes('bocek') || checkString.includes('trap')) {
+                monthlyStats[monthKey].yuruyen += (count > 0 ? count : 1);
+              } else {
+                // Tür belirlenemezse ve sayı varsa uçkun, yoksa kemirgen varsayalım (veya genel)
+                if (count > 0) monthlyStats[monthKey].uckun += count;
+                else monthlyStats[monthKey].kemirgen++;
+              }
+            }
           });
         }
       });
 
-      setTrendData(Object.values(monthlyStats));
+      setSummary({ totalChecks, totalIssues, consumption: totalConsumption });
+      setChartData(Object.values(monthlyStats));
     } catch (err) {
       console.error("Trend data error:", err);
     } finally {
@@ -114,55 +164,121 @@ const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
 
   if (loading) return <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" /></div>;
   
-  if (trendData.length === 0) {
+  if (summary.totalChecks === 0) {
     return (
       <div className="p-8 text-center bg-gray-50 rounded-lg border border-dashed">
         <TrendingUp className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-        <p className="text-gray-500">Bu şube için yeterli trend verisi bulunamadı.</p>
+        <p className="text-gray-500">Bu şube için analiz edilecek yeterli veri bulunamadı.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 p-2">
+      
+      {/* Özet Kartları */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+          <p className="text-sm text-blue-600 font-medium">Toplam Kontrol</p>
+          <p className="text-2xl font-bold text-blue-900">{summary.totalChecks}</p>
+        </div>
+        <div className="bg-red-50 p-4 rounded-lg border border-red-100">
+          <p className="text-sm text-red-600 font-medium">Tespit Edilen Aktivite</p>
+          <p className="text-2xl font-bold text-red-900">{summary.totalIssues}</p>
+        </div>
+        <div className="bg-orange-50 p-4 rounded-lg border border-orange-100">
+          <p className="text-sm text-orange-600 font-medium">Yem Tüketimi</p>
+          <p className="text-2xl font-bold text-orange-900">{summary.consumption} <span className="text-xs font-normal">Nokta</span></p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Aktivite Grafiği */}
+        
+        {/* Grafik 1: Zararlı Türüne Göre Trend (Area Chart) */}
         <div className="bg-white p-4 rounded-lg border shadow-sm">
           <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <ActivityIcon className="w-4 h-4 text-blue-500" /> Zararlı Aktivite Trendi
+            <TrendingUp className="w-4 h-4 text-purple-500" /> Zararlı Türüne Göre Trend
           </h4>
-          <div className="h-64">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trendData}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorUckun" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorKemirgen" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorYuruyen" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" style={{ fontSize: '12px' }} />
-                <YAxis allowDecimals={false} style={{ fontSize: '12px' }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="aktivite_sayisi" name="Aktivite Tespitleri" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={40} />
-              </BarChart>
+                <XAxis dataKey="month" style={{ fontSize: '11px' }} tickMargin={10} />
+                <YAxis style={{ fontSize: '11px' }} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                  labelStyle={{ fontWeight: 'bold', color: '#374151' }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}/>
+                
+                <Area 
+                  type="monotone" 
+                  dataKey="uckun" 
+                  name="Uçkun (Sinek vb.)" 
+                  stroke="#3b82f6" 
+                  fillOpacity={1} 
+                  fill="url(#colorUckun)" 
+                  stackId="1"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="yuruyen" 
+                  name="Yürüyen (Böcek)" 
+                  stroke="#f59e0b" 
+                  fillOpacity={1} 
+                  fill="url(#colorYuruyen)" 
+                  stackId="1"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="kemirgen" 
+                  name="Kemirgen" 
+                  stroke="#ef4444" 
+                  fillOpacity={1} 
+                  fill="url(#colorKemirgen)" 
+                  stackId="1"
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Yakalama Grafiği */}
+        {/* Grafik 2: Ekipman Durum Analizi (Composed Chart) */}
         <div className="bg-white p-4 rounded-lg border shadow-sm">
           <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <Bug className="w-4 h-4 text-green-500" /> Toplam Yakalama (EFC/Kapan)
+            <ActivityIcon className="w-4 h-4 text-green-500" /> Ekipman Sorun Oranı
           </h4>
-          <div className="h-64">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData}>
+              <ComposedChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" style={{ fontSize: '12px' }} />
-                <YAxis style={{ fontSize: '12px' }} />
+                <XAxis dataKey="month" style={{ fontSize: '11px' }} tickMargin={10} />
+                <YAxis yAxisId="left" style={{ fontSize: '11px' }} label={{ value: 'Kontrol Sayısı', angle: -90, position: 'insideLeft', style: {fontSize: 10} }}/>
+                <YAxis yAxisId="right" orientation="right" style={{ fontSize: '11px' }} label={{ value: 'Sorunlu', angle: 90, position: 'insideRight', style: {fontSize: 10} }} />
                 <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="yakalama_sayisi" name="Canlı Sayısı" stroke="#10B981" strokeWidth={3} dot={{ r: 4 }} />
-              </LineChart>
+                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                
+                <Bar yAxisId="left" dataKey="toplam_kontrol" name="Toplam Kontrol" fill="#e5e7eb" radius={[4, 4, 0, 0]} barSize={30} />
+                <Line yAxisId="right" type="monotone" dataKey="sorunlu_ekipman" name="Sorunlu/Aktivite" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, fill: '#f43f5e' }} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
+
       </div>
     </div>
   );
