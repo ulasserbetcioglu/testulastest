@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
 import { useNavigate } from 'react-router-dom';
-import { Search, Download, Calendar, CheckCircle, Clock, X, User, Building, FileText, Loader2, Info, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Search, Download, Calendar, CheckCircle, Clock, X, User, Building, FileText, Loader2, Info, ChevronLeft, ChevronRight, Eye, Image as ImageIcon, AlignLeft } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -20,6 +20,7 @@ interface Visit {
   operator: { name: string } | null;
 }
 
+// Detay arayüzünü yeni alanlarla güncelledik
 interface VisitDetail {
   id: string;
   visit_date: string;
@@ -27,6 +28,15 @@ interface VisitDetail {
   visit_type: string;
   report_number: string | null;
   notes: string | null;
+  
+  // Yeni eklenen alanlar
+  report_photo_url: string | null;
+  aciklama: string | null;
+  musteri_aciklamasi: string | null;
+  yonetici_notu: string | null;
+  yogunluk: string | null;
+  image_url: string | null;
+
   branch: { sube_adi: string } | null;
   operator: { name: string } | null;
   paid_materials: Array<{
@@ -76,8 +86,8 @@ const VisitCard: React.FC<{ visit: Visit; onViewDetails: (visitId: string) => vo
             </div>
             {visit.notes && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
-                     <p className="text-xs text-gray-400 font-semibold">NOTLAR</p>
-                     <p className="text-sm text-gray-600 mt-1 bg-gray-50 p-2 rounded-md">{visit.notes}</p>
+                      <p className="text-xs text-gray-400 font-semibold">NOTLAR</p>
+                      <p className="text-sm text-gray-600 mt-1 bg-gray-50 p-2 rounded-md">{visit.notes}</p>
                 </div>
             )}
             <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
@@ -92,7 +102,7 @@ const VisitCard: React.FC<{ visit: Visit; onViewDetails: (visitId: string) => vo
     );
 };
 
-// Modal for viewing visit details
+// Detay Modalı (Güncellenmiş)
 const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ visitId, onClose }) => {
     const [visitDetail, setVisitDetail] = useState<VisitDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -101,6 +111,7 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
         const fetchVisitDetail = async () => {
             try {
                 setLoading(true);
+                // Burada yeni eklenen sütunları da sorguya dahil ediyoruz
                 const { data: visitData, error: visitError } = await supabase
                     .from('visits')
                     .select(`
@@ -110,6 +121,12 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
                         visit_type,
                         report_number,
                         notes,
+                        report_photo_url,
+                        aciklama,
+                        musteri_aciklamasi,
+                        yonetici_notu,
+                        yogunluk,
+                        image_url,
                         branch:branch_id(sube_adi),
                         operator:operator_id(name)
                     `)
@@ -118,7 +135,6 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
 
                 if (visitError) throw visitError;
 
-                // Fetch paid material sales for this visit
                 const { data: salesData, error: salesError } = await supabase
                     .from('paid_material_sales')
                     .select('id')
@@ -128,7 +144,6 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
 
                 let materialsData: any[] = [];
 
-                // If there are sales, fetch the items with product details
                 if (salesData && salesData.length > 0) {
                     const saleIds = salesData.map(s => s.id);
 
@@ -145,7 +160,6 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
 
                     if (itemsError) throw itemsError;
 
-                    // Fetch product names for each item
                     materialsData = await Promise.all(
                         (itemsData || []).map(async (item) => {
                             const { data: product } = await supabase
@@ -182,10 +196,8 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
     if (loading) {
         return (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-xl p-8 max-w-2xl w-full">
-                    <div className="flex items-center justify-center">
-                        <Loader2 className="animate-spin" size={32} />
-                    </div>
+                <div className="bg-white rounded-xl p-8 max-w-2xl w-full flex justify-center">
+                    <Loader2 className="animate-spin" size={32} />
                 </div>
             </div>
         );
@@ -194,84 +206,131 @@ const VisitDetailModal: React.FC<{ visitId: string; onClose: () => void }> = ({ 
     if (!visitDetail) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800">Ziyaret Detayları</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div className="flex justify-between items-center mb-6 border-b pb-4">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-800">Ziyaret Detayları</h2>
+                        <p className="text-sm text-gray-500">Rapor No: {visitDetail.report_number || '-'}</p>
+                    </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                         <X size={24} />
                     </button>
                 </div>
 
-                <div className="space-y-6">
-                    {/* Basic Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-xs text-gray-500 font-semibold mb-1">ŞUBE</p>
-                            <p className="text-lg font-semibold">{visitDetail.branch?.sube_adi || 'Genel Merkez'}</p>
+                <div className="space-y-8">
+                    {/* Temel Bilgiler */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                            <p className="text-xs text-gray-500 font-semibold mb-1 flex items-center gap-1"><Building size={12}/> ŞUBE</p>
+                            <p className="text-lg font-semibold text-gray-800">{visitDetail.branch?.sube_adi || 'Genel Merkez'}</p>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-xs text-gray-500 font-semibold mb-1">TARİH</p>
-                            <p className="text-lg font-semibold">{format(new Date(visitDetail.visit_date), 'dd MMMM yyyy, HH:mm', { locale: tr })}</p>
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                            <p className="text-xs text-gray-500 font-semibold mb-1 flex items-center gap-1"><Calendar size={12}/> TARİH</p>
+                            <p className="text-lg font-semibold text-gray-800">{format(new Date(visitDetail.visit_date), 'dd MMMM yyyy, HH:mm', { locale: tr })}</p>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-xs text-gray-500 font-semibold mb-1">OPERATÖR</p>
-                            <p className="text-lg font-semibold">{visitDetail.operator?.name || 'Atanmadı'}</p>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-xs text-gray-500 font-semibold mb-1">ZİYARET TÜRÜ</p>
-                            <p className="text-lg font-semibold">{visitDetail.visit_type || 'Belirtilmemiş'}</p>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-xs text-gray-500 font-semibold mb-1">RAPOR NO</p>
-                            <p className="text-lg font-semibold font-mono">{visitDetail.report_number || '-'}</p>
-                        </div>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-xs text-gray-500 font-semibold mb-1">DURUM</p>
-                            <p className="text-lg font-semibold capitalize">{visitDetail.status === 'completed' ? 'Tamamlandı' : visitDetail.status === 'planned' ? 'Planlandı' : 'İptal Edildi'}</p>
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                            <p className="text-xs text-gray-500 font-semibold mb-1 flex items-center gap-1"><User size={12}/> OPERATÖR</p>
+                            <p className="text-lg font-semibold text-gray-800">{visitDetail.operator?.name || 'Atanmadı'}</p>
                         </div>
                     </div>
 
-                    {/* Notes */}
-                    {visitDetail.notes && (
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-xs text-gray-500 font-semibold mb-2">NOTLAR</p>
-                            <p className="text-sm text-gray-700">{visitDetail.notes}</p>
+                    {/* Ek Açıklamalar ve Yoğunluk (Yeni Eklenen Kısım) */}
+                    {(visitDetail.aciklama || visitDetail.musteri_aciklamasi || visitDetail.yonetici_notu || visitDetail.yogunluk) && (
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                <AlignLeft size={20} className="text-blue-600"/> Ek Bilgiler
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50 p-5 rounded-xl border border-blue-100">
+                                {visitDetail.yogunluk && (
+                                    <div className="md:col-span-2 border-b border-blue-200 pb-3 mb-2">
+                                        <p className="text-xs text-blue-600 font-bold uppercase mb-1">Zararlı Yoğunluğu</p>
+                                        <p className="text-md text-blue-900 font-medium">{visitDetail.yogunluk}</p>
+                                    </div>
+                                )}
+                                {visitDetail.aciklama && (
+                                    <div>
+                                        <p className="text-xs text-blue-600 font-bold uppercase mb-1">Genel Açıklama</p>
+                                        <p className="text-sm text-blue-900 leading-relaxed">{visitDetail.aciklama}</p>
+                                    </div>
+                                )}
+                                {visitDetail.musteri_aciklamasi && (
+                                    <div>
+                                        <p className="text-xs text-blue-600 font-bold uppercase mb-1">Müşteri Açıklaması</p>
+                                        <p className="text-sm text-blue-900 leading-relaxed">{visitDetail.musteri_aciklamasi}</p>
+                                    </div>
+                                )}
+                                {visitDetail.yonetici_notu && (
+                                    <div className="md:col-span-2 mt-2 bg-white bg-opacity-60 p-3 rounded-lg">
+                                        <p className="text-xs text-blue-600 font-bold uppercase mb-1">Yönetici Notu</p>
+                                        <p className="text-sm text-blue-900 italic">{visitDetail.yonetici_notu}</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
-                    {/* Paid Materials */}
-                    <div className="border-t pt-6">
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">Kullanılan Ücretli Malzemeler</h3>
+                    {/* Rapor Fotoğrafları (Yeni Eklenen Kısım) */}
+                    {(visitDetail.report_photo_url || visitDetail.image_url) && (
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                <ImageIcon size={20} className="text-purple-600"/> Rapor Görselleri
+                            </h3>
+                            <div className="flex flex-wrap gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                {visitDetail.report_photo_url && (
+                                    <div className="relative group cursor-pointer" onClick={() => window.open(visitDetail.report_photo_url!, '_blank')}>
+                                        <img
+                                            src={visitDetail.report_photo_url}
+                                            alt="Rapor Fotoğrafı"
+                                            className="h-48 w-auto object-cover rounded-lg shadow-sm group-hover:shadow-md transition-all group-hover:scale-105"
+                                        />
+                                        <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">Rapor Fotosu</div>
+                                    </div>
+                                )}
+                                {visitDetail.image_url && visitDetail.image_url !== visitDetail.report_photo_url && (
+                                    <div className="relative group cursor-pointer" onClick={() => window.open(visitDetail.image_url!, '_blank')}>
+                                        <img
+                                            src={visitDetail.image_url}
+                                            alt="Ek Fotoğraf"
+                                            className="h-48 w-auto object-cover rounded-lg shadow-sm group-hover:shadow-md transition-all group-hover:scale-105"
+                                        />
+                                        <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">Ek Görsel</div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Notlar */}
+                    {visitDetail.notes && (
+                        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                            <p className="text-xs text-yellow-700 font-semibold mb-2">ZİYARET NOTLARI</p>
+                            <p className="text-sm text-yellow-900">{visitDetail.notes}</p>
+                        </div>
+                    )}
+
+                    {/* Ücretli Malzemeler */}
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Kullanılan Malzemeler</h3>
                         {visitDetail.paid_materials.length > 0 ? (
                             <div className="space-y-3">
                                 {visitDetail.paid_materials.map((material) => (
-                                    <div key={material.id} className="bg-green-50 p-4 rounded-lg border border-green-200">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-semibold text-gray-800">{material.material_name}</p>
-                                                <p className="text-sm text-gray-600 mt-1">
-                                                    <span className="font-semibold">Adet:</span> {material.quantity} |
-                                                    <span className="font-semibold ml-2">Birim Fiyat:</span> {material.unit_price.toFixed(2)} ₺
-                                                </p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-xs text-gray-500">Toplam</p>
-                                                <p className="text-lg font-bold text-green-600">{material.total_price.toFixed(2)} ₺</p>
-                                            </div>
+                                    <div key={material.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                        <div>
+                                            <p className="font-semibold text-gray-800">{material.material_name}</p>
+                                            <p className="text-xs text-gray-500">{material.quantity} adet x {material.unit_price.toFixed(2)} ₺</p>
                                         </div>
+                                        <p className="font-bold text-gray-800">{material.total_price.toFixed(2)} ₺</p>
                                     </div>
                                 ))}
-                                <div className="bg-gray-800 p-4 rounded-lg text-white flex justify-between items-center">
-                                    <p className="font-semibold">GENEL TOPLAM</p>
-                                    <p className="text-2xl font-bold">
-                                        {visitDetail.paid_materials.reduce((sum, m) => sum + m.total_price, 0).toFixed(2)} ₺
-                                    </p>
+                                <div className="flex justify-between items-center bg-gray-800 text-white p-4 rounded-lg mt-2">
+                                    <p className="font-medium">TOPLAM TUTAR</p>
+                                    <p className="text-xl font-bold">{visitDetail.paid_materials.reduce((sum, m) => sum + m.total_price, 0).toFixed(2)} ₺</p>
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-center py-8 bg-gray-50 rounded-lg">
-                                <p className="text-gray-500">Bu ziyarette ücretli malzeme kullanılmamış</p>
+                            <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                                <p className="text-gray-500 text-sm">Bu ziyarette ücretli malzeme kullanılmamış.</p>
                             </div>
                         )}
                     </div>
@@ -285,23 +344,13 @@ const SkeletonLoader: React.FC = () => (
     <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
             <div key={i} className="p-5 rounded-xl shadow-lg bg-white animate-pulse">
-                <div className="flex justify-between items-start">
-                    <div className="space-y-2">
-                        <div className="h-6 bg-gray-200 rounded w-48"></div>
-                        <div className="h-4 bg-gray-200 rounded w-32"></div>
-                    </div>
-                    <div className="h-8 bg-gray-200 rounded-full w-24"></div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-3 gap-4">
-                    <div className="h-10 bg-gray-200 rounded"></div>
-                    <div className="h-10 bg-gray-200 rounded"></div>
-                    <div className="h-10 bg-gray-200 rounded"></div>
-                </div>
+                <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/4"></div>
             </div>
         ))}
     </div>
 );
-
 
 // --- ANA BİLEŞEN ---
 const CustomerVisits: React.FC = () => {
@@ -316,7 +365,8 @@ const CustomerVisits: React.FC = () => {
         startDate: '',
         endDate: '',
     });
-    // Sayfalama için state'ler
+    
+    // Sayfalama
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(20);
     const [totalVisits, setTotalVisits] = useState(0);
@@ -358,7 +408,6 @@ const CustomerVisits: React.FC = () => {
                     query = query.or(`branch.sube_adi.ilike.%${filters.searchTerm}%,operator.name.ilike.%${filters.searchTerm}%,notes.ilike.%${filters.searchTerm}%`);
                 }
 
-                // Sayfalama için .range() ekleniyor
                 query = query.range(from, to);
 
                 const { data, error, count } = await query;
@@ -377,14 +426,13 @@ const CustomerVisits: React.FC = () => {
     }, [customerId, filters, currentPage]);
 
     const handleFilterChange = (field: keyof typeof filters, value: string) => {
-        setCurrentPage(1); // Filtre değiştiğinde ilk sayfaya dön
+        setCurrentPage(1);
         setFilters(prev => ({ ...prev, [field]: value }));
     };
 
     const exportToExcel = async () => {
         toast.info("Tüm veriler Excel için hazırlanıyor...");
         try {
-            // Excel'e aktarmak için tüm verileri (sayfalama olmadan) çek
             let query = supabase
                 .from('visits')
                 .select(`visit_date, status, visit_type, report_number, notes, branch:branch_id(sube_adi), operator:operator_id(name)`)
@@ -462,12 +510,10 @@ const CustomerVisits: React.FC = () => {
                 </div>
             )}
 
-            {/* Visit Detail Modal */}
             {selectedVisitId && (
                 <VisitDetailModal visitId={selectedVisitId} onClose={() => setSelectedVisitId(null)} />
             )}
 
-            {/* Sayfalama Kontrolleri */}
             {totalPages > 1 && (
                 <div className="mt-8 flex justify-center items-center gap-4">
                     <button
