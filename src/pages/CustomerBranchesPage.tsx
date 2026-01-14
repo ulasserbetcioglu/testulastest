@@ -456,12 +456,109 @@ const BranchFloorPlanView = ({ branchId }: { branchId: string }) => (
   </div>
 );
 
-const BranchPesticideUsageView = ({ branchId }: { branchId: string }) => (
-  <div className="p-6 text-center text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg">
-    <Bug className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-    <p>Bu şube için pestisit kullanım raporu bulunamadı.</p>
-  </div>
-);
+const BranchPesticideUsageView = ({ branchId }: { branchId: string }) => {
+  const [usageData, setUsageData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUsage = async () => {
+      try {
+        setLoading(true);
+
+        // 1. Bu şubeye ait ziyaretleri bul
+        const { data: visits } = await supabase
+          .from('visits')
+          .select('id')
+          .eq('branch_id', branchId);
+
+        const visitIds = visits?.map(v => v.id) || [];
+
+        if (visitIds.length === 0) {
+          setUsageData([]);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Bu ziyaretlerde kullanılan biyosidal ürünleri çek
+        const { data, error } = await supabase
+          .from('biocidal_products_usage')
+          .select(`
+            id,
+            quantity,
+            unit,
+            created_at,
+            product:biocidal_products (name, active_ingredient),
+            visit:visits (visit_date)
+          `)
+          .in('visit_id', visitIds)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setUsageData(data || []);
+
+      } catch (error) {
+        console.error('Pestisit verisi çekilemedi:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (branchId) {
+      fetchUsage();
+    }
+  }, [branchId]);
+
+  if (loading) return <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" /></div>;
+
+  if (usageData.length === 0) {
+    return (
+      <div className="p-6 text-center text-gray-500 bg-white border border-dashed border-gray-300 rounded-lg">
+        <Bug className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+        <p>Bu şube için pestisit kullanım raporu bulunamadı.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {usageData.map((item) => (
+        <div key={item.id} className="p-3 bg-white border rounded-lg hover:bg-gray-50 transition-colors flex justify-between items-center">
+          
+          {/* Sol Taraf: Ürün Bilgisi ve Tarih */}
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-semibold text-gray-800 text-sm">
+                {item.product?.name || 'Bilinmeyen Ürün'}
+              </span>
+              <span className="text-xs text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full">
+                {item.product?.active_ingredient || '-'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <Calendar size={12} />
+                {item.visit?.visit_date 
+                  ? format(parseISO(item.visit.visit_date), 'dd MMM yyyy', { locale: tr })
+                  : format(parseISO(item.created_at), 'dd MMM yyyy', { locale: tr })
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* Sağ Taraf: Miktar */}
+          <div className="text-right">
+            <span className="block font-bold text-green-700 text-sm">
+              {item.quantity} {item.unit}
+            </span>
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider">Miktar</span>
+          </div>
+
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // Ziyaret Listesi
 const BranchVisitsList = ({ branchId }: { branchId: string }) => {
