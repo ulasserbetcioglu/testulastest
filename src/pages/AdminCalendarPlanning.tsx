@@ -568,7 +568,9 @@ const AdminCalendarPlanning = () => {
           scale: 2, // Yüksek çözünürlük
           backgroundColor: '#ffffff',
           logging: false,
-          useCORS: true
+          useCORS: true,
+          height: element.scrollHeight, // Tam yüksekliği al
+          windowHeight: element.scrollHeight // Pencere yüksekliğini de ayarla
         });
 
         const link = document.createElement('a');
@@ -644,7 +646,7 @@ const AdminCalendarPlanning = () => {
           <div className="hidden sm:block opacity-70 italic">Takvimdeki (+) butonuna tıklayarak hızlı ekleme yapabilirsiniz.</div>
         </div>
 
-        {/* ANA TAKVİM ALANI */}
+        {/* ANA İÇERİK */}
         <div className="flex-1 overflow-y-auto p-2 sm:p-4 custom-scrollbar bg-gray-50">
           
           {/* EKRAN İÇİN IZGARA GÖRÜNÜMÜ */}
@@ -729,11 +731,13 @@ const AdminCalendarPlanning = () => {
               ))}
 
               {eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) }).map((day) => (
-                <div key={day.toISOString()} className="border-r border-b border-gray-800 min-h-[180px] p-2 bg-white relative">
+                // DÜZELTME BURADA: min-h kaldırıldı, padding artırıldı (p-4), flex-col eklendi.
+                <div key={day.toISOString()} className="border-r border-b border-gray-800 p-4 bg-white relative flex flex-col">
                   <div className="absolute top-2 right-2 text-xl font-bold text-gray-400">{format(day, 'd')}</div>
-                  <div className="mt-6 flex flex-col gap-1">
+                  {/* DÜZELTME BURADA: mt-8 ile üst boşluk artırıldı */}
+                  <div className="mt-8 flex-1 flex flex-col gap-1.5">
                     {visits.filter(v => isSameDay(parseISO(v.visit_date), day)).map(visit => (
-                      <div key={visit.id} className="text-xs font-bold text-black uppercase leading-snug mb-1 truncate">
+                      <div key={visit.id} className="text-xs font-bold text-black uppercase leading-snug truncate">
                         {/* ALAN KAZANMAK İÇİN: ŞUBE VARSA ŞUBE ADI, YOKSA MÜŞTERİ ADI */}
                         {visit.branch ? `📍 ${visit.branch.sube_adi}` : `• ${visit.customer?.kisa_isim}`}
                       </div>
