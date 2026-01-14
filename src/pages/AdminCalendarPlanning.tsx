@@ -6,9 +6,11 @@ import { tr } from 'date-fns/locale';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { 
   Search, Filter, Plus, X, ChevronLeft, ChevronRight, Calendar, Trash2, User, 
-  Menu, List, Grid, CheckCircle, Copy, AlertCircle, Printer, ArrowLeft
+  Menu, List, Grid, CheckCircle, Copy, AlertCircle, Printer, ArrowLeft, FileText, FileImage
 } from 'lucide-react';
 import { toast } from 'sonner';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 // --- TİP TANIMLARI ---
 const ItemTypes = {
@@ -265,7 +267,7 @@ const DayCell = ({ date, onEventDrop, visits, onDeleteVisit, onQuickAdd }) => {
 // --- ANA SAYFA ---
 const AdminCalendarPlanning = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'print'>('grid');
   
   // YENİ STATE: Baskı Modu
   const [isPrintMode, setIsPrintMode] = useState(false);
@@ -285,6 +287,10 @@ const AdminCalendarPlanning = () => {
   const [bulkAddModalOpen, setBulkAddModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState<Date | null>(null);
+
+  // REF TANIMLAMALARI (HATAYI ÇÖZEN KISIM)
+  const calendarRef = useRef(null);
+  const printRef = useRef(null);
 
   useEffect(() => {
     checkAdmin();
@@ -429,6 +435,24 @@ const AdminCalendarPlanning = () => {
     toast.success('Silindi');
   };
 
+  const handleExport = async (type) => {
+    if (!calendarRef.current) return;
+    const canvas = await html2canvas(calendarRef.current, { scale: 2, backgroundColor: '#fff' });
+    if (type === 'png') {
+      const link = document.createElement('a');
+      link.download = 'takvim.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    } else {
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(canvas.toDataURL());
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      pdf.addImage(imgProps.data, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save('takvim.pdf');
+    }
+  };
+
   if (!isAdmin && !loading) return <div className="p-10 text-center text-red-500 font-bold">Yetkisiz erişim.</div>;
 
   // --- ÖZEL YAZDIRMA GÖRÜNÜMÜ ---
@@ -560,7 +584,7 @@ const AdminCalendarPlanning = () => {
           </div>
         </div>
 
-        <div className="bg-blue-50 px-4 py-2 flex justify-between items-center text-xs sm:text-sm border-b border-blue-100 text-blue-800">
+        <div className="bg-blue-50 px-4 py-2 flex justify-between items-center text-xs sm:text-sm border-b border-blue-100 text-blue-800 no-print">
           <div className="flex gap-4">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> <b>{visits.length}</b> Toplam</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> <b>{visits.filter(v => v.status === 'completed').length}</b> Tamamlanan</span>
