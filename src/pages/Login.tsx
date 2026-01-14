@@ -15,44 +15,18 @@ const Login: React.FC = () => {
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        // Oturum varsa, rolü kontrol edip yönlendir
-        checkRoleAndRedirect(data.session.user.id);
+        navigate('/');
         return;
       }
 
       const localSession = localAuth.getSession();
       if (localSession) {
-        if (localSession.type === 'customer') navigate('/customer-dashboard'); // Veya '/customer'
-        else if (localSession.type === 'branch') navigate('/branch-dashboard'); // Veya '/branch'
-        else navigate('/');
+        navigate('/');
       }
     };
 
     checkSession();
   }, [navigate]);
-
-  // Yardımcı Fonksiyon: Rol Kontrolü ve Yönlendirme
-  const checkRoleAndRedirect = async (userId: string) => {
-    try {
-      // Önce operatör tablosuna bak
-      const { data: operatorData } = await supabase
-        .from('operators')
-        .select('id')
-        .eq('auth_id', userId)
-        .single();
-
-      if (operatorData) {
-        // Operatör ise operatör paneline
-        navigate('/operator-dashboard');
-      } else {
-        // Operatör değilse (ve Supabase ile girdiyse) Admin kabul et
-        navigate('/');
-      }
-    } catch (err) {
-      console.error('Yönlendirme hatası:', err);
-      navigate('/'); // Hata durumunda varsayılan
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,8 +40,7 @@ const Login: React.FC = () => {
           throw new Error(error);
         }
         if (session) {
-          // React Router kullanıyorsanız navigate tercih edin, yoksa window.location
-          navigate('/customer-dashboard'); 
+          window.location.href = '/customer';
         }
       } else if (loginType === 'branch') {
         const { session, error } = await localAuth.signInBranch(email, password);
@@ -75,10 +48,9 @@ const Login: React.FC = () => {
           throw new Error(error);
         }
         if (session) {
-          navigate('/branch-dashboard');
+          window.location.href = '/branch';
         }
       } else {
-        // Admin veya Operatör girişi (Supabase)
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -96,9 +68,7 @@ const Login: React.FC = () => {
         }
 
         if (data.session) {
-          // --- DÜZELTME BURADA ---
-          // Doğrudan '/' sayfasına gitmek yerine rol kontrolü yapıyoruz
-          await checkRoleAndRedirect(data.session.user.id);
+          navigate('/');
         }
       }
     } catch (err: any) {
@@ -115,7 +85,6 @@ const Login: React.FC = () => {
           <img src="https://i.imgur.com/PajSpus.png" alt="İlaçlamatik Logo" className="h-20" />
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          {/* Başlık alanı boş bırakılmıştı, isterseniz buraya 'Giriş Yap' yazabilirsiniz */}
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Haşere Kontrol Yazılımı
