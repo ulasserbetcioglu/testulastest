@@ -98,7 +98,7 @@ const BulkAddModal = ({ isOpen, onClose, date, customers, branches, selectedOper
   );
 };
 
-// --- YENİ MODAL: SONRAKİ AYA AKTARIM ---
+// --- MODAL: SONRAKİ AYA AKTARIM ---
 const TransferModal = ({ isOpen, onClose, onTransfer, currentDate, customers, branches, operators }) => {
   const [targetOperator, setTargetOperator] = useState('');
   const [targetCustomer, setTargetCustomer] = useState('');
@@ -476,19 +476,20 @@ const AdminCalendarPlanning = () => {
     toast.success('Silindi');
   };
 
-  // --- EXCEL TAKVİM EXPORT (GELİŞMİŞ FORMAT) ---
+  // --- EXCEL TAKVİM EXPORT (DÜZELTİLMİŞ) ---
   const exportCalendarToExcel = async () => {
     if (!selectedOperator) return toast.error('Lütfen Excel çıktısı için bir operatör seçin.');
 
     const operatorName = operators.find(o => o.id === selectedOperator)?.name || 'Bilinmeyen';
-    const monthName = format(currentDate, 'MMMM yyyy', { locale: tr });
+    const monthName = format(currentDate, 'MMMM yyyy', { locale: tr }).toUpperCase();
     const rows = [];
 
-    rows.push([`${operatorName} - ${monthName} Ziyaret Takvimi`]);
+    // Ana Başlık
+    rows.push([`${operatorName} - ${monthName} ZİYARET PROGRAMI`]);
     rows.push([]);
 
     // Gün Başlıkları
-    const daysHeader = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+    const daysHeader = ['PAZARTESİ', 'SALI', 'ÇARŞAMBA', 'PERŞEMBE', 'CUMA', 'CUMARTESİ', 'PAZAR'];
     rows.push(daysHeader);
 
     // Takvim Oluşturma
@@ -508,20 +509,15 @@ const AdminCalendarPlanning = () => {
             isSameDay(parseISO(v.visit_date), day)
         );
 
-        let cellContent = `📅 ${format(day, 'd')}\n`;
-        if (dayVisits.length > 0) cellContent += '────────────────\n';
+        // İstediğiniz Format: GÜN/AY GÜN
+        let cellContent = `${format(day, 'dd/MM EEEE', { locale: tr }).toUpperCase()}\n──────────────────\n`;
         
         dayVisits.forEach(v => {
-            const customer = v.customer?.kisa_isim || 'Müşteri';
-            const branch = v.branch ? v.branch.sube_adi : '';
-            const status = v.status === 'completed' ? ' ✅' : '';
+            const customer = v.customer?.kisa_isim?.toUpperCase() || 'MÜŞTERİ';
+            // Müşterinin altına varsa şubeyi yaz (Girintili)
+            const branchInfo = v.branch ? `   📍 ${v.branch.sube_adi}` : '';
             
-            // Alt alta düzen (Müşteri \n Şube)
-            cellContent += `🔸 ${customer}${status}\n`;
-            if (branch) {
-                cellContent += `     📍 ${branch}\n`;
-            }
-            cellContent += `\n`; // Boşluk
+            cellContent += `${customer}\n${branchInfo ? branchInfo + '\n' : ''}`;
         });
 
         currentWeek[dayIndex] = cellContent;
@@ -535,7 +531,7 @@ const AdminCalendarPlanning = () => {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
 
-    // Sütun Genişliği (Print için geniş)
+    // Sütun Genişliği (Print için geniş, 35 karakter)
     worksheet['!cols'] = Array(7).fill({ wch: 35 });
 
     XLSX.utils.book_append_sheet(workbook, worksheet, "Ziyaret Takvimi");
