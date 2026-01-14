@@ -370,11 +370,11 @@ const VisitDetails: React.FC = () => {
       .join(', ');
 
     if (visitTypeLabels && pestTypeLabels) {
-      const autoText = `Yapılan ziyarette, işletme genelinde ${visitTypeLabels} kapsamında, ${pestTypeLabels} karşı zararlı Mücadelesi kontrol yapıldı.`;
+      const autoText = `Yapılan ziyarette, İşletmede ${visitTypeLabels} ziyaret(ler) kapsamında, ${pestTypeLabels} karşı zararlı mücadelesi kontrolü yapıldı.`;
       setExplanation(autoText);
     } else if (selectedVisitTypes.length > 0) {
        // Sadece ziyaret türü seçiliyse
-       const autoText = `Yapılan ziyarette, işletme genelinde ${visitTypeLabels} kapsamında genel kontrol yapıldı.`;
+       const autoText = `Yapılan ziyarette, işletmede ${visitTypeLabels} kapsamında genel kontrol yapıldı.`;
        setExplanation(autoText);
     }
 
