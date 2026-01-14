@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertTriangle, CheckCircle } from 'lucide-react';
+import { X, AlertTriangle, CheckCircle, Camera, Upload, Trash2 } from 'lucide-react'; // Yeni ikonlar eklendi
 import { supabase } from '../../lib/supabase';
 import { sendEmail, getRecipientEmails } from '../../lib/emailClient';
 import { toast } from 'sonner';
@@ -53,6 +53,10 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
   const [assignedCustomers, setAssignedCustomers] = useState<string[] | null>(null);
   const [assignedBranches, setAssignedBranches] = useState<string[] | null>(null);
   
+  // Fotoğraf State'leri
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     visitId: visitId || '',
     customerId: '',
@@ -93,15 +97,38 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
     }
   }, [formData.customerId, assignedBranches]);
 
+  // Fotoğraf Seçme İşlemi
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // 5MB limit kontrolü
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Fotoğraf boyutu 5MB\'dan küçük olmalıdır.');
+        return;
+      }
+      setSelectedImage(file);
+      // Önizleme URL'i oluştur
+      const url = URL.createObjectURL(file);
+      setImagePreview(url);
+    }
+  };
+
+  // Fotoğrafı Kaldırma
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+      setImagePreview(null);
+    }
+  };
+
   const checkUserRole = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Kullanıcı bulunamadı');
 
-      // Check if admin
       setIsAdmin(user.email === 'admin@ilaclamatik.com');
 
-      // Get operator ID and assigned entities
       const { data: operatorData, error: operatorError } = await supabase
         .from('operators')
         .select('id, assigned_customers, assigned_branches')
@@ -125,7 +152,6 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
         .select('id, kisa_isim')
         .order('kisa_isim');
 
-      // If not admin and has assigned customers, filter by them
       if (!isAdmin && assignedCustomers && assignedCustomers.length > 0) {
         query = query.in('id', assignedCustomers);
       }
@@ -135,7 +161,6 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
       if (error) throw error;
       setCustomers(data || []);
 
-      // Fetch all branches
       const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
         .select('id, sube_adi, customer_id')
@@ -149,10 +174,8 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
   };
 
   const fetchBranches = async (customerId: string) => {
-    // Filter branches by customer ID
     const customerBranches = branches.filter(branch => branch.customer_id === customerId);
     
-    // If not admin and has assigned branches, further filter by them
     if (!isAdmin && assignedBranches && assignedBranches.length > 0) {
       setFilteredBranches(customerBranches.filter(branch => 
         assignedBranches.includes(branch.id)
@@ -177,12 +200,10 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
         .eq('operator_id', operatorId)
         .order('visit_date', { ascending: false });
 
-      // If not admin and has assigned customers, filter by them
       if (!isAdmin && assignedCustomers && assignedCustomers.length > 0) {
         query = query.in('customer_id', assignedCustomers);
       }
 
-      // If not admin and has assigned branches, filter by them
       if (!isAdmin && assignedBranches && assignedBranches.length > 0) {
         query = query.in('branch_id', assignedBranches);
       }
@@ -209,7 +230,6 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
       let customer_id, branch_id;
 
       if (useVisit) {
-        // Get visit details to link to customer and branch
         const { data: visitData, error: visitError } = await supabase
           .from('visits')
           .select('customer_id, branch_id')
@@ -221,12 +241,35 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
         customer_id = visitData.customer_id;
         branch_id = visitData.branch_id;
       } else {
-        // Use directly selected customer and branch
         customer_id = formData.customerId;
         branch_id = formData.branchId || null;
       }
 
-      // Create the corrective action record
+      // --- Fotoğraf Yükleme İşlemi ---
+      let photoUrl = null;
+      if (selectedImage) {
+        try {
+          const fileExt = selectedImage.name.split('.').pop();
+          const fileName = `dof-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('documents') // 'documents' bucket'ını kullanıyoruz
+            .upload(fileName, selectedImage);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('documents')
+            .getPublicUrl(fileName);
+          
+          photoUrl = publicUrl;
+        } catch (uploadErr: any) {
+          console.error('Fotoğraf yükleme hatası:', uploadErr);
+          toast.error('Fotoğraf yüklenemedi, işlem fotoğrafsız devam ediyor.');
+        }
+      }
+
+      // Kayıt Ekleme
       const { data, error } = await supabase
         .from('corrective_actions')
         .insert([
@@ -243,21 +286,19 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
             due_date: formData.dueDate,
             related_standard: formData.relatedStandard,
             status: formData.status,
-            created_by: user.id
+            created_by: user.id,
+            photo_url: photoUrl // Veritabanında bu kolonun olması gerekir
           }
         ])
         .select();
 
       if (error) throw error;
 
-      // Send email notification if enabled
       if (sendEmailNotification && data && data.length > 0) {
         try {
-          // Get customer and branch emails
           const recipientEmails = await getRecipientEmails(customer_id, branch_id);
           
           if (recipientEmails.length > 0) {
-            // Send email to each recipient
             for (const email of recipientEmails) {
               await sendEmail('dof', data[0].id, email);
             }
@@ -301,6 +342,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
     setError(null);
     setUseVisit(!!visitId);
     setSendEmailNotification(true);
+    handleRemoveImage(); // Fotoğrafı sıfırla
   };
 
   if (!isOpen) return null;
@@ -338,23 +380,23 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="mb-4">
             <div className="flex items-center space-x-4">
-              <label className="flex items-center">
+              <label className="flex items-center cursor-pointer">
                 <input
                   type="radio"
                   checked={useVisit}
                   onChange={() => setUseVisit(true)}
-                  className="mr-2"
+                  className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
                 />
-                <span>Ziyaret Seç</span>
+                <span className="text-sm font-medium">Ziyaret Seç</span>
               </label>
-              <label className="flex items-center">
+              <label className="flex items-center cursor-pointer">
                 <input
                   type="radio"
                   checked={!useVisit}
                   onChange={() => setUseVisit(false)}
-                  className="mr-2"
+                  className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500"
                 />
-                <span>Müşteri/Şube Seç</span>
+                <span className="text-sm font-medium">Müşteri/Şube Seç</span>
               </label>
             </div>
           </div>
@@ -367,7 +409,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
               <select
                 value={formData.visitId}
                 onChange={(e) => setFormData({ ...formData, visitId: e.target.value })}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
                 <option value="">Ziyaret Seçiniz</option>
@@ -387,7 +429,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
                 <select
                   value={formData.customerId}
                   onChange={(e) => setFormData({ ...formData, customerId: e.target.value, branchId: '' })}
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 >
                   <option value="">Müşteri Seçiniz</option>
@@ -405,7 +447,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
                 <select
                   value={formData.branchId}
                   onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   disabled={!formData.customerId}
                 >
                   <option value="">Şube Seçiniz (Opsiyonel)</option>
@@ -426,7 +468,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
             <select
               value={formData.nonComplianceType}
               onChange={(e) => setFormData({ ...formData, nonComplianceType: e.target.value })}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             >
               <option value="">Seçiniz</option>
@@ -443,11 +485,64 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
             <textarea
               value={formData.nonComplianceDescription}
               onChange={(e) => setFormData({ ...formData, nonComplianceDescription: e.target.value })}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={3}
               placeholder="Uygunsuzluğun detaylı açıklaması..."
               required
             ></textarea>
+          </div>
+
+          {/* FOTOĞRAF YÜKLEME ALANI */}
+          <div className="border-t border-b py-4 my-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Uygunsuzluk Fotoğrafı (Opsiyonel)
+            </label>
+            
+            <div className="flex items-start gap-4">
+              {/* Gizli Dosya Inputu */}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment" // Mobilde kamerayı önceliklendirir
+                onChange={handleImageSelect}
+                className="hidden"
+                id="photo-upload"
+              />
+
+              {!imagePreview ? (
+                <label
+                  htmlFor="photo-upload"
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Camera className="w-8 h-8 text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500">
+                      <span className="font-semibold">Fotoğraf çek</span> veya yükle
+                    </p>
+                    <p className="text-xs text-gray-400">PNG, JPG (Max 5MB)</p>
+                  </div>
+                </label>
+              ) : (
+                <div className="relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                  <img 
+                    src={imagePreview} 
+                    alt="Önizleme" 
+                    className="w-full h-full object-contain" 
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full hover:bg-red-700 shadow-md transition-colors"
+                    title="Fotoğrafı Kaldır"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 text-center truncate">
+                    {selectedImage?.name}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
@@ -457,7 +552,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
             <textarea
               value={formData.rootCauseAnalysis}
               onChange={(e) => setFormData({ ...formData, rootCauseAnalysis: e.target.value })}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={3}
               placeholder="Uygunsuzluğun kök nedeni..."
               required
@@ -471,7 +566,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
             <textarea
               value={formData.correctiveAction}
               onChange={(e) => setFormData({ ...formData, correctiveAction: e.target.value })}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={3}
               placeholder="Uygunsuzluğu gidermek için yapılacak faaliyet..."
               required
@@ -485,7 +580,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
             <textarea
               value={formData.preventiveAction}
               onChange={(e) => setFormData({ ...formData, preventiveAction: e.target.value })}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={3}
               placeholder="Uygunsuzluğun tekrarını önlemek için yapılacak faaliyet..."
               required
@@ -501,7 +596,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
                 type="text"
                 value={formData.responsible}
                 onChange={(e) => setFormData({ ...formData, responsible: e.target.value })}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Faaliyetten sorumlu kişi..."
                 required
               />
@@ -514,7 +609,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
                 type="date"
                 value={formData.dueDate}
                 onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
@@ -527,7 +622,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
             <select
               value={formData.relatedStandard}
               onChange={(e) => setFormData({ ...formData, relatedStandard: e.target.value })}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             >
               <option value="">Seçiniz</option>
@@ -539,37 +634,43 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
             </select>
           </div>
 
-          <div className="flex items-center">
+          <div className="flex items-center bg-gray-50 p-3 rounded">
             <input
               type="checkbox"
               id="sendEmail"
               checked={sendEmailNotification}
               onChange={(e) => setSendEmailNotification(e.target.checked)}
-              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
             />
-            <label htmlFor="sendEmail" className="ml-2 block text-sm text-gray-700">
+            <label htmlFor="sendEmail" className="ml-2 block text-sm text-gray-700 cursor-pointer select-none">
               Müşteriye e-posta bildirimi gönder
             </label>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="flex justify-end gap-2 pt-4 border-t">
             <button
               type="button"
               onClick={() => {
                 onClose();
                 resetForm();
               }}
-              className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors"
               disabled={loading}
             >
               İptal
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center transition-colors"
               disabled={loading || (useVisit && !formData.visitId) || (!useVisit && !formData.customerId)}
             >
-              {loading ? 'Kaydediliyor...' : 'Kaydet'}
+              {loading ? (
+                <>
+                  <span className="animate-spin mr-2">⏳</span> Kaydediliyor...
+                </>
+              ) : (
+                'Kaydet'
+              )}
             </button>
           </div>
         </form>
