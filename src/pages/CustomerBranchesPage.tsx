@@ -23,13 +23,9 @@ interface EquipmentCheck {
 interface Visit {
   id: string;
   visit_date: string;
-  status: 'planned' | 'completed' | 'cancelled';
-  visit_type: string;
-  notes?: string;
-  report_number?: string;
-  operator?: {
-    name: string;
-  };
+  equipment_checks: Record<string, EquipmentCheck>;
+  status: string;
+  operator: { name: string };
 }
 
 interface Equipment {
@@ -566,184 +562,52 @@ const BranchPesticideUsageView = ({ branchId }: { branchId: string }) => {
 
 // Ziyaret Listesi
 const BranchVisitsList = ({ branchId }: { branchId: string }) => {
-  const [visits, setVisits] = useState<Visit[]>([]);
+  const [visits, setVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
 
   useEffect(() => {
     const fetchVisits = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('visits')
-          .select(`
-            *,
-            operator:operator_id (name)
-          `)
-          .eq('branch_id', branchId)
-          .order('visit_date', { ascending: false })
-          .limit(10); // Son 10 ziyareti getir
-
-        if (error) throw error;
-        setVisits(data || []);
-      } catch (error) {
-        console.error("Ziyaretler çekilirken hata:", error);
-      } finally {
-        setLoading(false);
-      }
+      const { data } = await supabase
+        .from('visits')
+        .select('*')
+        .eq('branch_id', branchId)
+        .order('visit_date', { ascending: false })
+        .limit(5);
+      setVisits(data || []);
+      setLoading(false);
     };
-
-    if (branchId) fetchVisits();
+    fetchVisits();
   }, [branchId]);
 
-  // Durum rozeti rengi ve ikonu
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-            <CheckCircle size={12} /> Tamamlandı
-          </span>
-        );
-      case 'cancelled':
-        return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-            <XCircle size={12} /> İptal
-          </span>
-        );
-      default:
-        return (
-          <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
-            <Clock size={12} /> Planlandı
-          </span>
-        );
-    }
-  };
-
-  if (loading) return <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-600"/></div>;
-  
-  if (visits.length === 0) {
-    return (
-      <div className="p-8 text-center bg-gray-50 border border-dashed border-gray-300 rounded-lg">
-        <Calendar className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-        <p className="text-gray-500 font-medium">Bu şube için kayıtlı ziyaret bulunmuyor.</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-4 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto"/></div>;
+  if (visits.length === 0) return <div className="p-4 text-center text-gray-500">Kayıtlı ziyaret bulunmuyor.</div>;
 
   return (
-    <>
-      <div className="space-y-3">
-        {visits.map((visit) => (
-          <div 
-            key={visit.id} 
-            onClick={() => setSelectedVisit(visit)}
-            className="group relative bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
-          >
-            <div className="flex justify-between items-start mb-2">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <span className="font-semibold text-gray-800 text-sm">
-                  {format(parseISO(visit.visit_date), 'dd MMMM yyyy', { locale: tr })}
-                </span>
-                <span className="text-xs text-gray-400">
-                  ({format(parseISO(visit.visit_date), 'HH:mm')})
-                </span>
-              </div>
-              {getStatusBadge(visit.status)}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-sm mt-3">
-              <div className="flex items-center gap-2 text-gray-600">
-                <User size={14} className="text-blue-500" />
-                <span className="truncate">{visit.operator?.name || 'Atanmamış'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <FileText size={14} className="text-purple-500" />
-                <span className="capitalize">{visit.visit_type || 'Periyodik'}</span>
-              </div>
-            </div>
-
-            {/* Hover'da görünen ok ikonu */}
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <ChevronRight className="text-gray-400" />
+    <div className="space-y-2">
+      {visits.map((visit) => (
+        <div key={visit.id} className="flex justify-between items-center p-3 bg-white border rounded-lg hover:bg-gray-50">
+          <div className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full ${
+              visit.status === 'completed' ? 'bg-green-500' : 
+              visit.status === 'cancelled' ? 'bg-red-500' : 'bg-yellow-500'
+            }`} />
+            <div>
+              <p className="font-medium text-sm text-gray-900">
+                {format(parseISO(visit.visit_date), 'dd MMMM yyyy', { locale: tr })}
+              </p>
+              <p className="text-xs text-gray-500 capitalize">{visit.visit_type || 'Standart Ziyaret'}</p>
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* --- DETAY MODALI --- */}
-      {selectedVisit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
-            
-            {/* Modal Header */}
-            <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center">
-              <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                <Eye size={18} className="text-blue-600"/> Ziyaret Detayı
-              </h3>
-              <button 
-                onClick={() => setSelectedVisit(null)}
-                className="p-1 hover:bg-gray-200 rounded-full transition-colors"
-              >
-                <X size={20} className="text-gray-500" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-4">
-              
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Tarih</p>
-                  <p className="font-medium text-gray-900">
-                    {format(parseISO(selectedVisit.visit_date), 'dd MMMM yyyy - HH:mm', { locale: tr })}
-                  </p>
-                  <p className="text-xs text-blue-600 mt-0.5">
-                    {formatDistanceToNow(parseISO(selectedVisit.visit_date), { addSuffix: true, locale: tr })}
-                  </p>
-                </div>
-                <div>{getStatusBadge(selectedVisit.status)}</div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Operatör</p>
-                  <p className="font-medium text-gray-800">{selectedVisit.operator?.name || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Rapor No</p>
-                  <p className="font-mono font-medium text-gray-800">{selectedVisit.report_number || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase">Ziyaret Türü</p>
-                  <p className="font-medium text-gray-800 capitalize">{selectedVisit.visit_type || '-'}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-gray-500 uppercase mb-1">Ziyaret Notları</p>
-                <div className="bg-yellow-50 border border-yellow-100 p-3 rounded-lg text-sm text-gray-700 min-h-[60px]">
-                  {selectedVisit.notes || 'Herhangi bir not girilmemiş.'}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-gray-50 px-6 py-3 border-t text-right">
-              <button 
-                onClick={() => setSelectedVisit(null)}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Kapat
-              </button>
-            </div>
-          </div>
+          <span className="text-xs font-medium px-2 py-1 bg-gray-100 rounded-full text-gray-600">
+            {visit.status === 'completed' ? 'Tamamlandı' : visit.status === 'cancelled' ? 'İptal' : 'Planlandı'}
+          </span>
         </div>
-      )}
-    </>
+      ))}
+    </div>
   );
 };
+
+
 // Malzeme Kullanımı
 const BranchMaterialUsageList = ({ branchId }: { branchId: string }) => {
   const [sales, setSales] = useState<any[]>([]);
