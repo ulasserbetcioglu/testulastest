@@ -125,48 +125,6 @@ import BranchDocuments from './pages/BranchDocuments';
 import ProtectedReportViewer from './components/ProtectedReportViewer';
 
 
-// =============================================================================
-// 🔥 KURTARICI: MOBİL UYUMLULUK KÖPRÜSÜ (MOBILE BRIDGE)
-// Bu bileşen, eski "navigation" ve "route" prop'larını bekleyen sayfaların
-// Web üzerinde çökmesini engeller ve otomatik dönüştürme yapar.
-// =============================================================================
-const withMobileFix = (Component: React.ComponentType<any>) => {
-  return (props: any) => {
-    const navigate = useNavigate();
-    const location = useLocation();
-
-
-    // Sahte Navigation Nesnesi (Mobil -> Web Dönüştürücü)
-    const navigationProp = {
-      navigate: (screenName: string, params: any) => {
-        // Eğer hedef bir web yoluysa ('/admin/...') direkt git
-        if (screenName.startsWith('/')) {
-          navigate(screenName, { state: params });
-        } else {
-          // Eğer mobil sayfa ismiyse, haritadan bul ve git
-          const path = routeMap[screenName] || `/admin/mentor/${screenName}`;
-          console.log(`Mobile Bridge Yönlendirmesi: ${screenName} -> ${path}`);
-          navigate(path, { state: params });
-        }
-      },
-      goBack: () => navigate(-1),
-      setOptions: () => {}, // Hata vermemesi için boş fonksiyon
-      addListener: () => {}, 
-    };
-
-    // Sahte Route Nesnesi (Parametreleri yakalamak için)
-    const routeProp = {
-      params: location.state || {}, // Web state'ini mobil params'a çevir
-      name: 'WebRoute'
-    };
-
-    // Orijinal bileşeni, oluşturduğumuz sahte props ile render et
-    return <Component {...props} navigation={navigationProp} route={routeProp} />;
-  };
-};
-
-// =============================================================================
-
 const ProtectedRoute: React.FC<{ children: React.ReactNode, allowedUserTypes?: string[] }> = ({ children }) => {
   const supabaseSession = localStorage.getItem('sb-mlegotnkqlnkfwqblqbs-auth-token');
   const localSession = localStorage.getItem('local_session');
@@ -218,32 +176,58 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   React.useEffect(() => {
     const checkUserRole = async () => {
       try {
+        // 1. Önce LocalAuth (Müşteri/Şube) kontrolü
         const localSessionStr = localStorage.getItem('local_session');
         if (localSessionStr) {
           const localSession = JSON.parse(localSessionStr);
           if (localSession.type === 'customer') { setUserRole('customer'); setLoading(false); return; }
           else if (localSession.type === 'branch') { setUserRole('branch'); setLoading(false); return; }
         }
+
+        // 2. Supabase Auth (Admin/Operatör) kontrolü
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { setLoading(false); return; }
         setCurrentUser(user);
 
+        // --- DÜZELTME BURADA ---
+        // Önce operators tablosuna bak, çünkü operatörler profiles tablosunda olmayabilir.
+        const { data: operatorData } = await supabase
+          .from('operators')
+          .select('id')
+          .eq('auth_id', user.id)
+          .maybeSingle();
+
+        if (operatorData) {
+          setUserRole('operator');
+          setLoading(false);
+          return;
+        }
+
+        // Operatör değilse Profiles tablosuna bak (Admin vb.)
         const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
         if (profileData?.role) {
           setUserRole(profileData.role);
         } else {
-          // Fallback logic
+          // Hiçbir yerde yoksa ama giriş yaptıysa varsayılan (genelde admin yetkisi kısıtlı user)
           setUserRole('user'); 
         }
-      } catch (err) { setUserRole('user'); } finally { setLoading(false); }
+      } catch (err) { 
+        setUserRole('user'); 
+      } finally { 
+        setLoading(false); 
+      }
     };
     checkUserRole();
   }, [navigate]);
 
   if (loading) return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
-  if (userRole === 'operator' || (userRole === 'user' && /^[^@]+@ilaclamatik\.com$/.test(currentUser?.email ?? '') && currentUser?.email !== 'admin@ilaclamatik.com')) return <Navigate to="/operator" />;
+  
+  // Yönlendirme Mantığı
+  if (userRole === 'operator') return <Navigate to="/operator" />;
   if (userRole === 'customer') return <Navigate to="/customer" />;
   if (userRole === 'branch') return <Navigate to="/branch" />;
+  
+  // Admin veya tanımlı olmayan roller içeriği (Admin Paneli) görür
   return children;
 };
 
