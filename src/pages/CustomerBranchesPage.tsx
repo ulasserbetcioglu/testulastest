@@ -23,9 +23,13 @@ interface EquipmentCheck {
 interface Visit {
   id: string;
   visit_date: string;
-  equipment_checks: Record<string, EquipmentCheck>;
-  status: string;
-  operator: { name: string };
+  status: 'planned' | 'completed' | 'cancelled';
+  visit_type: string;
+  notes?: string;
+  report_number?: string;
+  operator?: {
+    name: string;
+  };
 }
 
 interface Equipment {
