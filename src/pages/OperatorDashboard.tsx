@@ -7,7 +7,6 @@ import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, st
 import { tr } from 'date-fns/locale'; // Düzeltilen satır
 import { toast } from 'sonner'; // Yeni ikonlar
 import { BellRing, BellOff } from 'lucide-react';
-import WeeklyKmEntryModal from '../components/Operator/WeeklyKmEntryModal'; // Yeni modal import edildi
 import GoogleReviewPopup from '../components/Operator/GoogleReviewPopup'; // ✅ YENİ: GoogleReviewPopup import edildi
 
 // --- ARAYÜZLER (INTERFACES) ---
