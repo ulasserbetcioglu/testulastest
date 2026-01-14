@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { TouchBackend } from 'react-dnd-touch-backend'; // Mobilde sürükleme için
+// TouchBackend kaldırıldı, ekstra paket gerekmez.
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay, isSameDay, parseISO, startOfWeek, endOfWeek, getWeekOfMonth } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase, supabaseAdmin } from '../lib/supabase';
@@ -19,11 +19,6 @@ const ItemTypes = {
   BRANCH: 'branch',
   VISIT: 'visit',
   OPERATOR: 'operator'
-};
-
-// --- YARDIMCI: MOBİL Mİ? ---
-const isMobile = () => {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
 // --- MODAL: TOPLU ZİYARET EKLEME ---
@@ -137,7 +132,7 @@ const DraggableVisit = ({ visit, onDelete }) => {
       </div>
       {visit.branch && <div className="text-[9px] truncate opacity-80">{visit.branch.sube_adi}</div>}
       <div className="text-[9px] mt-1 flex items-center gap-1 opacity-70">
-        <User size={8} /> {visit.operator?.name.split(' ')[0]}
+        <User size={8} /> {visit.operator?.name?.split(' ')[0]}
       </div>
     </div>
   );
@@ -247,7 +242,7 @@ const AdminCalendarPlanning = () => {
       setBranches(branchData.data?.map(b => ({ ...b, customer: b.customers })) || []);
       setOperators(opData.data || []);
       
-      // Operatör filtresi varsa client-side filtrele (veya query'de yapabilirdik)
+      // Operatör filtresi varsa client-side filtrele
       let vData = visitData.data || [];
       if (selectedOperator) {
         vData = vData.filter(v => v.operator_id === selectedOperator);
@@ -264,10 +259,9 @@ const AdminCalendarPlanning = () => {
 
   // --- İŞLEMLER ---
 
-  // 1. Ziyaret Taşıma / Oluşturma (Sürükle-Bırak)
   const handleEventDrop = async (item, date) => {
     if (!isAdmin) return toast.error('Yetkiniz yok');
-    const dateStr = format(date, 'yyyy-MM-dd'); // 12:00 fix'ine gerek yok, format yeterli
+    const dateStr = format(date, 'yyyy-MM-dd');
 
     try {
       if (item.type === 'visit') {
@@ -277,7 +271,7 @@ const AdminCalendarPlanning = () => {
         // Optimistic update
         setVisits(prev => prev.map(v => v.id === item.id ? { ...v, visit_date: dateStr } : v));
       } else {
-        // Yeni oluşturma (Sidebar'dan sürükleme - artık çok kullanılmayabilir ama kalsın)
+        // Yeni oluşturma
         if (!selectedOperator) return toast.error('Önce bir operatör seçin!');
         createVisitBatch([{
           customer_id: item.type === 'branch' ? item.customer_id : item.id,
@@ -292,7 +286,6 @@ const AdminCalendarPlanning = () => {
     }
   };
 
-  // 2. Toplu Ziyaret Oluşturma (Modal'dan)
   const createVisitBatch = async (visitsPayload) => {
     try {
       const { data, error } = await supabaseAdmin.from('visits').insert(visitsPayload.map(v => ({...v, status: 'planned'}))).select(`*, customer:customer_id(kisa_isim), branch:branch_id(sube_adi), operator:operator_id(name)`);
@@ -322,14 +315,13 @@ const AdminCalendarPlanning = () => {
     createVisitBatch(newVisits);
   };
 
-  // 3. Bir Sonraki Aya Aktar (DÜZELTİLMİŞ)
+  // Bir Sonraki Aya Aktar
   const transferToNextMonth = async () => {
     if (!selectedOperator) return toast.error('Lütfen bir operatör seçin');
     if (!window.confirm('Bu aydaki ziyaret şablonu bir sonraki aya kopyalanacak. Onaylıyor musunuz?')) return;
 
     setIsTransferring(true);
     try {
-      // 1. Kaynak Ayın Verilerini Çek (State'den değil, veritabanından - KESİN ÇÖZÜM)
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
       
@@ -343,25 +335,19 @@ const AdminCalendarPlanning = () => {
       if (fetchError) throw fetchError;
       if (!sourceVisits || sourceVisits.length === 0) throw new Error('Bu ay için kopyalanacak ziyaret bulunamadı.');
 
-      // 2. Hedef Ayı Belirle
       const targetMonth = addMonths(currentDate, 1);
       const newVisitsPayload = [];
 
-      // 3. Tarih Dönüşümü (Ayın N'inci Günü Mantığı)
       sourceVisits.forEach(visit => {
         const d = parseISO(visit.visit_date);
-        const dayOfWeek = getDay(d); // 0 (Pazar) - 6 (Cumartesi)
-        const weekNum = getWeekOfMonth(d); // Ayın kaçıncı haftası?
+        const dayOfWeek = getDay(d); 
+        const weekNum = getWeekOfMonth(d);
 
-        // Hedef ayda aynı haftanın aynı gününü bul
         const targetStartOfMonth = startOfMonth(targetMonth);
         const targetEndOfMonth = endOfMonth(targetMonth);
         const daysInTarget = eachDayOfInterval({ start: targetStartOfMonth, end: targetEndOfMonth });
         
-        // Hedef aydaki tüm X günlerini bul (Örn: Tüm Salı'lar)
         const targetDays = daysInTarget.filter(day => getDay(day) === dayOfWeek);
-        
-        // N'inci günü al (Eğer ay 5 hafta değilse sonuncuyu al)
         const targetDate = targetDays[weekNum - 1] || targetDays[targetDays.length - 1];
 
         if (targetDate) {
@@ -376,12 +362,11 @@ const AdminCalendarPlanning = () => {
         }
       });
 
-      // 4. Toplu Ekleme
       if (newVisitsPayload.length > 0) {
         const { error: insertError } = await supabaseAdmin.from('visits').insert(newVisitsPayload);
         if (insertError) throw insertError;
         toast.success(`${newVisitsPayload.length} ziyaret başarıyla sonraki aya aktarıldı.`);
-        setCurrentDate(targetMonth); // Takvimi sonraki aya geçir
+        setCurrentDate(targetMonth);
       }
 
     } catch (error) {
@@ -398,17 +383,34 @@ const AdminCalendarPlanning = () => {
     toast.success('Silindi');
   };
 
-  // --- RENDER ---
+  const handleExport = async (type) => {
+    if (!calendarRef.current) return;
+    const canvas = await html2canvas(calendarRef.current, { scale: 2, backgroundColor: '#fff' });
+    if (type === 'png') {
+      const link = document.createElement('a');
+      link.download = 'takvim.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    } else {
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(canvas.toDataURL());
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      pdf.addImage(imgProps.data, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save('takvim.pdf');
+    }
+  };
+
   if (!isAdmin && !loading) return <div className="p-10 text-center text-red-500 font-bold">Bu sayfaya erişim yetkiniz yok.</div>;
 
   return (
-    <DndProvider backend={isMobile() ? TouchBackend : HTML5Backend}>
+    // HTML5Backend her yerde çalışır, sürükle-bırak sadece desktopta aktiftir. Mobilde (+) butonu kullanılır.
+    <DndProvider backend={HTML5Backend}>
       <div className="flex h-[calc(100vh-64px)] flex-col bg-gray-50 overflow-hidden">
         
-        {/* ÜST BAR (İSTATİSTİKLER & KONTROLLER) */}
+        {/* ÜST BAR */}
         <div className="bg-white border-b px-4 py-3 shadow-sm z-20 flex flex-col md:flex-row gap-4 justify-between items-center">
           
-          {/* Tarih Navigasyon */}
           <div className="flex items-center gap-4 bg-gray-100 p-1 rounded-xl">
             <button onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="p-2 hover:bg-white rounded-lg shadow-sm transition-all"><ChevronLeft size={18}/></button>
             <div className="text-center min-w-[140px]">
@@ -418,7 +420,6 @@ const AdminCalendarPlanning = () => {
             <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 hover:bg-white rounded-lg shadow-sm transition-all"><ChevronRight size={18}/></button>
           </div>
 
-          {/* Filtreler */}
           <div className="flex flex-wrap gap-3 items-center justify-center">
             <div className="relative group">
               <User className="absolute left-3 top-2.5 text-gray-400 group-hover:text-blue-500 transition-colors" size={16} />
@@ -446,7 +447,6 @@ const AdminCalendarPlanning = () => {
             </div>
           </div>
 
-          {/* Aksiyonlar */}
           <div className="flex gap-2">
             <button 
               onClick={transferToNextMonth} 
@@ -460,19 +460,17 @@ const AdminCalendarPlanning = () => {
               <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><Grid size={18}/></button>
               <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><List size={18}/></button>
             </div>
+            <button onClick={() => handleExport('pdf')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="PDF İndir"><FileText size={20}/></button>
           </div>
         </div>
 
-        {/* İSTATİSTİK BAR (YENİ) */}
         <div className="bg-blue-50 px-4 py-2 flex justify-between items-center text-xs sm:text-sm border-b border-blue-100 text-blue-800">
           <div className="flex gap-4">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> <b>{visits.length}</b> Toplam</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> <b>{visits.filter(v => v.status === 'completed').length}</b> Tamamlanan</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500"></span> <b>{visits.filter(v => v.status !== 'completed' && v.status !== 'cancelled').length}</b> Bekleyen</span>
           </div>
-          <div className="hidden sm:block opacity-70 italic">
-            Takvimdeki boş güne tıklayarak hızlı ekleme yapabilirsiniz.
-          </div>
+          <div className="hidden sm:block opacity-70 italic">Takvimdeki (+) butonuna tıklayarak hızlı ekleme yapabilirsiniz.</div>
         </div>
 
         {/* ANA TAKVİM ALANI */}
@@ -480,7 +478,6 @@ const AdminCalendarPlanning = () => {
           
           {viewMode === 'grid' ? (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-              {/* Gün Başlıkları */}
               <div className="grid grid-cols-7 border-b bg-gray-50">
                 {['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'].map((d, i) => (
                   <div key={i} className="py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider hidden sm:block">{d}</div>
@@ -490,9 +487,7 @@ const AdminCalendarPlanning = () => {
                 ))}
               </div>
               
-              {/* Günler */}
               <div className="grid grid-cols-7 auto-rows-fr bg-gray-200 gap-px border-b">
-                {/* Ayın başladığı güne kadar boşluk bırak (Pazartesi başlangıçlı) */}
                 {Array.from({ length: (getDay(startOfMonth(currentDate)) + 6) % 7 }).map((_, i) => (
                   <div key={`empty-${i}`} className="bg-gray-50 min-h-[100px]"></div>
                 ))}
@@ -511,13 +506,11 @@ const AdminCalendarPlanning = () => {
               </div>
             </div>
           ) : (
-            // LİSTE GÖRÜNÜMÜ (MOBİL İÇİN KARTLAR)
             <div className="space-y-4 max-w-2xl mx-auto pb-20">
               {eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) }).map((day) => {
                 const dayVisits = visits.filter(v => isSameDay(parseISO(v.visit_date), day));
                 const isWeekend = getDay(day) === 0 || getDay(day) === 6;
                 
-                // Boş günleri gizle, ama bugünse göster
                 if (dayVisits.length === 0 && !isToday(day)) return null;
 
                 return (
@@ -563,7 +556,6 @@ const AdminCalendarPlanning = () => {
           )}
         </div>
 
-        {/* MODAL */}
         <BulkAddModal 
           isOpen={modalOpen} 
           onClose={() => setModalOpen(false)} 
