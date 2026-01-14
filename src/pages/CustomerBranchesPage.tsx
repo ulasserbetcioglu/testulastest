@@ -429,7 +429,7 @@ const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
                             </span>
                           ))
                         ) : (
-                          <span className="text-xs text-gray-400 italic px-2 border border-dashed rounded">Kontrol Verisi Yok</span>
+                          <span className="text-xs text-green-400 italic px-2 border border-dashed rounded">Aktivite yok</span>
                         )}
                       </div>
                     </div>
