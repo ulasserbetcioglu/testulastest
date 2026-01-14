@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-// TouchBackend kaldırıldı, ekstra paket gerekmez.
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay, isSameDay, parseISO, startOfWeek, endOfWeek, getWeekOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay, isSameDay, parseISO, getWeekOfMonth } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { 
   Search, Filter, Plus, X, ChevronLeft, ChevronRight, Calendar, Trash2, User, 
-  Download, FileImage, FileText, Menu, List, Grid, CheckCircle, AlertCircle, Copy
+  FileImage, FileText, Menu, List, Grid, CheckCircle, Copy, Building, Users
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -92,6 +91,94 @@ const BulkAddModal = ({ isOpen, onClose, date, customers, branches, selectedOper
           >
             {selections.length} Ziyareti Ekle
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- YENİ MODAL: SONRAKİ AYA AKTARIM ---
+const TransferModal = ({ isOpen, onClose, onTransfer, currentDate, customers, branches, operators }) => {
+  const [targetOperator, setTargetOperator] = useState('');
+  const [targetCustomer, setTargetCustomer] = useState('');
+  const [targetBranch, setTargetBranch] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleTransfer = () => {
+    onTransfer({
+      operatorId: targetOperator || null,
+      customerId: targetCustomer || null,
+      branchId: targetBranch || null
+    });
+    onClose();
+  };
+
+  const filteredBranches = branches.filter(b => !targetCustomer || b.customer_id === targetCustomer);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+        <div className="p-5 border-b bg-indigo-50 rounded-t-xl">
+          <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
+            <Copy size={20} /> Sonraki Aya Plan Aktarımı
+          </h3>
+          <p className="text-xs text-indigo-600 mt-1">
+            {format(currentDate, 'MMMM yyyy', { locale: tr })} &rarr; {format(addMonths(currentDate, 1), 'MMMM yyyy', { locale: tr })}
+          </p>
+        </div>
+
+        <div className="p-6 space-y-5">
+          <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-xs text-yellow-800 flex gap-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>
+              Bu işlem, seçilen kriterlere uyan mevcut ziyaretleri, günlerini koruyarak (örn: ayın 2. Salısı) bir sonraki aya kopyalar.
+              <br/><b>Filtre seçmezseniz o aydaki TÜM ziyaretler kopyalanır.</b>
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Operatör (İsteğe Bağlı)</label>
+            <select 
+              className="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+              value={targetOperator}
+              onChange={(e) => setTargetOperator(e.target.value)}
+            >
+              <option value="">Tümü (Operatör ayrımı yapma)</option>
+              {operators.map(op => <option key={op.id} value={op.id}>{op.name}</option>)}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Müşteri (İsteğe Bağlı)</label>
+              <select 
+                className="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                value={targetCustomer}
+                onChange={(e) => { setTargetCustomer(e.target.value); setTargetBranch(''); }}
+              >
+                <option value="">Tümü</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.kisa_isim}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Şube (İsteğe Bağlı)</label>
+              <select 
+                className="w-full p-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                value={targetBranch}
+                onChange={(e) => setTargetBranch(e.target.value)}
+                disabled={!targetCustomer}
+              >
+                <option value="">Tümü</option>
+                {filteredBranches.map(b => <option key={b.id} value={b.id}>{b.sube_adi}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 border-t bg-gray-50 rounded-b-xl flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100">İptal</button>
+          <button onClick={handleTransfer} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 shadow-md">Aktarımı Başlat</button>
         </div>
       </div>
     </div>
@@ -199,8 +286,9 @@ const AdminCalendarPlanning = () => {
   const [selectedVisitType, setSelectedVisitType] = useState('periyodik');
   const [isTransferring, setIsTransferring] = useState(false);
 
-  // Modal
-  const [modalOpen, setModalOpen] = useState(false);
+  // Modals
+  const [bulkAddModalOpen, setBulkAddModalOpen] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false); // Yeni Modal State
   const [modalDate, setModalDate] = useState<Date | null>(null);
 
   const calendarRef = useRef(null);
@@ -216,9 +304,16 @@ const AdminCalendarPlanning = () => {
   }, [isAdmin, currentDate, selectedOperator]);
 
   const checkAdmin = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user?.email === 'admin@ilaclamatik.com') setIsAdmin(true);
-    setLoading(false);
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      if (user?.email === 'admin@ilaclamatik.com') setIsAdmin(true);
+    } catch (err) {
+      console.error("Auth check failed:", err);
+      toast.error("Oturum bilgileri alınamadı.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchData = async () => {
@@ -271,7 +366,6 @@ const AdminCalendarPlanning = () => {
         // Optimistic update
         setVisits(prev => prev.map(v => v.id === item.id ? { ...v, visit_date: dateStr } : v));
       } else {
-        // Yeni oluşturma
         if (!selectedOperator) return toast.error('Önce bir operatör seçin!');
         createVisitBatch([{
           customer_id: item.type === 'branch' ? item.customer_id : item.id,
@@ -315,25 +409,29 @@ const AdminCalendarPlanning = () => {
     createVisitBatch(newVisits);
   };
 
-  // Bir Sonraki Aya Aktar
-  const transferToNextMonth = async () => {
-    if (!selectedOperator) return toast.error('Lütfen bir operatör seçin');
-    if (!window.confirm('Bu aydaki ziyaret şablonu bir sonraki aya kopyalanacak. Onaylıyor musunuz?')) return;
-
+  // --- GÜNCELLENMİŞ AKTARIM MANTIĞI ---
+  const handleTransferSubmit = async ({ operatorId, customerId, branchId }) => {
     setIsTransferring(true);
     try {
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
       
-      const { data: sourceVisits, error: fetchError } = await supabase
+      // 1. Sorguyu Dinamik Oluştur
+      let query = supabase
         .from('visits')
-        .select('customer_id, branch_id, visit_date, visit_type')
-        .eq('operator_id', selectedOperator)
+        .select('customer_id, branch_id, visit_date, visit_type, operator_id') // operator_id'yi de çekiyoruz
         .gte('visit_date', start.toISOString())
         .lte('visit_date', end.toISOString());
 
+      // Filtreleri Uygula
+      if (operatorId) query = query.eq('operator_id', operatorId);
+      if (customerId) query = query.eq('customer_id', customerId);
+      if (branchId) query = query.eq('branch_id', branchId);
+
+      const { data: sourceVisits, error: fetchError } = await query;
+
       if (fetchError) throw fetchError;
-      if (!sourceVisits || sourceVisits.length === 0) throw new Error('Bu ay için kopyalanacak ziyaret bulunamadı.');
+      if (!sourceVisits || sourceVisits.length === 0) throw new Error('Seçilen kriterlere uygun kopyalanacak ziyaret bulunamadı.');
 
       const targetMonth = addMonths(currentDate, 1);
       const newVisitsPayload = [];
@@ -354,7 +452,7 @@ const AdminCalendarPlanning = () => {
           newVisitsPayload.push({
             customer_id: visit.customer_id,
             branch_id: visit.branch_id,
-            operator_id: selectedOperator,
+            operator_id: visit.operator_id, // Kaynaktaki operatörü koru (veya yeni bir mantık eklenebilir)
             visit_date: format(targetDate, 'yyyy-MM-dd'),
             visit_type: visit.visit_type,
             status: 'planned'
@@ -404,7 +502,6 @@ const AdminCalendarPlanning = () => {
   if (!isAdmin && !loading) return <div className="p-10 text-center text-red-500 font-bold">Bu sayfaya erişim yetkiniz yok.</div>;
 
   return (
-    // HTML5Backend her yerde çalışır, sürükle-bırak sadece desktopta aktiftir. Mobilde (+) butonu kullanılır.
     <DndProvider backend={HTML5Backend}>
       <div className="flex h-[calc(100vh-64px)] flex-col bg-gray-50 overflow-hidden">
         
@@ -449,8 +546,8 @@ const AdminCalendarPlanning = () => {
 
           <div className="flex gap-2">
             <button 
-              onClick={transferToNextMonth} 
-              disabled={isTransferring || !selectedOperator}
+              onClick={() => setTransferModalOpen(true)} 
+              disabled={isTransferring}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isTransferring ? <span className="animate-spin">⏳</span> : <Copy size={16} />}
@@ -499,7 +596,7 @@ const AdminCalendarPlanning = () => {
                       visits={visits} 
                       onEventDrop={handleEventDrop} 
                       onDeleteVisit={handleDeleteVisit}
-                      onQuickAdd={(d) => { setModalDate(d); setModalOpen(true); }}
+                      onQuickAdd={(d) => { setModalDate(d); setBulkAddModalOpen(true); }}
                     />
                   </div>
                 ))}
@@ -523,7 +620,7 @@ const AdminCalendarPlanning = () => {
                         </div>
                         <span className="text-sm font-medium text-gray-500">{format(day, 'MMMM yyyy', { locale: tr })}</span>
                       </div>
-                      <button onClick={() => { setModalDate(day); setModalOpen(true); }} className="text-blue-600 bg-blue-50 p-2 rounded-lg hover:bg-blue-100">
+                      <button onClick={() => { setModalDate(day); setBulkAddModalOpen(true); }} className="text-blue-600 bg-blue-50 p-2 rounded-lg hover:bg-blue-100">
                         <Plus size={20} />
                       </button>
                     </div>
@@ -556,14 +653,25 @@ const AdminCalendarPlanning = () => {
           )}
         </div>
 
+        {/* MODALLAR */}
         <BulkAddModal 
-          isOpen={modalOpen} 
-          onClose={() => setModalOpen(false)} 
+          isOpen={bulkAddModalOpen} 
+          onClose={() => setBulkAddModalOpen(false)} 
           date={modalDate || new Date()} 
           customers={customers} 
           branches={branches}
           selectedOperator={selectedOperator}
           onSave={handleBulkAdd}
+        />
+
+        <TransferModal 
+          isOpen={transferModalOpen}
+          onClose={() => setTransferModalOpen(false)}
+          onTransfer={handleTransferSubmit}
+          currentDate={currentDate}
+          customers={customers}
+          branches={branches}
+          operators={operators}
         />
 
       </div>
