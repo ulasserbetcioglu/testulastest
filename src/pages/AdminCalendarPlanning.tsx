@@ -6,7 +6,7 @@ import { tr } from 'date-fns/locale';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { 
   Search, Filter, Plus, X, ChevronLeft, ChevronRight, Calendar, Trash2, User, 
-  FileImage, FileText, Menu, List, Grid, CheckCircle, Copy, Building, Users
+  FileImage, FileText, Menu, List, Grid, CheckCircle, Copy, Building, Users, AlertCircle 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -366,6 +366,7 @@ const AdminCalendarPlanning = () => {
         // Optimistic update
         setVisits(prev => prev.map(v => v.id === item.id ? { ...v, visit_date: dateStr } : v));
       } else {
+        // Yeni oluşturma
         if (!selectedOperator) return toast.error('Önce bir operatör seçin!');
         createVisitBatch([{
           customer_id: item.type === 'branch' ? item.customer_id : item.id,
