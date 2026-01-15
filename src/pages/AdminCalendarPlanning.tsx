@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay, isSameDay, parseISO, getWeekOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay, isSameDay, parseISO, getWeeksInMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { 
   Search, Filter, Plus, X, ChevronLeft, ChevronRight, Calendar, Trash2, User, 
-  Menu, List, Grid, CheckCircle, Copy, AlertCircle, Printer, ArrowLeft, FileText, FileImage
+  FileImage, FileText, Menu, List, Grid, CheckCircle, Copy, AlertCircle, Printer, ArrowLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 // --- TİP TANIMLARI ---
 const ItemTypes = {
@@ -288,9 +286,7 @@ const AdminCalendarPlanning = () => {
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState<Date | null>(null);
 
-  // REF TANIMLAMALARI (HATAYI ÇÖZEN KISIM)
   const calendarRef = useRef(null);
-  const printRef = useRef(null);
 
   useEffect(() => {
     checkAdmin();
@@ -435,101 +431,124 @@ const AdminCalendarPlanning = () => {
     toast.success('Silindi');
   };
 
-  const handleExport = async (type) => {
-    if (!calendarRef.current) return;
-    const canvas = await html2canvas(calendarRef.current, { scale: 2, backgroundColor: '#fff' });
-    if (type === 'png') {
-      const link = document.createElement('a');
-      link.download = 'takvim.png';
-      link.href = canvas.toDataURL();
-      link.click();
-    } else {
-      const pdf = new jsPDF('l', 'mm', 'a4');
-      const imgProps = pdf.getImageProperties(canvas.toDataURL());
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      pdf.addImage(imgProps.data, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save('takvim.pdf');
-    }
-  };
-
   if (!isAdmin && !loading) return <div className="p-10 text-center text-red-500 font-bold">Yetkisiz erişim.</div>;
 
-  // --- ÖZEL YAZDIRMA GÖRÜNÜMÜ ---
+  // --- ÖZEL YAZDIRMA GÖRÜNÜMÜ (A4 YATAY OPTİMİZE EDİLMİŞ) ---
   if (isPrintMode) {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    
+    // Takvimi haftalara bölmek için mantık (Pazartesi başlar)
+    const startDay = getDay(monthStart) === 0 ? 6 : getDay(monthStart) - 1; // 0=Pazartesi
+    const weeks = [];
+    let currentWeek = Array(7).fill(null);
+    
+    // İlk hafta boşlukları
+    for(let i=0; i<startDay; i++) currentWeek[i] = null;
+    
+    daysInMonth.forEach(day => {
+        const dayIndex = getDay(day) === 0 ? 6 : getDay(day) - 1;
+        currentWeek[dayIndex] = day;
+        if (dayIndex === 6) {
+            weeks.push(currentWeek);
+            currentWeek = Array(7).fill(null);
+        }
+    });
+    // Son hafta dolmamışsa ekle
+    if (currentWeek.some(d => d !== null)) weeks.push(currentWeek);
+
     return (
-      <div className="bg-white min-h-screen text-black font-sans">
+      <div className="bg-white min-h-screen font-sans text-black">
         
-        {/* Yazdırma Kontrol Paneli (Kağıtta Çıkmaz) */}
-        <div className="fixed top-0 left-0 w-full bg-indigo-900 text-white p-4 flex justify-between items-center shadow-lg no-print z-50">
+        {/* Kontrol Bar (Baskıda Görünmez) */}
+        <div className="fixed top-0 left-0 w-full bg-slate-800 text-white p-3 flex justify-between items-center shadow-md no-print z-50">
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsPrintMode(false)} className="flex items-center gap-2 hover:bg-indigo-800 px-3 py-1 rounded">
-              <ArrowLeft size={20} /> Geri Dön
+            <button onClick={() => setIsPrintMode(false)} className="flex items-center gap-2 hover:bg-slate-700 px-3 py-1 rounded">
+              <ArrowLeft size={18} /> Geri
             </button>
-            <span className="font-bold text-lg">Baskı Önizleme</span>
+            <span className="font-bold">A4 Yatay Baskı Modu</span>
           </div>
-          <div className="flex gap-3">
-            <button onClick={() => window.print()} className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded font-bold shadow transition-all">
-              <Printer size={20} /> YAZDIR / PDF KAYDET
+          <div className="flex items-center gap-3">
+            <div className="text-xs bg-yellow-600 px-2 py-1 rounded text-yellow-50">
+              Yazdırırken: "Yatay" ve "Kenar Boşlukları: Yok" seçiniz.
+            </div>
+            <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded font-bold shadow">
+              <Printer size={18} /> YAZDIR
             </button>
           </div>
         </div>
 
-        {/* Yazdırılacak Alan */}
-        <div className="p-8 mt-16 max-w-[210mm] mx-auto landscape:max-w-none">
-          <div className="text-center mb-6 border-b-2 border-black pb-4">
-            <h1 className="text-3xl font-black uppercase tracking-widest mb-2">ZİYARET PLANI</h1>
-            <div className="flex justify-between items-end px-4">
-              <div className="text-left">
-                <p className="text-sm text-gray-600">DÖNEM</p>
-                <p className="text-xl font-bold uppercase">{format(currentDate, 'MMMM yyyy', { locale: tr })}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-600">OPERATÖR</p>
-                <p className="text-xl font-bold uppercase">{selectedOperator ? operators.find(o => o.id === selectedOperator)?.name : 'TÜM OPERATÖRLER'}</p>
-              </div>
+        {/* --- BASKI ALANI (A4 YATAY - 297mm x 210mm) --- */}
+        <div className="print-container w-[297mm] h-[210mm] mx-auto bg-white p-[5mm] flex flex-col">
+          
+          {/* Header */}
+          <div className="flex justify-between items-end border-b-2 border-black pb-2 mb-2">
+            <div className="text-left">
+              <h1 className="text-2xl font-black uppercase tracking-wider leading-none">ZİYARET PLANI</h1>
+              <p className="text-sm font-bold text-gray-600 uppercase mt-1">{format(currentDate, 'MMMM yyyy', { locale: tr })}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500 uppercase">OPERATÖR</p>
+              <p className="text-lg font-bold uppercase leading-none">{selectedOperator ? operators.find(o => o.id === selectedOperator)?.name : 'TÜMÜ'}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 border-2 border-black">
-            {['PAZARTESİ', 'SALI', 'ÇARŞAMBA', 'PERŞEMBE', 'CUMA', 'CUMARTESİ', 'PAZAR'].map((d, i) => (
-              <div key={i} className="py-2 text-center text-sm font-bold bg-gray-200 border-r border-b border-black last:border-r-0">{d}</div>
-            ))}
+          {/* Grid Container - Flex Grow ile kalanı doldur */}
+          <div className="flex-1 flex flex-col border-l border-t border-black">
             
-            {Array.from({ length: (getDay(startOfMonth(currentDate)) + 6) % 7 }).map((_, i) => (
-              <div key={`empty-${i}`} className="bg-gray-50 border-r border-b border-black min-h-[120px]"></div>
-            ))}
+            {/* Gün Başlıkları */}
+            <div className="flex h-[25px] border-b border-black bg-gray-100">
+                {['PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CMT', 'PAZ'].map(d => (
+                    <div key={d} className="flex-1 border-r border-black text-center text-[10px] font-bold flex items-center justify-center">
+                        {d}
+                    </div>
+                ))}
+            </div>
 
-            {eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) }).map((day) => {
-               const dayVisits = visits.filter(v => isSameDay(parseISO(v.visit_date), day));
-               return (
-                <div key={day.toISOString()} className="border-r border-b border-black min-h-[120px] p-1 relative flex flex-col">
-                  <div className="text-right font-bold text-lg text-gray-700 pr-2">{format(day, 'd')}</div>
-                  <div className="mt-1 flex flex-col gap-1">
-                    {dayVisits.map(visit => (
-                      <div key={visit.id} className="text-[10px] font-bold text-black uppercase leading-tight pl-1">
-                        {/* TEK SATIR: ŞUBE VARSA ŞUBE, YOKSA MÜŞTERİ */}
-                        {visit.branch ? `📍 ${visit.branch.sube_adi}` : `• ${visit.customer?.kisa_isim}`}
-                      </div>
-                    ))}
-                  </div>
+            {/* Haftalar */}
+            {weeks.map((week, wIndex) => (
+                <div key={wIndex} className="flex flex-1 border-b border-black min-h-0">
+                    {week.map((day, dIndex) => {
+                        if (!day) return <div key={dIndex} className="flex-1 border-r border-black bg-gray-50"></div>;
+                        
+                        const dayVisits = visits.filter(v => isSameDay(parseISO(v.visit_date), day));
+                        
+                        return (
+                            <div key={dIndex} className="flex-1 border-r border-black p-1 relative flex flex-col min-w-0">
+                                <div className="text-right text-[10px] font-bold text-gray-500 mb-0.5">{format(day, 'd')}</div>
+                                <div className="flex-1 flex flex-col gap-0.5 overflow-hidden">
+                                    {dayVisits.map(visit => (
+                                        <div key={visit.id} className="text-[7.5pt] font-bold leading-tight uppercase truncate whitespace-nowrap">
+                                            {visit.branch ? `📍 ${visit.branch.sube_adi}` : `• ${visit.customer?.kisa_isim}`}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
-              );
-            })}
+            ))}
           </div>
           
-          <div className="mt-4 text-xs text-right text-gray-500">
-            Rapor Tarihi: {format(new Date(), 'dd.MM.yyyy HH:mm')}
+          <div className="text-[8px] text-right text-gray-400 mt-1">
+            Çıktı Tarihi: {format(new Date(), 'dd.MM.yyyy HH:mm')}
           </div>
+
         </div>
 
-        {/* Yazdırma CSS'i */}
         <style>{`
           @media print {
+            @page { size: landscape; margin: 0; }
+            body { background: white; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
             .no-print { display: none !important; }
-            body { background: white; }
-            .print-container { width: 100%; margin: 0; padding: 0; }
-            @page { margin: 10mm; size: landscape; }
+            .print-container { 
+                width: 100vw !important; 
+                height: 100vh !important; 
+                padding: 5mm !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+            }
           }
         `}</style>
       </div>
@@ -541,7 +560,7 @@ const AdminCalendarPlanning = () => {
     <DndProvider backend={HTML5Backend}>
       <div className="flex h-[calc(100vh-64px)] flex-col bg-gray-50 overflow-hidden">
         {/* Üst Bar */}
-        <div className="bg-white border-b px-4 py-3 shadow-sm z-20 flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div className="bg-white border-b px-4 py-3 shadow-sm z-20 flex flex-col md:flex-row gap-4 justify-between items-center no-print">
           <div className="flex items-center gap-4 bg-gray-100 p-1 rounded-xl">
             <button onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="p-2 hover:bg-white rounded-lg shadow-sm"><ChevronLeft size={18}/></button>
             <div className="text-center min-w-[140px]">
@@ -577,7 +596,7 @@ const AdminCalendarPlanning = () => {
               <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><Grid size={18}/></button>
               <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><List size={18}/></button>
             </div>
-            {/* YAZDIRMA BUTONU: ARTIK MODA GEÇİŞ YAPIYOR */}
+            {/* YAZDIRMA BUTONU */}
             <button onClick={() => setIsPrintMode(true)} disabled={!selectedOperator} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-md transition-all disabled:opacity-50">
               <Printer size={16} /> <span className="hidden md:inline">Yazdırma Görünümü</span>
             </button>
