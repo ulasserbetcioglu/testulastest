@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay, isSameDay, parseISO, getWeeksInMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, getDay, isSameDay, parseISO, getWeekOfMonth } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { 
   Search, Filter, Plus, X, ChevronLeft, ChevronRight, Calendar, Trash2, User, 
-  FileImage, FileText, Menu, List, Grid, CheckCircle, Copy, AlertCircle, Printer, ArrowLeft
+  Menu, List, Grid, CheckCircle, Copy, AlertCircle, Printer, ArrowLeft, FileText, FileImage
 } from 'lucide-react';
 import { toast } from 'sonner';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 // --- TİP TANIMLARI ---
 const ItemTypes = {
@@ -265,10 +267,8 @@ const DayCell = ({ date, onEventDrop, visits, onDeleteVisit, onQuickAdd }) => {
 // --- ANA SAYFA ---
 const AdminCalendarPlanning = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'print'>('grid');
-  
-  // YENİ STATE: Baskı Modu
-  const [isPrintMode, setIsPrintMode] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isPrintMode, setIsPrintMode] = useState(false); // Baskı Modu State
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -344,7 +344,7 @@ const AdminCalendarPlanning = () => {
     }
   };
 
-  // İşlemler (Drop, Bulk Add, Transfer, Delete)
+  // İşlemler
   const handleEventDrop = async (item, date) => {
     if (!isAdmin) return toast.error('Yetkiniz yok');
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -433,93 +433,73 @@ const AdminCalendarPlanning = () => {
 
   if (!isAdmin && !loading) return <div className="p-10 text-center text-red-500 font-bold">Yetkisiz erişim.</div>;
 
-  // --- ÖZEL YAZDIRMA GÖRÜNÜMÜ (A4 YATAY OPTİMİZE EDİLMİŞ) ---
+  // --- YAZDIRMA GÖRÜNÜMÜ (HTML) ---
   if (isPrintMode) {
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
     const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
     
-    // Takvimi haftalara bölmek için mantık (Pazartesi başlar)
-    const startDay = getDay(monthStart) === 0 ? 6 : getDay(monthStart) - 1; // 0=Pazartesi
+    const startDay = getDay(monthStart) === 0 ? 6 : getDay(monthStart) - 1; 
     const weeks = [];
     let currentWeek = Array(7).fill(null);
-    
-    // İlk hafta boşlukları
     for(let i=0; i<startDay; i++) currentWeek[i] = null;
     
     daysInMonth.forEach(day => {
         const dayIndex = getDay(day) === 0 ? 6 : getDay(day) - 1;
         currentWeek[dayIndex] = day;
-        if (dayIndex === 6) {
-            weeks.push(currentWeek);
-            currentWeek = Array(7).fill(null);
-        }
+        if (dayIndex === 6) { weeks.push(currentWeek); currentWeek = Array(7).fill(null); }
     });
-    // Son hafta dolmamışsa ekle
     if (currentWeek.some(d => d !== null)) weeks.push(currentWeek);
 
     return (
-      <div className="bg-white min-h-screen font-sans text-black">
-        
-        {/* Kontrol Bar (Baskıda Görünmez) */}
-        <div className="fixed top-0 left-0 w-full bg-slate-800 text-white p-3 flex justify-between items-center shadow-md no-print z-50">
+      <div className="bg-white min-h-screen text-black font-sans">
+        {/* Navigasyon (Yazdırırken Gizlenir) */}
+        <div className="fixed top-0 left-0 w-full bg-slate-900 text-white p-3 flex justify-between items-center no-print z-50 shadow-lg">
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsPrintMode(false)} className="flex items-center gap-2 hover:bg-slate-700 px-3 py-1 rounded">
-              <ArrowLeft size={18} /> Geri
-            </button>
-            <span className="font-bold">A4 Yatay Baskı Modu</span>
+            <button onClick={() => setIsPrintMode(false)} className="flex items-center gap-2 hover:bg-slate-700 px-3 py-1 rounded font-medium"><ArrowLeft size={18} /> Geri Dön</button>
+            <span className="text-sm text-slate-300">Bu görünümde tarayıcıdan "Yazdır" (Ctrl+P) diyerek PDF alabilirsiniz.</span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-xs bg-yellow-600 px-2 py-1 rounded text-yellow-50">
-              Yazdırırken: "Yatay" ve "Kenar Boşlukları: Yok" seçiniz.
-            </div>
-            <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded font-bold shadow">
-              <Printer size={18} /> YAZDIR
-            </button>
-          </div>
+          <button onClick={() => window.print()} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 px-4 py-1.5 rounded font-bold shadow-sm transition-all">
+            <Printer size={18} /> YAZDIR / PDF KAYDET
+          </button>
         </div>
 
-        {/* --- BASKI ALANI (A4 YATAY - 297mm x 210mm) --- */}
-        <div className="print-container w-[297mm] h-[210mm] mx-auto bg-white p-[5mm] flex flex-col">
-          
-          {/* Header */}
-          <div className="flex justify-between items-end border-b-2 border-black pb-2 mb-2">
-            <div className="text-left">
-              <h1 className="text-2xl font-black uppercase tracking-wider leading-none">ZİYARET PLANI</h1>
-              <p className="text-sm font-bold text-gray-600 uppercase mt-1">{format(currentDate, 'MMMM yyyy', { locale: tr })}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-500 uppercase">OPERATÖR</p>
-              <p className="text-lg font-bold uppercase leading-none">{selectedOperator ? operators.find(o => o.id === selectedOperator)?.name : 'TÜMÜ'}</p>
+        {/* Yazdırılabilir Alan */}
+        <div className="p-4 mt-12 print:mt-0 print:p-0">
+          <div className="text-center mb-4 pb-2 border-b-2 border-black">
+            <h1 className="text-2xl font-black uppercase tracking-wider mb-1">ZİYARET PLANI</h1>
+            <div className="flex justify-between items-end">
+              <div className="text-left">
+                <p className="text-xs text-gray-500 font-bold">DÖNEM</p>
+                <p className="text-lg font-bold uppercase">{format(currentDate, 'MMMM yyyy', { locale: tr })}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500 font-bold">OPERATÖR</p>
+                <p className="text-lg font-bold uppercase">{selectedOperator ? operators.find(o => o.id === selectedOperator)?.name : 'TÜMÜ'}</p>
+              </div>
             </div>
           </div>
 
-          {/* Grid Container - Flex Grow ile kalanı doldur */}
-          <div className="flex-1 flex flex-col border-l border-t border-black">
-            
+          <div className="w-full border-t border-l border-black flex flex-col">
             {/* Gün Başlıkları */}
-            <div className="flex h-[25px] border-b border-black bg-gray-100">
+            <div className="flex border-b border-black bg-gray-100">
                 {['PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CMT', 'PAZ'].map(d => (
-                    <div key={d} className="flex-1 border-r border-black text-center text-[10px] font-bold flex items-center justify-center">
-                        {d}
-                    </div>
+                    <div key={d} className="flex-1 border-r border-black p-1 text-center text-[10px] font-bold">{d}</div>
                 ))}
             </div>
-
-            {/* Haftalar */}
+            {/* Takvim Hücreleri */}
             {weeks.map((week, wIndex) => (
-                <div key={wIndex} className="flex flex-1 border-b border-black min-h-0">
+                <div key={wIndex} className="flex border-b border-black">
                     {week.map((day, dIndex) => {
-                        if (!day) return <div key={dIndex} className="flex-1 border-r border-black bg-gray-50"></div>;
-                        
+                        if (!day) return <div key={dIndex} className="flex-1 border-r border-black bg-gray-50 min-h-[100px]"></div>;
                         const dayVisits = visits.filter(v => isSameDay(parseISO(v.visit_date), day));
                         
                         return (
-                            <div key={dIndex} className="flex-1 border-r border-black p-1 relative flex flex-col min-w-0">
-                                <div className="text-right text-[10px] font-bold text-gray-500 mb-0.5">{format(day, 'd')}</div>
-                                <div className="flex-1 flex flex-col gap-0.5 overflow-hidden">
+                            <div key={dIndex} className="flex-1 border-r border-black p-1 min-h-[100px] relative">
+                                <div className="text-right text-xs font-bold text-gray-600 mb-1">{format(day, 'd')}</div>
+                                <div className="flex flex-col gap-0.5">
                                     {dayVisits.map(visit => (
-                                        <div key={visit.id} className="text-[7.5pt] font-bold leading-tight uppercase truncate whitespace-nowrap">
+                                        <div key={visit.id} className="text-[9px] font-bold leading-tight uppercase truncate whitespace-nowrap">
                                             {visit.branch ? `📍 ${visit.branch.sube_adi}` : `• ${visit.customer?.kisa_isim}`}
                                         </div>
                                     ))}
@@ -531,31 +511,21 @@ const AdminCalendarPlanning = () => {
             ))}
           </div>
           
-          <div className="text-[8px] text-right text-gray-400 mt-1">
-            Çıktı Tarihi: {format(new Date(), 'dd.MM.yyyy HH:mm')}
-          </div>
-
+          <div className="mt-2 text-[8px] text-right text-gray-400">Oluşturulma: {format(new Date(), 'dd.MM.yyyy HH:mm')}</div>
         </div>
 
         <style>{`
           @media print {
-            @page { size: landscape; margin: 0; }
-            body { background: white; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+            @page { size: landscape; margin: 5mm; }
+            body { background: white; margin: 0; padding: 0; }
             .no-print { display: none !important; }
-            .print-container { 
-                width: 100vw !important; 
-                height: 100vh !important; 
-                padding: 5mm !important;
-                margin: 0 !important;
-                box-shadow: none !important;
-            }
           }
         `}</style>
       </div>
     );
   }
 
-  // --- NORMAL EKRAN GÖRÜNÜMÜ ---
+  // --- EKRAN GÖRÜNÜMÜ ---
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex h-[calc(100vh-64px)] flex-col bg-gray-50 overflow-hidden">
@@ -596,7 +566,6 @@ const AdminCalendarPlanning = () => {
               <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><Grid size={18}/></button>
               <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}><List size={18}/></button>
             </div>
-            {/* YAZDIRMA BUTONU */}
             <button onClick={() => setIsPrintMode(true)} disabled={!selectedOperator} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-md transition-all disabled:opacity-50">
               <Printer size={16} /> <span className="hidden md:inline">Yazdırma Görünümü</span>
             </button>
