@@ -1,8 +1,6 @@
-// src/components/Operators/EditOperatorModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
-import { supabase, supabaseAdmin } from '../../lib/supabase'; // supabaseAdmin import edildi
-import { Operator as OperatorType } from '../../types';
+import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
 interface EditOperatorModalProps {
@@ -24,9 +22,9 @@ interface Branch {
 }
 
 const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, onSave, operatorId }) => {
-  // Orijinal veriyi saklamak için (değişiklik kontrolü)
+  // Değişiklikleri kıyaslamak için orijinal veriyi tutuyoruz
   const [originalData, setOriginalData] = useState<any>(null);
-  
+
   const [formData, setFormData] = useState({
     adSoyad: '',
     telefon: '',
@@ -37,22 +35,30 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     assignedBranches: [] as string[],
     totalLeaveDays: 0
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  
+  // Select listeleri
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filteredBranches, setFilteredBranches] = useState<Branch[]>([]);
+  
+  // Tab yönetimi
   const [activeTab, setActiveTab] = useState<'basic' | 'permissions'>('basic');
 
+  // Modal açıldığında verileri çek
   useEffect(() => {
     if (isOpen) {
       fetchOperator();
       fetchCustomersAndBranches();
+      setSuccess(false);
+      setError(null);
     }
   }, [isOpen, operatorId]);
 
+  // Seçili müşterilere göre şubeleri filtrele
   useEffect(() => {
     if (formData.assignedCustomers.length > 0) {
       const filtered = branches.filter(branch => 
@@ -74,7 +80,6 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
 
       if (error) throw error;
 
-      // Verileri state'e yükle
       const initialData = {
         adSoyad: data.name,
         telefon: data.phone || '',
@@ -87,10 +92,12 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
       };
 
       setFormData(initialData);
-      setOriginalData({ ...initialData, auth_id: data.auth_id }); // auth_id'yi de sakla
+      // Auth ID'yi güncelleme için saklamamız şart
+      setOriginalData({ ...initialData, auth_id: data.auth_id }); 
 
     } catch (err: any) {
-      setError(err.message);
+      console.error("Veri çekme hatası:", err);
+      setError("Operatör bilgileri alınamadı.");
     }
   };
 
@@ -102,23 +109,21 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
       const { data: branchesData } = await supabase.from('branches').select('id, sube_adi, customer_id').order('sube_adi');
       setBranches(branchesData || []);
     } catch (err: any) {
-      setError(err.message);
+      console.error("Liste hatası:", err);
     }
   };
 
-  // --- E-POSTA GÜNCELLEME FONKSİYONU ---
-  const updateOperatorEmail = async (authId: string, newEmail: string) => {
-    if (!supabaseAdmin) {
-      throw new Error("Admin yetkisi (Service Role Key) bulunamadı. .env dosyasını kontrol edin.");
+  // --- SQL FONKSİYONUNU ÇAĞIRAN METOD ---
+  const updateOperatorEmailRPC = async (authId: string, newEmail: string) => {
+    // Adım 1'de oluşturduğumuz SQL fonksiyonunu çağırıyoruz
+    const { error } = await supabase.rpc('update_operator_email_admin', {
+      target_auth_id: authId,
+      new_email: newEmail
+    });
+
+    if (error) {
+      throw new Error(`E-posta güncelleme hatası: ${error.message}`);
     }
-
-    // 1. Auth tablosunu güncelle (Giriş bilgisi)
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-      authId,
-      { email: newEmail, email_confirm: true, user_metadata: { email: newEmail } }
-    );
-
-    if (authError) throw new Error(`Auth güncelleme hatası: ${authError.message}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -128,20 +133,21 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     setSuccess(false);
 
     try {
-      // 1. E-posta değişmiş mi kontrol et ve güncelle
+      // 1. Eğer e-posta değişmişse, önce güvenli RPC fonksiyonunu çalıştır
       if (originalData && formData.email !== originalData.email) {
         if (!originalData.auth_id) {
-          throw new Error("Bu operatörün Auth ID'si bulunamadı, e-posta değiştirilemez.");
+          throw new Error("Operatörün Auth ID'si bulunamadı, e-posta değiştirilemez.");
         }
-        await updateOperatorEmail(originalData.auth_id, formData.email);
-        toast.success("E-posta adresi güncellendi.");
+        await updateOperatorEmailRPC(originalData.auth_id, formData.email);
+        toast.success("E-posta adresi ve giriş bilgileri güncellendi.");
       }
 
-      // 2. Diğer verileri hazırla
+      // 2. Diğer verileri hazırla (İsim, Telefon, Yetkiler vb.)
       const operatorData: any = {
         name: formData.adSoyad,
         phone: formData.telefon,
-        email: formData.email, // Tablodaki e-postayı da güncelle
+        // E-posta zaten RPC ile güncellendi ama tutarlılık için buraya da koyabiliriz (Update üstüne update sorun olmaz)
+        email: formData.email, 
         status: formData.durum,
         total_leave_days: formData.totalLeaveDays
       };
@@ -154,13 +160,13 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
         operatorData.assigned_branches = null;
       }
 
-      // 3. Operators tablosunu güncelle
-      const { error } = await supabase
+      // 3. Standart tablo güncellemesi
+      const { error: updateError } = await supabase
         .from('operators')
         .update(operatorData)
         .eq('id', operatorId);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
       setSuccess(true);
       toast.success("Operatör başarıyla güncellendi!");
@@ -169,10 +175,11 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
       setTimeout(() => {
         onClose();
       }, 1500);
+
     } catch (err: any) {
       console.error("Güncelleme hatası:", err);
-      setError(err.message);
-      toast.error("Hata: " + err.message);
+      setError(err.message || "Bir hata oluştu.");
+      toast.error("İşlem başarısız oldu.");
     } finally {
       setLoading(false);
     }
@@ -191,22 +198,25 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl transform transition-all">
+        
+        {/* Header */}
         <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white z-10">
-          <h2 className="text-xl font-semibold">Operatör Düzenle</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <h2 className="text-xl font-semibold text-gray-800">Operatör Düzenle</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1 hover:bg-gray-100 rounded-full transition-colors">
             <X size={24} />
           </button>
         </div>
 
-        <div className="border-b">
-          <div className="flex">
+        {/* Tabs */}
+        <div className="border-b bg-gray-50 px-4 pt-2">
+          <div className="flex space-x-4">
             <button
               onClick={() => setActiveTab('basic')}
-              className={`px-4 py-2 font-medium ${
+              className={`pb-2 px-1 font-medium text-sm transition-colors ${
                 activeTab === 'basic'
-                  ? 'border-b-2 border-green-500 text-green-600'
+                  ? 'border-b-2 border-green-600 text-green-700'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -214,9 +224,9 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
             </button>
             <button
               onClick={() => setActiveTab('permissions')}
-              className={`px-4 py-2 font-medium ${
+              className={`pb-2 px-1 font-medium text-sm transition-colors ${
                 activeTab === 'permissions'
-                  ? 'border-b-2 border-green-500 text-green-600'
+                  ? 'border-b-2 border-green-600 text-green-700'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -227,15 +237,15 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
 
         <form onSubmit={handleSubmit} className="p-6">
           {error && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded flex items-center gap-2">
-              <AlertTriangle size={18} />
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center gap-2 text-sm">
+              <AlertTriangle size={16} />
               {error}
             </div>
           )}
           
           {success && (
-            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
-              Operatör başarıyla güncellendi!
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm font-medium">
+              ✓ Operatör başarıyla güncellendi!
             </div>
           )}
 
@@ -249,7 +259,7 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
                   type="text"
                   value={formData.adSoyad}
                   onChange={(e) => setFormData({ ...formData, adSoyad: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
                   required
                 />
               </div>
@@ -262,63 +272,65 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
                   type="tel"
                   value={formData.telefon}
                   onChange={(e) => setFormData({ ...formData, telefon: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                <label className="block text-sm font-bold text-gray-800 mb-1">
                   E-Posta (Giriş Bilgisi)
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500 bg-yellow-50"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
                   required
                 />
-                <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
-                  <AlertTriangle size={12} className="text-yellow-600"/>
-                  Dikkat: Burayı değiştirdiğinizde operatörün sisteme giriş maili de değişecektir.
+                <p className="mt-2 text-xs text-yellow-700 flex items-start gap-1">
+                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                  Dikkat: E-postayı değiştirdiğinizde operatörün sisteme giriş yaparken kullandığı e-posta adresi de kalıcı olarak değişecektir.
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Giriş İzni
-                </label>
-                <select
-                  value={formData.durum}
-                  onChange={(e) => setFormData({ ...formData, durum: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="Açık">Açık</option>
-                  <option value="Kapalı">Kapalı</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Giriş İzni
+                  </label>
+                  <select
+                    value={formData.durum}
+                    onChange={(e) => setFormData({ ...formData, durum: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all bg-white"
+                  >
+                    <option value="Açık">Açık</option>
+                    <option value="Kapalı">Kapalı</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Toplam İzin Günü
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.totalLeaveDays}
+                    onChange={(e) => setFormData({ ...formData, totalLeaveDays: parseInt(e.target.value) || 0 })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                    min="0"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Toplam İzin Günü
-                </label>
-                <input
-                  type="number"
-                  value={formData.totalLeaveDays}
-                  onChange={(e) => setFormData({ ...formData, totalLeaveDays: parseInt(e.target.value) || 0 })}
-                  className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
-                  min="0"
-                />
-              </div>
-
-              <div className="flex items-center mt-4">
+              <div className="flex items-center mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <input
                   type="checkbox"
                   id="isSubOperator"
                   checked={formData.isSubOperator}
                   onChange={(e) => setFormData({ ...formData, isSubOperator: e.target.checked })}
-                  className="mr-2 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                  className="mr-3 h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
                 />
-                <label htmlFor="isSubOperator" className="text-sm font-medium text-gray-700 select-none cursor-pointer">
+                <label htmlFor="isSubOperator" className="text-sm font-medium text-gray-800 select-none cursor-pointer">
                   Alt Taşeron Operatör (Kısıtlı Erişim)
                 </label>
               </div>
@@ -328,10 +340,15 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
           {activeTab === 'permissions' && (
             <div className="space-y-4">
               {!formData.isSubOperator ? (
-                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                  <p className="text-yellow-700 text-sm">
-                    Bu ayarları kullanabilmek için "Temel Bilgiler" sekmesinden "Alt Taşeron Operatör" seçeneğini aktif etmelisiniz.
-                  </p>
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                  <div className="flex">
+                    <div className="ml-3">
+                      <p className="text-sm text-blue-700">
+                        Bu ayarlar sadece <b>Alt Taşeron Operatörler</b> içindir. 
+                        <br/>Aktif etmek için "Temel Bilgiler" sekmesinden ilgili kutucuğu işaretleyin.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -343,16 +360,16 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
                       multiple
                       value={formData.assignedCustomers}
                       onChange={handleCustomerChange}
-                      className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500 min-h-[150px]"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 min-h-[150px] text-sm"
                     >
                       {customers.map(customer => (
-                        <option key={customer.id} value={customer.id}>
+                        <option key={customer.id} value={customer.id} className="p-1">
                           {customer.kisa_isim}
                         </option>
                       ))}
                     </select>
                     <p className="mt-1 text-xs text-gray-500">
-                      Çoklu seçim için Ctrl (Mac için Cmd) tuşuna basılı tutun. Boş bırakılırsa tüm müşterilere erişebilir.
+                      Birden fazla seçim yapmak için <b>Ctrl</b> (veya Mac'te <b>Cmd</b>) tuşuna basılı tutun.
                     </p>
                   </div>
 
@@ -364,17 +381,17 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
                       multiple
                       value={formData.assignedBranches}
                       onChange={handleBranchChange}
-                      className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500 min-h-[150px]"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 min-h-[150px] text-sm disabled:bg-gray-100 disabled:text-gray-400"
                       disabled={formData.assignedCustomers.length === 0}
                     >
                       {filteredBranches.map(branch => (
-                        <option key={branch.id} value={branch.id}>
+                        <option key={branch.id} value={branch.id} className="p-1">
                           {branch.sube_adi}
                         </option>
                       ))}
                     </select>
                     <p className="mt-1 text-xs text-gray-500">
-                      Önce müşteri seçmelisiniz. Boş bırakılırsa seçili müşterilerin tüm şubelerine erişebilir.
+                      Listelenen şubeler sadece yukarıda seçtiğiniz müşterilere aittir.
                     </p>
                   </div>
                 </>
@@ -382,22 +399,22 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
             </div>
           )}
 
-          <div className="mt-6 flex justify-end space-x-3 pt-4 border-t">
+          <div className="mt-8 flex justify-end space-x-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors"
+              className="px-5 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors focus:ring-2 focus:ring-gray-200"
               disabled={loading}
             >
               İptal
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
+              className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-sm focus:ring-2 focus:ring-green-500 focus:ring-offset-1"
               disabled={loading}
             >
               {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
-              {loading ? 'Kaydediliyor...' : 'Kaydet'}
+              {loading ? 'İşleniyor...' : 'Değişiklikleri Kaydet'}
             </button>
           </div>
         </form>
