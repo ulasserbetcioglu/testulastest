@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Eye, EyeOff, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -22,7 +22,6 @@ interface Branch {
 }
 
 const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, onSave, operatorId }) => {
-  // Değişiklikleri kıyaslamak için orijinal veriyi tutuyoruz
   const [originalData, setOriginalData] = useState<any>(null);
 
   const [formData, setFormData] = useState({
@@ -36,29 +35,30 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     totalLeaveDays: 0
   });
 
+  // Yeni şifre için state
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
-  // Select listeleri
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filteredBranches, setFilteredBranches] = useState<Branch[]>([]);
   
-  // Tab yönetimi
   const [activeTab, setActiveTab] = useState<'basic' | 'permissions'>('basic');
 
-  // Modal açıldığında verileri çek
   useEffect(() => {
     if (isOpen) {
       fetchOperator();
       fetchCustomersAndBranches();
       setSuccess(false);
       setError(null);
+      setNewPassword(''); // Modal açılınca şifre alanını temizle
     }
   }, [isOpen, operatorId]);
 
-  // Seçili müşterilere göre şubeleri filtrele
   useEffect(() => {
     if (formData.assignedCustomers.length > 0) {
       const filtered = branches.filter(branch => 
@@ -92,7 +92,6 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
       };
 
       setFormData(initialData);
-      // Auth ID'yi güncelleme için saklamamız şart
       setOriginalData({ ...initialData, auth_id: data.auth_id }); 
 
     } catch (err: any) {
@@ -114,15 +113,15 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
   };
 
   // --- SQL FONKSİYONUNU ÇAĞIRAN METOD ---
-  const updateOperatorEmailRPC = async (authId: string, newEmail: string) => {
-    // Adım 1'de oluşturduğumuz SQL fonksiyonunu çağırıyoruz
-    const { error } = await supabase.rpc('update_operator_email_admin', {
+  const updateOperatorCredentialsRPC = async (authId: string, newEmail: string, passwordToSet: string | null) => {
+    const { error } = await supabase.rpc('update_operator_credentials', {
       target_auth_id: authId,
-      new_email: newEmail
+      new_email: newEmail,
+      new_password: passwordToSet // Boş ise null gidecek
     });
 
     if (error) {
-      throw new Error(`E-posta güncelleme hatası: ${error.message}`);
+      throw new Error(`Kimlik güncelleme hatası: ${error.message}`);
     }
   };
 
@@ -133,20 +132,36 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     setSuccess(false);
 
     try {
-      // 1. Eğer e-posta değişmişse, önce güvenli RPC fonksiyonunu çalıştır
-      if (originalData && formData.email !== originalData.email) {
+      // 1. E-posta değişmiş mi VEYA Şifre girilmiş mi kontrol et
+      const emailChanged = originalData && formData.email !== originalData.email;
+      const passwordChanged = newPassword && newPassword.length > 0;
+
+      if (emailChanged || passwordChanged) {
         if (!originalData.auth_id) {
-          throw new Error("Operatörün Auth ID'si bulunamadı, e-posta değiştirilemez.");
+          throw new Error("Operatörün Auth ID'si bulunamadı, kimlik bilgileri değiştirilemez.");
         }
-        await updateOperatorEmailRPC(originalData.auth_id, formData.email);
-        toast.success("E-posta adresi ve giriş bilgileri güncellendi.");
+        
+        if (passwordChanged && newPassword.length < 6) {
+          throw new Error("Yeni şifre en az 6 karakter olmalıdır.");
+        }
+
+        // RPC fonksiyonunu çağır (Hem email hem şifre için)
+        await updateOperatorCredentialsRPC(
+          originalData.auth_id, 
+          formData.email, 
+          passwordChanged ? newPassword : null
+        );
+        
+        toast.success(passwordChanged 
+          ? "Şifre ve e-posta güncellendi." 
+          : "E-posta adresi güncellendi."
+        );
       }
 
-      // 2. Diğer verileri hazırla (İsim, Telefon, Yetkiler vb.)
+      // 2. Diğer verileri hazırla
       const operatorData: any = {
         name: formData.adSoyad,
         phone: formData.telefon,
-        // E-posta zaten RPC ile güncellendi ama tutarlılık için buraya da koyabiliriz (Update üstüne update sorun olmaz)
         email: formData.email, 
         status: formData.durum,
         total_leave_days: formData.totalLeaveDays
@@ -160,7 +175,7 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
         operatorData.assigned_branches = null;
       }
 
-      // 3. Standart tablo güncellemesi
+      // 3. Tablo güncellemesi
       const { error: updateError } = await supabase
         .from('operators')
         .update(operatorData)
@@ -276,21 +291,51 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
                 />
               </div>
 
-              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                <label className="block text-sm font-bold text-gray-800 mb-1">
-                  E-Posta (Giriş Bilgisi)
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
-                  required
-                />
-                <p className="mt-2 text-xs text-yellow-700 flex items-start gap-1">
-                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                  Dikkat: E-postayı değiştirdiğinizde operatörün sisteme giriş yaparken kullandığı e-posta adresi de kalıcı olarak değişecektir.
-                </p>
+              {/* KİMLİK BİLGİLERİ ALANI (Email ve Şifre) */}
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 space-y-3">
+                <h3 className="text-sm font-bold text-orange-800 border-b border-orange-200 pb-1 mb-2 flex items-center gap-2">
+                  <Lock size={14} /> Giriş Bilgileri
+                </h3>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    E-Posta Adresi
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Yeni Şifre Belirle
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Değiştirmek istemiyorsanız boş bırakın"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white pr-10"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-orange-700 flex items-start gap-1">
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    Şifreyi göremezsiniz ancak yeni bir şifre belirleyebilirsiniz.
+                  </p>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
