@@ -122,6 +122,7 @@ import CustomerBranchesPage from './pages/CustomerBranchesPage';
 import BranchCalendar from './pages/BranchCalendar';
 import BranchPaidMaterials from './pages/BranchPaidMaterials';
 import BranchDocuments from './pages/BranchDocuments';
+import BranchTrendAnalysisPage from './pages/BranchTrendAnalysisPage';
 import ProtectedReportViewer from './components/ProtectedReportViewer';
 
 
@@ -297,7 +298,7 @@ function App() {
             <Route path="dokumanlar" element={<BranchDocuments />} />
             <Route path="sertifikalar" element={<Certificates />} />
             <Route path="malzemeler" element={<BranchPaidMaterials />} />
-            <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
+            <Route path="trend-analizi" element={<BranchTrendAnalysisPage />} />
             <Route path="teklifler" element={<Offers />} />
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
             <Route path="trend-raporlari" element={<CustomerTrendReports />} />
