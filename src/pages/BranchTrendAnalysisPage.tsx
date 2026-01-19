@@ -19,7 +19,7 @@ const BranchTrendAnalysisPage: React.FC = () => {
     try {
       const localSession = localAuth.getSession();
       if (localSession && localSession.type === 'branch') {
-        setBranchId(localSession.branchId);
+        setBranchId(localSession.id);
         setBranchName(localSession.name);
         setLoading(false);
         return;
