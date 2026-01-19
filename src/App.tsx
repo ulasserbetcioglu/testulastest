@@ -280,7 +280,6 @@ function App() {
             <Route path="dof" element={<CustomerDOF />} />
             <Route path="dokumanlar" element={<CustomerDocuments />} />
             <Route path="sertifikalar" element={<CustomerCertificates />} />
-            <Route path="bildirimler" element={<Notifications />} />
             <Route path="malzemeler" element={<CustomerPaidMaterials />} />
             <Route path="teklifler" element={<Offers />} />
             <Route path="pestisit-raporu" element={<PesticideUsageReport />} />
@@ -297,7 +296,6 @@ function App() {
             <Route path="takvim" element={<BranchCalendar />} />
             <Route path="dokumanlar" element={<BranchDocuments />} />
             <Route path="sertifikalar" element={<Certificates />} />
-            <Route path="bildirimler" element={<Notifications />} />
             <Route path="malzemeler" element={<BranchPaidMaterials />} />
             <Route path="trend-analizi" element={<div className="p-8 text-center">Trend Analizi Modülü</div>} />
             <Route path="teklifler" element={<Offers />} />
