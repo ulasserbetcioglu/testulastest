@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   BarChart3,
   PieChart as PieChartIcon,
-  Activity
+  Activity,
+  Calculator
 } from 'lucide-react';
 import {
   BarChart,
@@ -27,7 +28,8 @@ import {
   AreaChart,
   Area,
   LineChart,
-  Line
+  Line,
+  LabelList
 } from 'recharts';
 import html2canvas from 'html2canvas';
 
@@ -161,7 +163,6 @@ const CustomerTrendAnalysis: React.FC = () => {
 
     setLoading(true);
     try {
-      // Şube ID'lerini garantiye al
       let targetBranchIds: string[] = [];
       if (selectedBranchId) {
         targetBranchIds = [selectedBranchId];
@@ -363,16 +364,11 @@ const CustomerTrendAnalysis: React.FC = () => {
                 if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
 
                 let numVal = 0;
-                // Sayısal
                 if (typeof value === 'number') numVal = value;
-                // String sayı
                 else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
-                // Boolean True
                 else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet' || value === 'evet') numVal = 1;
-                // Boolean False (Açıkça 0 olarak işle)
                 else if (value === false || value === 'false' || value === 'yok' || value === 'Yok' || value === 'Hayır' || value === 'hayır') numVal = 0;
 
-                // Koşulsuz ekle, böylece 0 değerleri de kaydedilir
                 activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
               });
             }
@@ -403,18 +399,13 @@ const CustomerTrendAnalysis: React.FC = () => {
         const propertyLabels: Record<string, string> = {};
         const allFieldsInData = new Set<string>();
 
-        // Veri içinde geçen alanları bul
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
           Object.keys(rawTotals).forEach(key => {
-            // Sadece sayısal olması yeterli, 0 da olsa ekle
-            if (typeof rawTotals[key] === 'number') {
-              allFieldsInData.add(key);
-            }
+            if (typeof rawTotals[key] === 'number') allFieldsInData.add(key);
           });
         });
 
-        // Tanımlı özellikleri ekle
         if (group.properties) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
             if (value && (value.type === 'number' || value.type === 'boolean' || value.type === 'select')) {
@@ -426,7 +417,6 @@ const CustomerTrendAnalysis: React.FC = () => {
           });
         }
 
-        // Veride olan diğer alanları ekle
         allFieldsInData.forEach(key => {
           if (!propertyKeys.includes(key)) {
             propertyKeys.push(key);
@@ -440,10 +430,7 @@ const CustomerTrendAnalysis: React.FC = () => {
 
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
-          
-          // Verisi olmasa bile listede görünsün ki "boş" olduğu anlaşılsın (Opsiyonel: Filtreleyebilirsiniz)
-          // if (Object.keys(rawTotals).length === 0) return;
-
+          // Verisi olmasa bile listede görünsün
           const visitCount = visitCountMap.get(eq.id) || 1;
 
           const activityRow: EquipmentTypeActivity = {
@@ -460,11 +447,9 @@ const CustomerTrendAnalysis: React.FC = () => {
               ? totalVal
               : Number((totalVal / visitCount).toFixed(1));
             
-            // Eğer en az bir değer (0 dahil, çünkü key var) varsa row'u ekle
             if (rawTotals.hasOwnProperty(key)) hasData = true;
           });
 
-          // Hiç veri yoksa bile ekle (0 olarak görünür)
           activities.push(activityRow);
         });
 
@@ -542,10 +527,8 @@ const CustomerTrendAnalysis: React.FC = () => {
                 if (typeof value === 'number') numVal = value;
                 else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
                 else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet') numVal = 1;
-                // False değerleri de ekle
                 else if (value === false || value === 'false' || value === 'yok' || value === 'Yok') numVal = 0;
 
-                // Koşulsuz ekle
                 activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
               });
             }
@@ -797,54 +780,110 @@ const CustomerTrendAnalysis: React.FC = () => {
                   </div>
 
                   <div className="space-y-8">
-                    {equipmentTypeData.map((typeData, idx) => (
-                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                        <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                          {typeData.type_label}
-                        </h4>
-                        <div className="h-80 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart 
-                              data={typeData.activities}
-                              layout="horizontal"
-                              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                              <XAxis 
-                                dataKey="equipment_code" 
-                                style={{fontSize: '10px'}} 
-                                interval={0} 
-                                angle={-45} 
-                                textAnchor="end" 
-                                height={60}
-                                tick={{fill: '#6b7280'}}
-                              />
-                              <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
-                              <Tooltip 
-                                contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                                formatter={(value: number, name: string) => [value, typeData.propertyLabels[name] || name]}
-                                labelFormatter={(label) => {
-                                  const eq = typeData.activities.find(a => a.equipment_code === label);
-                                  return `Ekipman: ${label} (${eq?.branch_name || ''})`;
-                                }}
-                              />
-                              <Legend />
-                              {typeData.propertyKeys.map((key, kIdx) => (
-                                <Bar 
-                                  key={key} 
-                                  dataKey={key} 
-                                  name={typeData.propertyLabels[key]} 
-                                  fill={COLORS[kIdx % COLORS.length]} 
-                                  radius={[4, 4, 0, 0]}
-                                  barSize={30}
+                    {equipmentTypeData.map((typeData, idx) => {
+                      // Her bir property için toplamları hesapla
+                      const totals = typeData.propertyKeys.reduce((acc, key) => {
+                        acc[key] = typeData.activities.reduce((sum, act) => sum + (Number(act[key]) || 0), 0);
+                        return acc;
+                      }, {} as Record<string, number>);
+
+                      return (
+                        <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                          <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                            {typeData.type_label}
+                          </h4>
+
+                          {/* ÖZET SAYI KARTLARI */}
+                          <div className="flex flex-wrap gap-3 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            {Object.entries(totals).map(([key, val]) => (
+                              <div key={key} className="flex flex-col items-center justify-center bg-white px-4 py-2 rounded shadow-sm border border-gray-200 min-w-[100px]">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{typeData.propertyLabels[key]}</span>
+                                <span className="text-xl font-black text-gray-800">{val}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="h-80 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart 
+                                data={typeData.activities}
+                                layout="horizontal"
+                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                <XAxis 
+                                  dataKey="equipment_code" 
+                                  style={{fontSize: '10px'}} 
+                                  interval={0} 
+                                  angle={-45} 
+                                  textAnchor="end" 
+                                  height={60}
+                                  tick={{fill: '#6b7280'}}
                                 />
-                              ))}
-                            </BarChart>
-                          </ResponsiveContainer>
+                                <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                                <Tooltip 
+                                  contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                                  formatter={(value: number, name: string) => [value, typeData.propertyLabels[name] || name]}
+                                  labelFormatter={(label) => {
+                                    const eq = typeData.activities.find(a => a.equipment_code === label);
+                                    return `Ekipman: ${label} (${eq?.branch_name || ''})`;
+                                  }}
+                                />
+                                <Legend />
+                                {typeData.propertyKeys.map((key, kIdx) => (
+                                  <Bar 
+                                    key={key} 
+                                    dataKey={key} 
+                                    name={typeData.propertyLabels[key]} 
+                                    fill={COLORS[kIdx % COLORS.length]} 
+                                    radius={[4, 4, 0, 0]}
+                                    barSize={30}
+                                  >
+                                    <LabelList dataKey={key} position="top" style={{ fontSize: '10px', fill: '#6b7280' }} />
+                                  </Bar>
+                                ))}
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+
+                          {/* Detaylı Tablo */}
+                          <div className="mt-6 overflow-x-auto border-t pt-4">
+                            <table className="w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-gray-50">
+                                  <th className="px-3 py-2 text-left font-medium text-gray-700 border">Ekipman Kodu</th>
+                                  {typeData.propertyKeys.map(key => (
+                                    <th key={key} className="px-3 py-2 text-center font-medium text-gray-700 border">{typeData.propertyLabels[key]}</th>
+                                  ))}
+                                  <th className="px-3 py-2 text-center font-medium text-gray-700 bg-blue-50 border">Toplam</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {typeData.activities.map((activity, idx) => {
+                                  const total = typeData.propertyKeys.reduce((sum, key) => sum + (Number(activity[key]) || 0), 0);
+                                  return (
+                                    <tr key={idx} className="hover:bg-gray-50">
+                                      <td className="px-3 py-2 font-mono text-gray-900 border">{activity.equipment_code}</td>
+                                      {typeData.propertyKeys.map(key => (
+                                        <td key={key} className="px-3 py-2 text-center border">
+                                          <span className={`font-medium ${Number(activity[key]) > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                                            {activity[key] || 0}
+                                          </span>
+                                        </td>
+                                      ))}
+                                      <td className="px-3 py-2 text-center bg-blue-50 border">
+                                        <span className="font-bold text-blue-700">{total}</span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -864,45 +903,68 @@ const CustomerTrendAnalysis: React.FC = () => {
                   </h3>
                   
                   <div className="grid grid-cols-1 gap-6">
-                    {equipmentTypeTrends.map((trendData, idx) => (
-                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                        <h4 className="text-md font-bold text-gray-700 mb-3">{trendData.type_label}</h4>
-                        <div className="h-64 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart
-                              data={trendData.trends}
-                              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                              <XAxis
-                                dataKey="date"
-                                style={{fontSize: '11px'}}
-                                height={30}
-                                tick={{fill: '#6b7280'}}
-                              />
-                              <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
-                              <Tooltip
-                                contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                                formatter={(value: number, name: string) => [value, trendData.propertyLabels[name] || name]}
-                              />
-                              <Legend wrapperStyle={{fontSize: '11px'}} />
-                              {trendData.propertyKeys.map((key, kIdx) => (
-                                <Line
-                                  key={key}
-                                  type="monotone"
-                                  dataKey={key}
-                                  name={trendData.propertyLabels[key]}
-                                  stroke={COLORS[kIdx % COLORS.length]}
-                                  strokeWidth={3}
-                                  dot={{ r: 4, strokeWidth: 2 }}
-                                  activeDot={{ r: 6 }}
+                    {equipmentTypeTrends.map((trendData, idx) => {
+                      // Trend toplamlarını hesapla
+                      const totals = trendData.propertyKeys.reduce((acc, key) => {
+                        acc[key] = trendData.trends.reduce((sum, t) => sum + (Number(t[key]) || 0), 0);
+                        return acc;
+                      }, {} as Record<string, number>);
+
+                      return (
+                        <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                          <h4 className="text-md font-bold text-gray-700 mb-3">{trendData.type_label}</h4>
+                          
+                          {/* ÖZET KARTLAR */}
+                          <div className="flex flex-wrap gap-3 mb-4 bg-gray-50 p-2 rounded border border-gray-100">
+                            <div className="flex items-center gap-2 px-2">
+                              <Calculator size={14} className="text-gray-400"/>
+                              <span className="text-xs font-bold text-gray-500 uppercase">Dönem Toplamı:</span>
+                            </div>
+                            {Object.entries(totals).map(([key, val]) => (
+                              <div key={key} className="px-2 py-1 bg-white rounded border border-gray-200 text-xs shadow-sm">
+                                <span className="text-gray-500 mr-1">{trendData.propertyLabels[key]}:</span>
+                                <span className="font-bold text-gray-800">{val}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart
+                                data={trendData.trends}
+                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                <XAxis
+                                  dataKey="date"
+                                  style={{fontSize: '11px'}}
+                                  height={30}
+                                  tick={{fill: '#6b7280'}}
                                 />
-                              ))}
-                            </LineChart>
-                          </ResponsiveContainer>
+                                <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                                <Tooltip
+                                  contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                                  formatter={(value: number, name: string) => [value, trendData.propertyLabels[name] || name]}
+                                />
+                                <Legend wrapperStyle={{fontSize: '11px'}} />
+                                {trendData.propertyKeys.map((key, kIdx) => (
+                                  <Line
+                                    key={key}
+                                    type="monotone"
+                                    dataKey={key}
+                                    name={trendData.propertyLabels[key]}
+                                    stroke={COLORS[kIdx % COLORS.length]}
+                                    strokeWidth={3}
+                                    dot={{ r: 4, strokeWidth: 2 }}
+                                    activeDot={{ r: 6 }}
+                                  />
+                                ))}
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
