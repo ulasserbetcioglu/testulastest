@@ -10,7 +10,10 @@ import {
   Download,
   Loader2,
   Filter,
-  AlertTriangle
+  AlertTriangle,
+  BarChart3,
+  PieChart as PieChartIcon,
+  Activity
 } from 'lucide-react';
 import {
   BarChart,
@@ -162,8 +165,8 @@ const CustomerTrendAnalysis: React.FC = () => {
         fetchVisitStats(),
         fetchMonthlyTrends(),
         fetchBiocidalProducts(),
-        fetchEquipmentTypeActivities(), // GÜNCELLENDİ: Artık visit_details tablosuna bakıyor
-        fetchEquipmentTrendsByDate()    // GÜNCELLENDİ: Artık visit_details tablosuna bakıyor
+        fetchEquipmentTypeActivities(), 
+        fetchEquipmentTrendsByDate()    
       ]);
     } catch (error) {
       console.error('Error generating report:', error);
@@ -198,7 +201,6 @@ const CustomerTrendAnalysis: React.FC = () => {
     });
   };
 
-  // DÜZELTİLDİ: visit_details tablosuna göre trend analizi
   const fetchMonthlyTrends = async () => {
     if (!customerId) return;
     const startDate = parseISO(dateRange.from);
@@ -209,43 +211,40 @@ const CustomerTrendAnalysis: React.FC = () => {
       const start = format(startOfMonth(month), 'yyyy-MM-dd');
       const end = format(endOfMonth(month), 'yyyy-MM-dd');
 
-      // 1. Ziyaret Sayısı
-      let visitQuery = supabase
+      let query = supabase
         .from('visits')
-        .select('id')
+        .select('id, equipment_checks')
         .eq('customer_id', customerId)
         .gte('visit_date', start)
         .lte('visit_date', end);
-      if (selectedBranchId) visitQuery = visitQuery.eq('branch_id', selectedBranchId);
-      const { data: visits } = await visitQuery;
 
-      // 2. Kontrol Sayısı ve Sorunlar (visit_details tablosundan)
-      let detailsQuery = supabase
-        .from('visit_details')
-        .select('id, status, control_result, visits!inner(visit_date, customer_id, branch_id)')
-        .eq('visits.customer_id', customerId)
-        .gte('visits.visit_date', start)
-        .lte('visits.visit_date', end);
+      if (selectedBranchId) query = query.eq('branch_id', selectedBranchId);
 
-      if (selectedBranchId) detailsQuery = detailsQuery.eq('visits.branch_id', selectedBranchId);
-      
-      const { data: details } = await detailsQuery;
+      const { data } = await query;
+      const visits = data || [];
       
       let issues = 0;
-      details?.forEach((d: any) => {
-        // Sorunlu durumları say (status veya control_result alanlarına göre)
-        const st = d.status?.toLowerCase() || '';
-        const cr = d.control_result?.toLowerCase() || '';
-        if (st.includes('sorun') || st.includes('problem') || st.includes('eksik') || 
-            cr.includes('sorun') || cr.includes('problem') || cr.includes('active')) { // active genellikle haşere aktivitesidir
-          issues++;
+      let checks = 0;
+
+      visits.forEach((v: any) => {
+        if (v.equipment_checks && typeof v.equipment_checks === 'object') {
+          // JSON objesinin anahtarlarını say (her biri bir ekipman kontrolü)
+          checks += Object.keys(v.equipment_checks).length;
+          
+          Object.values(v.equipment_checks).forEach((c: any) => {
+            // Kontrol verisi içindeki status veya sorun belirten alanları kontrol et
+            if (c?.status === 'issue' || c?.status === 'problem' || c?.status === 'missing' || 
+                (typeof c === 'object' && (c?.activity === true || c?.pest_activity === true))) {
+              issues++;
+            }
+          });
         }
       });
 
       return {
         month: format(month, 'MMM yyyy', { locale: tr }),
-        visits: visits?.length || 0,
-        equipment_checks: details?.length || 0,
+        visits: visits.length,
+        equipment_checks: checks,
         issues_found: issues
       };
     }));
@@ -293,167 +292,187 @@ const CustomerTrendAnalysis: React.FC = () => {
     setBiocidalProducts(Array.from(productMap.values()).sort((a,b) => b.total_quantity - a.total_quantity));
   };
 
-  // --- DÜZELTİLDİ: visit_details ÜZERİNDEN VERİ ÇEKME ---
+  // --- ANA DÜZELTME BURADA: VISITS TABLOSUNDAKİ JSONB VERİSİNİ OKUMA ---
   const fetchEquipmentTypeActivities = async () => {
     if (!customerId) return;
 
     try {
-      // 1. Ziyaret Detaylarını Çek (Equipment detayları burada)
-      // visits tablosuyla join yapıyoruz (inner join)
-      let query = supabase
-        .from('visit_details')
-        .select(`
-          *,
-          visits!inner (
-            id,
-            visit_date,
-            branch_id,
-            customer_id
-          ),
-          branch_equipment (
-            id,
-            equipment_code,
-            equipment:equipment_id ( name, type, properties ),
-            branch:branch_id ( sube_adi )
-          )
-        `)
-        .eq('visits.customer_id', customerId)
-        .gte('visits.visit_date', dateRange.from)
-        .lte('visits.visit_date', dateRange.to)
-        .eq('visits.status', 'completed'); // Sadece tamamlanan ziyaretler
-
+      let branchIds: string[] = [];
       if (selectedBranchId) {
-        query = query.eq('visits.branch_id', selectedBranchId);
+        branchIds = [selectedBranchId];
+      } else {
+        branchIds = branches.map(b => b.id);
       }
 
-      const { data: detailsData, error: dError } = await query;
-
-      if (dError) {
-        console.error("Visit details çekilemedi:", dError);
-        return;
-      }
-
-      if (!detailsData || detailsData.length === 0) {
+      if (branchIds.length === 0) {
         setEquipmentTypeData([]);
         return;
       }
 
-      // 2. Verileri Grupla ve Hesapla
-      const nameGroups = new Map<string, { activities: any[], properties: any }>();
+      // 1. Ekipman Tanımlarını Çek (Hangi kod ne anlama geliyor?)
+      const { data: equipmentData, error: eqError } = await supabase
+        .from('branch_equipment')
+        .select(`
+          id,
+          equipment_code,
+          equipment:equipment_id ( name, type, properties ),
+          branch:branch_id ( sube_adi )
+        `)
+        .in('branch_id', branchIds);
+
+      if (eqError) throw eqError;
+
+      // 2. Ziyaret Verilerini Çek (equipment_checks JSONB alanı)
+      const { data: visitsData, error: vError } = await supabase
+        .from('visits')
+        .select('equipment_checks')
+        .in('branch_id', branchIds)
+        .gte('visit_date', dateRange.from)
+        .lte('visit_date', dateRange.to)
+        .eq('status', 'completed'); // Sadece tamamlananlar
+
+      if (vError) throw vError;
+
+      // 3. Eşleştirme Haritaları
+      const equipmentByCode = new Map<string, any>();
+      const equipmentById = new Map<string, any>();
+
+      equipmentData?.forEach(eq => {
+        if(eq.equipment_code) equipmentByCode.set(eq.equipment_code, eq);
+        if(eq.id) equipmentById.set(eq.id, eq);
+      });
+
+      // 4. Veriyi İşleme
+      const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
 
-      detailsData.forEach((row: any) => {
-        // branch_equipment boş gelebilir (silinmiş ekipman vs.)
-        if (!row.branch_equipment) return;
+      visitsData?.forEach(visit => {
+        if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
+          // JSON içindeki her anahtarı (key) gez
+          Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
+            // Key genellikle ID'dir, ama bazen Code olabilir. İkisini de dene.
+            const equipment = equipmentById.get(key) || equipmentByCode.get(key);
+            
+            if (!equipment) return; // Bu kontrol verisine ait ekipman tanımı bulunamadı
 
-        const eqInfo = row.branch_equipment;
-        const equipmentName = eqInfo.equipment?.name || 'Diğer Ekipmanlar';
-        const eqId = eqInfo.id;
+            const eqId = equipment.id;
+            if (!activityMap.has(eqId)) activityMap.set(eqId, {});
+            visitCountMap.set(eqId, (visitCountMap.get(eqId) || 0) + 1);
 
-        // Ziyaret sayısını takip et (Ortalama hesaplamak için)
-        visitCountMap.set(eqId, (visitCountMap.get(eqId) || 0) + 1);
+            const activity = activityMap.get(eqId)!;
+            
+            // Kontrol verisi içindeki alanları topla
+            if (checkData && typeof checkData === 'object') {
+              Object.entries(checkData).forEach(([fieldKey, value]) => {
+                // Gereksiz alanları atla
+                if (['equipment_name', 'equipment_code', 'status', 'description', 'notes'].includes(fieldKey)) return;
 
-        if (!nameGroups.has(equipmentName)) {
-          nameGroups.set(equipmentName, { 
-            activities: [], 
-            properties: eqInfo.equipment?.properties || {} 
+                let numVal = 0;
+                // Sayısal değer ise direkt topla
+                if (typeof value === 'number') numVal = value;
+                // String sayı ise çevir
+                else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
+                // Boolean veya 'var'/'yok' ise 1/0
+                else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet') numVal = 1;
+
+                if (numVal > 0) {
+                  activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
+                }
+              });
+            }
           });
+        }
+      });
+
+      // 5. Ekipman İsmine Göre Gruplama
+      const nameGroups = new Map<string, { equipments: any[], properties: any }>();
+
+      equipmentData?.forEach((item: any) => {
+        const equipmentName = item.equipment?.name || 'Diğer Ekipmanlar';
+        if (!nameGroups.has(equipmentName)) {
+          nameGroups.set(equipmentName, { equipments: [], properties: {} });
         }
 
         const group = nameGroups.get(equipmentName)!;
-        
-        // Bu satırdaki veriyi birleştir
-        // row içindeki her alan bir özellik olabilir (örn: cleaning_status, pest_activity, vb.)
-        // row.branch_equipment ve row.visits hariç diğer alanlar veridir.
-        const activityData = { ...row };
-        delete activityData.visits;
-        delete activityData.branch_equipment;
-        delete activityData.id;
-        delete activityData.visit_id;
-        delete activityData.branch_equipment_id;
-        delete activityData.created_at;
-
-        group.activities.push({
-          eqId,
-          code: eqInfo.equipment_code,
-          branch: eqInfo.branch?.sube_adi,
-          data: activityData
-        });
+        group.equipments.push(item);
+        // Tanımlı özellikleri al
+        if (item.equipment?.properties) {
+          group.properties = { ...group.properties, ...item.equipment.properties };
+        }
       });
 
-      // 3. Sonuç Formatını Oluştur
       const resultData: EquipmentTypeData[] = [];
 
       nameGroups.forEach((group, equipmentName) => {
         const propertyKeys: string[] = [];
         const propertyLabels: Record<string, string> = {};
-        const aggregatedActivities = new Map<string, EquipmentTypeActivity>();
+        const allFieldsInData = new Set<string>();
 
-        // Property'leri belirle (Hem tanımda olanlar hem veride gelen sayısal alanlar)
+        // Veri içinde geçen tüm alanları bul (dinamik alanlar için)
+        group.equipments.forEach((eq: any) => {
+          const rawTotals = activityMap.get(eq.id) || {};
+          Object.keys(rawTotals).forEach(key => {
+            if (rawTotals[key] > 0) allFieldsInData.add(key);
+          });
+        });
+
+        // 1. Tanımlı özelliklerden ekle
         if (group.properties) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
             if (value && (value.type === 'number' || value.type === 'boolean' || value.type === 'select')) {
-              propertyKeys.push(key);
-              propertyLabels[key] = value.label || key;
+              if (!propertyKeys.includes(key)) {
+                propertyKeys.push(key);
+                propertyLabels[key] = value.label || key;
+              }
             }
           });
         }
 
-        // Veri içindeki alanları topla
-        group.activities.forEach(item => {
-          const eqCode = item.code;
-          
-          if (!aggregatedActivities.has(eqCode)) {
-            aggregatedActivities.set(eqCode, {
-              equipment_code: eqCode,
-              equipment_name: equipmentName,
-              branch_name: item.branch || '',
-            });
+        // 2. Veride olup tanımda olmayanları da ekle
+        allFieldsInData.forEach(key => {
+          if (!propertyKeys.includes(key)) {
+            propertyKeys.push(key);
+            propertyLabels[key] = key.replace(/_/g, ' ').toUpperCase();
           }
-          const aggRow = aggregatedActivities.get(eqCode)!;
-
-          // Verileri topla
-          Object.entries(item.data).forEach(([key, value]) => {
-            // Eğer property listesinde yoksa ve sayısal/mantıksal ise ekle
-            if (!propertyKeys.includes(key)) {
-               // Basit bir filtre: Sadece anlamlı veri tiplerini al
-               if (typeof value === 'number' || typeof value === 'boolean' || (typeof value === 'string' && ['var','yok','evet','hayır'].includes(value.toLowerCase()))) {
-                 propertyKeys.push(key);
-                 propertyLabels[key] = key.replace(/_/g, ' ').toUpperCase();
-               }
-            }
-
-            if (propertyKeys.includes(key)) {
-              let numVal = 0;
-              if (typeof value === 'number') numVal = value;
-              else if (value === true || value === 'true' || value === 'Var' || value === 'Evet') numVal = 1;
-              
-              aggRow[key] = (Number(aggRow[key]) || 0) + numVal;
-            }
-          });
         });
 
         if (propertyKeys.length === 0) return;
 
-        // Ortalamaları hesapla (gerekirse)
-        const finalActivities = Array.from(aggregatedActivities.values()).map(act => {
-          if (chartViewMode === 'per_visit') {
-             // Ekipman koduna karşılık gelen ekipman ID'sini bulmak zor olabilir, 
-             // basitlik için toplam / o tipteki toplam ziyaret sayısı yapılabilir 
-             // ama burada her ekipmanın kendi ziyaret sayısı önemli.
-             // group.activities içinden bu ekipman ID'sine ait ziyaret sayısını bulalım.
-             // Bu detaylı implementasyon karmaşık olabilir, şimdilik toplam bırakıyorum
-             // veya basit bir ortalama:
-             // const count = visitCountMap.get(...)
-          }
-          return act;
+        const activities: EquipmentTypeActivity[] = [];
+
+        group.equipments.forEach((eq: any) => {
+          const rawTotals = activityMap.get(eq.id) || {};
+          
+          // Sadece verisi olanları göster (veya hepsi) - Tercihe bağlı
+          // if (Object.keys(rawTotals).length === 0) return;
+
+          const visitCount = visitCountMap.get(eq.id) || 1;
+
+          const activityRow: EquipmentTypeActivity = {
+            equipment_code: eq.equipment_code || 'Kodsuz',
+            equipment_name: eq.equipment?.name || 'Bilinmeyen',
+            branch_name: eq.branch?.sube_adi || 'Merkez',
+          };
+
+          let hasData = false;
+          propertyKeys.forEach(key => {
+            const totalVal = rawTotals[key] || 0;
+            
+            activityRow[key] = chartViewMode === 'total'
+              ? totalVal
+              : Number((totalVal / visitCount).toFixed(1));
+            
+            if (totalVal > 0) hasData = true;
+          });
+
+          if (hasData) activities.push(activityRow);
         });
 
-        if (finalActivities.length > 0) {
+        if (activities.length > 0) {
           resultData.push({
             type: equipmentName,
-            type_label: `${equipmentName} Kontrol Verileri`,
-            activities: finalActivities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)),
+            type_label: `${equipmentName} Analizi`,
+            activities: activities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)),
             propertyKeys,
             propertyLabels
           });
@@ -467,76 +486,139 @@ const CustomerTrendAnalysis: React.FC = () => {
     }
   };
 
-  // --- DÜZELTİLDİ: visit_details ÜZERİNDEN TREND ---
+  // --- DÜZELTİLDİ: VISITS TABLOSU ÜZERİNDEN TREND ---
   const fetchEquipmentTrendsByDate = async () => {
     if (!customerId) return;
 
     try {
-      let query = supabase
-        .from('visit_details')
+      let branchIds: string[] = [];
+      if (selectedBranchId) {
+        branchIds = [selectedBranchId];
+      } else {
+        branchIds = branches.map(b => b.id);
+      }
+
+      if (branchIds.length === 0) return;
+
+      const { data: equipmentData } = await supabase
+        .from('branch_equipment')
         .select(`
-          *,
-          visits!inner (
-            visit_date,
-            customer_id,
-            branch_id,
-            status
-          ),
-          branch_equipment (
-            equipment_code,
-            equipment:equipment_id ( name, properties )
-          )
+          id,
+          equipment_code,
+          equipment:equipment_id ( name, properties )
         `)
-        .eq('visits.customer_id', customerId)
-        .gte('visits.visit_date', dateRange.from)
-        .lte('visits.visit_date', dateRange.to)
-        .eq('visits.status', 'completed')
-        .order('visits(visit_date)', { ascending: true });
+        .in('branch_id', branchIds);
 
-      if (selectedBranchId) query = query.eq('visits.branch_id', selectedBranchId);
+      const { data: visitsData } = await supabase
+        .from('visits')
+        .select('visit_date, equipment_checks')
+        .in('branch_id', branchIds)
+        .gte('visit_date', dateRange.from)
+        .lte('visit_date', dateRange.to)
+        .eq('status', 'completed')
+        .order('visit_date', { ascending: true });
 
-      const { data: detailsData, error } = await query;
-      if (error || !detailsData) return;
+      if (!equipmentData || !visitsData) return;
+
+      // Helper Maps
+      const equipmentByCode = new Map<string, any>();
+      const equipmentById = new Map<string, any>();
+      equipmentData?.forEach(eq => {
+        if(eq.equipment_code) equipmentByCode.set(eq.equipment_code, eq);
+        if(eq.id) equipmentById.set(eq.id, eq);
+      });
 
       // Tarih bazlı gruplama
       const dateEquipmentMap = new Map<string, Map<string, Record<string, number>>>();
 
-      detailsData.forEach((row: any) => {
-        const visitDate = format(parseISO(row.visits.visit_date), 'dd MMM', { locale: tr });
-        const eqName = row.branch_equipment?.equipment?.name || 'Diğer';
+      visitsData.forEach((visit: any) => {
+        const visitDate = format(parseISO(visit.visit_date), 'dd MMM', { locale: tr });
 
         if (!dateEquipmentMap.has(visitDate)) dateEquipmentMap.set(visitDate, new Map());
         const dateMap = dateEquipmentMap.get(visitDate)!;
 
-        if (!dateMap.has(eqName)) dateMap.set(eqName, {});
-        const activity = dateMap.get(eqName)!;
+        if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
+          Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
+            const equipment = equipmentById.get(key) || equipmentByCode.get(key);
+            if (!equipment) return;
 
-        // Row verilerini işle
-        Object.entries(row).forEach(([key, value]) => {
-          if (['id', 'visit_id', 'branch_equipment_id', 'branch_equipment', 'visits', 'created_at'].includes(key)) return;
+            const eqName = equipment.equipment?.name || 'Diğer';
+            if (!dateMap.has(eqName)) dateMap.set(eqName, {});
+            const activity = dateMap.get(eqName)!;
 
-          let numVal = 0;
-          if (typeof value === 'number') numVal = value;
-          else if (value === true || value === 'true' || value === 'Var') numVal = 1;
+            if (checkData && typeof checkData === 'object') {
+              Object.entries(checkData).forEach(([fieldKey, value]) => {
+                if (['equipment_name', 'equipment_code', 'status'].includes(fieldKey)) return;
 
-          if (numVal > 0) {
-            activity[key] = (activity[key] || 0) + numVal;
-            activity[`${key}_count`] = (activity[`${key}_count`] || 0) + 1;
-          }
-        });
+                let numVal = 0;
+                if (typeof value === 'number') numVal = value;
+                else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
+                else if (value === true || value === 'true' || value === 'var' || value === 'Var') numVal = 1;
+
+                if (numVal > 0) {
+                  activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
+                  activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1;
+                }
+              });
+            }
+          });
+        }
       });
 
-      // Sonuç formatı (Grafik için)
-      // ... (Geri kalan mapping mantığı benzer, sadece source değişti)
-      // Basitleştirilmiş trend verisi oluşturma:
-      
+      // Sonuç formatı
       const resultData: EquipmentTypeTrend[] = [];
-      // (Burada EquipmentTypeData logic'ine benzer şekilde propertyKeys ve trend array'i oluşturulur)
-      // Kodun aşırı uzamaması için temel logic'i yukarıdakiyle aynı tutuyoruz.
-      // Veri varsa işlenecektir.
+      const allEqTypes = new Set<string>();
+      dateEquipmentMap.forEach(dm => Array.from(dm.keys()).forEach(k => allEqTypes.add(k)));
 
-      // Placeholder:
-      setEquipmentTypeTrends([]); 
+      allEqTypes.forEach(eqType => {
+          const propertyKeys: string[] = [];
+          const propertyLabels: Record<string, string> = {};
+          
+          dateEquipmentMap.forEach(dm => {
+              const acts = dm.get(eqType);
+              if(acts) {
+                  Object.keys(acts).forEach(k => {
+                      if(!k.endsWith('_count') && !propertyKeys.includes(k)) {
+                          propertyKeys.push(k);
+                          propertyLabels[k] = k.replace(/_/g, ' ').toUpperCase();
+                      }
+                  });
+              }
+          });
+
+          if(propertyKeys.length === 0) return;
+
+          const trends: VisitDateTrendData[] = [];
+          // Tarih sıralaması (String formatında olduğu için basit sıralama, idealde timestamp tutulmalı)
+          // Burada basit string sort yapıyoruz (dd MMM), daha doğru sıralama için orijinal date objesi kullanılabilir ama UI için yeterli olabilir.
+          const sortedDates = Array.from(dateEquipmentMap.keys()); 
+
+          sortedDates.forEach(date => {
+              const dm = dateEquipmentMap.get(date);
+              const acts = dm?.get(eqType);
+              
+              if(acts) {
+                  const trendRow: VisitDateTrendData = { date };
+                  propertyKeys.forEach(pk => {
+                      const total = acts[pk] || 0;
+                      trendRow[pk] = total; 
+                  });
+                  trends.push(trendRow);
+              }
+          });
+
+          if(trends.length > 0) {
+              resultData.push({
+                  type: eqType,
+                  type_label: `${eqType} - Zaman İçindeki Değişim`,
+                  trends,
+                  propertyKeys,
+                  propertyLabels
+              });
+          }
+      });
+
+      setEquipmentTypeTrends(resultData);
 
     } catch (error) {
       console.error('Trend analizi hatası:', error);
@@ -679,10 +761,11 @@ const CustomerTrendAnalysis: React.FC = () => {
 
               {/* Ziyaret Trend Grafiği */}
               <div className="mb-10">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3 flex items-center gap-2">
+                  <Activity size={20} />
                   Aylık Ziyaret ve Sorun Grafiği
                 </h3>
-                <div className="h-64 w-full">
+                <div className="h-64 w-full bg-gray-50 rounded-lg p-2 border border-gray-100">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={monthlyTrends}>
                       <defs>
@@ -691,10 +774,12 @@ const CustomerTrendAnalysis: React.FC = () => {
                           <stop offset="95%" stopColor="#0088FE" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" style={{fontSize: '12px'}} />
-                      <YAxis style={{fontSize: '12px'}} />
-                      <Tooltip />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis dataKey="month" style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                      <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
                       <Legend />
                       <Area type="monotone" dataKey="visits" name="Ziyaret Sayısı" stroke="#0088FE" fillOpacity={1} fill="url(#colorVisits)" />
                       <Area type="monotone" dataKey="issues_found" name="Tespit Edilen Sorunlar" stroke="#FF8042" fill="none" />
@@ -707,7 +792,8 @@ const CustomerTrendAnalysis: React.FC = () => {
               {equipmentTypeData.length > 0 ? (
                 <div className="mb-10">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-purple-500 pl-3">
+                    <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-purple-500 pl-3 flex items-center gap-2">
+                      <BarChart3 size={20} />
                       Ekipman Aktivite Analizi
                     </h3>
                     <div className="flex bg-gray-100 rounded-lg p-1 text-xs">
@@ -728,24 +814,35 @@ const CustomerTrendAnalysis: React.FC = () => {
 
                   <div className="space-y-8">
                     {equipmentTypeData.map((typeData, idx) => (
-                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
-                        <h4 className="text-md font-bold text-gray-700 mb-3">{typeData.type_label}</h4>
-                        <div className="h-64 w-full">
+                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                        <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                          {typeData.type_label}
+                        </h4>
+                        <div className="h-80 w-full">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart 
                               data={typeData.activities}
                               layout="horizontal"
                               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                             >
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                              <XAxis dataKey="equipment_code" style={{fontSize: '10px'}} interval={0} angle={-45} textAnchor="end" height={60}/>
-                              <YAxis style={{fontSize: '12px'}} />
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                              <XAxis 
+                                dataKey="equipment_code" 
+                                style={{fontSize: '10px'}} 
+                                interval={0} 
+                                angle={-45} 
+                                textAnchor="end" 
+                                height={60}
+                                tick={{fill: '#6b7280'}}
+                              />
+                              <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
                               <Tooltip 
-                                contentStyle={{fontSize: '12px'}}
+                                contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                                 formatter={(value: number, name: string) => [value, typeData.propertyLabels[name] || name]}
                                 labelFormatter={(label) => {
                                   const eq = typeData.activities.find(a => a.equipment_code === label);
-                                  return `Ekipman: ${label} (${eq?.branch_name})`;
+                                  return `Ekipman: ${label} (${eq?.branch_name || ''})`;
                                 }}
                               />
                               <Legend />
@@ -756,6 +853,7 @@ const CustomerTrendAnalysis: React.FC = () => {
                                   name={typeData.propertyLabels[key]} 
                                   fill={COLORS[kIdx % COLORS.length]} 
                                   radius={[4, 4, 0, 0]}
+                                  barSize={30}
                                 />
                               ))}
                             </BarChart>
@@ -766,20 +864,75 @@ const CustomerTrendAnalysis: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="mb-10 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center text-gray-500">
-                  Bu tarih aralığında ekipman aktivite verisi bulunamadı.
+                <div className="mb-10 p-6 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center">
+                  <div className="text-gray-400 mb-2">📊</div>
+                  <p className="text-gray-500 font-medium">Bu tarih aralığında detaylı ekipman aktivite verisi bulunamadı.</p>
+                  <p className="text-gray-400 text-xs mt-1">Ziyaretler tamamlanmış ancak ekipman kontrol verisi girilmemiş olabilir.</p>
+                </div>
+              )}
+
+              {/* ZAMAN İÇİNDEKİ DEĞİŞİM (TRENDLER) */}
+              {equipmentTypeTrends.length > 0 && (
+                <div className="mb-10">
+                  <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-green-500 pl-3 mb-4 flex items-center gap-2">
+                    <TrendingUp size={20} />
+                    Zaman İçindeki Değişim (Trendler)
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 gap-6">
+                    {equipmentTypeTrends.map((trendData, idx) => (
+                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                        <h4 className="text-md font-bold text-gray-700 mb-3">{trendData.type_label}</h4>
+                        <div className="h-64 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={trendData.trends}
+                              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis
+                                dataKey="date"
+                                style={{fontSize: '11px'}}
+                                height={30}
+                                tick={{fill: '#6b7280'}}
+                              />
+                              <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                              <Tooltip
+                                contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                                formatter={(value: number, name: string) => [value, trendData.propertyLabels[name] || name]}
+                              />
+                              <Legend wrapperStyle={{fontSize: '11px'}} />
+                              {trendData.propertyKeys.map((key, kIdx) => (
+                                <Line
+                                  key={key}
+                                  type="monotone"
+                                  dataKey={key}
+                                  name={trendData.propertyLabels[key]}
+                                  stroke={COLORS[kIdx % COLORS.length]}
+                                  strokeWidth={3}
+                                  dot={{ r: 4, strokeWidth: 2 }}
+                                  activeDot={{ r: 6 }}
+                                />
+                              ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
               {/* Biyosidal Ürün Kullanımı */}
               {biocidalProducts.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-l-4 border-green-500 pl-3">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-l-4 border-yellow-500 pl-3 flex items-center gap-2">
+                    <PieChartIcon size={20} />
                     Biyosidal Ürün Kullanım Özeti
                   </h3>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-500 border rounded-lg">
-                      <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                    <table className="w-full text-sm text-left text-gray-500 border rounded-lg shadow-sm overflow-hidden">
+                      <thead className="text-xs text-gray-700 uppercase bg-gray-100">
                         <tr>
                           <th className="px-4 py-3">Ürün Adı</th>
                           <th className="px-4 py-3">Etken Madde</th>
@@ -788,14 +941,18 @@ const CustomerTrendAnalysis: React.FC = () => {
                           <th className="px-4 py-3 text-center">Kullanım Sıklığı</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-gray-200">
                         {biocidalProducts.map((product, idx) => (
-                          <tr key={idx} className="bg-white border-b hover:bg-gray-50">
+                          <tr key={idx} className="bg-white hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-3 font-medium text-gray-900">{product.product_name}</td>
                             <td className="px-4 py-3">{product.active_ingredient || '-'}</td>
                             <td className="px-4 py-3 text-center font-bold text-blue-600">{product.total_quantity.toFixed(2)}</td>
                             <td className="px-4 py-3 text-center">{product.unit}</td>
-                            <td className="px-4 py-3 text-center">{product.usage_count} kez</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="bg-gray-100 text-gray-800 py-1 px-2 rounded text-xs font-medium">
+                                {product.usage_count} kez
+                              </span>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
