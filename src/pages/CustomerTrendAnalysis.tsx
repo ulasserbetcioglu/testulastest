@@ -472,7 +472,22 @@ const CustomerTrendAnalysis: React.FC = () => {
           }
         });
 
-        if (propertyKeys.length === 0) return;
+        // Sadece sayısal veya boolean olarak yorumlanabilen propertyKeys'i filtrele
+        const filteredPropertyKeys = propertyKeys.filter(key => {
+            const propDef = group.properties[key];
+            const propType = propDef?.type || 'string';
+            // Eğer propertyType number veya boolean ise veya parseValue 0'dan büyük bir değer döndürüyorsa
+            // VEYA JSONB'deki değer 0 olsa bile (false, yok) bu key'i dahil et
+            return propType === 'number' || propType === 'boolean' || 
+                   group.equipments.some(eq => {
+                       const rawTotals = activityMap.get(eq.id) || {};
+                       // Eğer rawTotals'ta bu key varsa (değeri 0 bile olsa) dahil et
+                       return rawTotals.hasOwnProperty(key);
+                   });
+        });
+
+
+        if (filteredPropertyKeys.length === 0) return; // Eğer hiç ölçülebilir özellik yoksa bu grubu atla
 
         const activities: EquipmentTypeActivity[] = [];
 
@@ -487,8 +502,8 @@ const CustomerTrendAnalysis: React.FC = () => {
           };
 
           let hasData = false;
-          propertyKeys.forEach(key => {
-            const totalVal = rawTotals[key] || 0;
+          filteredPropertyKeys.forEach(key => { // Filtrelenmiş propertyKeys kullan
+            const totalVal = rawTotals[key] || 0; // Eğer rawTotals'ta yoksa 0 olarak başlat
             
             activityRow[key] = chartViewMode === 'total'
               ? totalVal
@@ -506,7 +521,7 @@ const CustomerTrendAnalysis: React.FC = () => {
             type: equipmentName,
             type_label: `${equipmentName} Analizi`,
             activities: activities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)),
-            propertyKeys,
+            propertyKeys: filteredPropertyKeys, // Filtrelenmiş propertyKeys kullan
             propertyLabels
           });
         }
@@ -940,7 +955,7 @@ const CustomerTrendAnalysis: React.FC = () => {
               {/* ZAMAN İÇİNDEKİ DEĞİŞİM (TRENDLER) */}
               {equipmentTypeTrends.length > 0 && (
                 <div className="mb-10">
-                  <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-green-500 pl-3 mb-4 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-green-500 pl-3 flex items-center gap-2">
                     <TrendingUp size={20} />
                     Zaman İçindeki Değişim (Trendler)
                   </h3>
