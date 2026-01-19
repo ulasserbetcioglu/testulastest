@@ -181,27 +181,32 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       const start = format(startOfMonth(month), 'yyyy-MM-dd');
       const end = format(endOfMonth(month), 'yyyy-MM-dd');
 
-      const { data } = await supabase
-        .from('visits')
-        .select('id, equipment_checks')
-        .eq('branch_id', branchId)
-        .gte('visit_date', start)
-        .lte('visit_date', end);
+      const [visitsResult, equipmentResult] = await Promise.all([
+        supabase
+          .from('visits')
+          .select('id')
+          .eq('branch_id', branchId)
+          .gte('visit_date', start)
+          .lte('visit_date', end),
+        supabase
+          .from('ekipmantrend')
+          .select('id, equipment_data')
+          .eq('branch_id', branchId)
+          .gte('visit_date', start)
+          .lte('visit_date', end)
+      ]);
 
-      const visits = data || [];
+      const visits = visitsResult.data || [];
+      const equipmentData = equipmentResult.data || [];
 
       let issues = 0;
-      let checks = 0;
+      let checks = equipmentData.length;
 
-      visits.forEach((v: any) => {
-        if (v.equipment_checks && typeof v.equipment_checks === 'object') {
-          checks += Object.keys(v.equipment_checks).length;
-          Object.values(v.equipment_checks).forEach((c: any) => {
-            const val = JSON.stringify(c).toLowerCase();
-            if (val.includes('issue') || val.includes('problem') || val.includes('missing') || val.includes('kırık') || val.includes('kayıp')) {
-                issues++;
-            }
-          });
+      equipmentData.forEach((item: any) => {
+        const checkData = item.equipment_data;
+        const val = JSON.stringify(checkData).toLowerCase();
+        if (val.includes('issue') || val.includes('problem') || val.includes('missing') || val.includes('kırık') || val.includes('kayıp') || val.includes('kirik') || val.includes('kayip') || val.includes('sorunlu')) {
+          issues++;
         }
       });
 
@@ -227,13 +232,12 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
       if (eqError) throw eqError;
 
-      const { data: visitsData } = await supabase
-        .from('visits')
-        .select('equipment_checks')
+      const { data: equipmentTrendData } = await supabase
+        .from('ekipmantrend')
+        .select('equipment_key, equipment_data, visit_id')
         .eq('branch_id', branchId)
         .gte('visit_date', dateRange.from)
-        .lte('visit_date', dateRange.to)
-        .in('status', ['completed', 'done', 'finished', 'tamamlandi']);
+        .lte('visit_date', dateRange.to);
 
       const equipmentByCode = new Map<string, any>();
       const equipmentById = new Map<string, any>();
@@ -244,44 +248,46 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       });
 
       const activityMap = new Map<string, Record<string, number>>();
-      const visitCountMap = new Map<string, number>();
+      const visitCountMap = new Map<string, Set<string>>();
       const missingEquipments = new Map<string, any>();
 
-      visitsData?.forEach(visit => {
-        if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
-          Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            const normKey = normalizeKey(key);
-            let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
-            
-            if (!equipment) {
-                if (!missingEquipments.has(normKey)) {
-                    missingEquipments.set(normKey, {
-                        id: key, equipment_code: key,
-                        equipment: { name: `Tanımsız (${key})`, properties: {} }
-                    });
-                }
-                equipment = missingEquipments.get(normKey);
-            }
+      equipmentTrendData?.forEach(item => {
+        const key = item.equipment_key;
+        const checkData = item.equipment_data;
+        const visitId = item.visit_id;
 
-            const eqId = equipment.id;
-            if (!activityMap.has(eqId)) activityMap.set(eqId, {});
-            visitCountMap.set(eqId, (visitCountMap.get(eqId) || 0) + 1);
+        const normKey = normalizeKey(key);
+        let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
 
-            const activity = activityMap.get(eqId)!;
-            
-            if (checkData && typeof checkData === 'object') {
-              Object.entries(checkData).forEach(([fieldKey, value]) => {
-                if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
-                const numVal = parseValue(value);
-                if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
-                activity[fieldKey] += numVal;
-              });
-            } else {
-               const numVal = parseValue(checkData);
-               if (activity['durum'] === undefined) activity['durum'] = 0;
-               activity['durum'] += numVal;
-            }
+        if (!equipment) {
+          if (!missingEquipments.has(normKey)) {
+            missingEquipments.set(normKey, {
+              id: key,
+              equipment_code: key,
+              equipment: { name: `Tanımsız (${key})`, properties: {} }
+            });
+          }
+          equipment = missingEquipments.get(normKey);
+        }
+
+        const eqId = equipment.equipment_code || equipment.id;
+        if (!activityMap.has(eqId)) activityMap.set(eqId, {});
+        if (!visitCountMap.has(eqId)) visitCountMap.set(eqId, new Set());
+        visitCountMap.get(eqId)!.add(visitId);
+
+        const activity = activityMap.get(eqId)!;
+
+        if (checkData && typeof checkData === 'object') {
+          Object.entries(checkData).forEach(([fieldKey, value]) => {
+            if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
+            const numVal = parseValue(value);
+            if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
+            activity[fieldKey] += numVal;
           });
+        } else {
+          const numVal = parseValue(checkData);
+          if (activity['durum'] === undefined) activity['durum'] = 0;
+          activity['durum'] += numVal;
         }
       });
 
@@ -320,8 +326,9 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
         const activities: EquipmentTypeActivity[] = [];
         group.equipments.forEach((eq: any) => {
-          const rawTotals = activityMap.get(eq.id) || {};
-          const visitCount = visitCountMap.get(eq.id) || 1;
+          const eqId = eq.equipment_code || eq.id;
+          const rawTotals = activityMap.get(eqId) || {};
+          const visitCount = visitCountMap.get(eqId)?.size || 1;
 
           const activityRow: EquipmentTypeActivity = {
             equipment_code: eq.equipment_code || 'Kodsuz',
@@ -368,16 +375,15 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
       if (eqError) throw eqError;
 
-      const { data: visitsData } = await supabase
-        .from('visits')
-        .select('visit_date, equipment_checks')
+      const { data: equipmentTrendData } = await supabase
+        .from('ekipmantrend')
+        .select('visit_date, equipment_key, equipment_data')
         .eq('branch_id', branchId)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
-        .in('status', ['completed', 'done', 'finished', 'tamamlandi'])
         .order('visit_date', { ascending: true });
 
-      if (!visitsData) return;
+      if (!equipmentTrendData) return;
 
       const equipmentById = new Map<string, any>();
       const equipmentByCode = new Map<string, any>();
@@ -389,43 +395,43 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       const dateEquipmentMap = new Map<string, Map<string, Record<string, number>>>();
       const missingEquipments = new Map<string, any>();
 
-      visitsData.forEach((visit: any) => {
-        const visitDate = format(parseISO(visit.visit_date), 'dd MMM', { locale: tr });
+      equipmentTrendData.forEach((item: any) => {
+        const visitDate = format(parseISO(item.visit_date), 'dd MMM', { locale: tr });
         if (!dateEquipmentMap.has(visitDate)) dateEquipmentMap.set(visitDate, new Map());
         const dateMap = dateEquipmentMap.get(visitDate)!;
 
-        if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
-          Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            const normKey = normalizeKey(key);
-            let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
-            
-            if (!equipment) {
-                if (!missingEquipments.has(normKey)) {
-                    missingEquipments.set(normKey, {
-                        id: key, equipment_code: key,
-                        equipment: { name: `Tanımsız (${key})`, properties: {} }
-                    });
-                }
-                equipment = missingEquipments.get(normKey);
-            }
+        const key = item.equipment_key;
+        const checkData = item.equipment_data;
 
-            const eqName = equipment.equipment?.name || 'Diğer';
-            if (!dateMap.has(eqName)) dateMap.set(eqName, {});
-            const activity = dateMap.get(eqName)!;
+        const normKey = normalizeKey(key);
+        let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
 
-            if (checkData && typeof checkData === 'object') {
-              Object.entries(checkData).forEach(([fieldKey, value]) => {
-                if (['equipment_name', 'equipment_code', 'status'].includes(fieldKey)) return;
-                const numVal = parseValue(value);
-                if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
-                activity[fieldKey] += numVal;
-              });
-            } else {
-                const numVal = parseValue(checkData);
-                if (activity['durum'] === undefined) activity['durum'] = 0;
-                activity['durum'] += numVal;
-            }
+        if (!equipment) {
+          if (!missingEquipments.has(normKey)) {
+            missingEquipments.set(normKey, {
+              id: key,
+              equipment_code: key,
+              equipment: { name: `Tanımsız (${key})`, properties: {} }
+            });
+          }
+          equipment = missingEquipments.get(normKey);
+        }
+
+        const eqName = equipment.equipment?.name || 'Diğer';
+        if (!dateMap.has(eqName)) dateMap.set(eqName, {});
+        const activity = dateMap.get(eqName)!;
+
+        if (checkData && typeof checkData === 'object') {
+          Object.entries(checkData).forEach(([fieldKey, value]) => {
+            if (['equipment_name', 'equipment_code', 'status'].includes(fieldKey)) return;
+            const numVal = parseValue(value);
+            if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
+            activity[fieldKey] += numVal;
           });
+        } else {
+          const numVal = parseValue(checkData);
+          if (activity['durum'] === undefined) activity['durum'] = 0;
+          activity['durum'] += numVal;
         }
       });
 

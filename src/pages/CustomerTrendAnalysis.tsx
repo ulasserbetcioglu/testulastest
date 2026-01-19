@@ -244,31 +244,35 @@ const CustomerTrendAnalysis: React.FC = () => {
       const start = format(startOfMonth(month), 'yyyy-MM-dd');
       const end = format(endOfMonth(month), 'yyyy-MM-dd');
 
-      let query = supabase
-        .from('visits')
-        .select('id, equipment_checks')
-        .in('branch_id', branchIds)
-        .gte('visit_date', start)
-        .lte('visit_date', end);
+      const [visitsResult, equipmentResult] = await Promise.all([
+        supabase
+          .from('visits')
+          .select('id')
+          .in('branch_id', branchIds)
+          .gte('visit_date', start)
+          .lte('visit_date', end),
+        supabase
+          .from('ekipmantrend')
+          .select('id, equipment_data')
+          .in('branch_id', branchIds)
+          .gte('visit_date', start)
+          .lte('visit_date', end)
+      ]);
 
-      const { data } = await query;
-      const visits = data || [];
+      const visits = visitsResult.data || [];
+      const equipmentData = equipmentResult.data || [];
       let issues = 0;
-      let checks = 0;
+      let checks = equipmentData.length;
 
-      visits.forEach((v: any) => {
-        if (v.equipment_checks && typeof v.equipment_checks === 'object') {
-          checks += Object.keys(v.equipment_checks).length;
-          Object.values(v.equipment_checks).forEach((c: any) => {
-             if (typeof c === 'object' && c !== null) {
-                const status = String(c.status || '').toLowerCase();
-                const result = String(c.control_result || '').toLowerCase();
-                if (['issue', 'problem', 'missing', 'broken', 'kirik', 'eksik', 'sorun'].some(s => status.includes(s) || result.includes(s))) issues++;
-                if (c.activity === true || c.pest_activity === true) issues++;
-             } else if (typeof c === 'string') {
-                 if (['problem', 'issue', 'sorun', 'eksik', 'kirik'].some(s => c.toLowerCase().includes(s))) issues++;
-             }
-          });
+      equipmentData.forEach((item: any) => {
+        const c = item.equipment_data;
+        if (typeof c === 'object' && c !== null) {
+          const status = String(c.status || '').toLowerCase();
+          const result = String(c.control_result || '').toLowerCase();
+          if (['issue', 'problem', 'missing', 'broken', 'kirik', 'eksik', 'sorun', 'kayip'].some(s => status.includes(s) || result.includes(s))) issues++;
+          if (c.activity === true || c.pest_activity === true || c.kirik === true || c.kayip === true) issues++;
+        } else if (typeof c === 'string') {
+          if (['problem', 'issue', 'sorun', 'eksik', 'kirik', 'kayip'].some(s => c.toLowerCase().includes(s))) issues++;
         }
       });
 
@@ -326,15 +330,13 @@ const CustomerTrendAnalysis: React.FC = () => {
         .select(`id, equipment_code, equipment:equipment_id ( name, type, properties ), branch:branch_id ( sube_adi )`)
         .in('branch_id', branchIds);
 
-      // 2. Ziyaret Verilerini Çek
-      const { data: visitsData } = await supabase
-        .from('visits')
-        .select('equipment_checks')
+      // 2. Ekipman Trend Verilerini Çek
+      const { data: equipmentTrendData } = await supabase
+        .from('ekipmantrend')
+        .select('equipment_key, equipment_data, visit_id')
         .in('branch_id', branchIds)
         .gte('visit_date', dateRange.from)
-        .lte('visit_date', dateRange.to)
-        // Status filtresini çok geniş tutuyoruz
-        .in('status', ['completed', 'done', 'finished', 'tamamlandi', 'planned']); 
+        .lte('visit_date', dateRange.to);
 
       // 3. Helper Maps
       const equipmentByCode = new Map<string, any>();
@@ -346,51 +348,48 @@ const CustomerTrendAnalysis: React.FC = () => {
       });
 
       const activityMap = new Map<string, Record<string, number>>();
-      const visitCountMap = new Map<string, number>();
-      const missingEquipments = new Map<string, any>(); // Veritabanında olmayanlar için
+      const visitCountMap = new Map<string, Set<string>>();
+      const missingEquipments = new Map<string, any>();
 
-      visitsData?.forEach(visit => {
-        if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
-          Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            const normKey = normalizeKey(key);
-            
-            // Veritabanında var mı?
-            let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
-            
-            // YOKSA: Sanal bir ekipman oluştur (Veri kaybını önlemek için)
-            if (!equipment) {
-                if (!missingEquipments.has(normKey)) {
-                    missingEquipments.set(normKey, {
-                        id: key, // Key'i ID gibi kullan
-                        equipment_code: key,
-                        equipment: { name: `Tanımsız (${key})`, properties: {} },
-                        branch: { sube_adi: 'Bilinmeyen' }
-                    });
-                }
-                equipment = missingEquipments.get(normKey);
-            }
+      equipmentTrendData?.forEach(item => {
+        const key = item.equipment_key;
+        const checkData = item.equipment_data;
+        const visitId = item.visit_id;
 
-            const eqId = equipment.id;
-            if (!activityMap.has(eqId)) activityMap.set(eqId, {});
-            visitCountMap.set(eqId, (visitCountMap.get(eqId) || 0) + 1);
+        const normKey = normalizeKey(key);
+        let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
 
-            const activity = activityMap.get(eqId)!;
-            
-            if (checkData && typeof checkData === 'object') {
-              Object.entries(checkData).forEach(([fieldKey, value]) => {
-                if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
-                
-                const numVal = parseValue(value);
-                if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
-                activity[fieldKey] += numVal;
-              });
-            } else {
-               // Tekil değer (örn: "Var")
-               const numVal = parseValue(checkData);
-               if (activity['durum'] === undefined) activity['durum'] = 0;
-               activity['durum'] += numVal;
-            }
+        if (!equipment) {
+          if (!missingEquipments.has(normKey)) {
+            missingEquipments.set(normKey, {
+              id: key,
+              equipment_code: key,
+              equipment: { name: `Tanımsız (${key})`, properties: {} },
+              branch: { sube_adi: 'Bilinmeyen' }
+            });
+          }
+          equipment = missingEquipments.get(normKey);
+        }
+
+        const eqId = equipment.equipment_code || equipment.id;
+        if (!activityMap.has(eqId)) activityMap.set(eqId, {});
+        if (!visitCountMap.has(eqId)) visitCountMap.set(eqId, new Set());
+        visitCountMap.get(eqId)!.add(visitId);
+
+        const activity = activityMap.get(eqId)!;
+
+        if (checkData && typeof checkData === 'object') {
+          Object.entries(checkData).forEach(([fieldKey, value]) => {
+            if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
+
+            const numVal = parseValue(value);
+            if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
+            activity[fieldKey] += numVal;
           });
+        } else {
+          const numVal = parseValue(checkData);
+          if (activity['durum'] === undefined) activity['durum'] = 0;
+          activity['durum'] += numVal;
         }
       });
 
@@ -430,8 +429,9 @@ const CustomerTrendAnalysis: React.FC = () => {
 
         const activities: EquipmentTypeActivity[] = [];
         group.equipments.forEach((eq: any) => {
-          const rawTotals = activityMap.get(eq.id) || {};
-          const visitCount = visitCountMap.get(eq.id) || 1;
+          const eqId = eq.equipment_code || eq.id;
+          const rawTotals = activityMap.get(eqId) || {};
+          const visitCount = visitCountMap.get(eqId)?.size || 1;
 
           const activityRow: EquipmentTypeActivity = {
             equipment_code: eq.equipment_code || 'Kodsuz',
@@ -479,16 +479,15 @@ const CustomerTrendAnalysis: React.FC = () => {
         .select(`id, equipment_code, equipment:equipment_id ( name, properties )`)
         .in('branch_id', branchIds);
 
-      const { data: visitsData } = await supabase
-        .from('visits')
-        .select('visit_date, equipment_checks')
+      const { data: equipmentTrendData } = await supabase
+        .from('ekipmantrend')
+        .select('visit_date, equipment_key, equipment_data')
         .in('branch_id', branchIds)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
-        .in('status', ['completed', 'done', 'finished', 'tamamlandi'])
         .order('visit_date', { ascending: true });
 
-      if (!visitsData) return;
+      if (!equipmentTrendData) return;
 
       const equipmentById = new Map<string, any>();
       const equipmentByCode = new Map<string, any>();
@@ -500,43 +499,43 @@ const CustomerTrendAnalysis: React.FC = () => {
       const dateEquipmentMap = new Map<string, Map<string, Record<string, number>>>();
       const missingEquipments = new Map<string, any>();
 
-      visitsData.forEach((visit: any) => {
-        const visitDate = format(parseISO(visit.visit_date), 'dd MMM', { locale: tr });
+      equipmentTrendData.forEach((item: any) => {
+        const visitDate = format(parseISO(item.visit_date), 'dd MMM', { locale: tr });
         if (!dateEquipmentMap.has(visitDate)) dateEquipmentMap.set(visitDate, new Map());
         const dateMap = dateEquipmentMap.get(visitDate)!;
 
-        if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
-          Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            const normKey = normalizeKey(key);
-            let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
-            
-            if (!equipment) {
-                if (!missingEquipments.has(normKey)) {
-                    missingEquipments.set(normKey, {
-                        id: key, equipment_code: key,
-                        equipment: { name: `Tanımsız (${key})`, properties: {} }
-                    });
-                }
-                equipment = missingEquipments.get(normKey);
-            }
+        const key = item.equipment_key;
+        const checkData = item.equipment_data;
 
-            const eqName = equipment.equipment?.name || 'Diğer';
-            if (!dateMap.has(eqName)) dateMap.set(eqName, {});
-            const activity = dateMap.get(eqName)!;
+        const normKey = normalizeKey(key);
+        let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
 
-            if (checkData && typeof checkData === 'object') {
-              Object.entries(checkData).forEach(([fieldKey, value]) => {
-                if (['equipment_name', 'equipment_code', 'status'].includes(fieldKey)) return;
-                const numVal = parseValue(value);
-                if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
-                activity[fieldKey] += numVal;
-              });
-            } else {
-                const numVal = parseValue(checkData);
-                if (activity['durum'] === undefined) activity['durum'] = 0;
-                activity['durum'] += numVal;
-            }
+        if (!equipment) {
+          if (!missingEquipments.has(normKey)) {
+            missingEquipments.set(normKey, {
+              id: key,
+              equipment_code: key,
+              equipment: { name: `Tanımsız (${key})`, properties: {} }
+            });
+          }
+          equipment = missingEquipments.get(normKey);
+        }
+
+        const eqName = equipment.equipment?.name || 'Diğer';
+        if (!dateMap.has(eqName)) dateMap.set(eqName, {});
+        const activity = dateMap.get(eqName)!;
+
+        if (checkData && typeof checkData === 'object') {
+          Object.entries(checkData).forEach(([fieldKey, value]) => {
+            if (['equipment_name', 'equipment_code', 'status'].includes(fieldKey)) return;
+            const numVal = parseValue(value);
+            if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
+            activity[fieldKey] += numVal;
           });
+        } else {
+          const numVal = parseValue(checkData);
+          if (activity['durum'] === undefined) activity['durum'] = 0;
+          activity['durum'] += numVal;
         }
       });
 

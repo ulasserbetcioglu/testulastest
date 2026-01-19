@@ -298,51 +298,108 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
   const fetchEquipmentData = async () => {
       try {
-        let query = supabase.from('visits').select('equipment_checks, visit_date').eq('customer_id', selectedCustomerId).gte('visit_date', dateRange.from).lte('visit_date', dateRange.to).not('equipment_checks', 'is', null);
-        if (selectedBranchId) query = query.eq('branch_id', selectedBranchId);
+        let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
+        if (branchIds.length === 0) { setEquipmentData([]); return; }
+
+        let query = supabase
+          .from('ekipmantrend')
+          .select('equipment_key, equipment_data, visit_date')
+          .in('branch_id', branchIds)
+          .gte('visit_date', dateRange.from)
+          .lte('visit_date', dateRange.to);
+
         const { data, error } = await query;
         if (error) throw error;
+
         const equipmentMap = new Map<string, EquipmentCheckData>();
-        data?.forEach(visit => {
-          const checks = visit.equipment_checks as any;
-          if (checks && typeof checks === 'object') {
-            Object.entries(checks).forEach(([equipmentId, checkData]: [string, any]) => {
-              const equipmentName = checkData?.equipment_name || checkData?.name || `Ekipman ${equipmentId}`;
-              const status = checkData?.status || checkData?.check_status || 'unknown';
-              if (!equipmentMap.has(equipmentName)) { equipmentMap.set(equipmentName, { equipment_name: equipmentName, total_checks: 0, ok_count: 0, issue_count: 0, missing_count: 0, effectiveness_rate: 0 }); }
-              const equipment = equipmentMap.get(equipmentName)!;
-              equipment.total_checks++;
-              if (status === 'ok' || status === 'working' || status === 'good') equipment.ok_count++;
-              else if (status === 'issue' || status === 'problem' || status === 'needs_attention') equipment.issue_count++;
-              else if (status === 'missing' || status === 'not_found') equipment.missing_count++;
+        data?.forEach(item => {
+          const checkData = item.equipment_data as any;
+          const equipmentName = checkData?.equipment_name || checkData?.name || `Ekipman ${item.equipment_key}`;
+          const status = checkData?.status || checkData?.check_status || checkData?.durum || 'unknown';
+
+          if (!equipmentMap.has(equipmentName)) {
+            equipmentMap.set(equipmentName, {
+              equipment_name: equipmentName,
+              total_checks: 0,
+              ok_count: 0,
+              issue_count: 0,
+              missing_count: 0,
+              effectiveness_rate: 0
             });
           }
+
+          const equipment = equipmentMap.get(equipmentName)!;
+          equipment.total_checks++;
+
+          if (status === 'ok' || status === 'working' || status === 'good' || status === 'iyi' || status === 'calisiyor') {
+            equipment.ok_count++;
+          } else if (status === 'issue' || status === 'problem' || status === 'needs_attention' || status === 'sorunlu' || status === 'kirik' || checkData?.kirik === true || checkData?.kirik === 'true') {
+            equipment.issue_count++;
+          } else if (status === 'missing' || status === 'not_found' || status === 'kayip' || checkData?.kayip === true || checkData?.kayip === 'true') {
+            equipment.missing_count++;
+          }
         });
-        setEquipmentData(Array.from(equipmentMap.values()).map(eq => ({ ...eq, effectiveness_rate: eq.total_checks > 0 ? Math.round((eq.ok_count / eq.total_checks) * 100) : 0 })));
+
+        setEquipmentData(
+          Array.from(equipmentMap.values()).map(eq => ({
+            ...eq,
+            effectiveness_rate: eq.total_checks > 0 ? Math.round((eq.ok_count / eq.total_checks) * 100) : 0
+          }))
+        );
       } catch (error) { console.error(error); }
   };
 
   const fetchMonthlyTrends = async () => {
       try {
+        let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
+        if (branchIds.length === 0) { setMonthlyTrends([]); return; }
+
         const startDate = parseISO(dateRange.from);
         const endDate = parseISO(dateRange.to);
         const months = eachMonthOfInterval({ start: startDate, end: endDate });
+
         const trendsData = await Promise.all(months.map(async (month) => {
           const monthStart = startOfMonth(month);
           const monthEnd = endOfMonth(month);
-          let query = supabase.from('visits').select('id, equipment_checks').eq('customer_id', selectedCustomerId).gte('visit_date', format(monthStart, 'yyyy-MM-dd')).lte('visit_date', format(monthEnd, 'yyyy-MM-dd'));
-          if (selectedBranchId) query = query.eq('branch_id', selectedBranchId);
-          const { data, error } = await query;
-          if (error) throw error;
-          let checks = 0, issues = 0;
-          data?.forEach(visit => {
-            if (visit.equipment_checks) {
-              checks += Object.keys(visit.equipment_checks).length;
-              Object.values(visit.equipment_checks).forEach((c: any) => { if (c.status === 'issue' || c.status === 'problem' || c.status === 'missing') issues++; });
+
+          let visitsQuery = supabase
+            .from('visits')
+            .select('id')
+            .in('branch_id', branchIds)
+            .gte('visit_date', format(monthStart, 'yyyy-MM-dd'))
+            .lte('visit_date', format(monthEnd, 'yyyy-MM-dd'));
+
+          let equipmentQuery = supabase
+            .from('ekipmantrend')
+            .select('id, equipment_data')
+            .in('branch_id', branchIds)
+            .gte('visit_date', format(monthStart, 'yyyy-MM-dd'))
+            .lte('visit_date', format(monthEnd, 'yyyy-MM-dd'));
+
+          const [visitsResult, equipmentResult] = await Promise.all([visitsQuery, equipmentQuery]);
+
+          if (visitsResult.error) throw visitsResult.error;
+          if (equipmentResult.error) throw equipmentResult.error;
+
+          let checks = equipmentResult.data?.length || 0;
+          let issues = 0;
+
+          equipmentResult.data?.forEach(item => {
+            const checkData = item.equipment_data as any;
+            const status = checkData?.status || checkData?.check_status || checkData?.durum;
+            if (status === 'issue' || status === 'problem' || status === 'missing' || status === 'sorunlu' || status === 'kirik' || status === 'kayip' || checkData?.kirik === true || checkData?.kayip === true || checkData?.kirik === 'true' || checkData?.kayip === 'true') {
+              issues++;
             }
           });
-          return { month: format(month, 'MMM yyyy', { locale: tr }), visits: data?.length || 0, equipment_checks: checks, issues_found: issues };
+
+          return {
+            month: format(month, 'MMM yyyy', { locale: tr }),
+            visits: visitsResult.data?.length || 0,
+            equipment_checks: checks,
+            issues_found: issues
+          };
         }));
+
         setMonthlyTrends(trendsData);
       } catch (error) { console.error(error); }
   };
@@ -384,28 +441,39 @@ const AdminTrendAnalysisReport: React.FC = () => {
     try {
       let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
       if (branchIds.length === 0) { setEquipmentList([]); return; }
-      
+
       const { data, error } = await supabase.from('branch_equipment').select(`equipment_code, department, last_check, equipment:equipment_id (name, properties), branch:branch_id (sube_adi)`).in('branch_id', branchIds);
       if (error) throw error;
-      
-      const { data: visitsData } = await supabase.from('visits').select('equipment_checks').in('branch_id', branchIds).gte('visit_date', dateRange.from).lte('visit_date', dateRange.to).eq('status', 'completed');
-      
+
+      const { data: equipmentTrendData } = await supabase
+        .from('ekipmantrend')
+        .select('equipment_key, equipment_data')
+        .in('branch_id', branchIds)
+        .gte('visit_date', dateRange.from)
+        .lte('visit_date', dateRange.to);
+
       const activityMap = new Map<string, { total: number; details: Record<string, number> }>();
-      visitsData?.forEach(visit => {
-        if (visit.equipment_checks) {
-          Object.entries(visit.equipment_checks).forEach(([code, checkData]: [string, any]) => {
-            if (!activityMap.has(code)) activityMap.set(code, { total: 0, details: {} });
-            const activity = activityMap.get(code)!;
-            if (checkData && typeof checkData === 'object') {
-              Object.entries(checkData).forEach(([key, value]) => {
-                if (typeof value === 'number') { activity.total += value; activity.details[key] = (activity.details[key] || 0) + value; }
-                else if (value === true || value === 'true' || value === 'var' || value === 'evet') { activity.total += 1; activity.details[key] = (activity.details[key] || 0) + 1; }
-              });
+
+      equipmentTrendData?.forEach(item => {
+        const code = item.equipment_key;
+        const checkData = item.equipment_data as any;
+
+        if (!activityMap.has(code)) activityMap.set(code, { total: 0, details: {} });
+        const activity = activityMap.get(code)!;
+
+        if (checkData && typeof checkData === 'object') {
+          Object.entries(checkData).forEach(([key, value]) => {
+            if (typeof value === 'number') {
+              activity.total += value;
+              activity.details[key] = (activity.details[key] || 0) + value;
+            } else if (value === true || value === 'true' || value === 'var' || value === 'evet') {
+              activity.total += 1;
+              activity.details[key] = (activity.details[key] || 0) + 1;
             }
           });
         }
       });
-      
+
       setEquipmentList(data?.map((item: any) => {
         const act = activityMap.get(item.equipment_code);
         return {
@@ -457,33 +525,48 @@ const AdminTrendAnalysisReport: React.FC = () => {
       try {
         let branchIds: string[] = selectedBranchId ? [selectedBranchId] : branches.filter(b => b.customer_id === selectedCustomerId).map(b => b.id);
         if (branchIds.length === 0) { setEquipmentTypeData([]); return; }
-        
+
         const { data: equipmentData } = await supabase.from('branch_equipment').select(`id, equipment_code, equipment:equipment_id (name, type, properties), branch:branch_id (sube_adi)`).in('branch_id', branchIds);
-        const { data: visitsData } = await supabase.from('visits').select('equipment_checks').in('branch_id', branchIds).gte('visit_date', dateRange.from).lte('visit_date', dateRange.to).eq('status', 'completed');
+
+        const { data: equipmentTrendData } = await supabase
+          .from('ekipmantrend')
+          .select('equipment_key, equipment_data, visit_id')
+          .in('branch_id', branchIds)
+          .gte('visit_date', dateRange.from)
+          .lte('visit_date', dateRange.to);
 
         const activityMapTotal = new Map<string, Record<string, number>>();
         const activityMapPerVisit = new Map<string, Record<string, { sum: number; count: number }>>();
+        const visitCountMap = new Map<string, Set<string>>();
 
-        visitsData?.forEach(visit => {
-          if (visit.equipment_checks) {
-            Object.entries(visit.equipment_checks).forEach(([eqId, checkData]: [string, any]) => {
-              if (!activityMapTotal.has(eqId)) activityMapTotal.set(eqId, {});
-              if (!activityMapPerVisit.has(eqId)) activityMapPerVisit.set(eqId, {});
-              const activityTotal = activityMapTotal.get(eqId)!;
-              const activityPerVisit = activityMapPerVisit.get(eqId)!;
+        equipmentTrendData?.forEach(item => {
+          const eqId = item.equipment_key;
+          const checkData = item.equipment_data as any;
+          const visitId = item.visit_id;
 
-              if (checkData && typeof checkData === 'object') {
-                Object.entries(checkData).forEach(([key, value]) => {
-                  let num = 0;
-                  if (typeof value === 'number') num = value;
-                  else if (value === true || value === 'true' || value === 'var' || value === 'evet' || value === 'issue') num = 1;
-                  if (num > 0) {
-                    activityTotal[key] = (activityTotal[key] || 0) + num;
-                    if (!activityPerVisit[key]) activityPerVisit[key] = { sum: 0, count: 0 };
-                    activityPerVisit[key].sum += num;
-                    activityPerVisit[key].count += 1;
-                  }
-                });
+          if (!activityMapTotal.has(eqId)) activityMapTotal.set(eqId, {});
+          if (!activityMapPerVisit.has(eqId)) activityMapPerVisit.set(eqId, {});
+          if (!visitCountMap.has(eqId)) visitCountMap.set(eqId, new Set());
+
+          visitCountMap.get(eqId)!.add(visitId);
+
+          const activityTotal = activityMapTotal.get(eqId)!;
+          const activityPerVisit = activityMapPerVisit.get(eqId)!;
+
+          if (checkData && typeof checkData === 'object') {
+            Object.entries(checkData).forEach(([key, value]) => {
+              let num = 0;
+              if (typeof value === 'number') {
+                num = value;
+              } else if (value === true || value === 'true' || value === 'var' || value === 'evet' || value === 'issue') {
+                num = 1;
+              }
+
+              if (num > 0) {
+                activityTotal[key] = (activityTotal[key] || 0) + num;
+                if (!activityPerVisit[key]) activityPerVisit[key] = { sum: 0, count: 0 };
+                activityPerVisit[key].sum += num;
+                activityPerVisit[key].count += 1;
               }
             });
           }
@@ -491,9 +574,12 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
         const activityMapAvg = new Map<string, Record<string, number>>();
         activityMapPerVisit.forEach((val, id) => {
-           const avg: Record<string, number> = {};
-           Object.entries(val).forEach(([k, v]) => avg[k] = v.count > 0 ? Math.round((v.sum / v.count) * 10) / 10 : 0);
-           activityMapAvg.set(id, avg);
+          const avg: Record<string, number> = {};
+          const visitCount = visitCountMap.get(id)?.size || 1;
+          Object.entries(val).forEach(([k, v]) => {
+            avg[k] = visitCount > 0 ? Math.round((v.sum / visitCount) * 10) / 10 : 0;
+          });
+          activityMapAvg.set(id, avg);
         });
 
         const typeGroups = new Map<string, { equipments: any[]; properties: Record<string, any>; }>();
@@ -507,39 +593,76 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
         const typeDataTotal: EquipmentTypeData[] = [];
         const typeDataAvg: EquipmentTypeData[] = [];
-        const typeLabels: Record<string, string> = { UCAN: 'Uçan Zararlılar (EFC)', KEMIRGEN: 'Kemirgen Kontrol', YURUYEN: 'Yürüyen Haşere', AMBAR: 'Ambar Zararlıları', DIGER: 'Diğer' };
+        const typeLabels: Record<string, string> = {
+          UCAN: 'Uçan Zararlılar (EFC)',
+          KEMIRGEN: 'Kemirgen Kontrol',
+          YURUYEN: 'Yürüyen Haşere',
+          AMBAR: 'Ambar Zararlıları',
+          DIGER: 'Diğer'
+        };
 
         typeGroups.forEach((g, type) => {
-            const keys: string[] = [];
-            const labels: Record<string, string> = {};
-            if (g.properties) {
-               Object.entries(g.properties).forEach(([k, v]: [string, any]) => {
-                  if (v.type === 'number' || v.type === 'boolean' || k.includes('sayi') || k.includes('count') || k.includes('aktivite')) {
-                     if (!keys.includes(k)) { keys.push(k); labels[k] = v.label || k; }
-                  }
-               });
-            }
-            if (keys.length === 0) return;
+          const keys: string[] = [];
+          const labels: Record<string, string> = {};
 
-            const actTotal: EquipmentTypeActivity[] = [];
-            const actAvg: EquipmentTypeActivity[] = [];
+          if (g.properties) {
+            Object.entries(g.properties).forEach(([k, v]: [string, any]) => {
+              if (v.type === 'number' || v.type === 'boolean' || k.includes('sayi') || k.includes('count') || k.includes('aktivite') || k.includes('Sayisi')) {
+                if (!keys.includes(k)) {
+                  keys.push(k);
+                  labels[k] = v.label || k;
+                }
+              }
+            });
+          }
 
-            g.equipments.forEach((eq: any) => {
-               const dTotal = activityMapTotal.get(eq.id) || {};
-               const dAvg = activityMapAvg.get(eq.id) || {};
-               const rowT: any = { equipment_code: eq.equipment_code, equipment_name: eq.equipment?.name, branch_name: eq.branch?.sube_adi };
-               const rowA: any = { equipment_code: eq.equipment_code, equipment_name: eq.equipment?.name, branch_name: eq.branch?.sube_adi };
-               keys.forEach(k => { rowT[k] = dTotal[k] || 0; rowA[k] = dAvg[k] || 0; });
-               actTotal.push(rowT);
-               actAvg.push(rowA);
+          if (keys.length === 0) return;
+
+          const actTotal: EquipmentTypeActivity[] = [];
+          const actAvg: EquipmentTypeActivity[] = [];
+
+          g.equipments.forEach((eq: any) => {
+            const dTotal = activityMapTotal.get(eq.equipment_code) || {};
+            const dAvg = activityMapAvg.get(eq.equipment_code) || {};
+
+            const rowT: any = {
+              equipment_code: eq.equipment_code,
+              equipment_name: eq.equipment?.name,
+              branch_name: eq.branch?.sube_adi
+            };
+            const rowA: any = {
+              equipment_code: eq.equipment_code,
+              equipment_name: eq.equipment?.name,
+              branch_name: eq.branch?.sube_adi
+            };
+
+            keys.forEach(k => {
+              rowT[k] = dTotal[k] || 0;
+              rowA[k] = dAvg[k] || 0;
             });
 
-            if (actTotal.some(a => keys.some(k => Number(a[k]) > 0))) {
-               typeDataTotal.push({ type, type_label: typeLabels[type] || type, activities: actTotal, propertyKeys: keys, propertyLabels: labels });
-               typeDataAvg.push({ type, type_label: typeLabels[type] || type, activities: actAvg, propertyKeys: keys, propertyLabels: labels });
-            }
+            actTotal.push(rowT);
+            actAvg.push(rowA);
+          });
+
+          if (actTotal.some(a => keys.some(k => Number(a[k]) > 0))) {
+            typeDataTotal.push({
+              type,
+              type_label: typeLabels[type] || type,
+              activities: actTotal,
+              propertyKeys: keys,
+              propertyLabels: labels
+            });
+            typeDataAvg.push({
+              type,
+              type_label: typeLabels[type] || type,
+              activities: actAvg,
+              propertyKeys: keys,
+              propertyLabels: labels
+            });
+          }
         });
-        
+
         setEquipmentTypeData(typeDataTotal);
         setEquipmentTypeDataByVisit(typeDataAvg);
       } catch (error) { console.error(error); }
