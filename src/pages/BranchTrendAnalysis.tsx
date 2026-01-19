@@ -83,7 +83,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
   const [generating, setGenerating] = useState(false);
 
   const [dateRange, setDateRange] = useState({
-    from: format(new Date(new Date().setMonth(new Date().getMonth() - 6)), 'yyyy-MM-dd'),
+    from: format(new Date(new Date().setMonth(new Date().getMonth() - 3)), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd'),
   });
 
@@ -130,18 +130,27 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
     
     if (typeof value === 'string') {
       const lower = value.trim().toLowerCase();
-      if (['true', 'var', 'evet', 'yes', 'mevcut', '1', 'on', 'checked'].includes(lower)) return 1;
-      if (['false', 'yok', 'hayır', 'no', 'boş', '0', 'off'].includes(lower)) return 0;
+      // Pozitif (1 sayılacak) durumlar
+      if (['true', 'var', 'evet', 'yes', 'mevcut', '1', 'on', 'checked', 'active', 'ok', 'completed', 'temiz', 'normal', 'değişti', 'kirik', 'kırık', 'kayip', 'kayıp'].some(v => lower.includes(v))) {
+          // İstisna: İçinde "yok" geçiyorsa 0'dır (Örn: "Aktivite Yok")
+          if (lower.includes('yok') || lower.includes('hayır') || lower.includes('false')) return 0;
+          return 1;
+      }
       
-      const cleanStr = lower.replace(',', '.');
+      // Negatif (0 sayılacak) durumlar
+      if (['false', 'yok', 'hayır', 'no', 'boş', '0', 'off'].some(v => lower.includes(v))) return 0;
+      
+      const cleanStr = lower.replace(',', '.').replace(/[^0-9.]/g, ''); 
       const parsed = parseFloat(cleanStr);
       if (!isNaN(parsed)) return parsed;
       
-      // String doluysa ve negatif değilse 1 say
       if (lower.length > 0) return 1;
     }
     return 0;
   };
+
+  // --- YARDIMCI: Key Normalizasyonu ---
+  const normalizeKey = (key: string) => String(key).trim().toLowerCase();
 
   const fetchVisitStats = async () => {
     if (!branchId) return;
@@ -156,7 +165,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
     setVisitStats({
       total_visits: visits.length,
-      completed_visits: visits.filter(v => v.status === 'completed').length,
+      completed_visits: visits.filter(v => ['completed', 'done', 'finished', 'tamamlandi'].includes(v.status)).length,
       pending_visits: visits.filter(v => v.status === 'planned').length,
       cancelled_visits: visits.filter(v => v.status === 'cancelled').length,
     });
@@ -188,11 +197,9 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         if (v.equipment_checks && typeof v.equipment_checks === 'object') {
           checks += Object.keys(v.equipment_checks).length;
           Object.values(v.equipment_checks).forEach((c: any) => {
-            // Sorun tespiti
-            if (typeof c === 'object' && c !== null) {
-               if (c.status === 'issue' || c.status === 'problem' || c.status === 'missing' || c.activity === true) issues++;
-            } else if (typeof c === 'string' && (c === 'problem' || c === 'issue')) {
-               issues++;
+            const val = JSON.stringify(c).toLowerCase();
+            if (val.includes('issue') || val.includes('problem') || val.includes('missing') || val.includes('kırık') || val.includes('kayıp')) {
+                issues++;
             }
           });
         }
@@ -215,11 +222,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
     try {
       const { data: equipmentData, error: eqError } = await supabase
         .from('branch_equipment')
-        .select(`
-          id,
-          equipment_code,
-          equipment:equipment_id ( name, type, properties )
-        `)
+        .select(`id, equipment_code, equipment:equipment_id ( name, type, properties )`)
         .eq('branch_id', branchId);
 
       if (eqError) throw eqError;
@@ -230,60 +233,67 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         .eq('branch_id', branchId)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
-        .eq('status', 'completed');
+        .in('status', ['completed', 'done', 'finished', 'tamamlandi']);
 
-      // Hem ID hem de CODE ile eşleştirme için map oluştur
       const equipmentByCode = new Map<string, any>();
       const equipmentById = new Map<string, any>();
 
       equipmentData?.forEach(eq => {
-        if(eq.equipment_code) equipmentByCode.set(eq.equipment_code, eq);
-        if(eq.id) equipmentById.set(eq.id, eq);
+        if(eq.equipment_code) equipmentByCode.set(normalizeKey(eq.equipment_code), eq);
+        if(eq.id) equipmentById.set(normalizeKey(eq.id), eq);
       });
 
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
+      const missingEquipments = new Map<string, any>();
 
       visitsData?.forEach(visit => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            const equipment = equipmentById.get(key) || equipmentByCode.get(key);
-            if (!equipment) return;
+            const normKey = normalizeKey(key);
+            let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
+            
+            if (!equipment) {
+                if (!missingEquipments.has(normKey)) {
+                    missingEquipments.set(normKey, {
+                        id: key, equipment_code: key,
+                        equipment: { name: `Tanımsız (${key})`, properties: {} }
+                    });
+                }
+                equipment = missingEquipments.get(normKey);
+            }
 
             const eqId = equipment.id;
             if (!activityMap.has(eqId)) activityMap.set(eqId, {});
             visitCountMap.set(eqId, (visitCountMap.get(eqId) || 0) + 1);
 
             const activity = activityMap.get(eqId)!;
-
+            
             if (checkData && typeof checkData === 'object') {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
                 if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
-
                 const numVal = parseValue(value);
-
                 if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
                 activity[fieldKey] += numVal;
               });
+            } else {
+               const numVal = parseValue(checkData);
+               if (activity['durum'] === undefined) activity['durum'] = 0;
+               activity['durum'] += numVal;
             }
           });
         }
       });
 
-      // Gruplama
       const nameGroups = new Map<string, { equipments: any[], properties: any }>();
+      const allEquipments = [...(equipmentData || []), ...Array.from(missingEquipments.values())];
 
-      equipmentData?.forEach((item: any) => {
+      allEquipments.forEach((item: any) => {
         const equipmentName = item.equipment?.name || 'Diğer Ekipmanlar';
-        if (!nameGroups.has(equipmentName)) {
-          nameGroups.set(equipmentName, { equipments: [], properties: {} });
-        }
-
+        if (!nameGroups.has(equipmentName)) nameGroups.set(equipmentName, { equipments: [], properties: {} });
         const group = nameGroups.get(equipmentName)!;
         group.equipments.push(item);
-        if (item.equipment?.properties) {
-          group.properties = { ...group.properties, ...item.equipment.properties };
-        }
+        if (item.equipment?.properties) group.properties = { ...group.properties, ...item.equipment.properties };
       });
 
       const resultData: EquipmentTypeData[] = [];
@@ -293,40 +303,22 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         const propertyLabels: Record<string, string> = {};
         const allFieldsInData = new Set<string>();
 
-        // Veri içindeki alanları bul
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
-          Object.keys(rawTotals).forEach(key => {
-            if (typeof rawTotals[key] === 'number') {
-              allFieldsInData.add(key);
-            }
-          });
+          Object.keys(rawTotals).forEach(key => allFieldsInData.add(key));
         });
 
-        // Tanımlı özellikleri ekle
-        if (group.properties) {
-          Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
-            if (value && (value.type === 'number' || value.type === 'boolean' || value.type === 'select')) {
-              if (!propertyKeys.includes(key)) {
-                propertyKeys.push(key);
-                propertyLabels[key] = value.label || key;
-              }
-            }
-          });
-        }
+        if (allFieldsInData.size === 0) return;
 
-        // Veride olan diğer alanları ekle
         allFieldsInData.forEach(key => {
-          if (!propertyKeys.includes(key)) {
             propertyKeys.push(key);
-            propertyLabels[key] = key.replace(/_/g, ' ').toUpperCase();
-          }
+            const definedLabel = group.properties?.[key]?.label;
+            let label = definedLabel || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            if (label.includes('Sayisi')) label = label.replace('Sayisi', 'Sayısı');
+            propertyLabels[key] = label;
         });
-
-        if (propertyKeys.length === 0) return;
 
         const activities: EquipmentTypeActivity[] = [];
-
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
           const visitCount = visitCountMap.get(eq.id) || 1;
@@ -339,11 +331,8 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
           let hasData = false;
           propertyKeys.forEach(key => {
             const totalVal = rawTotals[key] || 0;
-            activityRow[key] = chartViewMode === 'total'
-              ? totalVal
-              : Number((totalVal / visitCount).toFixed(1));
-            
-            if (Object.prototype.hasOwnProperty.call(rawTotals, key)) hasData = true;
+            activityRow[key] = chartViewMode === 'total' ? totalVal : Number((totalVal / visitCount).toFixed(1));
+            if (rawTotals.hasOwnProperty(key)) hasData = true;
           });
 
           activities.push(activityRow);
@@ -353,7 +342,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
           resultData.push({
             type: equipmentName,
             type_label: `${equipmentName} Ekipman Kontrolleri`,
-            activities: activities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)),
+            activities: activities.sort((a,b) => String(a.equipment_code).localeCompare(String(b.equipment_code))),
             propertyKeys,
             propertyLabels
           });
@@ -374,11 +363,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
     try {
       const { data: equipmentData, error: eqError } = await supabase
         .from('branch_equipment')
-        .select(`
-          id,
-          equipment_code,
-          equipment:equipment_id ( name, properties )
-        `)
+        .select(`id, equipment_code, equipment:equipment_id ( name, properties )`)
         .eq('branch_id', branchId);
 
       if (eqError) throw eqError;
@@ -389,31 +374,40 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         .eq('branch_id', branchId)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'done', 'finished', 'tamamlandi'])
         .order('visit_date', { ascending: true });
 
-      if (!equipmentData || !visitsData) return;
+      if (!visitsData) return;
 
       const equipmentById = new Map<string, any>();
       const equipmentByCode = new Map<string, any>();
-
       equipmentData?.forEach(eq => {
-        if(eq.id) equipmentById.set(eq.id, eq);
-        if(eq.equipment_code) equipmentByCode.set(eq.equipment_code, eq);
+        if(eq.id) equipmentById.set(normalizeKey(eq.id), eq);
+        if(eq.equipment_code) equipmentByCode.set(normalizeKey(eq.equipment_code), eq);
       });
 
       const dateEquipmentMap = new Map<string, Map<string, Record<string, number>>>();
+      const missingEquipments = new Map<string, any>();
 
       visitsData.forEach((visit: any) => {
         const visitDate = format(parseISO(visit.visit_date), 'dd MMM', { locale: tr });
-
         if (!dateEquipmentMap.has(visitDate)) dateEquipmentMap.set(visitDate, new Map());
         const dateMap = dateEquipmentMap.get(visitDate)!;
 
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            const equipment = equipmentById.get(key) || equipmentByCode.get(key);
-            if (!equipment) return;
+            const normKey = normalizeKey(key);
+            let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
+            
+            if (!equipment) {
+                if (!missingEquipments.has(normKey)) {
+                    missingEquipments.set(normKey, {
+                        id: key, equipment_code: key,
+                        equipment: { name: `Tanımsız (${key})`, properties: {} }
+                    });
+                }
+                equipment = missingEquipments.get(normKey);
+            }
 
             const eqName = equipment.equipment?.name || 'Diğer';
             if (!dateMap.has(eqName)) dateMap.set(eqName, {});
@@ -422,11 +416,14 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
             if (checkData && typeof checkData === 'object') {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
                 if (['equipment_name', 'equipment_code', 'status'].includes(fieldKey)) return;
-
                 const numVal = parseValue(value);
                 if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
                 activity[fieldKey] += numVal;
               });
+            } else {
+                const numVal = parseValue(checkData);
+                if (activity['durum'] === undefined) activity['durum'] = 0;
+                activity['durum'] += numVal;
             }
           });
         }
@@ -444,9 +441,9 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
               const acts = dm.get(eqType);
               if(acts) {
                   Object.keys(acts).forEach(k => {
-                      if(!k.endsWith('_count') && !propertyKeys.includes(k)) {
+                      if(!propertyKeys.includes(k)) {
                           propertyKeys.push(k);
-                          propertyLabels[k] = k.replace(/_/g, ' ').toUpperCase();
+                          propertyLabels[k] = k.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                       }
                   });
               }
@@ -660,7 +657,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                         ))}
                       </div>
 
-                      <div className="h-64 w-full">
+                      <div className="h-80 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={typeData.activities}
