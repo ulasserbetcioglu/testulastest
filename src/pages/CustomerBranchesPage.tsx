@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  MapPin, Phone, Mail, Building, ChevronDown, ChevronUp, 
-  Package, Calendar, Layout, TrendingUp, Loader2, 
+import {
+  MapPin, Phone, Mail, Building, ChevronDown, ChevronUp,
+  Package, Calendar, Layout, TrendingUp, Loader2,
   AlertCircle, Bug, FileText, Filter, Eye, X, XCircle, CheckCircle, Clock, CreditCard, ChevronRight
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -10,6 +10,7 @@ import type { Branch } from '../types';
 import { format, subMonths, parseISO, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import FloorPlanViewer from '../components/Branches/FloorPlanViewer';
+import BranchTrendAnalysis from './BranchTrendAnalysis';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, AreaChart, Area, ComposedChart
@@ -53,194 +54,6 @@ interface MaterialSale {
   items: SaleItem[];
 }
 
-// --- 1. Geliştirilmiş TREND ANALİZ BİLEŞENİ ---
-const BranchTrendAnalysisView = ({ branchId }: { branchId: string }) => {
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [summary, setSummary] = useState({ totalChecks: 0, totalIssues: 0, consumption: 0 });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchTrendData = async () => {
-      try {
-        const endDate = new Date();
-        const startDate = subMonths(endDate, 6);
-        
-        const { data: visits, error } = await supabase
-          .from('visits')
-          .select(`
-            visit_date, 
-            equipment_checks
-          `)
-          .eq('branch_id', branchId)
-          .eq('status', 'completed')
-          .gte('visit_date', startDate.toISOString())
-          .lte('visit_date', endDate.toISOString())
-          .order('visit_date', { ascending: true });
-
-        if (error) throw error;
-
-        const monthlyStats: Record<string, any> = {};
-        let totalChecks = 0;
-        let totalIssues = 0;
-        let totalConsumption = 0;
-
-        for (let i = 5; i >= 0; i--) {
-          const d = subMonths(new Date(), i);
-          const key = format(d, 'MMM yyyy', { locale: tr });
-          monthlyStats[key] = {
-            month: key,
-            kemirgen: 0,
-            yuruyen: 0,
-            uckun: 0,
-            toplam_kontrol: 0,
-            sorunlu_ekipman: 0
-          };
-        }
-
-        visits?.forEach(visit => {
-          const monthKey = format(parseISO(visit.visit_date), 'MMM yyyy', { locale: tr });
-          if (!monthlyStats[monthKey]) return;
-
-          if (visit.equipment_checks) {
-            Object.values(visit.equipment_checks).forEach((check: any) => {
-              monthlyStats[monthKey].toplam_kontrol++;
-              totalChecks++;
-
-              let hasIssue = false;
-              let count = 0;
-
-              Object.entries(check).forEach(([k, v]) => {
-                const key = k.toLowerCase();
-                if ((key.includes('activity') || key.includes('aktivite') || key.includes('durum')) && 
-                    (v === true || v === 'true' || v === 'var' || v === 'active')) {
-                  hasIssue = true;
-                }
-                if (key.includes('consumption') || key.includes('tuketim')) {
-                  hasIssue = true;
-                  totalConsumption++;
-                }
-                if ((key.includes('count') || key.includes('sayi') || key.includes('adet')) && typeof v === 'number') {
-                  count += v;
-                  if (v > 0) hasIssue = true;
-                }
-              });
-
-              if (hasIssue) {
-                monthlyStats[monthKey].sorunlu_ekipman++;
-                totalIssues++;
-                
-                const checkString = JSON.stringify(check).toLowerCase();
-                if (checkString.includes('efc') || checkString.includes('sinek') || checkString.includes('fly')) {
-                  monthlyStats[monthKey].uckun += (count > 0 ? count : 1);
-                } else if (checkString.includes('yem') || checkString.includes('bait') || checkString.includes('kemirgen')) {
-                  monthlyStats[monthKey].kemirgen++;
-                } else {
-                  if (count > 0) monthlyStats[monthKey].uckun += count;
-                  else monthlyStats[monthKey].yuruyen += (count > 0 ? count : 1);
-                }
-              }
-            });
-          }
-        });
-
-        setSummary({ totalChecks, totalIssues, consumption: totalConsumption });
-        setChartData(Object.values(monthlyStats));
-      } catch (err) {
-        console.error("Trend data error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTrendData();
-  }, [branchId]);
-
-  if (loading) return <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" /></div>;
-  
-  if (summary.totalChecks === 0) {
-    return (
-      <div className="p-8 text-center bg-gray-50 rounded-lg border border-dashed">
-        <TrendingUp className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-        <p className="text-gray-500">Bu şube için analiz edilecek yeterli veri bulunamadı.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6 p-2">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-          <p className="text-sm text-blue-600 font-medium">Toplam Kontrol</p>
-          <p className="text-2xl font-bold text-blue-900">{summary.totalChecks}</p>
-        </div>
-        <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-          <p className="text-sm text-red-600 font-medium">Tespit Edilen Aktivite</p>
-          <p className="text-2xl font-bold text-red-900">{summary.totalIssues}</p>
-        </div>
-        <div className="bg-orange-50 p-4 rounded-lg border border-orange-100">
-          <p className="text-sm text-orange-600 font-medium">Yem Tüketimi</p>
-          <p className="text-2xl font-bold text-orange-900">{summary.consumption} <span className="text-xs font-normal">Nokta</span></p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-purple-500" /> Zararlı Türüne Göre Trend
-          </h4>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorUckun" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorKemirgen" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorYuruyen" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" style={{ fontSize: '11px' }} tickMargin={10} />
-                <YAxis style={{ fontSize: '11px' }} />
-                <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}/>
-                <Area type="monotone" dataKey="uckun" name="Uçkun (Sinek vb.)" stroke="#3b82f6" fillOpacity={1} fill="url(#colorUckun)" stackId="1" />
-                <Area type="monotone" dataKey="yuruyen" name="Yürüyen (Böcek)" stroke="#f59e0b" fillOpacity={1} fill="url(#colorYuruyen)" stackId="1" />
-                <Area type="monotone" dataKey="kemirgen" name="Kemirgen" stroke="#ef4444" fillOpacity={1} fill="url(#colorKemirgen)" stackId="1" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border shadow-sm">
-          <h4 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <ActivityIcon className="w-4 h-4 text-green-500" /> Ekipman Sorun Oranı
-          </h4>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" style={{ fontSize: '11px' }} tickMargin={10} />
-                <YAxis yAxisId="left" style={{ fontSize: '11px' }} />
-                <YAxis yAxisId="right" orientation="right" style={{ fontSize: '11px' }} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                <Bar yAxisId="left" dataKey="toplam_kontrol" name="Toplam Kontrol" fill="#e5e7eb" radius={[4, 4, 0, 0]} barSize={30} />
-                <Line yAxisId="right" type="monotone" dataKey="sorunlu_ekipman" name="Sorunlu/Aktivite" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, fill: '#f43f5e' }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // --- 2. EKİPMAN AKTİVİTE GÖRÜNTÜLEYİCİ ---
 const BranchEquipmentActivityView = ({ branchId }: { branchId: string }) => {
@@ -688,7 +501,7 @@ const CustomerBranchesPage: React.FC = () => {
                     {activeTab === 'materials' && <BranchMaterialUsageList branchId={branch.id} />}
                     {activeTab === 'pesticides' && <BranchPesticideUsageView branchId={branch.id} />}
                     {activeTab === 'floorplan' && <FloorPlanViewer branchId={branch.id} />}
-                    {activeTab === 'trends' && <BranchTrendAnalysisView branchId={branch.id} />}
+                    {activeTab === 'trends' && <BranchTrendAnalysis branchId={branch.id} branchName={branch.sube_adi} />}
                   </div>
                 )}
               </div>
