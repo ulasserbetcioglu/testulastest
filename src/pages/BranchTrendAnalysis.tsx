@@ -231,9 +231,15 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
               Object.entries(checkData).forEach(([fieldKey, value]) => {
                 if (fieldKey === 'equipment_name' || fieldKey === 'equipment_code' || fieldKey === 'status') return;
 
-                if (typeof value === 'number' && value > 0) {
-                  activity[fieldKey] = (activity[fieldKey] || 0) + value;
-                } else if (value === true || value === 'true' || value === 'var') {
+                if (typeof value === 'number') {
+                  if (value > 0) {
+                    activity[fieldKey] = (activity[fieldKey] || 0) + value;
+                  }
+                } else if (typeof value === 'string') {
+                  if (value === 'true' || value === 'var' || value === 'evet') {
+                    activity[fieldKey] = (activity[fieldKey] || 0) + 1;
+                  }
+                } else if (value === true) {
                   activity[fieldKey] = (activity[fieldKey] || 0) + 1;
                 }
               });
@@ -407,10 +413,17 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
               Object.entries(checkData).forEach(([fieldKey, value]) => {
                 if (fieldKey === 'equipment_name' || fieldKey === 'equipment_code' || fieldKey === 'status') return;
 
-                if (typeof value === 'number' && value > 0) {
-                  activity[fieldKey] = (activity[fieldKey] || 0) + value;
-                  activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1;
-                } else if (value === true || value === 'true' || value === 'var') {
+                if (typeof value === 'number') {
+                  if (value > 0) {
+                    activity[fieldKey] = (activity[fieldKey] || 0) + value;
+                    activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1;
+                  }
+                } else if (typeof value === 'string') {
+                  if (value === 'true' || value === 'var' || value === 'evet') {
+                    activity[fieldKey] = (activity[fieldKey] || 0) + 1;
+                    activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1;
+                  }
+                } else if (value === true) {
                   activity[fieldKey] = (activity[fieldKey] || 0) + 1;
                   activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1;
                 }
