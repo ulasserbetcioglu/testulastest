@@ -119,8 +119,7 @@ const CustomerTrendAnalysis: React.FC = () => {
         
         if (activeId) {
           setCustomerId(activeId);
-          // Şubeleri state için çekiyoruz (Dropdown için)
-          fetchBranches(activeId);
+          await fetchBranches(activeId);
         } else {
           console.warn("Müşteri ID bulunamadı.");
           setLoading(false);
@@ -133,20 +132,24 @@ const CustomerTrendAnalysis: React.FC = () => {
     init();
   }, [user]);
 
+  // 2. Şubeleri Çek
   const fetchBranches = async (id: string) => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('branches')
         .select('id, sube_adi')
         .eq('customer_id', id)
         .order('sube_adi');
+        
+      if (error) throw error;
       setBranches(data || []);
     } catch (error) {
       console.error('Error fetching branches:', error);
+      toast.error("Şubeler yüklenemedi.");
     }
   };
 
-  // 2. Raporu Oluştur (Trigger)
+  // 3. Raporu Oluştur (Trigger)
   useEffect(() => {
     if (customerId) {
       handleGenerateReport();
@@ -158,7 +161,7 @@ const CustomerTrendAnalysis: React.FC = () => {
 
     setLoading(true);
     try {
-      // Şube ID'lerini burada garanti altına alıyoruz (State'in dolmasını beklemeden)
+      // Şube ID'lerini garantiye al
       let targetBranchIds: string[] = [];
       if (selectedBranchId) {
         targetBranchIds = [selectedBranchId];
@@ -237,10 +240,6 @@ const CustomerTrendAnalysis: React.FC = () => {
           checks += Object.keys(v.equipment_checks).length;
           
           Object.values(v.equipment_checks).forEach((c: any) => {
-            if (c === true || c === 'true' || c === 'var' || c === 'problem' || c === 'issue') {
-                // Basit kontrol (boolean true ise veya string var ise) - Detaylı obje kontrolü aşağıda
-            }
-            // Eğer c bir obje ise ve içinde status varsa
             if (typeof c === 'object' && c !== null) {
                 if (c.status === 'issue' || c.status === 'problem' || c.status === 'missing' || c.activity === true) {
                     issues++;
@@ -349,7 +348,6 @@ const CustomerTrendAnalysis: React.FC = () => {
       visitsData?.forEach(visit => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            // Key genellikle ekipman ID'sidir
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
             
             if (!equipment) return; 
@@ -365,13 +363,17 @@ const CustomerTrendAnalysis: React.FC = () => {
                 if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
 
                 let numVal = 0;
+                // Sayısal
                 if (typeof value === 'number') numVal = value;
+                // String sayı
                 else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
+                // Boolean True
                 else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet' || value === 'evet') numVal = 1;
+                // Boolean False (Açıkça 0 olarak işle)
+                else if (value === false || value === 'false' || value === 'yok' || value === 'Yok' || value === 'Hayır' || value === 'hayır') numVal = 0;
 
-                if (numVal > 0) {
-                  activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
-                }
+                // Koşulsuz ekle, böylece 0 değerleri de kaydedilir
+                activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
               });
             }
           });
@@ -405,7 +407,10 @@ const CustomerTrendAnalysis: React.FC = () => {
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
           Object.keys(rawTotals).forEach(key => {
-            if (rawTotals[key] > 0) allFieldsInData.add(key);
+            // Sadece sayısal olması yeterli, 0 da olsa ekle
+            if (typeof rawTotals[key] === 'number') {
+              allFieldsInData.add(key);
+            }
           });
         });
 
@@ -436,8 +441,8 @@ const CustomerTrendAnalysis: React.FC = () => {
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
           
-          // Sadece verisi olanları gösterelim ki grafik boş kalmasın
-          if (Object.keys(rawTotals).length === 0) return;
+          // Verisi olmasa bile listede görünsün ki "boş" olduğu anlaşılsın (Opsiyonel: Filtreleyebilirsiniz)
+          // if (Object.keys(rawTotals).length === 0) return;
 
           const visitCount = visitCountMap.get(eq.id) || 1;
 
@@ -450,14 +455,17 @@ const CustomerTrendAnalysis: React.FC = () => {
           let hasData = false;
           propertyKeys.forEach(key => {
             const totalVal = rawTotals[key] || 0;
+            
             activityRow[key] = chartViewMode === 'total'
               ? totalVal
               : Number((totalVal / visitCount).toFixed(1));
             
-            if (totalVal > 0) hasData = true;
+            // Eğer en az bir değer (0 dahil, çünkü key var) varsa row'u ekle
+            if (rawTotals.hasOwnProperty(key)) hasData = true;
           });
 
-          if (hasData) activities.push(activityRow);
+          // Hiç veri yoksa bile ekle (0 olarak görünür)
+          activities.push(activityRow);
         });
 
         if (activities.length > 0) {
@@ -534,10 +542,11 @@ const CustomerTrendAnalysis: React.FC = () => {
                 if (typeof value === 'number') numVal = value;
                 else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
                 else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet') numVal = 1;
+                // False değerleri de ekle
+                else if (value === false || value === 'false' || value === 'yok' || value === 'Yok') numVal = 0;
 
-                if (numVal > 0) {
-                  activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
-                }
+                // Koşulsuz ekle
+                activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
               });
             }
           });
@@ -556,7 +565,7 @@ const CustomerTrendAnalysis: React.FC = () => {
               const acts = dm.get(eqType);
               if(acts) {
                   Object.keys(acts).forEach(k => {
-                      if(!propertyKeys.includes(k)) {
+                      if(!k.endsWith('_count') && !propertyKeys.includes(k)) {
                           propertyKeys.push(k);
                           propertyLabels[k] = k.replace(/_/g, ' ').toUpperCase();
                       }
@@ -567,7 +576,7 @@ const CustomerTrendAnalysis: React.FC = () => {
           if(propertyKeys.length === 0) return;
 
           const trends: VisitDateTrendData[] = [];
-          const sortedDates = Array.from(dateEquipmentMap.keys()); // UI için yeterli
+          const sortedDates = Array.from(dateEquipmentMap.keys()); 
 
           sortedDates.forEach(date => {
               const dm = dateEquipmentMap.get(date);
