@@ -301,28 +301,39 @@ const CustomerTrendAnalysis: React.FC = () => {
         .lte('visit_date', dateRange.to)
         .eq('status', 'completed');
 
+      // Hem ID hem de CODE ile eşleştirme için map oluştur
+      const equipmentByCode = new Map<string, any>();
+      const equipmentById = new Map<string, any>();
+
+      equipmentData?.forEach(eq => {
+        equipmentByCode.set(eq.equipment_code, eq);
+        equipmentById.set(eq.id, eq);
+      });
+
       // 4. Hesaplama Mantığı
-      // Her bir ekipman ID'si için toplam aktiviteleri topla
       const activityMap = new Map<string, Record<string, number>>();
-      const visitCountMap = new Map<string, number>(); // Ortalama hesabı için
+      const visitCountMap = new Map<string, number>();
 
       visitsData?.forEach(visit => {
         if (visit.equipment_checks) {
-          // DÜZELTME: equipment_checks içindeki anahtarlar branch_equipment.id'dir (UUID)
-          Object.entries(visit.equipment_checks).forEach(([eqId, checkData]: [string, any]) => {
+          Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
+            // Key hem equipment_code hem de id olabilir
+            const equipment = equipmentById.get(key) || equipmentByCode.get(key);
+            if (!equipment) return;
+
+            const eqId = equipment.id;
             if (!activityMap.has(eqId)) activityMap.set(eqId, {});
             visitCountMap.set(eqId, (visitCountMap.get(eqId) || 0) + 1);
 
             const activity = activityMap.get(eqId)!;
             if (checkData && typeof checkData === 'object') {
-              // Sayısal değerleri topla (örn: catch_count, consumption, activity_level vb.)
-              Object.entries(checkData).forEach(([key, value]) => {
-                // 'true' boolean değerlerini 1 olarak say, sayıları olduğu gibi topla
-                if (typeof value === 'number') {
-                  activity[key] = (activity[key] || 0) + value;
-                } else if (value === true || value === 'true') {
-                   // Boolean aktiviteler (örn: aktivite var mı?) için sayım yap
-                   activity[key] = (activity[key] || 0) + 1;
+              Object.entries(checkData).forEach(([fieldKey, value]) => {
+                if (fieldKey === 'equipment_name' || fieldKey === 'equipment_code' || fieldKey === 'status') return;
+
+                if (typeof value === 'number' && value > 0) {
+                  activity[fieldKey] = (activity[fieldKey] || 0) + value;
+                } else if (value === true || value === 'true' || value === 'var') {
+                  activity[fieldKey] = (activity[fieldKey] || 0) + 1;
                 }
               });
             }
@@ -330,30 +341,25 @@ const CustomerTrendAnalysis: React.FC = () => {
         }
       });
 
-      // 5. Gruplama (Ekipman Türüne Göre)
-      const typeGroups = new Map<string, { equipments: any[], properties: any }>();
-      
-      equipmentData?.forEach((item: any) => {
-        const type = item.equipment?.type || 'DIGER';
-        if (!typeGroups.has(type)) typeGroups.set(type, { equipments: [], properties: {} });
-        
-        const group = typeGroups.get(type)!;
-        group.equipments.push(item);
-        if (item.equipment?.properties) group.properties = item.equipment.properties;
-      });
+      // 5. Ekipman ismine göre gruplama
+      const nameGroups = new Map<string, { equipments: any[], properties: any }>();
 
-      // 6. Sonuç Dizisini Oluştur
-      const typeLabels: Record<string, string> = {
-        UCAN: 'Uçan Zararlılar (EFC/UV)',
-        KEMIRGEN: 'Kemirgen İstasyonları',
-        YURUYEN: 'Yürüyen Haşereler',
-        AMBAR: 'Ambar Zararlıları',
-        DIGER: 'Diğer Ekipmanlar'
-      };
+      equipmentData?.forEach((item: any) => {
+        const equipmentName = item.equipment?.name || 'Diğer Ekipmanlar';
+        if (!nameGroups.has(equipmentName)) {
+          nameGroups.set(equipmentName, { equipments: [], properties: {} });
+        }
+
+        const group = nameGroups.get(equipmentName)!;
+        group.equipments.push(item);
+        if (item.equipment?.properties) {
+          group.properties = { ...group.properties, ...item.equipment.properties };
+        }
+      });
 
       const resultData: EquipmentTypeData[] = [];
 
-      typeGroups.forEach((group, type) => {
+      nameGroups.forEach((group, equipmentName) => {
         const propertyKeys: string[] = [];
         const propertyLabels: Record<string, string> = {};
         const allFieldsInData = new Set<string>();
@@ -369,9 +375,9 @@ const CustomerTrendAnalysis: React.FC = () => {
         });
 
         // Properties'den tanımlı olanları ekle
-        if (group.properties) {
+        if (group.properties && Object.keys(group.properties).length > 0) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
-            if (value.type === 'number' || value.type === 'boolean') {
+            if (value && (value.type === 'number' || value.type === 'boolean')) {
               if (!propertyKeys.includes(key)) {
                 propertyKeys.push(key);
                 propertyLabels[key] = value.label || key;
@@ -391,7 +397,9 @@ const CustomerTrendAnalysis: React.FC = () => {
               .replace(/Count/gi, 'Sayısı')
               .replace(/Activity/gi, 'Aktivite')
               .replace(/Consumption/gi, 'Tüketim')
-              .replace(/Catch/gi, 'Yakalanan');
+              .replace(/Catch/gi, 'Yakalanan')
+              .replace(/Canli/gi, 'Canlı')
+              .replace(/Sayi/gi, 'Sayı');
           }
         });
 
@@ -424,8 +432,8 @@ const CustomerTrendAnalysis: React.FC = () => {
 
         if (activities.some(a => propertyKeys.some(k => Number(a[k]) > 0))) {
           resultData.push({
-            type,
-            type_label: typeLabels[type] || type,
+            type: equipmentName,
+            type_label: `${equipmentName} Ekipman Kontrolleri`,
             activities: activities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)),
             propertyKeys,
             propertyLabels
