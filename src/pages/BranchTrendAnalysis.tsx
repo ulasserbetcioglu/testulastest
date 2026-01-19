@@ -235,15 +235,44 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       typeGroups.forEach((group, type) => {
         const propertyKeys: string[] = [];
         const propertyLabels: Record<string, string> = {};
+        const allFieldsInData = new Set<string>();
 
+        // Önce tüm ekipmanlardaki tüm alanları topla
+        group.equipments.forEach((eq: any) => {
+          const rawTotals = activityMap.get(eq.id) || {};
+          Object.keys(rawTotals).forEach(key => {
+            if (typeof rawTotals[key] === 'number' && rawTotals[key] > 0) {
+              allFieldsInData.add(key);
+            }
+          });
+        });
+
+        // Properties'den tanımlı olanları ekle
         if (group.properties) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
             if (value.type === 'number' || value.type === 'boolean') {
-              propertyKeys.push(key);
-              propertyLabels[key] = value.label || key;
+              if (!propertyKeys.includes(key)) {
+                propertyKeys.push(key);
+                propertyLabels[key] = value.label || key;
+              }
             }
           });
         }
+
+        // Veride olan ama properties'de tanımlı olmayan sayısal alanları da ekle
+        allFieldsInData.forEach(key => {
+          if (!propertyKeys.includes(key)) {
+            propertyKeys.push(key);
+            // Label'ı güzelleştir
+            propertyLabels[key] = key
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, l => l.toUpperCase())
+              .replace(/Count/gi, 'Sayısı')
+              .replace(/Activity/gi, 'Aktivite')
+              .replace(/Consumption/gi, 'Tüketim')
+              .replace(/Catch/gi, 'Yakalanan');
+          }
+        });
 
         if (propertyKeys.length === 0) return;
 

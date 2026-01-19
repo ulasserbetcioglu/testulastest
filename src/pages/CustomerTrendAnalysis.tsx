@@ -356,23 +356,50 @@ const CustomerTrendAnalysis: React.FC = () => {
       typeGroups.forEach((group, type) => {
         const propertyKeys: string[] = [];
         const propertyLabels: Record<string, string> = {};
+        const allFieldsInData = new Set<string>();
 
+        // Önce tüm ekipmanlardaki tüm alanları topla
+        group.equipments.forEach((eq: any) => {
+          const rawTotals = activityMap.get(eq.id) || {};
+          Object.keys(rawTotals).forEach(key => {
+            if (typeof rawTotals[key] === 'number' && rawTotals[key] > 0) {
+              allFieldsInData.add(key);
+            }
+          });
+        });
+
+        // Properties'den tanımlı olanları ekle
         if (group.properties) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
-            // Sayısal veya Boolean (sayılabilir) özellikleri grafiğe dahil et
             if (value.type === 'number' || value.type === 'boolean') {
-              propertyKeys.push(key);
-              propertyLabels[key] = value.label || key;
+              if (!propertyKeys.includes(key)) {
+                propertyKeys.push(key);
+                propertyLabels[key] = value.label || key;
+              }
             }
           });
         }
 
-        if (propertyKeys.length === 0) return; 
+        // Veride olan ama properties'de tanımlı olmayan sayısal alanları da ekle
+        allFieldsInData.forEach(key => {
+          if (!propertyKeys.includes(key)) {
+            propertyKeys.push(key);
+            // Label'ı güzelleştir
+            propertyLabels[key] = key
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, l => l.toUpperCase())
+              .replace(/Count/gi, 'Sayısı')
+              .replace(/Activity/gi, 'Aktivite')
+              .replace(/Consumption/gi, 'Tüketim')
+              .replace(/Catch/gi, 'Yakalanan');
+          }
+        });
+
+        if (propertyKeys.length === 0) return;
 
         const activities: EquipmentTypeActivity[] = [];
 
         group.equipments.forEach((eq: any) => {
-          // DÜZELTME: Eşleşmeyi UUID (eq.id) üzerinden yapıyoruz
           const rawTotals = activityMap.get(eq.id) || {};
           const visitCount = visitCountMap.get(eq.id) || 1;
 
@@ -385,24 +412,21 @@ const CustomerTrendAnalysis: React.FC = () => {
           let hasActivity = false;
           propertyKeys.forEach(key => {
             const totalVal = rawTotals[key] || 0;
-            activityRow[key] = chartViewMode === 'total' 
-              ? totalVal 
+            activityRow[key] = chartViewMode === 'total'
+              ? totalVal
               : Number((totalVal / visitCount).toFixed(1));
-            
+
             if (totalVal > 0) hasActivity = true;
           });
 
-          // Sadece aktivitesi olan ekipmanları veya tümünü gösterme tercihi
-          // Burada tümünü gösteriyoruz ama değerler 0 olabilir
           activities.push(activityRow);
         });
 
-        // Sadece verisi olan grupları ekle
         if (activities.some(a => propertyKeys.some(k => Number(a[k]) > 0))) {
           resultData.push({
             type,
             type_label: typeLabels[type] || type,
-            activities: activities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)), // Koda göre sırala
+            activities: activities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)),
             propertyKeys,
             propertyLabels
           });
