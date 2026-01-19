@@ -189,30 +189,43 @@ const CustomerTrendAnalysis: React.FC = () => {
     }
   };
 
-  // --- YARDIMCI FONKSİYON: Değer Dönüştürücü ---
+  // --- GÜÇLENDİRİLMİŞ YARDIMCI FONKSİYON: Değer Dönüştürücü ---
   const parseValue = (value: any): number => {
     if (value === null || value === undefined) return 0;
     
     // Zaten sayıysa
-    if (typeof value === 'number') return value;
+    if (typeof value === 'number') {
+      return isNaN(value) ? 0 : value;
+    }
     
     // Boolean ise
-    if (value === true) return 1;
-    if (value === false) return 0;
+    if (typeof value === 'boolean') {
+      return value ? 1 : 0;
+    }
     
     // String ise analiz et
     if (typeof value === 'string') {
-      const lower = value.trim().toLowerCase();
+      const trimmed = value.trim();
+      if (trimmed === '') return 0;
       
-      // Boolean stringler
-      if (['true', 'var', 'evet', 'yes', 'mevcut'].includes(lower)) return 1;
-      if (['false', 'yok', 'hayır', 'no', 'boş'].includes(lower)) return 0;
+      const lower = trimmed.toLowerCase();
+      
+      // Boolean stringler - GENİŞLETİLMİŞ
+      if (['true', 'var', 'evet', 'yes', 'mevcut', 'oluşturuldu', 'yapıldı', 'aktif', 'ok'].includes(lower)) return 1;
+      if (['false', 'yok', 'hayır', 'no', 'boş', 'yapılmadı', 'pasif', 'none'].includes(lower)) return 0;
       
       // Sayısal stringler (Virgül/Nokta desteği)
-      const cleanStr = lower.replace(',', '.'); // 10,5 -> 10.5
+      const cleanStr = trimmed.replace(/,/g, '.'); // 10,5 -> 10.5
       const parsed = parseFloat(cleanStr);
       
-      if (!isNaN(parsed)) return parsed;
+      if (!isNaN(parsed) && isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    
+    // Object veya Array ise (genelde sayısal değil)
+    if (typeof value === 'object') {
+      return 0;
     }
     
     return 0;
@@ -371,12 +384,19 @@ const CustomerTrendAnalysis: React.FC = () => {
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
 
-      visitsData?.forEach(visit => {
+      // DEBUG: Hangi ekipmanlar için veri var
+      console.log('🔍 Equipment Data Count:', equipmentData?.length);
+      console.log('🔍 Visits Data Count:', visitsData?.length);
+
+      visitsData?.forEach((visit, visitIdx) => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
             
-            if (!equipment) return; 
+            if (!equipment) {
+              console.warn(`⚠️ Equipment not found for key: ${key}`);
+              return; 
+            }
 
             const eqId = equipment.id;
             if (!activityMap.has(eqId)) activityMap.set(eqId, {});
@@ -386,10 +406,16 @@ const CustomerTrendAnalysis: React.FC = () => {
             
             if (checkData && typeof checkData === 'object') {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
+                // Sistem alanlarını atla
                 if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
 
                 // GÜÇLENDİRİLMİŞ PARSER KULLANIMI
                 const numVal = parseValue(value);
+                
+                // DEBUG İLK 3 ZIYARET İÇİN
+                if (visitIdx < 3) {
+                  console.log(`📊 Field: ${fieldKey}, Raw Value: ${value} (${typeof value}), Parsed: ${numVal}`);
+                }
                 
                 // 0 olsa bile toplama ekle (Sonuç 0 görünsün diye)
                 activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
@@ -397,6 +423,12 @@ const CustomerTrendAnalysis: React.FC = () => {
             }
           });
         }
+      });
+
+      // DEBUG: Activity Map içeriği
+      console.log('📈 Activity Map size:', activityMap.size);
+      activityMap.forEach((acts, eqId) => {
+        console.log(`Equipment ${eqId}:`, acts);
       });
 
       const nameGroups = new Map<string, { equipments: any[], properties: any }>();
@@ -452,6 +484,8 @@ const CustomerTrendAnalysis: React.FC = () => {
           }
         });
 
+        console.log(`✅ ${equipmentName} - Property Keys:`, propertyKeys);
+
         if (propertyKeys.length === 0) return;
 
         const activities: EquipmentTypeActivity[] = [];
@@ -466,19 +500,14 @@ const CustomerTrendAnalysis: React.FC = () => {
             branch_name: eq.branch?.sube_adi || 'Merkez',
           };
 
-          let hasData = false;
           propertyKeys.forEach(key => {
             const totalVal = rawTotals[key] || 0;
             
             activityRow[key] = chartViewMode === 'total'
               ? totalVal
               : Number((totalVal / visitCount).toFixed(1));
-            
-            // Veri varlığı kontrolü: key rawTotals içinde varsa (değer 0 olsa bile) true
-            if (Object.prototype.hasOwnProperty.call(rawTotals, key)) hasData = true;
           });
 
-          // Hiç veri yoksa bile ekle (0 olarak görünür)
           activities.push(activityRow);
         });
 
@@ -493,6 +522,7 @@ const CustomerTrendAnalysis: React.FC = () => {
         }
       });
 
+      console.log('🎯 Final Result Data:', resultData);
       setEquipmentTypeData(resultData);
 
     } catch (error) {
@@ -813,6 +843,9 @@ const CustomerTrendAnalysis: React.FC = () => {
                         return acc;
                       }, {} as Record<string, number>);
 
+                      // DİNAMİK YÜKSEKLIK - Ekipman sayısına göre
+                      const chartHeight = Math.max(400, typeData.activities.length * 60);
+
                       return (
                         <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                           <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
@@ -830,12 +863,12 @@ const CustomerTrendAnalysis: React.FC = () => {
                             ))}
                           </div>
 
-                          <div className="h-80 w-full">
+                          <div style={{ height: chartHeight }} className="w-full">
                             <ResponsiveContainer width="100%" height="100%">
                               <BarChart 
                                 data={typeData.activities}
                                 layout="horizontal"
-                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
                               >
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                 <XAxis 
@@ -844,7 +877,7 @@ const CustomerTrendAnalysis: React.FC = () => {
                                   interval={0} 
                                   angle={-45} 
                                   textAnchor="end" 
-                                  height={60}
+                                  height={80}
                                   tick={{fill: '#6b7280'}}
                                 />
                                 <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
