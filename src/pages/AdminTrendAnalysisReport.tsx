@@ -303,7 +303,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
         let query = supabase
           .from('ekipmantrend')
-          .select('equipment_key, equipment_data, visit_date')
+          .select('equipment_key, equipment_name, status, kirik, kayip')
           .in('branch_id', branchIds)
           .gte('visit_date', dateRange.from)
           .lte('visit_date', dateRange.to);
@@ -313,9 +313,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
         const equipmentMap = new Map<string, EquipmentCheckData>();
         data?.forEach(item => {
-          const checkData = item.equipment_data as any;
-          const equipmentName = checkData?.equipment_name || checkData?.name || `Ekipman ${item.equipment_key}`;
-          const status = checkData?.status || checkData?.check_status || checkData?.durum || 'unknown';
+          const equipmentName = item.equipment_name || `Ekipman ${item.equipment_key}`;
+          const status = item.status || 'unknown';
 
           if (!equipmentMap.has(equipmentName)) {
             equipmentMap.set(equipmentName, {
@@ -333,9 +332,9 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
           if (status === 'ok' || status === 'working' || status === 'good' || status === 'iyi' || status === 'calisiyor') {
             equipment.ok_count++;
-          } else if (status === 'issue' || status === 'problem' || status === 'needs_attention' || status === 'sorunlu' || status === 'kirik' || checkData?.kirik === true || checkData?.kirik === 'true') {
+          } else if (status === 'issue' || status === 'problem' || status === 'needs_attention' || status === 'sorunlu' || item.kirik) {
             equipment.issue_count++;
-          } else if (status === 'missing' || status === 'not_found' || status === 'kayip' || checkData?.kayip === true || checkData?.kayip === 'true') {
+          } else if (status === 'missing' || status === 'not_found' || item.kayip) {
             equipment.missing_count++;
           }
         });
@@ -371,7 +370,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
           let equipmentQuery = supabase
             .from('ekipmantrend')
-            .select('id, equipment_data')
+            .select('id, status, kirik, kayip, aktivite_var')
             .in('branch_id', branchIds)
             .gte('visit_date', format(monthStart, 'yyyy-MM-dd'))
             .lte('visit_date', format(monthEnd, 'yyyy-MM-dd'));
@@ -385,9 +384,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
           let issues = 0;
 
           equipmentResult.data?.forEach(item => {
-            const checkData = item.equipment_data as any;
-            const status = checkData?.status || checkData?.check_status || checkData?.durum;
-            if (status === 'issue' || status === 'problem' || status === 'missing' || status === 'sorunlu' || status === 'kirik' || status === 'kayip' || checkData?.kirik === true || checkData?.kayip === true || checkData?.kirik === 'true' || checkData?.kayip === 'true') {
+            const status = item.status || '';
+            if (status === 'issue' || status === 'problem' || status === 'missing' || status === 'sorunlu' || item.kirik || item.kayip || item.aktivite_var) {
               issues++;
             }
           });

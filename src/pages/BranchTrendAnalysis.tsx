@@ -190,7 +190,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
           .lte('visit_date', end),
         supabase
           .from('ekipmantrend')
-          .select('id, equipment_data')
+          .select('id, status, kirik, kayip, aktivite_var')
           .eq('branch_id', branchId)
           .gte('visit_date', start)
           .lte('visit_date', end)
@@ -203,9 +203,8 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       let checks = equipmentData.length;
 
       equipmentData.forEach((item: any) => {
-        const checkData = item.equipment_data;
-        const val = JSON.stringify(checkData).toLowerCase();
-        if (val.includes('issue') || val.includes('problem') || val.includes('missing') || val.includes('kırık') || val.includes('kayıp') || val.includes('kirik') || val.includes('kayip') || val.includes('sorunlu')) {
+        const status = (item.status || '').toLowerCase();
+        if (status.includes('issue') || status.includes('problem') || status.includes('missing') || status.includes('sorunlu') || item.kirik || item.kayip || item.aktivite_var) {
           issues++;
         }
       });

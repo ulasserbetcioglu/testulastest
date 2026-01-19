@@ -253,7 +253,7 @@ const CustomerTrendAnalysis: React.FC = () => {
           .lte('visit_date', end),
         supabase
           .from('ekipmantrend')
-          .select('id, equipment_data')
+          .select('id, status, kirik, kayip, aktivite_var')
           .in('branch_id', branchIds)
           .gte('visit_date', start)
           .lte('visit_date', end)
@@ -265,14 +265,9 @@ const CustomerTrendAnalysis: React.FC = () => {
       let checks = equipmentData.length;
 
       equipmentData.forEach((item: any) => {
-        const c = item.equipment_data;
-        if (typeof c === 'object' && c !== null) {
-          const status = String(c.status || '').toLowerCase();
-          const result = String(c.control_result || '').toLowerCase();
-          if (['issue', 'problem', 'missing', 'broken', 'kirik', 'eksik', 'sorun', 'kayip'].some(s => status.includes(s) || result.includes(s))) issues++;
-          if (c.activity === true || c.pest_activity === true || c.kirik === true || c.kayip === true) issues++;
-        } else if (typeof c === 'string') {
-          if (['problem', 'issue', 'sorun', 'eksik', 'kirik', 'kayip'].some(s => c.toLowerCase().includes(s))) issues++;
+        const status = (item.status || '').toLowerCase();
+        if (['issue', 'problem', 'missing', 'broken', 'kirik', 'eksik', 'sorun', 'kayip'].some(s => status.includes(s)) || item.kirik || item.kayip || item.aktivite_var) {
+          issues++;
         }
       });
 
