@@ -83,7 +83,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
   const [generating, setGenerating] = useState(false);
 
   const [dateRange, setDateRange] = useState({
-    from: format(new Date(new Date().setMonth(new Date().getMonth() - 3)), 'yyyy-MM-dd'),
+    from: format(new Date(new Date().setMonth(new Date().getMonth() - 6)), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd'),
   });
 
@@ -244,18 +244,11 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
 
-      let totalChecksProcessed = 0;
-      let totalValuesAdded = 0;
-
       visitsData?.forEach(visit => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            totalChecksProcessed++;
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
-            if (!equipment) {
-              console.warn('Equipment bulunamadı:', key);
-              return;
-            }
+            if (!equipment) return;
 
             const eqId = equipment.id;
             if (!activityMap.has(eqId)) activityMap.set(eqId, {});
@@ -271,23 +264,11 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
                 if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
                 activity[fieldKey] += numVal;
-                totalValuesAdded++;
-
-                if (totalValuesAdded <= 10) {
-                  console.log(`${equipment.equipment_code} - ${fieldKey}: ${value} => ${numVal}`);
-                }
               });
             }
           });
         }
       });
-
-      console.log(`✅ BRANCH ÖZET: ${totalChecksProcessed} check işlendi, ${totalValuesAdded} değer eklendi`);
-      console.log('ActivityMap boyutu:', activityMap.size);
-      if (activityMap.size > 0) {
-        const firstEntry = Array.from(activityMap.entries())[0];
-        console.log('İlk activity örneği:', firstEntry);
-      }
 
       // Gruplama
       const nameGroups = new Map<string, { equipments: any[], properties: any }>();

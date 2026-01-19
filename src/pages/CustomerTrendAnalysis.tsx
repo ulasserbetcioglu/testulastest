@@ -97,7 +97,7 @@ const CustomerTrendAnalysis: React.FC = () => {
   const [selectedBranchId, setSelectedBranchId] = useState('');
   
   const [dateRange, setDateRange] = useState({
-    from: format(new Date(new Date().setMonth(new Date().getMonth() - 3)), 'yyyy-MM-dd'),
+    from: format(new Date(new Date().setMonth(new Date().getMonth() - 6)), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd'),
   });
 
