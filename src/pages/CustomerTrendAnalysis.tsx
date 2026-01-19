@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../components/Auth/AuthProvider';
-import { localAuth } from '../lib/localAuth';
 import { toast } from 'sonner';
 import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -10,11 +8,9 @@ import {
   Download,
   Loader2,
   Filter,
-  AlertTriangle,
-  BarChart3,
-  PieChart as PieChartIcon,
   Activity,
-  Calculator
+  BarChart3,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import {
   BarChart,
@@ -28,12 +24,15 @@ import {
   AreaChart,
   Area,
   LineChart,
-  Line,
-  LabelList
+  Line
 } from 'recharts';
 import html2canvas from 'html2canvas';
 
-// --- ARAYÜZLER ---
+interface BranchTrendAnalysisProps {
+  branchId: string;
+  branchName: string;
+}
+
 interface VisitStats {
   total_visits: number;
   completed_visits: number;
@@ -86,16 +85,10 @@ interface EquipmentTypeTrend {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF4560', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B'];
 
-const CustomerTrendAnalysis: React.FC = () => {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, branchName }) => {
+  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  // State
-  const [customerId, setCustomerId] = useState<string | null>(null);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState('');
-  
   const [dateRange, setDateRange] = useState({
     from: format(new Date(new Date().setMonth(new Date().getMonth() - 3)), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd'),
@@ -111,76 +104,25 @@ const CustomerTrendAnalysis: React.FC = () => {
 
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // 1. Müşteri Kimliğini Belirle
   useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      try {
-        const id = await localAuth.getCurrentCustomerId();
-        const activeId = id || user?.customer_id;
-        
-        if (activeId) {
-          setCustomerId(activeId);
-          await fetchBranches(activeId);
-        } else {
-          console.warn("Müşteri ID bulunamadı.");
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Başlangıç hatası:", error);
-        setLoading(false);
-      }
-    };
-    init();
-  }, [user]);
-
-  // 2. Şubeleri Çek
-  const fetchBranches = async (id: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('id, sube_adi')
-        .eq('customer_id', id)
-        .order('sube_adi');
-        
-      if (error) throw error;
-      setBranches(data || []);
-    } catch (error) {
-      console.error('Error fetching branches:', error);
-      toast.error("Şubeler yüklenemedi.");
-    }
-  };
-
-  // 3. Raporu Oluştur (Trigger)
-  useEffect(() => {
-    if (customerId) {
+    if (branchId) {
       handleGenerateReport();
     }
-  }, [customerId, selectedBranchId, dateRange.from, dateRange.to]);
+  }, [branchId, dateRange.from, dateRange.to]);
 
   const handleGenerateReport = async () => {
-    if (!customerId) return;
+    if (!branchId) return;
 
     setLoading(true);
     try {
-      let targetBranchIds: string[] = [];
-      if (selectedBranchId) {
-        targetBranchIds = [selectedBranchId];
-      } else {
-        const { data: bData } = await supabase
-          .from('branches')
-          .select('id')
-          .eq('customer_id', customerId);
-        targetBranchIds = bData?.map(b => b.id) || [];
-      }
-
       await Promise.all([
-        fetchVisitStats(targetBranchIds),
-        fetchMonthlyTrends(targetBranchIds),
-        fetchBiocidalProducts(targetBranchIds),
-        fetchEquipmentTypeActivities(targetBranchIds), 
-        fetchEquipmentTrendsByDate(targetBranchIds)    
+        fetchVisitStats(),
+        fetchMonthlyTrends(),
+        fetchBiocidalProducts(),
+        fetchEquipmentTypeActivities(),
+        fetchEquipmentTrendsByDate()
       ]);
+      toast.success('Analiz güncellendi');
     } catch (error) {
       console.error('Error generating report:', error);
       toast.error('Veriler alınırken hata oluştu');
@@ -219,8 +161,7 @@ const CustomerTrendAnalysis: React.FC = () => {
       }
 
       // 4. Metin Değerleri ("Temiz", "Kirli", "Değişti" vb.)
-      // Eğer sayısal bir alan değilse ve string doluysa, bu bir "aktivite" veya "durum" belirtir.
-      // Dolayısıyla bunu 1 (var) olarak sayarız.
+      // Dolu bir string ise 1 olarak kabul et (aktivite var)
       if (lower.length > 0) return 1;
     }
     
@@ -229,18 +170,15 @@ const CustomerTrendAnalysis: React.FC = () => {
 
   // --- Veri Çekme Fonksiyonları ---
 
-  const fetchVisitStats = async (branchIds: string[]) => {
-    if (branchIds.length === 0) return;
-
-    let query = supabase
+  const fetchVisitStats = async () => {
+    if (!branchId) return;
+    const { data } = await supabase
       .from('visits')
       .select('id, status')
-      .in('branch_id', branchIds)
+      .eq('branch_id', branchId)
       .gte('visit_date', dateRange.from)
       .lte('visit_date', dateRange.to);
 
-    const { data, error } = await query;
-    if (error) { console.error(error); return; }
     const visits = data || [];
 
     setVisitStats({
@@ -251,8 +189,8 @@ const CustomerTrendAnalysis: React.FC = () => {
     });
   };
 
-  const fetchMonthlyTrends = async (branchIds: string[]) => {
-    if (branchIds.length === 0) return;
+  const fetchMonthlyTrends = async () => {
+    if (!branchId) return;
     const startDate = parseISO(dateRange.from);
     const endDate = parseISO(dateRange.to);
     const months = eachMonthOfInterval({ start: startDate, end: endDate });
@@ -261,14 +199,13 @@ const CustomerTrendAnalysis: React.FC = () => {
       const start = format(startOfMonth(month), 'yyyy-MM-dd');
       const end = format(endOfMonth(month), 'yyyy-MM-dd');
 
-      let query = supabase
+      const { data } = await supabase
         .from('visits')
         .select('id, equipment_checks')
-        .in('branch_id', branchIds)
+        .eq('branch_id', branchId)
         .gte('visit_date', start)
         .lte('visit_date', end);
 
-      const { data } = await query;
       const visits = data || [];
       
       let issues = 0;
@@ -302,16 +239,16 @@ const CustomerTrendAnalysis: React.FC = () => {
     setMonthlyTrends(trendsData);
   };
 
-  const fetchBiocidalProducts = async (branchIds: string[]) => {
-    if (branchIds.length === 0) return;
+  const fetchBiocidalProducts = async () => {
+    if (!branchId) return;
 
     let query = supabase
       .from('biocidal_products_usage')
       .select(`
         quantity, unit,
-        biocidal_products (name, active_ingredient)
+        product:biocidal_products (name, active_ingredient)
       `)
-      .in('branch_id', branchIds)
+      .eq('branch_id', branchId)
       .gte('created_at', dateRange.from)
       .lte('created_at', dateRange.to);
 
@@ -321,13 +258,13 @@ const CustomerTrendAnalysis: React.FC = () => {
     const productMap = new Map<string, BiocidalProductUsage>();
 
     data?.forEach((usage: any) => {
-      const name = usage.biocidal_products?.name || 'Bilinmeyen';
+      const name = usage.product?.name || 'Bilinmeyen';
       const quantity = parseFloat(usage.quantity) || 0;
       
       if (!productMap.has(name)) {
         productMap.set(name, {
           product_name: name,
-          active_ingredient: usage.biocidal_products?.active_ingredient || '',
+          active_ingredient: usage.product?.active_ingredient || '',
           total_quantity: 0,
           unit: usage.unit || 'adet',
           usage_count: 0
@@ -341,8 +278,8 @@ const CustomerTrendAnalysis: React.FC = () => {
     setBiocidalProducts(Array.from(productMap.values()).sort((a,b) => b.total_quantity - a.total_quantity));
   };
 
-  const fetchEquipmentTypeActivities = async (branchIds: string[]) => {
-    if (branchIds.length === 0) {
+  const fetchEquipmentTypeActivities = async () => {
+    if (!branchId) {
       setEquipmentTypeData([]);
       return;
     }
@@ -357,7 +294,7 @@ const CustomerTrendAnalysis: React.FC = () => {
           equipment:equipment_id ( name, type, properties ),
           branch:branch_id ( sube_adi )
         `)
-        .in('branch_id', branchIds);
+        .eq('branch_id', branchId);
 
       if (eqError) throw eqError;
 
@@ -365,7 +302,7 @@ const CustomerTrendAnalysis: React.FC = () => {
       const { data: visitsData, error: vError } = await supabase
         .from('visits')
         .select('equipment_checks')
-        .in('branch_id', branchIds)
+        .eq('branch_id', branchId)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
         .eq('status', 'completed');
@@ -1059,4 +996,3 @@ const CustomerTrendAnalysis: React.FC = () => {
 };
 
 export default CustomerTrendAnalysis;
-
