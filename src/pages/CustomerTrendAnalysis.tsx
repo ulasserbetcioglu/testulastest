@@ -33,7 +33,7 @@ import {
 } from 'recharts';
 import html2canvas from 'html2canvas';
 
-// --- TİP TANIMLARI ---
+// --- ARAYÜZLER ---
 interface VisitStats {
   total_visits: number;
   completed_visits: number;
@@ -111,7 +111,7 @@ const CustomerTrendAnalysis: React.FC = () => {
 
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // --- BAŞLANGIÇ ---
+  // 1. Müşteri Kimliğini Belirle
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -123,6 +123,7 @@ const CustomerTrendAnalysis: React.FC = () => {
           setCustomerId(activeId);
           await fetchBranches(activeId);
         } else {
+          console.warn("Müşteri ID bulunamadı.");
           setLoading(false);
         }
       } catch (error) {
@@ -133,20 +134,24 @@ const CustomerTrendAnalysis: React.FC = () => {
     init();
   }, [user]);
 
+  // 2. Şubeleri Çek
   const fetchBranches = async (id: string) => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('branches')
         .select('id, sube_adi')
         .eq('customer_id', id)
         .order('sube_adi');
+        
+      if (error) throw error;
       setBranches(data || []);
     } catch (error) {
-      console.error('Şubeler alınamadı:', error);
+      console.error('Error fetching branches:', error);
+      toast.error("Şubeler yüklenemedi.");
     }
   };
 
-  // --- RAPOR TETİKLEME ---
+  // 3. Raporu Oluştur (Trigger)
   useEffect(() => {
     if (customerId) {
       handleGenerateReport();
@@ -158,7 +163,6 @@ const CustomerTrendAnalysis: React.FC = () => {
 
     setLoading(true);
     try {
-      // Şube ID'lerini belirle
       let targetBranchIds: string[] = [];
       if (selectedBranchId) {
         targetBranchIds = [selectedBranchId];
@@ -178,7 +182,7 @@ const CustomerTrendAnalysis: React.FC = () => {
         fetchEquipmentTrendsByDate(targetBranchIds)    
       ]);
     } catch (error) {
-      console.error('Rapor oluşturma hatası:', error);
+      console.error('Error generating report:', error);
       toast.error('Veriler alınırken hata oluştu');
     } finally {
       setLoading(false);
@@ -186,48 +190,30 @@ const CustomerTrendAnalysis: React.FC = () => {
   };
 
   // --- YARDIMCI FONKSİYONLAR ---
-  
-  // Anahtarları standartlaştır (ID ve Code eşleşmesi için)
   const normalizeKey = (key: string) => String(key).trim().toLowerCase();
 
-  // Her türlü veriyi sayıya çevirir (Agresif Parser)
   const parseValue = (value: any): number => {
     if (value === null || value === undefined) return 0;
-    
-    // Zaten sayıysa
     if (typeof value === 'number') return value;
-    
-    // Boolean ise
     if (value === true) return 1;
     if (value === false) return 0;
-    
-    // String ise
     if (typeof value === 'string') {
       const lower = value.trim().toLowerCase();
-      
-      // Pozitif kelimeler
-      if (['true', 'var', 'evet', 'yes', 'mevcut', '1', 'on', 'checked', 'active', 'ok', 'completed'].includes(lower)) return 1;
-      
-      // Negatif kelimeler
+      if (['true', 'var', 'evet', 'yes', 'mevcut', '1', 'on', 'checked', 'active', 'ok', 'completed', 'temiz', 'normal'].includes(lower)) return 1;
       if (['false', 'yok', 'hayır', 'no', 'boş', '0', 'off', 'none'].includes(lower)) return 0;
-      
-      // Sayısal string (virgül desteği)
-      const cleanStr = lower.replace(',', '.').replace(/[^0-9.]/g, ''); // Sadece rakam ve nokta bırak
+      const cleanStr = lower.replace(',', '.').replace(/[^0-9.]/g, ''); 
       const parsed = parseFloat(cleanStr);
-      
       if (!isNaN(parsed)) return parsed;
-      
-      // String doluysa ve yukarıdaki negatiflere uymuyorsa (Örn: "Değişti", "Kirli") 1 say
       if (lower.length > 0) return 1;
     }
-    
     return 0;
   };
 
-  // --- VERİ ÇEKME FONKSİYONLARI ---
+  // --- Veri Çekme Fonksiyonları ---
 
   const fetchVisitStats = async (branchIds: string[]) => {
     if (branchIds.length === 0) return;
+
     let query = supabase
       .from('visits')
       .select('id, status')
@@ -235,12 +221,13 @@ const CustomerTrendAnalysis: React.FC = () => {
       .gte('visit_date', dateRange.from)
       .lte('visit_date', dateRange.to);
 
-    const { data } = await query;
+    const { data, error } = await query;
+    if (error) { console.error(error); return; }
     const visits = data || [];
 
     setVisitStats({
       total_visits: visits.length,
-      completed_visits: visits.filter(v => ['completed', 'done', 'finished'].includes(v.status)).length,
+      completed_visits: visits.filter(v => ['completed', 'done', 'finished', 'tamamlandi'].includes(v.status)).length,
       pending_visits: visits.filter(v => v.status === 'planned').length,
       cancelled_visits: visits.filter(v => v.status === 'cancelled').length,
     });
@@ -256,29 +243,27 @@ const CustomerTrendAnalysis: React.FC = () => {
       const start = format(startOfMonth(month), 'yyyy-MM-dd');
       const end = format(endOfMonth(month), 'yyyy-MM-dd');
 
-      const { data } = await supabase
+      let query = supabase
         .from('visits')
         .select('id, equipment_checks')
         .in('branch_id', branchIds)
         .gte('visit_date', start)
         .lte('visit_date', end);
 
+      const { data } = await query;
       const visits = data || [];
+      
       let issues = 0;
       let checks = 0;
 
       visits.forEach((v: any) => {
         if (v.equipment_checks && typeof v.equipment_checks === 'object') {
           checks += Object.keys(v.equipment_checks).length;
-          
           Object.values(v.equipment_checks).forEach((c: any) => {
-             // Sorun tespiti için geniş kapsamlı kontrol
              if (typeof c === 'object' && c !== null) {
                 const status = String(c.status || '').toLowerCase();
                 const result = String(c.control_result || '').toLowerCase();
-                if (['issue', 'problem', 'missing', 'broken', 'kirik', 'eksik', 'sorun'].some(s => status.includes(s) || result.includes(s))) {
-                    issues++;
-                }
+                if (['issue', 'problem', 'missing', 'broken', 'kirik', 'eksik', 'sorun'].some(s => status.includes(s) || result.includes(s))) issues++;
                 if (c.activity === true || c.pest_activity === true) issues++;
              } else if (typeof c === 'string') {
                  const lower = c.toLowerCase();
@@ -331,28 +316,32 @@ const CustomerTrendAnalysis: React.FC = () => {
     setBiocidalProducts(Array.from(productMap.values()).sort((a,b) => b.total_quantity - a.total_quantity));
   };
 
-  // --- KRİTİK DÜZELTME: EKİPMAN AKTİVİTE ANALİZİ ---
+  // --- KRİTİK BÖLÜM: YEDEK MEKANİZMALI VERİ ÇEKME ---
   const fetchEquipmentTypeActivities = async (branchIds: string[]) => {
     if (branchIds.length === 0) { setEquipmentTypeData([]); return; }
 
     try {
-      // 1. Ekipman Tanımlarını Çek
-      const { data: equipmentData } = await supabase
+      const { data: equipmentData, error: eqError } = await supabase
         .from('branch_equipment')
-        .select(`id, equipment_code, equipment:equipment_id ( name, properties ), branch:branch_id ( sube_adi )`)
+        .select(`id, equipment_code, equipment:equipment_id ( name, type, properties ), branch:branch_id ( sube_adi )`)
         .in('branch_id', branchIds);
 
-      // 2. Ziyaret Verilerini Çek
-      const { data: visitsData } = await supabase
+      if (eqError) throw eqError;
+
+      const { data: visitsData, error: vError } = await supabase
         .from('visits')
         .select('equipment_checks')
         .in('branch_id', branchIds)
         .gte('visit_date', dateRange.from)
         .lte('visit_date', dateRange.to)
-        // Status filtresini geniş tutuyoruz
         .in('status', ['completed', 'done', 'finished', 'tamamlandi']); 
 
-      // 3. Helper Maps
+      if (vError) throw vError;
+
+      console.log('--- DEBUG BAŞLANGIÇ ---');
+      console.log('Gelen Ekipman Tanımları:', equipmentData?.length);
+      console.log('Gelen Ziyaret Verisi:', visitsData?.length);
+
       const equipmentByCode = new Map<string, any>();
       const equipmentById = new Map<string, any>();
 
@@ -361,17 +350,32 @@ const CustomerTrendAnalysis: React.FC = () => {
         if(eq.id) equipmentById.set(normalizeKey(eq.id), eq);
       });
 
-      // 4. Veri İşleme
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
+      
+      // Kayıp ekipmanları da takip etmek için
+      const missingEquipments = new Map<string, any>();
 
       visitsData?.forEach(visit => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             const normKey = normalizeKey(key);
-            const equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
             
-            if (!equipment) return;
+            // 1. Önce veritabanından bulmaya çalış
+            let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
+            
+            // 2. Bulunamazsa "Sanal Ekipman" oluştur (Veri kaybını önlemek için)
+            if (!equipment) {
+                if (!missingEquipments.has(normKey)) {
+                    missingEquipments.set(normKey, {
+                        id: key, // Orijinal key ID olarak kullanılır
+                        equipment_code: key,
+                        equipment: { name: `Tanımsız Ekipman (${key})`, properties: {} },
+                        branch: { sube_adi: 'Bilinmeyen Şube' }
+                    });
+                }
+                equipment = missingEquipments.get(normKey);
+            }
 
             const eqId = equipment.id;
             if (!activityMap.has(eqId)) activityMap.set(eqId, {});
@@ -380,16 +384,13 @@ const CustomerTrendAnalysis: React.FC = () => {
             const activity = activityMap.get(eqId)!;
             
             if (checkData && typeof checkData === 'object') {
-              // Obje ise içindeki key'leri dön
               Object.entries(checkData).forEach(([fieldKey, value]) => {
                 if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
-                
                 const numVal = parseValue(value);
                 if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
                 activity[fieldKey] += numVal;
               });
             } else {
-               // Obje değilse (örn: {"EQ01": "Var"}) kendisini bir değer olarak işle
                const numVal = parseValue(checkData);
                if (activity['durum'] === undefined) activity['durum'] = 0;
                activity['durum'] += numVal;
@@ -398,12 +399,14 @@ const CustomerTrendAnalysis: React.FC = () => {
         }
       });
 
-      // 5. Gruplama
+      // Veritabanındaki + Sanal ekipmanları birleştir
+      const allEquipments = [...(equipmentData || []), ...Array.from(missingEquipments.values())];
+
+      // Gruplama
       const nameGroups = new Map<string, { equipments: any[], properties: any }>();
-      equipmentData?.forEach((item: any) => {
+      allEquipments.forEach((item: any) => {
         const equipmentName = item.equipment?.name || 'Diğer Ekipmanlar';
         if (!nameGroups.has(equipmentName)) nameGroups.set(equipmentName, { equipments: [], properties: {} });
-        
         const group = nameGroups.get(equipmentName)!;
         group.equipments.push(item);
         if (item.equipment?.properties) group.properties = { ...group.properties, ...item.equipment.properties };
@@ -416,25 +419,24 @@ const CustomerTrendAnalysis: React.FC = () => {
         const propertyLabels: Record<string, string> = {};
         const allFieldsInData = new Set<string>();
 
-        // Veri içinde geçen TÜM alanları bul
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
           Object.keys(rawTotals).forEach(key => allFieldsInData.add(key));
         });
 
-        // Hepsini property olarak ekle
+        if (allFieldsInData.size === 0) return; // Hiç veri yoksa bu grubu geç
+
         allFieldsInData.forEach(key => {
             propertyKeys.push(key);
-            // Label varsa properties'den al, yoksa key'i düzelt
             const definedLabel = group.properties?.[key]?.label;
             propertyLabels[key] = definedLabel || key.replace(/_/g, ' ').toUpperCase();
         });
 
-        if (propertyKeys.length === 0) return;
-
         const activities: EquipmentTypeActivity[] = [];
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
+          
+          // Verisi olmayan ekipmanları da göster (amaç trend görmekse veri yoksa 0 görünmeli)
           const visitCount = visitCountMap.get(eq.id) || 1;
 
           const activityRow: EquipmentTypeActivity = {
@@ -447,11 +449,12 @@ const CustomerTrendAnalysis: React.FC = () => {
           propertyKeys.forEach(key => {
             const totalVal = rawTotals[key] || 0;
             activityRow[key] = chartViewMode === 'total' ? totalVal : Number((totalVal / visitCount).toFixed(1));
-            // 0 verisi bile olsa hasData true yap ki grafikte görünsün
+            // Veri varlığı kontrolü
             if (rawTotals.hasOwnProperty(key)) hasData = true;
           });
 
-          // Filtrelemeden hepsini ekle
+          // Sadece verisi olanları veya tanımlı olup verisi olmayanları da ekleyebiliriz.
+          // Burada hepsini ekliyoruz.
           activities.push(activityRow);
         });
 
@@ -459,13 +462,14 @@ const CustomerTrendAnalysis: React.FC = () => {
           resultData.push({
             type: equipmentName,
             type_label: `${equipmentName} Analizi`,
-            activities: activities.sort((a,b) => a.equipment_code.localeCompare(b.equipment_code)),
+            activities: activities.sort((a,b) => String(a.equipment_code).localeCompare(String(b.equipment_code))),
             propertyKeys,
             propertyLabels
           });
         }
       });
 
+      console.log('Oluşturulan Grafik Verisi:', resultData);
       setEquipmentTypeData(resultData);
 
     } catch (error) {
@@ -473,16 +477,19 @@ const CustomerTrendAnalysis: React.FC = () => {
     }
   };
 
-  // --- TREND ANALİZİ ---
   const fetchEquipmentTrendsByDate = async (branchIds: string[]) => {
     if (branchIds.length === 0) return;
 
     try {
-      const { data: equipmentData } = await supabase
+      // 1. Ekipmanları Çek
+      const { data: equipmentData, error: eqError } = await supabase
         .from('branch_equipment')
         .select(`id, equipment_code, equipment:equipment_id ( name, properties )`)
         .in('branch_id', branchIds);
 
+      if (eqError) throw eqError;
+
+      // 2. Ziyaretleri Çek
       const { data: visitsData } = await supabase
         .from('visits')
         .select('visit_date, equipment_checks')
@@ -496,12 +503,14 @@ const CustomerTrendAnalysis: React.FC = () => {
 
       const equipmentById = new Map<string, any>();
       const equipmentByCode = new Map<string, any>();
+      
       equipmentData?.forEach(eq => {
         if(eq.id) equipmentById.set(normalizeKey(eq.id), eq);
         if(eq.equipment_code) equipmentByCode.set(normalizeKey(eq.equipment_code), eq);
       });
 
       const dateEquipmentMap = new Map<string, Map<string, Record<string, number>>>();
+      const missingEquipments = new Map<string, any>();
 
       visitsData.forEach((visit: any) => {
         const visitDate = format(parseISO(visit.visit_date), 'dd MMM', { locale: tr });
@@ -511,8 +520,19 @@ const CustomerTrendAnalysis: React.FC = () => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             const normKey = normalizeKey(key);
-            const equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
-            if (!equipment) return;
+            let equipment = equipmentById.get(normKey) || equipmentByCode.get(normKey);
+            
+            // Fallback (Yedek) Mekanizma
+            if (!equipment) {
+                if (!missingEquipments.has(normKey)) {
+                    missingEquipments.set(normKey, {
+                        id: key, 
+                        equipment_code: key,
+                        equipment: { name: `Tanımsız (${key})`, properties: {} }
+                    });
+                }
+                equipment = missingEquipments.get(normKey);
+            }
 
             const eqName = equipment.equipment?.name || 'Diğer';
             if (!dateMap.has(eqName)) dateMap.set(eqName, {});
@@ -798,6 +818,40 @@ const CustomerTrendAnalysis: React.FC = () => {
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
+
+                          <div className="mt-6 overflow-x-auto border-t pt-4">
+                            <table className="w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-gray-50">
+                                  <th className="px-3 py-2 text-left font-medium text-gray-700 border">Ekipman Kodu</th>
+                                  {typeData.propertyKeys.map(key => (
+                                    <th key={key} className="px-3 py-2 text-center font-medium text-gray-700 border">{typeData.propertyLabels[key]}</th>
+                                  ))}
+                                  <th className="px-3 py-2 text-center font-medium text-gray-700 bg-blue-50 border">Toplam</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {typeData.activities.map((activity, idx) => {
+                                  const total = typeData.propertyKeys.reduce((sum, key) => sum + (Number(activity[key]) || 0), 0);
+                                  return (
+                                    <tr key={idx} className="hover:bg-gray-50">
+                                      <td className="px-3 py-2 font-mono text-gray-900 border">{activity.equipment_code}</td>
+                                      {typeData.propertyKeys.map(key => (
+                                        <td key={key} className="px-3 py-2 text-center border">
+                                          <span className={`font-medium ${Number(activity[key]) > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                                            {activity[key] || 0}
+                                          </span>
+                                        </td>
+                                      ))}
+                                      <td className="px-3 py-2 text-center bg-blue-50 border">
+                                        <span className="font-bold text-blue-700">{total}</span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       );
                     })}
@@ -805,7 +859,9 @@ const CustomerTrendAnalysis: React.FC = () => {
                 </div>
               ) : (
                 <div className="mb-10 p-6 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center">
-                  <p className="text-gray-500 font-medium">Ekipman verisi bulunamadı.</p>
+                  <div className="text-gray-400 mb-2">📊</div>
+                  <p className="text-gray-500 font-medium">Bu tarih aralığında detaylı ekipman aktivite verisi bulunamadı.</p>
+                  <p className="text-gray-400 text-xs mt-1">Ziyaretler tamamlanmış ancak ekipman kontrol verisi girilmemiş olabilir.</p>
                 </div>
               )}
 
