@@ -10,7 +10,8 @@ import {
   Filter,
   Activity,
   BarChart3,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Calculator
 } from 'lucide-react';
 import {
   BarChart,
@@ -24,7 +25,8 @@ import {
   AreaChart,
   Area,
   LineChart,
-  Line
+  Line,
+  LabelList
 } from 'recharts';
 import html2canvas from 'html2canvas';
 
@@ -119,6 +121,28 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
     }
   };
 
+  // --- YARDIMCI: Değer Dönüştürücü ---
+  const parseValue = (value: any): number => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return value;
+    if (value === true) return 1;
+    if (value === false) return 0;
+    
+    if (typeof value === 'string') {
+      const lower = value.trim().toLowerCase();
+      if (['true', 'var', 'evet', 'yes', 'mevcut', '1', 'on', 'checked'].includes(lower)) return 1;
+      if (['false', 'yok', 'hayır', 'no', 'boş', '0', 'off'].includes(lower)) return 0;
+      
+      const cleanStr = lower.replace(',', '.');
+      const parsed = parseFloat(cleanStr);
+      if (!isNaN(parsed)) return parsed;
+      
+      // String doluysa ve negatif değilse 1 say
+      if (lower.length > 0) return 1;
+    }
+    return 0;
+  };
+
   const fetchVisitStats = async () => {
     if (!branchId) return;
     const { data } = await supabase
@@ -163,15 +187,13 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       visits.forEach((v: any) => {
         if (v.equipment_checks && typeof v.equipment_checks === 'object') {
           checks += Object.keys(v.equipment_checks).length;
-
-          // İlk visit'in equipment_checks yapısını göster
-          if (visits.indexOf(v) === 0) {
-            console.log('İLK VİSİT EQUIPMENT_CHECKS YAPISI:', JSON.stringify(v.equipment_checks, null, 2).substring(0, 1000));
-            console.log('Equipment_checks keys:', Object.keys(v.equipment_checks).slice(0, 10));
-          }
-
           Object.values(v.equipment_checks).forEach((c: any) => {
-            if (c?.status === 'issue' || c?.status === 'problem' || c?.status === 'missing' || c?.activity === true) issues++;
+            // Sorun tespiti
+            if (typeof c === 'object' && c !== null) {
+               if (c.status === 'issue' || c.status === 'problem' || c.status === 'missing' || c.activity === true) issues++;
+            } else if (typeof c === 'string' && (c === 'problem' || c === 'issue')) {
+               issues++;
+            }
           });
         }
       });
@@ -215,13 +237,9 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       const equipmentById = new Map<string, any>();
 
       equipmentData?.forEach(eq => {
-        equipmentByCode.set(eq.equipment_code, eq);
-        equipmentById.set(eq.id, eq);
+        if(eq.equipment_code) equipmentByCode.set(eq.equipment_code, eq);
+        if(eq.id) equipmentById.set(eq.id, eq);
       });
-
-      console.log('BRANCH EQUIPMENT SAYISI:', equipmentData?.length);
-      console.log('ÖRNEK EQUIPMENT KODLARI:', Array.from(equipmentByCode.keys()).slice(0, 10));
-      console.log('ÖRNEK EQUIPMENT ID\'LERİ:', Array.from(equipmentById.keys()).slice(0, 10));
 
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
@@ -229,37 +247,31 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       visitsData?.forEach(visit => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            // Key hem equipment_code hem de id olabilir
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
-            if (!equipment) {
-              console.log('Eşleşmeyen key:', key, 'Mevcut equipment IDs:', Array.from(equipmentById.keys()).slice(0, 5), 'Mevcut codes:', Array.from(equipmentByCode.keys()).slice(0, 5));
-              return;
-            }
+            if (!equipment) return;
 
             const eqId = equipment.id;
             if (!activityMap.has(eqId)) activityMap.set(eqId, {});
             visitCountMap.set(eqId, (visitCountMap.get(eqId) || 0) + 1);
 
             const activity = activityMap.get(eqId)!;
+            
             if (checkData && typeof checkData === 'object') {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
                 if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
 
-                let numVal = 0;
-                if (typeof value === 'number') numVal = value;
-                else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
-                else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet' || value === 'evet') numVal = 1;
-                else if (value === false || value === 'false' || value === 'yok' || value === 'Yok' || value === 'Hayır' || value === 'hayır') numVal = 0;
-
-                // 0 değerleri de eklensin
-                activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
+                // GÜÇLENDİRİLMİŞ PARSER
+                const numVal = parseValue(value);
+                
+                if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
+                activity[fieldKey] += numVal;
               });
             }
           });
         }
       });
 
-      // Ekipman ismine göre gruplama
+      // Gruplama
       const nameGroups = new Map<string, { equipments: any[], properties: any }>();
 
       equipmentData?.forEach((item: any) => {
@@ -282,18 +294,17 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         const propertyLabels: Record<string, string> = {};
         const allFieldsInData = new Set<string>();
 
-        // Önce tüm ekipmanlardaki tüm alanları topla
+        // Veri içindeki alanları bul
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
           Object.keys(rawTotals).forEach(key => {
-            // Sadece sayısal olması yeterli (0 olsa bile)
             if (typeof rawTotals[key] === 'number') {
               allFieldsInData.add(key);
             }
           });
         });
 
-        // Properties'den tanımlı olanları ekle
+        // Tanımlı özellikleri ekle
         if (group.properties) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
             if (value && (value.type === 'number' || value.type === 'boolean' || value.type === 'select')) {
@@ -305,11 +316,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
           });
         }
 
-        // Veride olan ama properties'de tanımlı olmayan sayısal alanları da ekle
+        // Veride olan diğer alanları ekle
         allFieldsInData.forEach(key => {
           if (!propertyKeys.includes(key)) {
             propertyKeys.push(key);
-            // Label'ı güzelleştir
             propertyLabels[key] = key.replace(/_/g, ' ').toUpperCase();
           }
         });
@@ -323,19 +333,18 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
           const visitCount = visitCountMap.get(eq.id) || 1;
 
           const activityRow: EquipmentTypeActivity = {
-            equipment_code: eq.equipment_code,
+            equipment_code: eq.equipment_code || 'Kodsuz',
             equipment_name: eq.equipment?.name || 'Bilinmeyen',
           };
 
-          let hasActivity = false;
+          let hasData = false;
           propertyKeys.forEach(key => {
             const totalVal = rawTotals[key] || 0;
             activityRow[key] = chartViewMode === 'total'
               ? totalVal
               : Number((totalVal / visitCount).toFixed(1));
-
-            // Eğer key rawTotals içinde varsa (0 olsa bile) hasActivity true
-            if (rawTotals.hasOwnProperty(key)) hasActivity = true;
+            
+            if (Object.prototype.hasOwnProperty.call(rawTotals, key)) hasData = true;
           });
 
           activities.push(activityRow);
@@ -369,7 +378,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         .select(`
           id,
           equipment_code,
-          equipment:equipment_id ( name, type, properties )
+          equipment:equipment_id ( name, properties )
         `)
         .eq('branch_id', branchId);
 
@@ -384,145 +393,97 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         .eq('status', 'completed')
         .order('visit_date', { ascending: true });
 
-      const equipmentByCode = new Map<string, any>();
+      if (!equipmentData || !visitsData) return;
+
       const equipmentById = new Map<string, any>();
+      const equipmentByCode = new Map<string, any>();
 
       equipmentData?.forEach(eq => {
-        equipmentByCode.set(eq.equipment_code, eq);
-        equipmentById.set(eq.id, eq);
+        if(eq.id) equipmentById.set(eq.id, eq);
+        if(eq.equipment_code) equipmentByCode.set(eq.equipment_code, eq);
       });
-
-      console.log('BRANCH EQUIPMENT SAYISI:', equipmentData?.length);
-      console.log('ÖRNEK EQUIPMENT KODLARI:', Array.from(equipmentByCode.keys()).slice(0, 10));
-      console.log('ÖRNEK EQUIPMENT ID\'LERİ:', Array.from(equipmentById.keys()).slice(0, 10));
 
       const dateEquipmentMap = new Map<string, Map<string, Record<string, number>>>();
 
-      visitsData?.forEach(visit => {
+      visitsData.forEach((visit: any) => {
         const visitDate = format(parseISO(visit.visit_date), 'dd MMM', { locale: tr });
 
-        if (!dateEquipmentMap.has(visitDate)) {
-          dateEquipmentMap.set(visitDate, new Map());
-        }
-
+        if (!dateEquipmentMap.has(visitDate)) dateEquipmentMap.set(visitDate, new Map());
         const dateMap = dateEquipmentMap.get(visitDate)!;
 
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
-            if (!equipment) {
-              console.log('Trend: Eşleşmeyen key:', key);
-              return;
-            }
+            if (!equipment) return;
 
-            const equipmentName = equipment.equipment?.name || 'Diğer';
-            if (!dateMap.has(equipmentName)) {
-              dateMap.set(equipmentName, {});
-            }
+            const eqName = equipment.equipment?.name || 'Diğer';
+            if (!dateMap.has(eqName)) dateMap.set(eqName, {});
+            const activity = dateMap.get(eqName)!;
 
-            const activity = dateMap.get(equipmentName)!;
             if (checkData && typeof checkData === 'object') {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
-                if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
+                if (['equipment_name', 'equipment_code', 'status'].includes(fieldKey)) return;
 
-                let numVal = 0;
-                if (typeof value === 'number') numVal = value;
-                else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
-                else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet' || value === 'evet') numVal = 1;
-                else if (value === false || value === 'false' || value === 'yok' || value === 'Yok' || value === 'Hayır' || value === 'hayır') numVal = 0;
-
-                activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
-                // activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1; // Ortalama için gerekirse
+                const numVal = parseValue(value);
+                if (activity[fieldKey] === undefined) activity[fieldKey] = 0;
+                activity[fieldKey] += numVal;
               });
             }
           });
         }
       });
 
-      const equipmentGroups = new Map<string, { properties: any, dates: Set<string> }>();
-
-      equipmentData?.forEach((item: any) => {
-        const equipmentName = item.equipment?.name || 'Diğer';
-        if (!equipmentGroups.has(equipmentName)) {
-          equipmentGroups.set(equipmentName, { properties: {}, dates: new Set() });
-        }
-        const group = equipmentGroups.get(equipmentName)!;
-        if (item.equipment?.properties) {
-          group.properties = { ...group.properties, ...item.equipment.properties };
-        }
-      });
-
       const resultData: EquipmentTypeTrend[] = [];
+      const allEqTypes = new Set<string>();
+      dateEquipmentMap.forEach(dm => Array.from(dm.keys()).forEach(k => allEqTypes.add(k)));
 
-      equipmentGroups.forEach((group, equipmentName) => {
-        const propertyKeys: string[] = [];
-        const propertyLabels: Record<string, string> = {};
-        const allFieldsInData = new Set<string>();
-
-        dateEquipmentMap.forEach((dateMap) => {
-          const equipmentData = dateMap.get(equipmentName);
-          if (equipmentData) {
-            Object.keys(equipmentData).forEach(key => {
-              if (!key.endsWith('_count')) {
-                allFieldsInData.add(key);
+      allEqTypes.forEach(eqType => {
+          const propertyKeys: string[] = [];
+          const propertyLabels: Record<string, string> = {};
+          
+          dateEquipmentMap.forEach(dm => {
+              const acts = dm.get(eqType);
+              if(acts) {
+                  Object.keys(acts).forEach(k => {
+                      if(!k.endsWith('_count') && !propertyKeys.includes(k)) {
+                          propertyKeys.push(k);
+                          propertyLabels[k] = k.replace(/_/g, ' ').toUpperCase();
+                      }
+                  });
               }
-            });
-          }
-        });
-
-        if (group.properties && Object.keys(group.properties).length > 0) {
-          Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
-            if (value && (value.type === 'number' || value.type === 'boolean')) {
-              if (!propertyKeys.includes(key)) {
-                propertyKeys.push(key);
-                propertyLabels[key] = value.label || key;
-              }
-            }
           });
-        }
 
-        allFieldsInData.forEach(key => {
-          if (!propertyKeys.includes(key)) {
-            propertyKeys.push(key);
-            propertyLabels[key] = key.replace(/_/g, ' ').toUpperCase();
-          }
-        });
+          if(propertyKeys.length === 0) return;
 
-        if (propertyKeys.length === 0) return;
+          const trends: VisitDateTrendData[] = [];
+          const sortedDates = Array.from(dateEquipmentMap.keys()); 
 
-        const trends: VisitDateTrendData[] = [];
-
-        dateEquipmentMap.forEach((dateMap, visitDate) => {
-          const equipmentData = dateMap.get(equipmentName);
-          if (equipmentData) {
-            const trendRow: VisitDateTrendData = { date: visitDate };
-
-            propertyKeys.forEach(key => {
-              const totalVal = equipmentData[key] || 0;
-              // const count = equipmentData[`${key}_count`] || 1;
-              trendRow[key] = totalVal; // Toplam değer
-            });
-
-            trends.push(trendRow);
-          }
-        });
-
-        if (trends.length > 0) {
-          resultData.push({
-            type: equipmentName,
-            type_label: `${equipmentName} - Ziyaret Bazlı Trend`,
-            trends,
-            propertyKeys,
-            propertyLabels
+          sortedDates.forEach(date => {
+              const dm = dateEquipmentMap.get(date);
+              const acts = dm?.get(eqType);
+              
+              const trendRow: VisitDateTrendData = { date };
+              propertyKeys.forEach(pk => {
+                  trendRow[pk] = acts ? (acts[pk] || 0) : 0; 
+              });
+              trends.push(trendRow);
           });
-        }
+
+          if(trends.length > 0) {
+              resultData.push({
+                  type: eqType,
+                  type_label: `${eqType} - Zaman İçindeki Değişim`,
+                  trends,
+                  propertyKeys,
+                  propertyLabels
+              });
+          }
       });
 
       setEquipmentTypeTrends(resultData);
 
     } catch (error) {
-      console.error('Ekipman trend analizi hatası:', error);
-      toast.error('Trend verileri yüklenirken hata');
+      console.error('Trend analizi hatası:', error);
     }
   };
 
@@ -558,10 +519,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         <div>
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <TrendingUp className="h-8 w-8 text-blue-600" />
-            Trend Analizi ve Raporlama
+            Trend Analizi
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            {branchName} için performans ve aktivite analizleri
+            {branchName} şubesi için performans ve aktivite analizleri
           </p>
         </div>
         <button
@@ -632,11 +593,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
             {monthlyTrends.length > 0 && (
               <div className="mb-10">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3 flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">
                   Aylık Ziyaret ve Sorun Grafiği
                 </h3>
-                <div className="h-64 w-full bg-gray-50 rounded-lg p-2 border border-gray-100">
+                <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={monthlyTrends}>
                       <defs>
@@ -645,12 +605,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                           <stop offset="95%" stopColor="#0088FE" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                      <XAxis dataKey="month" style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
-                      <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
-                      <Tooltip
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="month" style={{fontSize: '12px'}} />
+                      <YAxis style={{fontSize: '12px'}} />
+                      <Tooltip />
                       <Legend />
                       <Area type="monotone" dataKey="visits" name="Ziyaret Sayısı" stroke="#0088FE" fillOpacity={1} fill="url(#colorVisits)" />
                       <Area type="monotone" dataKey="issues_found" name="Tespit Edilen Sorunlar" stroke="#FF8042" fill="none" />
@@ -663,22 +621,21 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
             {equipmentTypeData.length > 0 ? (
               <div className="mb-10">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-purple-500 pl-3 flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
-                    Ekipman Aktivite Analizi
+                  <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-purple-500 pl-3">
+                    Ekipman Aktivite Analizi (Canlı/Hareket)
                   </h3>
                   <div className="flex bg-gray-100 rounded-lg p-1 text-xs">
                     <button
                       onClick={() => setChartViewMode('total')}
                       className={`px-3 py-1 rounded-md transition-all ${chartViewMode === 'total' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500'}`}
                     >
-                      Toplam
+                      Toplam Sayı
                     </button>
                     <button
                       onClick={() => setChartViewMode('per_visit')}
                       className={`px-3 py-1 rounded-md transition-all ${chartViewMode === 'per_visit' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500'}`}
                     >
-                      Ortalama
+                      Ziyaret Ort.
                     </button>
                   </div>
                 </div>
@@ -691,12 +648,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                     }, {} as Record<string, number>);
 
                     return (
-                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                      <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                        {typeData.type_label}
-                      </h4>
-
+                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                      <h4 className="text-md font-bold text-gray-700 mb-3">{typeData.type_label}</h4>
+                      
+                      {/* ÖZET KARTLAR */}
                       <div className="flex flex-wrap gap-3 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
                         {Object.entries(totals).map(([key, val]) => (
                           <div key={key} className="flex flex-col items-center justify-center bg-white px-4 py-2 rounded shadow-sm border border-gray-200 min-w-[100px]">
@@ -706,26 +661,18 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                         ))}
                       </div>
 
-                      <div className="h-80 w-full">
+                      <div className="h-64 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={typeData.activities}
                             layout="horizontal"
                             margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                            <XAxis
-                              dataKey="equipment_code"
-                              style={{fontSize: '10px'}}
-                              interval={0}
-                              angle={-45}
-                              textAnchor="end"
-                              height={60}
-                              tick={{fill: '#6b7280'}}
-                            />
-                            <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="equipment_code" style={{fontSize: '10px'}} interval={0} angle={-45} textAnchor="end" height={60}/>
+                            <YAxis style={{fontSize: '12px'}} />
                             <Tooltip
-                              contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                              contentStyle={{fontSize: '12px'}}
                               formatter={(value: number, name: string) => [value, typeData.propertyLabels[name] || name]}
                               labelFormatter={(label) => {
                                 const eq = typeData.activities.find(a => a.equipment_code === label);
@@ -740,14 +687,15 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                                 name={typeData.propertyLabels[key]}
                                 fill={COLORS[kIdx % COLORS.length]}
                                 radius={[4, 4, 0, 0]}
-                                barSize={30}
-                              />
+                              >
+                                <LabelList dataKey={key} position="top" style={{ fontSize: '10px', fill: '#6b7280' }} />
+                              </Bar>
                             ))}
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
 
-                      <div className="mt-6 overflow-x-auto border-t pt-4">
+                      <div className="mt-4 overflow-x-auto">
                         <table className="w-full text-xs border-collapse">
                           <thead>
                             <tr className="bg-gray-50">
@@ -766,7 +714,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                                   <td className="px-3 py-2 font-mono text-gray-900 border">{activity.equipment_code}</td>
                                   {typeData.propertyKeys.map(key => (
                                     <td key={key} className="px-3 py-2 text-center border">
-                                      <span className={`font-medium ${Number(activity[key]) > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                                      <span className={`font-medium ${Number(activity[key]) > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
                                         {activity[key] || 0}
                                       </span>
                                     </td>
@@ -786,21 +734,19 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                 </div>
               </div>
             ) : (
-              <div className="mb-10 p-6 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center">
-                <div className="text-gray-400 mb-2">📊</div>
-                <p className="text-gray-500 font-medium">Bu tarih aralığında detaylı ekipman aktivite verisi bulunamadı.</p>
-                <p className="text-gray-400 text-xs mt-1">Ziyaretler tamamlanmış ancak ekipman kontrol verisi girilmemiş olabilir.</p>
+              <div className="mb-10 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center text-gray-500">
+                Ekipman aktivite verisi bulunamadı veya özellikler sayısal değil.
               </div>
             )}
 
             {equipmentTypeTrends.length > 0 && (
               <div className="mb-10">
-                <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-green-500 pl-3 mb-4 flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Zaman İçindeki Değişim (Trendler)
+                <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-green-500 pl-3 mb-4">
+                  Ziyaret Bazlı Ekipman Trendleri
                 </h3>
+                <p className="text-sm text-gray-600 mb-4">Her ziyaret tarihindeki ekipman ortalama değerleri</p>
 
-                <div className="grid grid-cols-1 gap-6">
+                <div className="space-y-8">
                   {equipmentTypeTrends.map((trendData, idx) => {
                     const totals = trendData.propertyKeys.reduce((acc, key) => {
                       acc[key] = trendData.trends.reduce((sum, t) => sum + (Number(t[key]) || 0), 0);
@@ -808,12 +754,12 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                     }, {} as Record<string, number>);
 
                     return (
-                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
                       <h4 className="text-md font-bold text-gray-700 mb-3">{trendData.type_label}</h4>
-
+                      
                       <div className="flex flex-wrap gap-3 mb-4 bg-gray-50 p-2 rounded border border-gray-100">
                         <div className="flex items-center gap-2 px-2">
-                          <Activity className="h-3.5 w-3.5 text-gray-400"/>
+                          <Calculator size={14} className="text-gray-400"/>
                           <span className="text-xs font-bold text-gray-500 uppercase">Dönem Toplamı:</span>
                         </div>
                         {Object.entries(totals).map(([key, val]) => (
@@ -824,22 +770,23 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                         ))}
                       </div>
 
-                      <div className="h-64 w-full">
+                      <div className="h-80 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart
                             data={trendData.trends}
                             margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                            <CartesianGrid strokeDasharray="3 3" />
                             <XAxis
                               dataKey="date"
                               style={{fontSize: '11px'}}
-                              height={30}
-                              tick={{fill: '#6b7280'}}
+                              angle={-45}
+                              textAnchor="end"
+                              height={70}
                             />
-                            <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                            <YAxis style={{fontSize: '12px'}} />
                             <Tooltip
-                              contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                              contentStyle={{fontSize: '12px'}}
                               formatter={(value: number, name: string) => [value, trendData.propertyLabels[name] || name]}
                             />
                             <Legend wrapperStyle={{fontSize: '11px'}} />
@@ -850,13 +797,40 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                                 dataKey={key}
                                 name={trendData.propertyLabels[key]}
                                 stroke={COLORS[kIdx % COLORS.length]}
-                                strokeWidth={3}
-                                dot={{ r: 4, strokeWidth: 2 }}
+                                strokeWidth={2}
+                                dot={{ r: 4 }}
                                 activeDot={{ r: 6 }}
                               />
                             ))}
                           </LineChart>
                         </ResponsiveContainer>
+                      </div>
+
+                      <div className="mt-4 overflow-x-auto">
+                        <table className="w-full text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="px-3 py-2 text-left font-medium text-gray-700 border">Tarih</th>
+                              {trendData.propertyKeys.map(key => (
+                                <th key={key} className="px-3 py-2 text-center font-medium text-gray-700 border">{trendData.propertyLabels[key]}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {trendData.trends.map((trend, idx) => (
+                              <tr key={idx} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 font-medium text-gray-900 border">{trend.date}</td>
+                                {trendData.propertyKeys.map(key => (
+                                  <td key={key} className="px-3 py-2 text-center border">
+                                    <span className={`font-medium ${Number(trend[key]) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                      {trend[key] || 0}
+                                    </span>
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                     );
