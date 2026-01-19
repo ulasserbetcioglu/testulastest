@@ -537,10 +537,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         <div>
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <TrendingUp className="h-8 w-8 text-blue-600" />
-            Trend Analizi
+            Trend Analizi ve Raporlama
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            {branchName} şubesi için performans ve aktivite analizleri
+            {branchName} için performans ve aktivite analizleri
           </p>
         </div>
         <button
@@ -611,10 +611,11 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
             {monthlyTrends.length > 0 && (
               <div className="mb-10">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-l-4 border-blue-500 pl-3 flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
                   Aylık Ziyaret ve Sorun Grafiği
                 </h3>
-                <div className="h-64 w-full">
+                <div className="h-64 w-full bg-gray-50 rounded-lg p-2 border border-gray-100">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={monthlyTrends}>
                       <defs>
@@ -623,10 +624,12 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                           <stop offset="95%" stopColor="#0088FE" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" style={{fontSize: '12px'}} />
-                      <YAxis style={{fontSize: '12px'}} />
-                      <Tooltip />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis dataKey="month" style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                      <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
                       <Legend />
                       <Area type="monotone" dataKey="visits" name="Ziyaret Sayısı" stroke="#0088FE" fillOpacity={1} fill="url(#colorVisits)" />
                       <Area type="monotone" dataKey="issues_found" name="Tespit Edilen Sorunlar" stroke="#FF8042" fill="none" />
@@ -639,41 +642,69 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
             {equipmentTypeData.length > 0 ? (
               <div className="mb-10">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-purple-500 pl-3">
-                    Ekipman Aktivite Analizi (Canlı/Hareket)
+                  <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-purple-500 pl-3 flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Ekipman Aktivite Analizi
                   </h3>
                   <div className="flex bg-gray-100 rounded-lg p-1 text-xs">
                     <button
                       onClick={() => setChartViewMode('total')}
                       className={`px-3 py-1 rounded-md transition-all ${chartViewMode === 'total' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500'}`}
                     >
-                      Toplam Sayı
+                      Toplam
                     </button>
                     <button
                       onClick={() => setChartViewMode('per_visit')}
                       className={`px-3 py-1 rounded-md transition-all ${chartViewMode === 'per_visit' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500'}`}
                     >
-                      Ziyaret Ort.
+                      Ortalama
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-8">
-                  {equipmentTypeData.map((typeData, idx) => (
-                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
-                      <h4 className="text-md font-bold text-gray-700 mb-3">{typeData.type_label}</h4>
-                      <div className="h-64 w-full">
+                  {equipmentTypeData.map((typeData, idx) => {
+                    const totals = typeData.propertyKeys.reduce((acc, key) => {
+                      acc[key] = typeData.activities.reduce((sum, act) => sum + (Number(act[key]) || 0), 0);
+                      return acc;
+                    }, {} as Record<string, number>);
+
+                    return (
+                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                      <h4 className="text-md font-bold text-gray-700 mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                        {typeData.type_label}
+                      </h4>
+
+                      <div className="flex flex-wrap gap-3 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        {Object.entries(totals).map(([key, val]) => (
+                          <div key={key} className="flex flex-col items-center justify-center bg-white px-4 py-2 rounded shadow-sm border border-gray-200 min-w-[100px]">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{typeData.propertyLabels[key]}</span>
+                            <span className="text-xl font-black text-gray-800">{val}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="h-80 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={typeData.activities}
                             layout="horizontal"
                             margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="equipment_code" style={{fontSize: '10px'}} interval={0} angle={-45} textAnchor="end" height={60}/>
-                            <YAxis style={{fontSize: '12px'}} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                            <XAxis
+                              dataKey="equipment_code"
+                              style={{fontSize: '10px'}}
+                              interval={0}
+                              angle={-45}
+                              textAnchor="end"
+                              height={60}
+                              tick={{fill: '#6b7280'}}
+                            />
+                            <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
                             <Tooltip
-                              contentStyle={{fontSize: '12px'}}
+                              contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                               formatter={(value: number, name: string) => [value, typeData.propertyLabels[name] || name]}
                               labelFormatter={(label) => {
                                 const eq = typeData.activities.find(a => a.equipment_code === label);
@@ -688,13 +719,14 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                                 name={typeData.propertyLabels[key]}
                                 fill={COLORS[kIdx % COLORS.length]}
                                 radius={[4, 4, 0, 0]}
+                                barSize={30}
                               />
                             ))}
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
 
-                      <div className="mt-4 overflow-x-auto">
+                      <div className="mt-6 overflow-x-auto border-t pt-4">
                         <table className="w-full text-xs border-collapse">
                           <thead>
                             <tr className="bg-gray-50">
@@ -713,7 +745,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                                   <td className="px-3 py-2 font-mono text-gray-900 border">{activity.equipment_code}</td>
                                   {typeData.propertyKeys.map(key => (
                                     <td key={key} className="px-3 py-2 text-center border">
-                                      <span className={`font-medium ${Number(activity[key]) > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                                      <span className={`font-medium ${Number(activity[key]) > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
                                         {activity[key] || 0}
                                       </span>
                                     </td>
@@ -728,43 +760,65 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                         </table>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : (
-              <div className="mb-10 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center text-gray-500">
-                Ekipman aktivite verisi bulunamadı veya özellikler sayısal değil.
+              <div className="mb-10 p-6 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-center">
+                <div className="text-gray-400 mb-2">📊</div>
+                <p className="text-gray-500 font-medium">Bu tarih aralığında detaylı ekipman aktivite verisi bulunamadı.</p>
+                <p className="text-gray-400 text-xs mt-1">Ziyaretler tamamlanmış ancak ekipman kontrol verisi girilmemiş olabilir.</p>
               </div>
             )}
 
             {equipmentTypeTrends.length > 0 && (
               <div className="mb-10">
-                <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-green-500 pl-3 mb-4">
-                  Ziyaret Bazlı Ekipman Trendleri
+                <h3 className="text-lg font-semibold text-gray-800 border-l-4 border-green-500 pl-3 mb-4 flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Zaman İçindeki Değişim (Trendler)
                 </h3>
-                <p className="text-sm text-gray-600 mb-4">Her ziyaret tarihindeki ekipman ortalama değerleri</p>
 
-                <div className="space-y-8">
-                  {equipmentTypeTrends.map((trendData, idx) => (
-                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                <div className="grid grid-cols-1 gap-6">
+                  {equipmentTypeTrends.map((trendData, idx) => {
+                    const totals = trendData.propertyKeys.reduce((acc, key) => {
+                      acc[key] = trendData.trends.reduce((sum, t) => sum + (Number(t[key]) || 0), 0);
+                      return acc;
+                    }, {} as Record<string, number>);
+
+                    return (
+                    <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                       <h4 className="text-md font-bold text-gray-700 mb-3">{trendData.type_label}</h4>
-                      <div className="h-80 w-full">
+
+                      <div className="flex flex-wrap gap-3 mb-4 bg-gray-50 p-2 rounded border border-gray-100">
+                        <div className="flex items-center gap-2 px-2">
+                          <Activity className="h-3.5 w-3.5 text-gray-400"/>
+                          <span className="text-xs font-bold text-gray-500 uppercase">Dönem Toplamı:</span>
+                        </div>
+                        {Object.entries(totals).map(([key, val]) => (
+                          <div key={key} className="px-2 py-1 bg-white rounded border border-gray-200 text-xs shadow-sm">
+                            <span className="text-gray-500 mr-1">{trendData.propertyLabels[key]}:</span>
+                            <span className="font-bold text-gray-800">{val}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="h-64 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart
                             data={trendData.trends}
                             margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                             <XAxis
                               dataKey="date"
                               style={{fontSize: '11px'}}
-                              angle={-45}
-                              textAnchor="end"
-                              height={70}
+                              height={30}
+                              tick={{fill: '#6b7280'}}
                             />
-                            <YAxis style={{fontSize: '12px'}} />
+                            <YAxis style={{fontSize: '12px'}} tick={{fill: '#6b7280'}} />
                             <Tooltip
-                              contentStyle={{fontSize: '12px'}}
+                              contentStyle={{fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                               formatter={(value: number, name: string) => [value, trendData.propertyLabels[name] || name]}
                             />
                             <Legend wrapperStyle={{fontSize: '11px'}} />
@@ -775,43 +829,17 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
                                 dataKey={key}
                                 name={trendData.propertyLabels[key]}
                                 stroke={COLORS[kIdx % COLORS.length]}
-                                strokeWidth={2}
-                                dot={{ r: 4 }}
+                                strokeWidth={3}
+                                dot={{ r: 4, strokeWidth: 2 }}
                                 activeDot={{ r: 6 }}
                               />
                             ))}
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
-
-                      <div className="mt-4 overflow-x-auto">
-                        <table className="w-full text-xs border-collapse">
-                          <thead>
-                            <tr className="bg-gray-50">
-                              <th className="px-3 py-2 text-left font-medium text-gray-700 border">Tarih</th>
-                              {trendData.propertyKeys.map(key => (
-                                <th key={key} className="px-3 py-2 text-center font-medium text-gray-700 border">{trendData.propertyLabels[key]}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {trendData.trends.map((trend, idx) => (
-                              <tr key={idx} className="hover:bg-gray-50">
-                                <td className="px-3 py-2 font-medium text-gray-900 border">{trend.date}</td>
-                                {trendData.propertyKeys.map(key => (
-                                  <td key={key} className="px-3 py-2 text-center border">
-                                    <span className={`font-medium ${Number(trend[key]) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                                      {trend[key] || 0}
-                                    </span>
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
