@@ -161,10 +161,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       let checks = 0;
 
       visits.forEach((v: any) => {
-        if (v.equipment_checks) {
+        if (v.equipment_checks && typeof v.equipment_checks === 'object') {
           checks += Object.keys(v.equipment_checks).length;
           Object.values(v.equipment_checks).forEach((c: any) => {
-            if (c.status === 'issue' || c.status === 'problem' || c.status === 'missing') issues++;
+            if (c?.status === 'issue' || c?.status === 'problem' || c?.status === 'missing' || c?.activity === true) issues++;
           });
         }
       });
@@ -216,7 +216,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       const visitCountMap = new Map<string, number>();
 
       visitsData?.forEach(visit => {
-        if (visit.equipment_checks) {
+        if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             // Key hem equipment_code hem de id olabilir
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
@@ -229,19 +229,16 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
             const activity = activityMap.get(eqId)!;
             if (checkData && typeof checkData === 'object') {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
-                if (fieldKey === 'equipment_name' || fieldKey === 'equipment_code' || fieldKey === 'status') return;
+                if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
 
-                if (typeof value === 'number') {
-                  if (value > 0) {
-                    activity[fieldKey] = (activity[fieldKey] || 0) + value;
-                  }
-                } else if (typeof value === 'string') {
-                  if (value === 'true' || value === 'var' || value === 'evet') {
-                    activity[fieldKey] = (activity[fieldKey] || 0) + 1;
-                  }
-                } else if (value === true) {
-                  activity[fieldKey] = (activity[fieldKey] || 0) + 1;
-                }
+                let numVal = 0;
+                if (typeof value === 'number') numVal = value;
+                else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
+                else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet' || value === 'evet') numVal = 1;
+                else if (value === false || value === 'false' || value === 'yok' || value === 'Yok' || value === 'Hayır' || value === 'hayır') numVal = 0;
+
+                // 0 değerleri de eklensin
+                activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
               });
             }
           });
@@ -275,16 +272,17 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
           Object.keys(rawTotals).forEach(key => {
-            if (typeof rawTotals[key] === 'number' && rawTotals[key] > 0) {
+            // Sadece sayısal olması yeterli (0 olsa bile)
+            if (typeof rawTotals[key] === 'number') {
               allFieldsInData.add(key);
             }
           });
         });
 
         // Properties'den tanımlı olanları ekle
-        if (group.properties && Object.keys(group.properties).length > 0) {
+        if (group.properties) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
-            if (value && (value.type === 'number' || value.type === 'boolean')) {
+            if (value && (value.type === 'number' || value.type === 'boolean' || value.type === 'select')) {
               if (!propertyKeys.includes(key)) {
                 propertyKeys.push(key);
                 propertyLabels[key] = value.label || key;
@@ -298,15 +296,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
           if (!propertyKeys.includes(key)) {
             propertyKeys.push(key);
             // Label'ı güzelleştir
-            propertyLabels[key] = key
-              .replace(/_/g, ' ')
-              .replace(/\b\w/g, l => l.toUpperCase())
-              .replace(/Count/gi, 'Sayısı')
-              .replace(/Activity/gi, 'Aktivite')
-              .replace(/Consumption/gi, 'Tüketim')
-              .replace(/Catch/gi, 'Yakalanan')
-              .replace(/Canli/gi, 'Canlı')
-              .replace(/Sayi/gi, 'Sayı');
+            propertyLabels[key] = key.replace(/_/g, ' ').toUpperCase();
           }
         });
 
@@ -330,13 +320,14 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
               ? totalVal
               : Number((totalVal / visitCount).toFixed(1));
 
-            if (totalVal > 0) hasActivity = true;
+            // Eğer key rawTotals içinde varsa (0 olsa bile) hasActivity true
+            if (rawTotals.hasOwnProperty(key)) hasActivity = true;
           });
 
           activities.push(activityRow);
         });
 
-        if (activities.some(a => propertyKeys.some(k => Number(a[k]) > 0))) {
+        if (activities.length > 0) {
           resultData.push({
             type: equipmentName,
             type_label: `${equipmentName} Ekipman Kontrolleri`,
@@ -398,7 +389,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
         const dateMap = dateEquipmentMap.get(visitDate)!;
 
-        if (visit.equipment_checks) {
+        if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
             if (!equipment) return;
@@ -411,22 +402,16 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
             const activity = dateMap.get(equipmentName)!;
             if (checkData && typeof checkData === 'object') {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
-                if (fieldKey === 'equipment_name' || fieldKey === 'equipment_code' || fieldKey === 'status') return;
+                if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
 
-                if (typeof value === 'number') {
-                  if (value > 0) {
-                    activity[fieldKey] = (activity[fieldKey] || 0) + value;
-                    activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1;
-                  }
-                } else if (typeof value === 'string') {
-                  if (value === 'true' || value === 'var' || value === 'evet') {
-                    activity[fieldKey] = (activity[fieldKey] || 0) + 1;
-                    activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1;
-                  }
-                } else if (value === true) {
-                  activity[fieldKey] = (activity[fieldKey] || 0) + 1;
-                  activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1;
-                }
+                let numVal = 0;
+                if (typeof value === 'number') numVal = value;
+                else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
+                else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet' || value === 'evet') numVal = 1;
+                else if (value === false || value === 'false' || value === 'yok' || value === 'Yok' || value === 'Hayır' || value === 'hayır') numVal = 0;
+
+                activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
+                // activity[`${fieldKey}_count`] = (activity[`${fieldKey}_count`] || 0) + 1; // Ortalama için gerekirse
               });
             }
           });
@@ -478,15 +463,7 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         allFieldsInData.forEach(key => {
           if (!propertyKeys.includes(key)) {
             propertyKeys.push(key);
-            propertyLabels[key] = key
-              .replace(/_/g, ' ')
-              .replace(/\b\w/g, l => l.toUpperCase())
-              .replace(/Count/gi, 'Sayısı')
-              .replace(/Activity/gi, 'Aktivite')
-              .replace(/Consumption/gi, 'Tüketim')
-              .replace(/Catch/gi, 'Yakalanan')
-              .replace(/Canli/gi, 'Canlı')
-              .replace(/Sayi/gi, 'Sayı');
+            propertyLabels[key] = key.replace(/_/g, ' ').toUpperCase();
           }
         });
 
@@ -501,8 +478,8 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
 
             propertyKeys.forEach(key => {
               const totalVal = equipmentData[key] || 0;
-              const count = equipmentData[`${key}_count`] || 1;
-              trendRow[key] = Number((totalVal / count).toFixed(1));
+              // const count = equipmentData[`${key}_count`] || 1;
+              trendRow[key] = totalVal; // Toplam değer
             });
 
             trends.push(trendRow);
