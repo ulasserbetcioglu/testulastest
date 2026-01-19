@@ -189,6 +189,35 @@ const CustomerTrendAnalysis: React.FC = () => {
     }
   };
 
+  // --- YARDIMCI FONKSİYON: Değer Dönüştürücü ---
+  const parseValue = (value: any): number => {
+    if (value === null || value === undefined) return 0;
+    
+    // Zaten sayıysa
+    if (typeof value === 'number') return value;
+    
+    // Boolean ise
+    if (value === true) return 1;
+    if (value === false) return 0;
+    
+    // String ise analiz et
+    if (typeof value === 'string') {
+      const lower = value.trim().toLowerCase();
+      
+      // Boolean stringler
+      if (['true', 'var', 'evet', 'yes', 'mevcut'].includes(lower)) return 1;
+      if (['false', 'yok', 'hayır', 'no', 'boş'].includes(lower)) return 0;
+      
+      // Sayısal stringler (Virgül/Nokta desteği)
+      const cleanStr = lower.replace(',', '.'); // 10,5 -> 10.5
+      const parsed = parseFloat(cleanStr);
+      
+      if (!isNaN(parsed)) return parsed;
+    }
+    
+    return 0;
+  };
+
   // --- Veri Çekme Fonksiyonları ---
 
   const fetchVisitStats = async (branchIds: string[]) => {
@@ -309,7 +338,6 @@ const CustomerTrendAnalysis: React.FC = () => {
     }
 
     try {
-      // 1. Ekipman Tanımlarını Çek
       const { data: equipmentData, error: eqError } = await supabase
         .from('branch_equipment')
         .select(`
@@ -322,7 +350,6 @@ const CustomerTrendAnalysis: React.FC = () => {
 
       if (eqError) throw eqError;
 
-      // 2. Ziyaret Verilerini Çek (JSONB)
       const { data: visitsData, error: vError } = await supabase
         .from('visits')
         .select('equipment_checks')
@@ -333,7 +360,6 @@ const CustomerTrendAnalysis: React.FC = () => {
 
       if (vError) throw vError;
 
-      // 3. Eşleştirme Haritaları
       const equipmentByCode = new Map<string, any>();
       const equipmentById = new Map<string, any>();
 
@@ -342,7 +368,6 @@ const CustomerTrendAnalysis: React.FC = () => {
         if(eq.id) equipmentById.set(eq.id, eq);
       });
 
-      // 4. Veriyi İşleme
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
 
@@ -363,12 +388,10 @@ const CustomerTrendAnalysis: React.FC = () => {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
                 if (['equipment_name', 'equipment_code', 'status', 'description', 'notes', 'image_url'].includes(fieldKey)) return;
 
-                let numVal = 0;
-                if (typeof value === 'number') numVal = value;
-                else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
-                else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet' || value === 'evet') numVal = 1;
-                else if (value === false || value === 'false' || value === 'yok' || value === 'Yok' || value === 'Hayır' || value === 'hayır') numVal = 0;
-
+                // GÜÇLENDİRİLMİŞ PARSER KULLANIMI
+                const numVal = parseValue(value);
+                
+                // 0 olsa bile toplama ekle (Sonuç 0 görünsün diye)
                 activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
               });
             }
@@ -376,7 +399,6 @@ const CustomerTrendAnalysis: React.FC = () => {
         }
       });
 
-      // 5. Ekipman İsmine Göre Gruplama
       const nameGroups = new Map<string, { equipments: any[], properties: any }>();
 
       equipmentData?.forEach((item: any) => {
@@ -399,13 +421,18 @@ const CustomerTrendAnalysis: React.FC = () => {
         const propertyLabels: Record<string, string> = {};
         const allFieldsInData = new Set<string>();
 
+        // Veri içinde geçen tüm sayısal/boolean alanları bul
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
           Object.keys(rawTotals).forEach(key => {
-            if (typeof rawTotals[key] === 'number') allFieldsInData.add(key);
+            // Sadece sayısal (0 dahil) ise al
+            if (typeof rawTotals[key] === 'number') {
+              allFieldsInData.add(key);
+            }
           });
         });
 
+        // Tanımlı özellikleri ekle
         if (group.properties) {
           Object.entries(group.properties).forEach(([key, value]: [string, any]) => {
             if (value && (value.type === 'number' || value.type === 'boolean' || value.type === 'select')) {
@@ -417,6 +444,7 @@ const CustomerTrendAnalysis: React.FC = () => {
           });
         }
 
+        // Veriden gelenleri ekle
         allFieldsInData.forEach(key => {
           if (!propertyKeys.includes(key)) {
             propertyKeys.push(key);
@@ -430,7 +458,6 @@ const CustomerTrendAnalysis: React.FC = () => {
 
         group.equipments.forEach((eq: any) => {
           const rawTotals = activityMap.get(eq.id) || {};
-          // Verisi olmasa bile listede görünsün
           const visitCount = visitCountMap.get(eq.id) || 1;
 
           const activityRow: EquipmentTypeActivity = {
@@ -447,9 +474,11 @@ const CustomerTrendAnalysis: React.FC = () => {
               ? totalVal
               : Number((totalVal / visitCount).toFixed(1));
             
-            if (rawTotals.hasOwnProperty(key)) hasData = true;
+            // Veri varlığı kontrolü: key rawTotals içinde varsa (değer 0 olsa bile) true
+            if (Object.prototype.hasOwnProperty.call(rawTotals, key)) hasData = true;
           });
 
+          // Hiç veri yoksa bile ekle (0 olarak görünür)
           activities.push(activityRow);
         });
 
@@ -523,12 +552,9 @@ const CustomerTrendAnalysis: React.FC = () => {
               Object.entries(checkData).forEach(([fieldKey, value]) => {
                 if (['equipment_name', 'equipment_code', 'status'].includes(fieldKey)) return;
 
-                let numVal = 0;
-                if (typeof value === 'number') numVal = value;
-                else if (typeof value === 'string' && !isNaN(parseFloat(value))) numVal = parseFloat(value);
-                else if (value === true || value === 'true' || value === 'var' || value === 'Var' || value === 'Evet') numVal = 1;
-                else if (value === false || value === 'false' || value === 'yok' || value === 'Yok') numVal = 0;
-
+                // GÜÇLENDİRİLMİŞ PARSER
+                const numVal = parseValue(value);
+                
                 activity[fieldKey] = (activity[fieldKey] || 0) + numVal;
               });
             }
@@ -781,7 +807,7 @@ const CustomerTrendAnalysis: React.FC = () => {
 
                   <div className="space-y-8">
                     {equipmentTypeData.map((typeData, idx) => {
-                      // Her bir property için toplamları hesapla
+                      // Özet Toplamları Hesapla
                       const totals = typeData.propertyKeys.reduce((acc, key) => {
                         acc[key] = typeData.activities.reduce((sum, act) => sum + (Number(act[key]) || 0), 0);
                         return acc;
@@ -847,7 +873,7 @@ const CustomerTrendAnalysis: React.FC = () => {
                             </ResponsiveContainer>
                           </div>
 
-                          {/* Detaylı Tablo */}
+                          {/* Detay Tablosu */}
                           <div className="mt-6 overflow-x-auto border-t pt-4">
                             <table className="w-full text-xs border-collapse">
                               <thead>
