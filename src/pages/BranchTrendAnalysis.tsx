@@ -163,6 +163,13 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
       visits.forEach((v: any) => {
         if (v.equipment_checks && typeof v.equipment_checks === 'object') {
           checks += Object.keys(v.equipment_checks).length;
+
+          // İlk visit'in equipment_checks yapısını göster
+          if (visits.indexOf(v) === 0) {
+            console.log('İLK VİSİT EQUIPMENT_CHECKS YAPISI:', JSON.stringify(v.equipment_checks, null, 2).substring(0, 1000));
+            console.log('Equipment_checks keys:', Object.keys(v.equipment_checks).slice(0, 10));
+          }
+
           Object.values(v.equipment_checks).forEach((c: any) => {
             if (c?.status === 'issue' || c?.status === 'problem' || c?.status === 'missing' || c?.activity === true) issues++;
           });
@@ -211,6 +218,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         equipmentByCode.set(eq.equipment_code, eq);
         equipmentById.set(eq.id, eq);
       });
+
+      console.log('BRANCH EQUIPMENT SAYISI:', equipmentData?.length);
+      console.log('ÖRNEK EQUIPMENT KODLARI:', Array.from(equipmentByCode.keys()).slice(0, 10));
+      console.log('ÖRNEK EQUIPMENT ID\'LERİ:', Array.from(equipmentById.keys()).slice(0, 10));
 
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
@@ -380,6 +391,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         equipmentByCode.set(eq.equipment_code, eq);
         equipmentById.set(eq.id, eq);
       });
+
+      console.log('BRANCH EQUIPMENT SAYISI:', equipmentData?.length);
+      console.log('ÖRNEK EQUIPMENT KODLARI:', Array.from(equipmentByCode.keys()).slice(0, 10));
+      console.log('ÖRNEK EQUIPMENT ID\'LERİ:', Array.from(equipmentById.keys()).slice(0, 10));
 
       const dateEquipmentMap = new Map<string, Map<string, Record<string, number>>>();
 

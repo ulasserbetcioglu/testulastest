@@ -380,9 +380,22 @@ const CustomerTrendAnalysis: React.FC = () => {
         if(eq.id) equipmentById.set(eq.id, eq);
       });
 
+      console.log('CUSTOMER EQUIPMENT SAYISI:', equipmentData?.length);
+      console.log('ÖRNEK EQUIPMENT KODLARI:', Array.from(equipmentByCode.keys()).slice(0, 10));
+      console.log('ÖRNEK EQUIPMENT ID\'LERİ:', Array.from(equipmentById.keys()).slice(0, 10));
+
       // 4. Veriyi İşleme
       const activityMap = new Map<string, Record<string, number>>();
       const visitCountMap = new Map<string, number>();
+
+      // İlk visit'in equipment_checks yapısını göster
+      if (visitsData && visitsData.length > 0) {
+        const firstVisit = visitsData[0];
+        if (firstVisit.equipment_checks && typeof firstVisit.equipment_checks === 'object') {
+          console.log('CUSTOMER İLK VİSİT EQUIPMENT_CHECKS YAPISI:', JSON.stringify(firstVisit.equipment_checks, null, 2).substring(0, 1000));
+          console.log('CUSTOMER Equipment_checks keys:', Object.keys(firstVisit.equipment_checks).slice(0, 10));
+        }
+      }
 
       visitsData?.forEach(visit => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
