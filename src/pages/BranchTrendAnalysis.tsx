@@ -220,7 +220,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             // Key hem equipment_code hem de id olabilir
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
-            if (!equipment) return;
+            if (!equipment) {
+              console.log('Eşleşmeyen key:', key, 'Mevcut equipment IDs:', Array.from(equipmentById.keys()).slice(0, 5), 'Mevcut codes:', Array.from(equipmentByCode.keys()).slice(0, 5));
+              return;
+            }
 
             const eqId = equipment.id;
             if (!activityMap.has(eqId)) activityMap.set(eqId, {});
@@ -392,7 +395,10 @@ const BranchTrendAnalysis: React.FC<BranchTrendAnalysisProps> = ({ branchId, bra
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
-            if (!equipment) return;
+            if (!equipment) {
+              console.log('Trend: Eşleşmeyen key:', key);
+              return;
+            }
 
             const equipmentName = equipment.equipment?.name || 'Diğer';
             if (!dateMap.has(equipmentName)) {

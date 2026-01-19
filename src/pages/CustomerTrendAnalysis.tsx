@@ -388,7 +388,10 @@ const CustomerTrendAnalysis: React.FC = () => {
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
             const equipment = equipmentById.get(key) || equipmentByCode.get(key);
-            if (!equipment) return; 
+            if (!equipment) {
+              console.log('Customer: Eşleşmeyen key:', key, 'Mevcut equipment IDs:', Array.from(equipmentById.keys()).slice(0, 5), 'Mevcut codes:', Array.from(equipmentByCode.keys()).slice(0, 5));
+              return;
+            } 
 
             const eqId = equipment.id;
             const eqProps = equipment.equipment?.properties || {}; // Tanımlı özellikler
@@ -575,8 +578,11 @@ const CustomerTrendAnalysis: React.FC = () => {
 
         if (visit.equipment_checks && typeof visit.equipment_checks === 'object') {
           Object.entries(visit.equipment_checks).forEach(([key, checkData]: [string, any]) => {
-            const equipment = equipmentById.get(key);
-            if (!equipment) return;
+            const equipment = equipmentById.get(key) || equipmentByCode.get(key);
+            if (!equipment) {
+              console.log('Customer Trend: Eşleşmeyen key:', key);
+              return;
+            }
 
             const eqName = equipment.equipment?.name || 'Diğer';
             if (!dateMap.has(eqName)) dateMap.set(eqName, {});
