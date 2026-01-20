@@ -41,7 +41,7 @@ interface Visit {
   customer: {
     id: string;
     kisa_isim: string;
-    name?: string; // Yedek
+    cari_isim?: string; // DÜZELTME: name yerine cari_isim
   };
   branch?: {
     id: string;
@@ -453,9 +453,9 @@ const VisitDetails: React.FC = () => {
         .from('visits')
         .select(`
           id, visit_date, equipment_checks, pest_types, visit_type, notes, report_number, status, report_photo_url, report_photo_file_path,
-          customer:customer_id (id, kisa_isim, name),
+          customer:customer_id (id, kisa_isim, cari_isim),
           branch:branch_id (id, sube_adi, latitude, longitude)
-        `)
+        `) // DÜZELTME: name kaldırıldı, cari_isim eklendi
         .eq('id', id)
         .single();
 
@@ -667,8 +667,8 @@ const VisitDetails: React.FC = () => {
         // Tarih formatı: YYYY-MM-DD
         const formattedDate = new Date(visit.visit_date).toISOString().split('T')[0]; 
         
-        // Müşteri ve Şube isimleri
-        const customerName = visit.customer.kisa_isim || visit.customer.name || 'Musteri';
+        // Müşteri ve Şube isimleri (DÜZELTME: name yerine cari_isim kullanıldı)
+        const customerName = visit.customer.kisa_isim || visit.customer.cari_isim || 'Musteri';
         const branchName = visit.branch?.sube_adi || 'Sube';
         
         // Dosya uzantısı
