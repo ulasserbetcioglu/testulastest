@@ -21,6 +21,7 @@ import BranchDashboard from './pages/BranchDashboard';
 // --- ADMIN PAGES ---
 import Customers from './pages/Customers';
 import TrendAnalysis from './pages/TrendAnalysis';
+import AdminPhotoMigration from './pages/AdminPhotoMigration';
 import AdminDataSimulator from './pages/AdminDataSimulator';
 import CustomerDetails from './components/Customers/CustomerDetails';
 import Offers from './pages/Offers';
@@ -320,6 +321,7 @@ function App() {
             <Route path="teklifler" element={<TekliflerListesi />} />
             <Route path="teklifler/templates" element={<OfferTemplates />} />
             <Route path="teklifler/new" element={<NewOffer />} />
+            <Route path="photo-migration" element={<AdminPhotoMigration />} />
             <Route path="depolar" element={<Warehouses />} />
             <Route path="depolar/transfer" element={<WarehouseTransfers />} />
             <Route path="ucretli-malzemeler" element={<PaidMaterialSales />} />
