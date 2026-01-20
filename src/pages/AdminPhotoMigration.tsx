@@ -32,6 +32,67 @@ const sanitizeFileName = (text: any) => {
     .replace(/[^a-zA-Z0-9_\-]/g, '');
 };
 
+// Fotoğraf boyutlandırma fonksiyonu
+const resizeImage = async (
+  blob: Blob,
+  maxWidth: number = 1920,
+  maxHeight: number = 1080,
+  quality: number = 0.85
+): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let width = img.width;
+      let height = img.height;
+
+      // Oranı koruyarak boyutlandır
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.floor(width * ratio);
+        height = Math.floor(height * ratio);
+      }
+
+      // Canvas oluştur
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas context alınamadı'));
+        return;
+      }
+
+      // Resmi çiz
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Blob olarak dışa aktar
+      canvas.toBlob(
+        (resizedBlob) => {
+          if (resizedBlob) {
+            resolve(resizedBlob);
+          } else {
+            reject(new Error('Blob oluşturulamadı'));
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Resim yüklenemedi'));
+    };
+
+    img.src = url;
+  });
+};
+
 const BUCKET_NAME = 'documents'; 
 
 interface PhotoItem {
@@ -56,6 +117,10 @@ const AdminPhotoMigration = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [downloadLog, setDownloadLog] = useState<string[]>([]);
   const [downloadMethod, setDownloadMethod] = useState<'storage' | 'signed'>('signed');
+  const [resizeEnabled, setResizeEnabled] = useState(true);
+  const [maxWidth, setMaxWidth] = useState(1920);
+  const [maxHeight, setMaxHeight] = useState(1080);
+  const [imageQuality, setImageQuality] = useState(85);
 
   // 1. VERİLERİ ANALİZ ET VE LİSTELE
   const fetchPhotos = async () => {
@@ -219,7 +284,8 @@ const AdminPhotoMigration = () => {
     }
 
     logs.push(`Toplam ${selected.length} dosya işlenecek...`);
-    logs.push(`İndirme Yöntemi: ${downloadMethod === 'signed' ? 'Signed URL (Önerilen)' : 'Storage Download'}\n`);
+    logs.push(`İndirme Yöntemi: ${downloadMethod === 'signed' ? 'Signed URL (Önerilen)' : 'Storage Download'}`);
+    logs.push(`Boyut Optimizasyonu: ${resizeEnabled ? `AÇIK (${maxWidth}x${maxHeight}, kalite: %${imageQuality})` : 'KAPALI'}\n`);
     setDownloadLog([...logs]);
 
     for (const item of selected) {
@@ -301,6 +367,25 @@ const AdminPhotoMigration = () => {
 
         // ZIP'e ekle
         if (blobData && blobData.size > 0) {
+          const originalSize = blobData.size;
+
+          // Boyut optimizasyonu
+          if (resizeEnabled) {
+            try {
+              logs.push(`  → Boyutlandırılıyor (${maxWidth}x${maxHeight}, kalite: %${imageQuality})...`);
+              setDownloadLog([...logs]);
+
+              const resizedBlob = await resizeImage(blobData, maxWidth, maxHeight, imageQuality / 100);
+              const newSize = resizedBlob.size;
+              const reduction = ((1 - newSize / originalSize) * 100).toFixed(1);
+
+              logs.push(`  ✓ Optimize edildi: ${(originalSize / 1024).toFixed(2)} KB → ${(newSize / 1024).toFixed(2)} KB (-%${reduction})`);
+              blobData = resizedBlob;
+            } catch (resizeError: any) {
+              logs.push(`  ⚠ Boyutlandırma başarısız, orijinal kullanılıyor: ${resizeError.message}`);
+            }
+          }
+
           folder.file(item.newName, blobData, { binary: true });
           successCount++;
           logs.push(`  ✓ ZIP'e eklendi\n`);
@@ -457,33 +542,90 @@ Tarih: ${item.visitDate}`;
         </div>
 
         {/* Alt Satır - Butonlar ve Ayarlar */}
-        <div className="flex flex-wrap gap-4 items-center justify-between border-t pt-4">
-          <div className="flex items-center gap-3 bg-blue-50 px-3 py-2 rounded-lg">
-            <Settings className="w-4 h-4 text-blue-600"/>
-            <span className="text-xs font-medium text-gray-700">İndirme Yöntemi:</span>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input 
-                type="radio" 
-                name="download-method" 
-                checked={downloadMethod === 'signed'}
-                onChange={() => setDownloadMethod('signed')}
-                className="text-blue-600"
-              />
-              <span className="text-xs font-medium">Signed URL (Önerilen)</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input 
-                type="radio" 
-                name="download-method" 
-                checked={downloadMethod === 'storage'}
-                onChange={() => setDownloadMethod('storage')}
-                className="text-blue-600"
-              />
-              <span className="text-xs font-medium">Storage API</span>
-            </label>
+        <div className="flex flex-wrap gap-4 items-start justify-between border-t pt-4">
+          <div className="flex flex-col gap-3">
+            {/* İndirme Yöntemi */}
+            <div className="flex items-center gap-3 bg-blue-50 px-3 py-2 rounded-lg">
+              <Settings className="w-4 h-4 text-blue-600"/>
+              <span className="text-xs font-medium text-gray-700">İndirme Yöntemi:</span>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="download-method"
+                  checked={downloadMethod === 'signed'}
+                  onChange={() => setDownloadMethod('signed')}
+                  className="text-blue-600"
+                />
+                <span className="text-xs font-medium">Signed URL (Önerilen)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="download-method"
+                  checked={downloadMethod === 'storage'}
+                  onChange={() => setDownloadMethod('storage')}
+                  className="text-blue-600"
+                />
+                <span className="text-xs font-medium">Storage API</span>
+              </label>
+            </div>
+
+            {/* Boyut Optimizasyonu */}
+            <div className="flex flex-wrap items-center gap-3 bg-green-50 px-3 py-2 rounded-lg">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={resizeEnabled}
+                  onChange={(e) => setResizeEnabled(e.target.checked)}
+                  className="text-green-600 rounded"
+                />
+                <span className="text-xs font-bold text-gray-700">Boyut Optimizasyonu</span>
+              </label>
+
+              {resizeEnabled && (
+                <>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-gray-600">Maks Genişlik:</span>
+                    <input
+                      type="number"
+                      value={maxWidth}
+                      onChange={(e) => setMaxWidth(Number(e.target.value))}
+                      className="w-20 px-2 py-1 text-xs border rounded"
+                      min="640"
+                      max="3840"
+                    />
+                    <span className="text-xs text-gray-500">px</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-gray-600">Maks Yükseklik:</span>
+                    <input
+                      type="number"
+                      value={maxHeight}
+                      onChange={(e) => setMaxHeight(Number(e.target.value))}
+                      className="w-20 px-2 py-1 text-xs border rounded"
+                      min="480"
+                      max="2160"
+                    />
+                    <span className="text-xs text-gray-500">px</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-gray-600">JPEG Kalite:</span>
+                    <input
+                      type="number"
+                      value={imageQuality}
+                      onChange={(e) => setImageQuality(Number(e.target.value))}
+                      className="w-16 px-2 py-1 text-xs border rounded"
+                      min="50"
+                      max="100"
+                    />
+                    <span className="text-xs text-gray-500">%</span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="flex gap-2 flex-1 md:flex-initial justify-end">
+          <div className="flex gap-2 flex-1 md:flex-initial justify-end mt-2 md:mt-0">
             <button 
               onClick={runRename} 
               disabled={processing}
