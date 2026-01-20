@@ -1,8 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../Auth/AuthProvider';
-// Building ikonu importlara eklendi
-import { LogOut, Menu, X, Home, Calendar, FileText, AlertCircle, FilePlus, Award, Package, TrendingUp, Bug, Layers, Building } from 'lucide-react';
+import { 
+  LogOut, 
+  Menu, 
+  X, 
+  Home, 
+  Calendar, 
+  FileText, 
+  AlertCircle, 
+  FilePlus, 
+  Award, 
+  Package, 
+  TrendingUp, 
+  Bug, 
+  Layers, 
+  Building,
+  CalendarDays // YENİ EKLENDİ
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
 
@@ -50,8 +65,10 @@ const CustomerLayout: React.FC = () => {
 
   const navItems = [
     { path: '/customer', icon: <Home size={20} />, name: 'Ana Sayfa' },
-    // YENİ EKLENEN: Şubelerim Linki
     { path: '/customer/subeler', icon: <Building size={20} />, name: 'Şubelerim' },
+    // YENİ EKLENEN SATIR BAŞLANGIÇ
+    { path: '/customer/ziyaret-plani', icon: <CalendarDays size={20} />, name: 'Ziyaret Planı' },
+    // YENİ EKLENEN SATIR BİTİŞ
     { path: '/customer/ziyaretler', icon: <FileText size={20} />, name: 'Ziyaretler' },
     { path: '/customer/takvim', icon: <Calendar size={20} />, name: 'Takvim' },
     { path: '/customer/dof', icon: <AlertCircle size={20} />, name: 'DÖF' },
@@ -66,7 +83,7 @@ const CustomerLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Mobil için karartma perdesi (backdrop/scrim) */}
+      {/* Mobil Karartma */}
       <div
         className={`fixed inset-0 bg-black/60 z-40 md:hidden ${
           isSidebarOpen ? 'block' : 'hidden'
@@ -82,11 +99,7 @@ const CustomerLayout: React.FC = () => {
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="p-2 rounded-lg hover:bg-gray-100"
             >
-              {isSidebarOpen ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
+              {isSidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
             <div className="ml-4 flex items-center">
               <img
@@ -119,25 +132,20 @@ const CustomerLayout: React.FC = () => {
         </div>
       </header>
 
-      {/* Sidebar and Main Content */}
+      {/* İçerik */}
       <div className="flex">
-        {/* Sidebar */}
         <aside
           className={`
-            ${/* Mobil: fixed, z-50 */''}
             fixed top-0 left-0 z-50 h-screen w-64 bg-white shadow-lg 
             overflow-y-auto overflow-x-hidden 
             transition-all duration-300 ease-in-out
             ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-            
-            ${/* Desktop: relative, sticky */''}
             md:relative md:translate-x-0 md:z-auto
-            md:h-[calc(100vh-4rem)] ${/* h-16 */''}
-            md:sticky md:top-16 
+            md:h-[calc(100vh-4rem)] md:sticky md:top-16 
             ${isSidebarOpen ? 'md:w-64' : 'md:w-0'}
           `}
         >
-          <nav className="mt-4 px-4">
+          <nav className="mt-4 px-4 pb-20">
             <ul className="space-y-2">
               {navItems.map((item) => (
                 <li key={item.path}>
@@ -147,12 +155,11 @@ const CustomerLayout: React.FC = () => {
                     className={({ isActive }) =>
                       `flex items-center px-4 py-2 rounded-lg transition-colors ${
                         isActive
-                          ? 'bg-green-50 text-green-600'
+                          ? 'bg-green-50 text-green-600 font-medium'
                           : 'text-gray-700 hover:bg-gray-100'
                       }`
                     }
                     onClick={() => {
-                      // Mobilde bir linke tıklayınca menüyü kapat
                       if (window.innerWidth < 768) {
                         setIsSidebarOpen(false);
                       }
@@ -167,12 +174,7 @@ const CustomerLayout: React.FC = () => {
           </nav>
         </aside>
 
-        {/* Main Content */}
-        <main
-          className={`
-            flex-1 p-6 transition-all duration-300
-          `}
-        >
+        <main className="flex-1 p-6 transition-all duration-300 overflow-x-hidden">
           <Outlet />
         </main>
       </div>
