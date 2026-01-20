@@ -20,6 +20,8 @@ import BranchDashboard from './pages/BranchDashboard';
 
 // --- ADMIN PAGES ---
 import Customers from './pages/Customers';
+import TrendAnalysis from './pages/TrendAnalysis';
+import AdminDataSimulator from './pages/AdminDataSimulator';
 import CustomerDetails from './components/Customers/CustomerDetails';
 import Offers from './pages/Offers';
 import OfferTemplates from './pages/OfferTemplates';
@@ -377,6 +379,8 @@ function App() {
             <Route path="admin/mesai-cizelgeleri" element={<AdminRoute><AdminOperatorShifts /></AdminRoute>} />
             <Route path="admin/operator-leaves" element={<AdminRoute><AdminOperatorLeaves /></AdminRoute>} />
             <Route path="admin/vehicles" element={<AdminRoute><AdminVehicles /></AdminRoute>} />
+            <Route path="yeni-trend-analizi" element={<TrendAnalysis branchId={undefined} />} />
+            <Route path="admin/simulator" element={<AdminDataSimulator />} />
             <Route path="admin/yillik-rapor" element={<AnnualVisitReport />} />
             
 
