@@ -480,6 +480,136 @@ Tarih: ${item.visitDate}`;
     }
   };
 
+  // D. STORAGE'DA OPTİMİZASYON (YENİ)
+  const runOptimizeInStorage = async () => {
+    const selected = photos.filter(p => p.isSelected);
+    if (selected.length === 0) return toast.warning('Lütfen optimize edilecek fotoğrafları seçin.');
+    if (!confirm(`${selected.length} fotoğraf storage'da optimize edilecek ve eskisinin üzerine yazılacak. Devam edilsin mi?`)) return;
+
+    setProcessing(true);
+    setProgress(0);
+    setDownloadLog([]);
+
+    const logs: string[] = [];
+    let count = 0;
+    let successCount = 0;
+    let totalOriginalSize = 0;
+    let totalOptimizedSize = 0;
+
+    logs.push(`🔧 STORAGE OPTİMİZASYONU BAŞLATILIYOR`);
+    logs.push(`Toplam ${selected.length} dosya işlenecek...`);
+    logs.push(`Ayarlar: ${maxWidth}x${maxHeight} px, kalite: %${imageQuality}\n`);
+    setDownloadLog([...logs]);
+
+    for (const item of selected) {
+      try {
+        logs.push(`[${count + 1}/${selected.length}] ${item.newName}`);
+        setDownloadLog([...logs]);
+
+        // 1. Storage'dan indir
+        let blobData: Blob | null = null;
+
+        try {
+          const { data: signedUrlData, error: signedError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .createSignedUrl(item.oldPath, 3600);
+
+          if (signedError) throw signedError;
+
+          if (signedUrlData?.signedUrl) {
+            const response = await fetch(signedUrlData.signedUrl);
+            if (response.ok) {
+              blobData = await response.blob();
+              logs.push(`  ✓ İndirildi: ${(blobData.size / 1024).toFixed(2)} KB`);
+            } else {
+              throw new Error(`HTTP ${response.status}`);
+            }
+          }
+        } catch (downloadError: any) {
+          logs.push(`  ✗ İndirme hatası: ${downloadError.message}`);
+          throw downloadError;
+        }
+
+        if (!blobData || blobData.size === 0) {
+          throw new Error('Dosya indirilemedi');
+        }
+
+        const originalSize = blobData.size;
+        totalOriginalSize += originalSize;
+
+        // 2. Optimize et
+        try {
+          logs.push(`  → Optimize ediliyor...`);
+          setDownloadLog([...logs]);
+
+          const optimizedBlob = await resizeImage(blobData, maxWidth, maxHeight, imageQuality / 100);
+          const newSize = optimizedBlob.size;
+          totalOptimizedSize += newSize;
+
+          const reduction = ((1 - newSize / originalSize) * 100).toFixed(1);
+          logs.push(`  ✓ ${(originalSize / 1024).toFixed(2)} KB → ${(newSize / 1024).toFixed(2)} KB (-%${reduction})`);
+
+          // 3. Storage'a geri yükle (üzerine yaz)
+          logs.push(`  → Storage'a yükleniyor...`);
+          setDownloadLog([...logs]);
+
+          const { error: uploadError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .upload(item.oldPath, optimizedBlob, {
+              upsert: true,
+              contentType: 'image/jpeg'
+            });
+
+          if (uploadError) throw uploadError;
+
+          logs.push(`  ✓ Başarıyla güncellendi!\n`);
+          successCount++;
+
+          setPhotos(prev => prev.map(p =>
+            p.id === item.id ? { ...p, status: 'success' } : p
+          ));
+
+        } catch (optimizeError: any) {
+          logs.push(`  ✗ Optimizasyon hatası: ${optimizeError.message}\n`);
+          setPhotos(prev => prev.map(p =>
+            p.id === item.id ? { ...p, status: 'error', message: optimizeError.message } : p
+          ));
+        }
+
+      } catch (err: any) {
+        logs.push(`  ✗ Genel hata: ${err.message}\n`);
+        setPhotos(prev => prev.map(p =>
+          p.id === item.id ? { ...p, status: 'error', message: err.message } : p
+        ));
+      }
+
+      count++;
+      setProgress(Math.round((count / selected.length) * 100));
+      setDownloadLog([...logs]);
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Özet
+    const totalReduction = totalOriginalSize > 0
+      ? ((1 - totalOptimizedSize / totalOriginalSize) * 100).toFixed(1)
+      : '0';
+
+    logs.push(`\n✅ İŞLEM TAMAMLANDI`);
+    logs.push(`Başarılı: ${successCount}/${selected.length}`);
+    logs.push(`Toplam Kazanç: ${((totalOriginalSize - totalOptimizedSize) / 1024 / 1024).toFixed(2)} MB (-%${totalReduction})`);
+    logs.push(`Orijinal: ${(totalOriginalSize / 1024 / 1024).toFixed(2)} MB`);
+    logs.push(`Optimize: ${(totalOptimizedSize / 1024 / 1024).toFixed(2)} MB`);
+    setDownloadLog([...logs]);
+
+    toast.success(
+      `${successCount} fotoğraf optimize edildi! Toplam -%${totalReduction} boyut azaldı.`,
+      { duration: 5000 }
+    );
+
+    setProcessing(false);
+  };
+
   // --- SEÇİM ---
   const toggleSelectAll = () => {
     const allSelected = filteredPhotos.every(p => p.isSelected);
@@ -625,23 +755,30 @@ Tarih: ${item.visitDate}`;
             </div>
           </div>
 
-          <div className="flex gap-2 flex-1 md:flex-initial justify-end mt-2 md:mt-0">
-            <button 
-              onClick={runRename} 
+          <div className="flex flex-wrap gap-2 flex-1 md:flex-initial justify-end mt-2 md:mt-0">
+            <button
+              onClick={runRename}
               disabled={processing}
               className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
             >
               <Play size={16}/> İsimleri Düzelt
             </button>
-            <button 
-              onClick={runDownload} 
+            <button
+              onClick={runOptimizeInStorage}
+              disabled={processing}
+              className="flex items-center justify-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+            >
+              <Settings size={16}/> Storage'da Optimize Et
+            </button>
+            <button
+              onClick={runDownload}
               disabled={processing}
               className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
             >
               <Download size={16}/> İndir (ZIP)
             </button>
-            <button 
-              onClick={runDelete} 
+            <button
+              onClick={runDelete}
               disabled={processing}
               className="flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
             >
