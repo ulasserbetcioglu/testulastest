@@ -20,6 +20,77 @@ const sanitizeFileName = (text: string) => {
     .replace(/[^a-zA-Z0-9_]/g, ''); // Harf, rakam ve alt çizgi dışındakileri sil
 };
 
+// --- YARDIMCI FONKSİYON: FOTOĞRAF OPTİMİZASYONU ---
+const resizeImage = async (
+  file: File,
+  maxWidth: number = 1920,
+  maxHeight: number = 1080,
+  quality: number = 0.85
+): Promise<{ file: File; originalSize: number; newSize: number }> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    const originalSize = file.size;
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let width = img.width;
+      let height = img.height;
+
+      // Oranı koruyarak boyutlandır
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.floor(width * ratio);
+        height = Math.floor(height * ratio);
+      }
+
+      // Canvas oluştur
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas context alınamadı'));
+        return;
+      }
+
+      // Resmi çiz
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Blob olarak dışa aktar
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            // File nesnesine çevir
+            const optimizedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve({
+              file: optimizedFile,
+              originalSize,
+              newSize: blob.size,
+            });
+          } else {
+            reject(new Error('Blob oluşturulamadı'));
+          }
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Resim yüklenemedi'));
+    };
+
+    img.src = url;
+  });
+};
+
 // --- TİP TANIMLARI ---
 
 interface BranchEquipment {
@@ -640,11 +711,31 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
-      setReportPhotoFile(file);
-      setReportPhotoPreview(URL.createObjectURL(file));
+
+      try {
+        toast.info('Fotoğraf optimize ediliyor...');
+
+        // Fotoğrafı optimize et
+        const { file: optimizedFile, originalSize, newSize } = await resizeImage(file, 1920, 1080, 0.85);
+
+        setReportPhotoFile(optimizedFile);
+        setReportPhotoPreview(URL.createObjectURL(optimizedFile));
+
+        // Kullanıcıya bilgi ver
+        const reduction = ((1 - newSize / originalSize) * 100).toFixed(1);
+        toast.success(
+          `Fotoğraf optimize edildi: ${(originalSize / 1024 / 1024).toFixed(2)} MB → ${(newSize / 1024 / 1024).toFixed(2)} MB (-%${reduction})`
+        );
+      } catch (error: any) {
+        console.error('Optimizasyon hatası:', error);
+        toast.warning('Optimizasyon başarısız, orijinal dosya kullanılacak');
+        // Hata durumunda orijinal dosyayı kullan
+        setReportPhotoFile(file);
+        setReportPhotoPreview(URL.createObjectURL(file));
+      }
     }
   };
 
