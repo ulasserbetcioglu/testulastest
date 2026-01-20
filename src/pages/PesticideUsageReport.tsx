@@ -356,7 +356,7 @@ const PesticideUsageReport: React.FC = () => {
             )}
             <div>
               <h1 className="text-xl font-bold text-gray-900 uppercase tracking-wide">{companySettings.company_name}</h1>
-              <p className="text-sm text-gray-500">Pest Kontrol Hizmetleri</p>
+              <p className="text-sm text-gray-500">Bu rapor ilaclamatik.com CRM yazılımı ile otomatik olarak oluşturulmuştur.</p>
             </div>
           </div>
           <div className="text-right">
@@ -386,14 +386,14 @@ const PesticideUsageReport: React.FC = () => {
         ) : (
           <div className="p-8 space-y-10">
             
-            {/* 1. ÖZET KARTLARI (Sıvı vs Katı) */}
+            {/* 1. ÖZET KARTLARI (İnsectisit vs Rodentisit & Jel) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                
                {/* SIVI BÖLÜMÜ */}
                <div className="border border-blue-200 rounded-xl overflow-hidden shadow-sm">
                   <div className="bg-blue-50 px-4 py-3 border-b border-blue-100 flex items-center justify-between">
                      <h3 className="font-bold text-blue-800 flex items-center gap-2">
-                        <Droplets size={18} /> Sıvı Kimyasallar
+                        <Droplets size={18} /> İnsectisit Kimyasallar
                      </h3>
                      <span className="text-xs font-semibold text-blue-600 bg-white px-2 py-1 rounded border border-blue-200">Birim: ml</span>
                   </div>
@@ -425,7 +425,7 @@ const PesticideUsageReport: React.FC = () => {
                         </table>
                      </div>
                   ) : (
-                     <div className="p-6 text-center text-gray-400 text-sm">Sıvı tüketim kaydı yok.</div>
+                     <div className="p-6 text-center text-gray-400 text-sm">İnsectisit tüketim kaydı yok.</div>
                   )}
                </div>
 
@@ -433,7 +433,7 @@ const PesticideUsageReport: React.FC = () => {
                <div className="border border-green-200 rounded-xl overflow-hidden shadow-sm">
                   <div className="bg-green-50 px-4 py-3 border-b border-green-100 flex items-center justify-between">
                      <h3 className="font-bold text-green-800 flex items-center gap-2">
-                        <Package size={18} /> Katı/Jel Kimyasallar
+                        <Package size={18} /> Rodentisit/Jel Kimyasallar
                      </h3>
                      <span className="text-xs font-semibold text-green-600 bg-white px-2 py-1 rounded border border-green-200">Birim: gr</span>
                   </div>
@@ -465,7 +465,7 @@ const PesticideUsageReport: React.FC = () => {
                         </table>
                      </div>
                   ) : (
-                     <div className="p-6 text-center text-gray-400 text-sm">Katı tüketim kaydı yok.</div>
+                     <div className="p-6 text-center text-gray-400 text-sm">Rodentisit & Jel tüketim kaydı yok.</div>
                   )}
                </div>
             </div>
