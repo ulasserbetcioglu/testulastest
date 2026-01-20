@@ -6,6 +6,20 @@ import { calculateDistance } from '../lib/utils';
 import { sendEmail, getRecipientEmails } from '../lib/emailClient';
 import { toast } from 'sonner';
 
+// --- YARDIMCI FONKSİYON: DOSYA ADI TEMİZLEME ---
+const sanitizeFileName = (text: string) => {
+  if (!text) return 'unknown';
+  return text
+    .replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
+    .replace(/ü/g, 'u').replace(/Ü/g, 'U')
+    .replace(/ş/g, 's').replace(/Ş/g, 'S')
+    .replace(/ı/g, 'i').replace(/İ/g, 'I')
+    .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+    .replace(/ç/g, 'c').replace(/Ç/g, 'C')
+    .replace(/\s+/g, '_') // Boşlukları alt çizgi yap
+    .replace(/[^a-zA-Z0-9_]/g, ''); // Harf, rakam ve alt çizgi dışındakileri sil
+};
+
 // --- TİP TANIMLARI ---
 
 interface BranchEquipment {
@@ -27,6 +41,7 @@ interface Visit {
   customer: {
     id: string;
     kisa_isim: string;
+    name?: string; // Yedek
   };
   branch?: {
     id: string;
@@ -355,10 +370,6 @@ const VisitDetails: React.FC = () => {
 
   // --- OTOMATİK AÇIKLAMA METNİ OLUŞTURUCU (YENİ) ---
   useEffect(() => {
-    // Sadece eğer kullanıcı henüz elle bir açıklama girmemişse veya metin boşsa otomatik doldur.
-    // Ancak "otomatik koy" dediğiniz için her seçimde güncelleyecek şekilde ayarlıyorum.
-    // Eğer operatörün elle yazdığını korumak isterseniz if condition eklenebilir.
-    
     const visitTypeLabels = selectedVisitTypes
       .map(id => visitTypes.find(t => t.id === id)?.label)
       .filter(Boolean)
@@ -373,13 +384,11 @@ const VisitDetails: React.FC = () => {
       const autoText = `Yapılan ziyarette, İşletmede ${visitTypeLabels} ziyaret(ler)i kapsamında, ${pestTypeLabels}lere karşı zararlı mücadelesi kontrolü yapıldı.`;
       setExplanation(autoText);
     } else if (selectedVisitTypes.length > 0) {
-       // Sadece ziyaret türü seçiliyse
        const autoText = `Yapılan ziyarette, işletmede ${visitTypeLabels} kapsamında genel kontrol yapıldı.`;
        setExplanation(autoText);
     }
 
   }, [selectedVisitTypes, selectedPestTypes]);
-  // ----------------------------------------------------
 
   useEffect(() => {
     if (isEditMode && previousPaidMaterials.length > 0) {
@@ -444,7 +453,7 @@ const VisitDetails: React.FC = () => {
         .from('visits')
         .select(`
           id, visit_date, equipment_checks, pest_types, visit_type, notes, report_number, status, report_photo_url, report_photo_file_path,
-          customer:customer_id (id, kisa_isim),
+          customer:customer_id (id, kisa_isim, name),
           branch:branch_id (id, sube_adi, latitude, longitude)
         `)
         .eq('id', id)
@@ -495,14 +504,6 @@ const VisitDetails: React.FC = () => {
         }
       }
 
-      // Eğer kayıtlı açıklama yoksa (eski kayıtlarda), otomatik oluşturmayı tetiklemek için boş bırakıyoruz
-      if (data?.notes && !explanation) {
-          // Normalde müşteri açıklaması ayrı bir sütun olmalıydı, ancak mevcut yapıda 'notes' kullanılıyor olabilir.
-          // Bu örnekte 'explanation' state'i UI için var, veritabanına 'notes' içine eklenerek veya ayrı bir alan olarak gidebilir.
-          // Mevcut kod yapısında 'explanation' visit tablosunda yok gibi görünüyor, 'notes' alanına birleştiriliyor olabilir.
-          // Biz UI state'ini yönetelim.
-      }
-
       if (data?.report_number) setReportNumber(data.report_number);
       if (data?.report_photo_url) setReportPhotoPreview(data.report_photo_url);
 
@@ -532,7 +533,7 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // --- İSTİSNA YÖNETİMİ (MANAGEMENT BY EXCEPTION) ---
+  // --- İSTİSNA YÖNETİMİ ---
   const fetchBranchEquipment = async (branchId: string) => {
     try {
       const { data: branchEquipmentData } = await supabase
@@ -661,20 +662,37 @@ const VisitDetails: React.FC = () => {
       let uploadedPhotoUrl = visit?.report_photo_url || null;
       let uploadedPhotoFilePath = visit?.report_photo_file_path || null;
 
-      if (reportPhotoFile) {
-        const fileName = `report_photos/${id}-${Date.now()}.${reportPhotoFile.name.split('.').pop()}`;
-        await supabase.storage.from('documents').upload(fileName, reportPhotoFile, { upsert: true });
-        uploadedPhotoUrl = supabase.storage.from('documents').getPublicUrl(fileName).data.publicUrl;
-        uploadedPhotoFilePath = fileName;
+      // --- DÜZENLENEN KISIM: DOSYA ADI FORMATLAMA ---
+      if (reportPhotoFile && visit) {
+        // Tarih formatı: YYYY-MM-DD
+        const formattedDate = new Date(visit.visit_date).toISOString().split('T')[0]; 
+        
+        // Müşteri ve Şube isimleri
+        const customerName = visit.customer.kisa_isim || visit.customer.name || 'Musteri';
+        const branchName = visit.branch?.sube_adi || 'Sube';
+        
+        // Dosya uzantısı
+        const fileExt = reportPhotoFile.name.split('.').pop();
+
+        // Yeni Dosya Adı: MUSTERI_SUBE_TARIH_RAPORNO.ext
+        const newFileName = `${sanitizeFileName(customerName)}_${sanitizeFileName(branchName)}_${formattedDate}_${reportNumber}.${fileExt}`;
+        
+        // Storage yolu (Klasör yapısını koruyarak)
+        const filePath = `report_photos/${newFileName}`;
+
+        // Yükleme
+        await supabase.storage.from('documents').upload(filePath, reportPhotoFile, { upsert: true });
+        
+        // URL Alma
+        const { data: urlData } = supabase.storage.from('documents').getPublicUrl(filePath);
+        uploadedPhotoUrl = urlData.publicUrl;
+        uploadedPhotoFilePath = filePath;
       } else if (reportPhotoPreview === null && visit?.report_photo_url) {
         uploadedPhotoUrl = null;
         uploadedPhotoFilePath = null;
       }
+      // ------------------------------------------------
 
-      // Notları birleştirme: Ücret bilgisi + Müşteri Açıklaması + Operatör Notları
-      // Not: Müşteri açıklaması için veritabanında ayrı sütun yoksa 'notes' alanına etiketle gömmek bir yöntemdir.
-      // Ancak profesyonel çözümde veritabanına 'customer_notes' sütunu eklemek gerekir. 
-      // Mevcut yapıyı bozmamak için hepsini 'notes' içine formatlı yazıyorum.
       let finalNotes = notes;
       
       if (explanation) {
@@ -689,7 +707,7 @@ const VisitDetails: React.FC = () => {
         equipment_checks: equipmentChecks,
         pest_types: selectedPestTypes,
         visit_type: selectedVisitTypes[0] || null, 
-        notes: finalNotes, // Güncellenen notlar
+        notes: finalNotes,
         report_number: reportNumber,
         status: 'completed',
         report_photo_url: uploadedPhotoUrl,
