@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Mail, Calendar, Users, Eye, Send, Loader2 as Loader, Building } from 'lucide-react';
-import { format, lastDayOfMonth } from 'date-fns';
+import { Mail, Calendar, Users, Eye, Send, Loader2 as Loader, Building, FileText } from 'lucide-react';
+import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 // Arayüz (Interface) tanımları
@@ -30,22 +30,29 @@ interface PaidMaterialSale {
 }
 
 interface Visit {
-  id: string; // Ziyaret ID'si eklendi
+  id: string;
   visit_date: string;
   report_number: string | null;
   branch: { sube_adi: string } | null;
   operator: { name: string } | null;
   paid_material_sales: PaidMaterialSale[];
-  report_photo_url?: string; // Rapor fotoğrafı URL'si eklendi
-  report_photo_access_password?: string; // ✅ YENİ: Rapor fotoğrafı şifresi eklendi
+  report_photo_url?: string;
+  report_photo_access_password?: string;
 }
 
 const AylikTakvimEposta: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]); // ✅ DÜZELTME: branches state'i tanımlandı
+  const [branches, setBranches] = useState<Branch[]>([]);
+  
+  // Form State'leri
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  
+  // Rapor Türü State'leri
+  const [reportType, setReportType] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
   const [visits, setVisits] = useState<Visit[]>([]);
   const [emailPreview, setEmailPreview] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -78,7 +85,7 @@ const AylikTakvimEposta: React.FC = () => {
   }, []);
 
   // E-posta içeriğini oluşturan fonksiyon
-  const generateEmailHtml = (customerName: string, monthName: string, year: number, scheduleVisits: Visit[]): string => {
+  const generateEmailHtml = (customerName: string, periodTitle: string, scheduleVisits: Visit[]): string => {
     const visitRows = scheduleVisits
       .sort((a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime())
       .map(visit => {
@@ -86,19 +93,19 @@ const AylikTakvimEposta: React.FC = () => {
           .map(item => `<li style="font-size: 12px; color: #555;">- ${item.quantity} x ${item.product.name}</li>`)
           .join('');
 
-        // ✅ DEĞİŞTİRİLDİ: Rapor fotoğrafı bağlantısı ve şifre bilgisi eklendi
         const reportPhotoLinkHtml = visit.report_photo_url ? 
-          `<a href="${window.location.origin}/view-report-protected/${visit.id}" target="_blank" style="color: #059669; text-decoration: none;">Görüntüle</a>` : 
+          `<a href="${window.location.origin}/view-report-protected/${visit.id}" target="_blank" style="color: #059669; text-decoration: none; font-weight: bold;">Görüntüle</a>` : 
           '-';
+        
         const reportPhotoPasswordHtml = visit.report_photo_access_password ? 
           `<br><span style="font-size: 10px; color: #888;">Şifre: <strong>${visit.report_photo_access_password}</strong></span>` : 
           '';
 
         return `
         <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #dddddd; vertical-align: top;">${format(new Date(visit.visit_date), "dd MMMM yyyy, EEEE", { locale: tr })}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #dddddd; vertical-align: top;">${format(new Date(visit.visit_date), "dd.MM.yyyy", { locale: tr })}</td>
           <td style="padding: 10px; border-bottom: 1px solid #dddddd; vertical-align: top;">
-            ${visit.branch?.sube_adi || 'Genel Merkez'}
+            <strong>${visit.branch?.sube_adi || 'Genel Merkez'}</strong>
             ${materialsHtml ? `<ul style="margin: 5px 0 0 0; padding-left: 15px;">${materialsHtml}</ul>` : ''}
           </td>
           <td style="padding: 10px; border-bottom: 1px solid #dddddd; vertical-align: top;">${visit.operator?.name || 'Atanmadı'}</td>
@@ -115,38 +122,44 @@ const AylikTakvimEposta: React.FC = () => {
       <html>
       <head>
         <style>
-          body { font-family: Arial, sans-serif; color: #333; }
-          .container { max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; }
-          .header { background-color: #059669; color: white; padding: 10px; text-align: center; }
-          .content { padding: 20px; }
-          table { width: 100%; border-collapse: collapse; }
-          th { background-color: #f2f2f2; text-align: left; padding: 10px; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; padding: 0; }
+          .container { max-width: 800px; margin: auto; border: 1px solid #eee; background-color: #ffffff; }
+          .header { background-color: #059669; color: white; padding: 20px; text-align: center; }
+          .content { padding: 30px 20px; }
+          table { width: 100%; border-collapse: collapse; font-size: 14px; }
+          th { background-color: #f8f9fa; text-align: left; padding: 12px; border-bottom: 2px solid #dee2e6; color: #495057; }
+          .footer { margin-top: 30px; font-size: 12px; color: #6c757d; border-top: 1px solid #eee; padding-top: 20px; text-align: center; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h2>Aylık Ziyaret Takvimi ve Raporu</h2>
+            <h2 style="margin:0;">Ziyaret ve Faaliyet Raporu</h2>
+            <p style="margin:5px 0 0 0; opacity: 0.9;">${periodTitle}</p>
           </div>
           <div class="content">
-            <p>Merhaba ${customerName},</p>
-            <p>${monthName} ${year} dönemi için ziyaret takviminiz ve malzeme kullanım raporunuz aşağıda bilgilerinize sunulmuştur.</p>
+            <p>Sayın <strong>${customerName}</strong> Yetkilisi,</p>
+            <p>${periodTitle} dönemine ait gerçekleştirilen ziyaretler ve malzeme kullanım detayları aşağıda sunulmuştur.</p>
+            <br/>
             <table>
               <thead>
                 <tr>
-                  <th>Tarih</th>
-                  <th>Şube & Kullanılan Malzemeler</th>
-                  <th>Sorumlu Operatör</th>
-                  <th>Rapor No</th>
-                  <th>Rapor Görüntüsü</th>
+                  <th style="width: 15%">Tarih</th>
+                  <th style="width: 35%">Şube & Malzemeler</th>
+                  <th style="width: 15%">Operatör</th>
+                  <th style="width: 15%">Rapor No</th>
+                  <th style="width: 20%">Rapor</th>
                 </tr>
               </thead>
               <tbody>
                 ${visitRows}
               </tbody>
             </table>
-            <p>Sağlıklı günler dileriz.</p>
-            <p><strong>Sistem İlaçlama Sanayi ve Ticaret Limited Şirketi / PestMentor. İlaclamatik.com Her Hakkı Saklıdır.</strong></p>
+            
+            <div class="footer">
+              <p>Bu e-posta otomatik olarak oluşturulmuştur.</p>
+              <p><strong>Sistem İlaçlama Sanayi ve Ticaret Limited Şirketi / PestMentor</strong><br/>www.ilaclamatik.com</p>
+            </div>
           </div>
         </div>
       </body>
@@ -162,17 +175,26 @@ const AylikTakvimEposta: React.FC = () => {
     }
     setIsPreviewing(true);
     try {
-      const [year, month] = selectedMonth.split('-').map(Number);
+      let startDate: Date;
+      let endDate: Date;
+      let periodTitle = '';
+
+      // TARİH ARALIĞI HESAPLAMA
+      if (reportType === 'monthly') {
+        const [year, month] = selectedMonth.split('-').map(Number);
+        startDate = new Date(year, month - 1, 1);
+        endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        periodTitle = `${format(startDate, 'MMMM yyyy', { locale: tr })} Ayı`;
+      } else {
+        startDate = new Date(selectedYear, 0, 1); // 1 Ocak
+        endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999); // 31 Aralık
+        periodTitle = `${selectedYear} Yılı Genel`;
+      }
       
-      // ✅ DÜZELTİLDİ: Tarih aralığını doğru şekilde hesapla
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999); // Ayın son günü, gece 23:59:59
-      
-      console.log('Tarih Aralığı:', {
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-        startLocal: startDate.toLocaleDateString('tr-TR'),
-        endLocal: endDate.toLocaleDateString('tr-TR')
+      console.log('Rapor Aralığı:', {
+        start: startDate.toLocaleString('tr-TR'),
+        end: endDate.toLocaleString('tr-TR'),
+        type: reportType
       });
 
       let query = supabase
@@ -204,11 +226,6 @@ const AylikTakvimEposta: React.FC = () => {
 
       if (error) throw error;
       
-      console.log('Çekilen ziyaretler:', data?.map(v => ({
-        date: v.visit_date,
-        formatted: format(new Date(v.visit_date), 'dd/MM/yyyy HH:mm')
-      })));
-      
       const fetchedVisits = data as Visit[] || [];
 
       // Rapor fotoğraflarını ve şifrelerini çek
@@ -218,7 +235,7 @@ const AylikTakvimEposta: React.FC = () => {
       if (visitIds.length > 0) {
           const { data: documentsData, error: documentsError } = await supabase
               .from('documents')
-              .select('entity_id, file_url, access_password') // ✅ DEĞİŞTİRİLDİ: access_password çekildi
+              .select('entity_id, file_url, access_password')
               .eq('entity_type', 'visit')
               .eq('document_type', 'report_photo')
               .in('entity_id', visitIds);
@@ -234,25 +251,24 @@ const AylikTakvimEposta: React.FC = () => {
           }
       }
 
-      // Ziyaret verilerini rapor fotoğrafı URL'leri ve şifreleri ile zenginleştir
+      // Ziyaret verilerini zenginleştir
       const visitsWithPhotos = fetchedVisits.map(visit => ({
           ...visit,
           report_photo_url: reportPhotosMap.get(visit.id)?.url || undefined,
-          report_photo_access_password: reportPhotosMap.get(visit.id)?.password || undefined, // ✅ YENİ: Şifre eklendi
+          report_photo_access_password: reportPhotosMap.get(visit.id)?.password || undefined,
       }));
 
-      setVisits(visitsWithPhotos); // setSales yerine setVisits kullanıldı
+      setVisits(visitsWithPhotos);
 
       const customer = customers.find(c => c.id === selectedCustomer);
-      const monthName = format(startDate, 'MMMM', { locale: tr });
       
       if (visitsWithPhotos && visitsWithPhotos.length > 0) {
-        const html = generateEmailHtml(customer?.kisa_isim || '', monthName, year, visitsWithPhotos);
+        const html = generateEmailHtml(customer?.kisa_isim || '', periodTitle, visitsWithPhotos);
         setEmailPreview(html);
-        toast.success(`E-posta önizlemesi başarıyla oluşturuldu. ${visitsWithPhotos.length} ziyaret bulundu.`);
+        toast.success(`E-posta önizlemesi hazır. ${visitsWithPhotos.length} kayıt listelendi.`);
       } else {
         setEmailPreview('');
-        toast.info('Seçili kriterler için planlanmış ziyaret bulunamadı.');
+        toast.info('Seçili kriterler için kayıt bulunamadı.');
       }
     } catch (error: any) {
       console.error('Önizleme hatası:', error);
@@ -264,20 +280,19 @@ const AylikTakvimEposta: React.FC = () => {
 
   // E-posta gönderme
   const handleSendEmail = async () => {
-    if (!emailPreview) {
-      toast.error('Lütfen önce bir önizleme oluşturun.');
-      return;
-    }
-    if (!recipientEmail) {
-      toast.error('Lütfen geçerli bir alıcı e-posta adresi girin.');
-      return;
-    }
+    if (!emailPreview) return toast.error('Lütfen önce bir önizleme oluşturun.');
+    if (!recipientEmail) return toast.error('Lütfen alıcı e-posta adresi girin.');
 
     setIsSending(true);
     try {
-      const [year, month] = selectedMonth.split('-').map(Number);
-      const monthName = format(new Date(year, month - 1, 1), 'MMMM', { locale: tr });
-      const subject = `${monthName} ${year} Aylık Ziyaret ve Malzeme Raporu`;
+      let subject = '';
+      if (reportType === 'monthly') {
+        const [year, month] = selectedMonth.split('-').map(Number);
+        const monthName = format(new Date(year, month - 1, 1), 'MMMM', { locale: tr });
+        subject = `${monthName} ${year} Ziyaret Raporu - PestMentor`;
+      } else {
+        subject = `${selectedYear} Yılı Genel Faaliyet Raporu - PestMentor`;
+      }
 
       const { error } = await supabase.functions.invoke('send-schedule-email', {
         body: {
@@ -289,9 +304,9 @@ const AylikTakvimEposta: React.FC = () => {
 
       if (error) throw error;
 
-      toast.success(`E-posta başarıyla ${recipientEmail} adresine gönderildi!`);
+      toast.success(`Rapor başarıyla gönderildi! (${recipientEmail})`);
     } catch (error: any) {
-      toast.error('E-posta gönderilirken bir hata oluştu: ' + error.message);
+      toast.error('E-posta gönderim hatası: ' + error.message);
     } finally {
       setIsSending(false);
     }
@@ -300,29 +315,33 @@ const AylikTakvimEposta: React.FC = () => {
   const handleCustomerChange = (customerId: string) => {
     setSelectedCustomer(customerId);
     const customer = customers.find(c => c.id === customerId);
-    setSelectedCustomerEmail(customer?.email || '');
+    setRecipientEmail(customer?.email || '');
     setEmailPreview('');
-    setSelectedBranch('all'); // Müşteri değiştiğinde şube filtresini sıfırla
+    setSelectedBranch('all');
   };
 
-  // Seçili müşteriye ait şubeleri filtreleyen useMemo
   const filteredBranches = useMemo(() => {
     if (!selectedCustomer) return [];
     return branches.filter(b => b.customer_id === selectedCustomer);
   }, [selectedCustomer, branches]);
+
+  // Yıl seçenekleri (Geçmiş 5 yıl + Gelecek 1 yıl)
+  const yearOptions = Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 5 + i).reverse();
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Mail className="w-8 h-8 text-blue-600" />
-          <h1 className="text-3xl font-bold text-gray-800">Aylık Rapor Gönder</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Rapor Gönder (Aylık/Yıllık)</h1>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Kontrol Paneli */}
         <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md space-y-6">
+          
+          {/* Müşteri Seçimi */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
               <Users size={16}/> Müşteri Seçimi
@@ -330,7 +349,7 @@ const AylikTakvimEposta: React.FC = () => {
             <select
               value={selectedCustomer}
               onChange={e => handleCustomerChange(e.target.value)}
-              className="w-full p-2 border rounded-lg bg-white"
+              className="w-full p-2 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none"
               disabled={loading}
             >
               <option value="" disabled>Müşteri Seçin...</option>
@@ -338,7 +357,7 @@ const AylikTakvimEposta: React.FC = () => {
             </select>
           </div>
           
-          {/* Şube seçim alanı */}
+          {/* Şube Seçimi */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
               <Building size={16}/> Şube Seçimi
@@ -346,7 +365,7 @@ const AylikTakvimEposta: React.FC = () => {
             <select
               value={selectedBranch}
               onChange={e => setSelectedBranch(e.target.value)}
-              className="w-full p-2 border rounded-lg bg-white disabled:bg-gray-100"
+              className="w-full p-2 border rounded-lg bg-white disabled:bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
               disabled={!selectedCustomer}
             >
               <option value="all">Tüm Şubeler</option>
@@ -354,6 +373,7 @@ const AylikTakvimEposta: React.FC = () => {
             </select>
           </div>
           
+          {/* Gönderilecek Adres */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
               <Mail size={16}/> Gönderilecek Adres
@@ -364,36 +384,78 @@ const AylikTakvimEposta: React.FC = () => {
               onChange={e => setRecipientEmail(e.target.value)}
               placeholder="gonderilecek@adres.com"
               disabled={!selectedCustomer}
-              className="w-full p-2 border rounded-lg bg-white disabled:bg-gray-100"
+              className="w-full p-2 border rounded-lg bg-white disabled:bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-              <Calendar size={16}/> Dönem Seçimi
+          {/* Rapor Türü ve Dönem Seçimi */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <Calendar size={16}/> Rapor Dönemi
             </label>
-            <input 
-              type="month" 
-              value={selectedMonth} 
-              onChange={e => setSelectedMonth(e.target.value)} 
-              className="w-full p-2 border rounded-lg" 
-            />
+            
+            {/* Radio Butonlar */}
+            <div className="flex gap-4 mb-4">
+                <label className="flex items-center cursor-pointer">
+                    <input 
+                        type="radio" 
+                        name="reportType" 
+                        value="monthly" 
+                        checked={reportType === 'monthly'} 
+                        onChange={() => setReportType('monthly')}
+                        className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Aylık Rapor</span>
+                </label>
+                <label className="flex items-center cursor-pointer">
+                    <input 
+                        type="radio" 
+                        name="reportType" 
+                        value="yearly" 
+                        checked={reportType === 'yearly'} 
+                        onChange={() => setReportType('yearly')}
+                        className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Yıllık Rapor</span>
+                </label>
+            </div>
+
+            {/* Tarih Seçiciler */}
+            {reportType === 'monthly' ? (
+                <input 
+                  type="month" 
+                  value={selectedMonth} 
+                  onChange={e => setSelectedMonth(e.target.value)} 
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                />
+            ) : (
+                <select 
+                    value={selectedYear} 
+                    onChange={e => setSelectedYear(parseInt(e.target.value))}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                    {yearOptions.map(year => (
+                        <option key={year} value={year}>{year} Yılı</option>
+                    ))}
+                </select>
+            )}
           </div>
           
-          <div className="space-y-3">
+          {/* Butonlar */}
+          <div className="space-y-3 pt-2">
             <button 
               onClick={handleGeneratePreview} 
               disabled={isPreviewing || !selectedCustomer} 
-              className="w-full flex items-center justify-center gap-2 p-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+              className="w-full flex items-center justify-center gap-2 p-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors shadow-sm"
             >
               {isPreviewing ? <Loader className="animate-spin" /> : <Eye />}
-              {isPreviewing ? 'Oluşturuluyor...' : 'Önizleme Oluştur'}
+              {isPreviewing ? 'Hazırlanıyor...' : 'Raporu Önizle'}
             </button>
             
             <button 
               onClick={handleSendEmail} 
               disabled={isSending || !emailPreview} 
-              className="w-full flex items-center justify-center gap-2 p-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors"
+              className="w-full flex items-center justify-center gap-2 p-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors shadow-sm"
             >
               {isSending ? <Loader className="animate-spin" /> : <Send />}
               {isSending ? 'Gönderiliyor...' : 'E-postayı Gönder'}
@@ -402,9 +464,20 @@ const AylikTakvimEposta: React.FC = () => {
         </div>
 
         {/* E-posta Önizleme */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-md">
-            <h3 className="text-lg font-semibold mb-4">E-posta Önizlemesi</h3>
-            <div className="border rounded-lg h-[60vh] overflow-hidden">
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-md flex flex-col h-[800px]">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <FileText className="text-gray-500" />
+                    Rapor Önizlemesi
+                </h3>
+                {emailPreview && (
+                    <span className="text-xs font-medium px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                        Hazır
+                    </span>
+                )}
+            </div>
+            
+            <div className="border rounded-lg flex-grow overflow-hidden bg-gray-50">
                 {emailPreview ? (
                     <iframe
                         srcDoc={emailPreview}
@@ -412,8 +485,9 @@ const AylikTakvimEposta: React.FC = () => {
                         className="w-full h-full border-0"
                     />
                 ) : (
-                    <div className="flex items-center justify-center h-full bg-gray-50 text-gray-500">
-                        <p>Lütfen bir müşteri ve dönem seçip önizleme oluşturun.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                        <FileText size={48} className="mb-2 opacity-20" />
+                        <p>Lütfen sol taraftan kriterleri seçip "Raporu Önizle" butonuna basın.</p>
                     </div>
                 )}
             </div>
