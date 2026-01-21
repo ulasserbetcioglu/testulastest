@@ -1,13 +1,13 @@
-// src/pages/OperatorDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Bug, Users, FileText, Calendar, DollarSign, TrendingUp, TrendingDown, Loader2, MapPin, Building } from 'lucide-react';
+import { Bug, Users, FileText, Calendar, DollarSign, TrendingUp, TrendingDown, MapPin, Building, BellRing, BellOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, startOfWeek, isSameDay } from 'date-fns'; // isSameDay ve startOfWeek eklendi
-import { tr } from 'date-fns/locale'; // Düzeltilen satır
-import { toast } from 'sonner'; // Yeni ikonlar
-import { BellRing, BellOff } from 'lucide-react';
-import GoogleReviewPopup from '../components/Operator/GoogleReviewPopup'; // ✅ YENİ: GoogleReviewPopup import edildi
+import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, startOfWeek, isSameDay } from 'date-fns';
+import { tr } from 'date-fns/locale';
+import { toast } from 'sonner';
+import GoogleReviewPopup from '../components/Operator/GoogleReviewPopup';
+// DİKKAT: 2. attığınız Modal yerine 1. attığınız (Zorunlu) Modal import edildi
+import MandatoryWeeklyKmModal from '../components/Operator/MandatoryWeeklyKmModal';
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface StatCardProps {
@@ -75,17 +75,19 @@ const StatCardSkeleton: React.FC = () => (
 
 const OperatorDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true); // Corrected line
+  const [loading, setLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState<'thisMonth' | 'lastMonth' | 'thisYear'>('thisMonth');
   const [welcomeMessage, setWelcomeMessage] = useState('');
-  const [operatorId, setOperatorId] = useState<string | null>(null); // Operatör ID'si için state
-  const [isPushEnabled, setIsPushEnabled] = useState(false); // Push bildirim durumu
-  const [vapidPublicKey, setVapidPublicKey] = useState(''); // VAPID genel anahtarı
-
-  // ✅ YENİ STATE'LER
+  const [operatorId, setOperatorId] = useState<string | null>(null);
+  const [operatorName, setOperatorName] = useState<string>(''); // Modal için isim gerekli
+  const [isPushEnabled, setIsPushEnabled] = useState(false);
+  const [vapidPublicKey, setVapidPublicKey] = useState('');
+  
+  // Modal Kontrolü
   const [showWeeklyKmModal, setShowWeeklyKmModal] = useState(false);
-  const [isWeeklyKmMandatory, setIsWeeklyKmMandatory] = useState(false);
-  const [showReviewPopup, setShowReviewPopup] = useState(false); // ✅ YENİ: Google Review Popup state'i
+
+  // Google Review Popup state'i
+  const [showReviewPopup, setShowReviewPopup] = useState(false);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -94,7 +96,7 @@ const OperatorDashboard: React.FC = () => {
     else setWelcomeMessage('İyi akşamlar');
   }, []);
 
-  // Operatör ID'sini çek
+  // Operatör ID ve İsmini Çek
   useEffect(() => {
     const fetchOperatorId = async () => {
       try {
@@ -102,14 +104,12 @@ const OperatorDashboard: React.FC = () => {
         if (user) {
           const { data: opData, error: opError } = await supabase
             .from('operators')
-            .select('id')
+            .select('id, name') // name eklendi
             .eq('auth_id', user.id)
             .single();
           if (opError) throw opError;
           setOperatorId(opData.id);
-          console.log('Operator ID fetched in Dashboard:', opData.id); // LOG
-        } else {
-          console.log('Kullanıcı oturumu bulunamadı.'); // LOG
+          setOperatorName(opData.name || '');
         }
       } catch (err) {
         console.error("Operatör ID çekilirken hata:", err);
@@ -119,44 +119,80 @@ const OperatorDashboard: React.FC = () => {
     fetchOperatorId();
   }, []);
 
-  // VAPID genel anahtarını ve push abonelik durumunu çek
+  // VAPID
   useEffect(() => {
     const fetchVapidKeyAndSubscriptionStatus = async () => {
-      if (!operatorId) {
-        console.log('VAPID anahtarı ve abonelik durumu çekilemiyor: operatorId null.'); // LOG
-        return; // Operatör ID'si yoksa devam etme
-      }
+      if (!operatorId) return;
 
       try {
-        // VAPID genel anahtarını Supabase ortam değişkenlerinden çekin (bu bir Edge Function veya API çağrısı gerektirebilir)
-        // Şimdilik doğrudan buraya yazalım, ancak güvenli bir uygulamada bu anahtar sunucudan gelmelidir.
-        const publicVapidKey = 'BIyT6ZxE86Xj6uwaG30GDN6zDg0fz2sGHQRbLrCKc9fuP2fKxvxJwPCtpHO6j0pj3z2HyDwuNgfGq-pgKPCXNwo'; // BURAYI KENDİ VAPID GENEL ANAHTARINIZLA DEĞİŞTİRİN
+        const publicVapidKey = 'BIyT6ZxE86Xj6uwaG30GDN6zDg0fz2sGHQRbLrCKc9fuP2fKxvxJwPCtpHO6j0pj3z2HyDwuNgfGq-pgKPCXNwo';
         setVapidPublicKey(publicVapidKey);
-        console.log('VAPID Public Key ayarlandı.'); // LOG
 
         if ('serviceWorker' in navigator && 'PushManager' in window) {
           const registration = await navigator.serviceWorker.ready;
-          console.log('Service Worker hazır:', registration); // LOG
           const subscription = await registration.pushManager.getSubscription();
-          console.log('Mevcut abonelik:', subscription); // LOG
           setIsPushEnabled(!!subscription);
-        } else {
-          console.log('Tarayıcı Service Worker veya PushManager desteklemiyor.'); // LOG
         }
       } catch (err) {
-        console.error("VAPID anahtarı veya abonelik durumu çekilirken hata:", err);
+        console.error("VAPID anahtarı hata:", err);
       }
     };
     fetchVapidKeyAndSubscriptionStatus();
-  }, [operatorId]); // operatorId değiştiğinde tekrar çalıştır
+  }, [operatorId]);
 
+  // ✅ KM Giriş Zorunluluk Kontrolü
+  useEffect(() => {
+    const checkWeeklyKmEntry = async () => {
+      if (!operatorId) return;
 
+      try {
+        const { data: vehicles, error } = await supabase
+          .from('vehicles')
+          .select('id, updated_at')
+          .eq('operator_id', operatorId)
+          .eq('status', 'active');
+
+        if (error) throw error;
+
+        const today = new Date();
+        const startOfThisWeek = startOfWeek(today, { weekStartsOn: 1 }); // Pazartesi
+
+        let kmEntryMadeThisWeek = false;
+        if (vehicles && vehicles.length > 0) {
+          for (const vehicle of vehicles) {
+            if (vehicle.updated_at) {
+              const lastUpdateDate = new Date(vehicle.updated_at);
+              if (lastUpdateDate >= startOfThisWeek) {
+                kmEntryMadeThisWeek = true;
+                break;
+              }
+            }
+          }
+        }
+
+        const isMonday = isSameDay(today, startOfThisWeek);
+        
+        // Eğer bugün Pazartesi ise ve bu hafta giriş yapılmadıysa ZORUNLU MODALI AÇ
+        if (!kmEntryMadeThisWeek && isMonday) {
+          setShowWeeklyKmModal(true);
+        } else {
+          setShowWeeklyKmModal(false);
+        }
+
+      } catch (err) {
+        console.error("Haftalık KM girişi kontrol edilirken hata:", err);
+      }
+    };
+
+    if (operatorId) {
+      checkWeeklyKmEntry();
+    }
+  }, [operatorId]);
+
+  // Dashboard İstatistikleri
   useEffect(() => {
     const fetchDashboardStats = async () => {
-      if (!operatorId) {
-        console.log('Dashboard istatistikleri çekilemiyor: operatorId null.'); // LOG
-        return; // Operatör ID'si yoksa istatistikleri çekme
-      }
+      if (!operatorId) return;
 
       setLoading(true);
       
@@ -187,14 +223,14 @@ const OperatorDashboard: React.FC = () => {
           yearlyRevenueRes,
         ] = await Promise.all([
           supabase.from('visits').select('id, visit_date', { count: 'exact' }).eq('operator_id', operatorId).gte('visit_date', start.toISOString()).lte('visit_date', end.toISOString()),
-          supabase.from('customers').select('id', { count: 'exact' }), // Operatöre atanmış müşteriler için filtreleme gerekebilir
-          supabase.from('offers').select('id', { count: 'exact' }).eq('status', 'pending'), // Operatöre atanmış teklifler için filtreleme gerekebilir
+          supabase.from('customers').select('id', { count: 'exact' }),
+          supabase.from('offers').select('id', { count: 'exact' }).eq('status', 'pending'),
           supabase.from('visits').select('id', { count: 'exact' }).eq('operator_id', operatorId).eq('status', 'planned').gte('visit_date', today.toISOString()).lte('visit_date', next7Days.toISOString()),
-          supabase.from('branches').select('id', { count: 'exact' }), // Operatöre atanmış şubeler için filtreleme gerekebilir
-          supabase.from('offers').select('total_amount').eq('status', 'accepted').gte('created_at', start.toISOString()).lte('created_at', end.toISOString()), // Operatöre atanmış teklifler için filtreleme gerekebilir
+          supabase.from('branches').select('id', { count: 'exact' }),
+          supabase.from('offers').select('total_amount').eq('status', 'accepted').gte('created_at', start.toISOString()).lte('created_at', end.toISOString()),
           supabase.from('visits').select(`id, visit_date, status, customer:customer_id(kisa_isim), operator:operator_id(name)`).eq('operator_id', operatorId).order('visit_date', { ascending: false }).limit(5),
-          supabase.from('customers').select('sehir').not('sehir', 'is', null), // Operatöre atanmış müşteriler için filtreleme gerekebilir
-          supabase.from('offers').select('total_amount').eq('status', 'accepted').gte('created_at', startOfYear(today).toISOString()).lte('created_at', endOfYear(today).toISOString()), // Operatöre atanmış teklifler için filtreleme gerekebilir
+          supabase.from('customers').select('sehir').not('sehir', 'is', null),
+          supabase.from('offers').select('total_amount').eq('status', 'accepted').gte('created_at', startOfYear(today).toISOString()).lte('created_at', endOfYear(today).toISOString()),
         ]);
 
         const errors = [visitsRes.error, customersRes.error, offersRes.error, plannedVisitsRes.error, branchesRes.error, revenueRes.error, recentTreatmentsRes.error, citiesRes.error, yearlyRevenueRes.error];
@@ -233,55 +269,39 @@ const OperatorDashboard: React.FC = () => {
     };
     
     fetchDashboardStats();
-  }, [timePeriod, operatorId]); // operatorId değiştiğinde istatistikleri tekrar çek
+  }, [timePeriod, operatorId]);
 
-  // Push bildirimlerini açma/kapatma
+  // Push Bildirim
   const togglePushNotifications = async () => {
-    console.log('togglePushNotifications çağrıldı. Mevcut isPushEnabled:', isPushEnabled); // LOG
     if (!('serviceWorker' in navigator && 'PushManager' in window)) {
       toast.error('Tarayıcınız push bildirimlerini desteklemiyor.');
-      console.error('Tarayıcı Service Worker veya PushManager desteklemiyor.'); // LOG
       return;
     }
     if (!operatorId) {
-      toast.error('Operatör bilgisi yüklenemedi. Lütfen sayfayı yenileyin.');
-      console.error('Operatör ID null, bildirim ayarı yapılamıyor.'); // LOG
+      toast.error('Operatör bilgisi yüklenemedi.');
       return;
     }
 
     setLoading(true);
     try {
       const registration = await navigator.serviceWorker.ready;
-      console.log('Service Worker hazır:', registration); // LOG
 
       if (isPushEnabled) {
-        console.log('Mevcut abonelik iptal ediliyor...'); // LOG
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
           const unsubscribed = await subscription.unsubscribe();
-          console.log('Abonelik tarayıcıdan kaldırıldı (unsubscribed):', unsubscribed); // LOG
           if (unsubscribed) {
-            const { error: dbError } = await supabase.from('operator_push_subscriptions').delete().eq('operator_id', operatorId);
-            if (dbError) {
-              console.error('Abonelik veritabanından silinirken hata:', dbError); // LOG
-              throw dbError;
-            }
-            console.log('Abonelik veritabanından silindi.'); // LOG
+            await supabase.from('operator_push_subscriptions').delete().eq('operator_id', operatorId);
             toast.success('Bildirimler kapatıldı.');
             setIsPushEnabled(false);
           } else {
             toast.error('Abonelikten çıkılamadı.');
-            console.error('Abonelikten çıkma işlemi başarısız oldu.'); // LOG
           }
         } else {
-          toast.info('Bildirimler zaten kapalı.');
-          setIsPushEnabled(false); // Zaten kapalıysa durumu güncelle
-          console.log('Mevcut abonelik bulunamadı, durum zaten kapalı.'); // LOG
+          setIsPushEnabled(false);
         }
       } else {
-        console.log('Yeni abonelik oluşturuluyor...'); // LOG
         const permission = await Notification.requestPermission();
-        console.log('Bildirim izni:', permission); // LOG
         if (permission !== 'granted') {
           toast.error('Bildirim izni verilmedi.');
           setLoading(false);
@@ -292,45 +312,30 @@ const OperatorDashboard: React.FC = () => {
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
-        console.log('Yeni abonelik objesi:', subscription); // LOG
 
-        const { data: upsertData, error: dbError } = await supabase.from('operator_push_subscriptions').upsert({
+        await supabase.from('operator_push_subscriptions').upsert({
           operator_id: operatorId,
           endpoint: subscription.endpoint,
-          p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')!))), // ! ekledim
-          auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')!))), // ! ekledim
-        }, { onConflict: 'operator_id' }); // onConflict ekledim
+          p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')!))),
+          auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')!))),
+        }, { onConflict: 'operator_id' });
 
-        if (dbError) {
-          console.error('Veritabanına kaydederken hata:', dbError); // LOG
-          throw dbError;
-        }
-        console.log('Abonelik veritabanına kaydedildi:', upsertData); // LOG
         toast.success('Bildirimler açıldı.');
         setIsPushEnabled(true);
       }
     } catch (err: any) {
-      console.error('Bildirim ayarlanırken hata:', err); // LOG
       toast.error(`Bildirim ayarlanırken hata: ${err.message}`);
     } finally {
       setLoading(false);
-      console.log('togglePushNotifications işlemi tamamlandı.'); // LOG
     }
   };
 
-  // urlBase64ToUint8Array yardımcı fonksiyonu
   const urlBase64ToUint8Array = (base64String: string) => {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-      .replace(/\-/g, '+')
-      .replace(/_/g, '/');
-
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
-
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
     return outputArray;
   };
 
@@ -364,10 +369,10 @@ const OperatorDashboard: React.FC = () => {
             <StatCard title="Aktif Konum" value={stats.activeLocations} icon={<MapPin size={24} />} change="Farklı şehir sayısı" />
           </div>
 
-          {/* Bildirim Ayarları Bölümü */}
-          <div className="mb-8 bg-white p-4 sm:p-6 rounded-2xl shadow-lg flex items-center justify-between">
+          {/* Bildirim ve Google Yorum Bölümü */}
+          <div className="mb-8 bg-white p-4 sm:p-6 rounded-2xl shadow-lg flex items-center justify-between mt-6">
             <div>
-              <h2 className="text-xl font-semibold text-gray-700 mb-2">Bildirim Ayarları</h2>
+              <h2 className="text-xl font-semibold text-gray-700 mb-2">Ayarlar & İşlemler</h2>
               <p className="text-gray-500 font-medium flex items-center">
                 {isPushEnabled ? (
                   <>
@@ -380,7 +385,7 @@ const OperatorDashboard: React.FC = () => {
                 )}
               </p>
             </div>
-            <div className="flex gap-2"> {/* Added a div for button grouping */}
+            <div className="flex gap-2">
               <button
                 onClick={togglePushNotifications}
                 disabled={loading}
@@ -390,7 +395,7 @@ const OperatorDashboard: React.FC = () => {
               >
                 {loading ? 'Ayarlanıyor...' : (isPushEnabled ? 'Bildirimleri Kapat' : 'Bildirimleri Aç')}
               </button>
-              {/* ✅ YENİ: Google Review Pop-up butonu */}
+              
               <button
                 onClick={() => setShowReviewPopup(true)}
                 className="px-6 py-3 rounded-lg font-bold text-white transition-colors bg-yellow-500 hover:bg-yellow-600"
@@ -440,18 +445,17 @@ const OperatorDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ YENİ: Haftalık KM Giriş Modalı */}
-      {operatorId && ( // operatorId mevcutsa modalı render et
-        <WeeklyKmEntryModal
+      {/* ✅ ZORUNLU KM GİRİŞİ MODALI */}
+      {operatorId && showWeeklyKmModal && (
+        <MandatoryWeeklyKmModal
           isOpen={showWeeklyKmModal}
-          onClose={() => setShowWeeklyKmModal(false)}
-          onSuccess={() => setShowWeeklyKmModal(false)} // Başarılı gönderimde modalı kapat
-          isMandatory={isWeeklyKmMandatory}
           operatorId={operatorId}
+          operatorName={operatorName} // Operatör adını prop olarak geçiyoruz
+          onSuccess={() => setShowWeeklyKmModal(false)}
         />
       )}
 
-      {/* ✅ YENİ: Google Review Pop-up */}
+      {/* Google Review Pop-up */}
       {showReviewPopup && (
         <GoogleReviewPopup
           isOpen={showReviewPopup}
@@ -463,4 +467,3 @@ const OperatorDashboard: React.FC = () => {
 };
 
 export default OperatorDashboard;
-
