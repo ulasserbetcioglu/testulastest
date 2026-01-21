@@ -326,6 +326,7 @@ function App() {
             <Route path="depolar" element={<Warehouses />} />
             <Route path="depolar/transfer" element={<WarehouseTransfers />} />
             <Route path="ucretli-malzemeler" element={<PaidMaterialSales />} />
+            <Route path="km-takip" element={<AdminWeeklyKmTracking />} />
             <Route path="gelir-yonetimi" element={<AdminRevenue />} />
             <Route path="dokumanlar" element={<Documents />} />
             <Route path="sertifikalar" element={<Certificates />} />
