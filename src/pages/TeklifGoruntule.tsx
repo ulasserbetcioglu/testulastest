@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Info, Bug, CalendarCheck, Phone } from 'lucide-react';
+import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Info, Bug } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -36,7 +36,7 @@ interface CompanySettings {
     email: string;
     phone: string;
     footer_text: string;
-    about_text?: string; // Yeni: Hakkımızda metni
+    about_text?: string;
 }
 
 const TeklifGoruntule: React.FC = () => {
@@ -237,13 +237,16 @@ const TeklifGoruntule: React.FC = () => {
             
             <div className="py-8 px-4 print:p-0">
                 {/* TEKLİF KAĞIDI */}
-                <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none print:w-full rounded-sm overflow-hidden" style={{ minHeight: '297mm' }}>
-                    <div ref={proposalRef} className="relative w-full h-full flex flex-col bg-white">
+                <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none print:w-full rounded-sm overflow-hidden">
+                    
+                    {/* proposalRef doğrudan A4 boyutunu ve flex yapısını yöneten dive verilmeli */}
+                    <div ref={proposalRef} className="relative w-full flex flex-col bg-white" style={{ minHeight: '297mm' }}>
                         
                         {/* 1. HEADER STRIP */}
-                        <div style={{ height: '12px', width: '100%', backgroundColor: primaryColor }}></div>
+                        <div style={{ height: '12px', width: '100%', backgroundColor: primaryColor, flexShrink: 0 }}></div>
 
-                        <div style={{ padding: '40px 50px' }}>
+                        {/* MAIN CONTENT - flexGrow: 1 sayesinde içeriği doldurur ve footer'ı aşağı iter */}
+                        <div style={{ padding: '40px 50px', flexGrow: 1 }}>
                             
                             {/* 2. LOGO & BAŞLIK */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
@@ -332,7 +335,7 @@ const TeklifGoruntule: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* 6. FİRMA BİLGİLERİ & GARANTİLER (YENİ BÖLÜM) */}
+                            {/* 6. FİRMA BİLGİLERİ & GARANTİLER */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                                 
                                 {/* Sol: Hakkımızda */}
@@ -341,11 +344,11 @@ const TeklifGoruntule: React.FC = () => {
                                         <Info size={12} /> HAKKIMIZDA
                                     </h4>
                                     <p style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.5' }}>
-                                        {companySettings?.about_text || 'Sistem İlaçlama San.Tic.Ltd.Şti. olarak 1992 yılından beri sektörde öncü konumdayız. Sağlık Bakanlığı onaylı ürünlerimiz ve uzman kadromuzla %100 müşteri memnuniyeti odaklı çalışıyoruz.'}
+                                        {companySettings?.about_text || 'İlaçlamatik olarak sektörde öncü konumdayız. Sağlık Bakanlığı onaylı ürünlerimiz ve uzman kadromuzla %100 müşteri memnuniyeti odaklı çalışıyoruz.'}
                                     </p>
                                 </div>
 
-                                {/* Sağ: Hizmet Kalitesi */}
+                                {/* Sağ: Hizmet Garantisi */}
                                 <div style={{ padding: '15px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
                                     <h4 style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <Shield size={12} /> GARANTİMİZ
@@ -359,7 +362,7 @@ const TeklifGoruntule: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* 7. HEDEF ZARARLILAR (YENİ BÖLÜM) */}
+                            {/* 7. HEDEF ZARARLILAR */}
                             <div style={{ marginBottom: '30px' }}>
                                 <h4 style={{ fontSize: '11px', fontWeight: '700', color: primaryColor, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: `1px solid ${lightBorder}`, paddingBottom: '5px' }}>
                                     <Bug size={12} /> HEDEF ZARARLILAR
@@ -373,18 +376,20 @@ const TeklifGoruntule: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* 8. FOOTER */}
-                            <div style={{ paddingTop: '15px', borderTop: `1px solid ${lightBorder}`, textAlign: 'center', color: '#9ca3af', fontSize: '9px' }}>
+                        </div>
+                        
+                        {/* 8. FOOTER - En alta sabitlenmiş alan */}
+                        <div style={{ padding: '0 50px 20px 50px', textAlign: 'center', color: '#9ca3af', fontSize: '9px', flexShrink: 0 }}>
+                            <div style={{ borderTop: `1px solid ${lightBorder}`, paddingTop: '15px' }}>
                                 <p style={{ fontStyle: 'italic', marginBottom: '4px' }}>
                                     {companySettings?.footer_text || 'Bu teklif bilgisayar ortamında oluşturulmuştur. Onaylanması durumunda sözleşme yerine geçer.'}
                                 </p>
                                 <p>Sayfa 1 / 1</p>
                             </div>
-
                         </div>
-                        
+
                         {/* Alt Şerit */}
-                        <div style={{ marginTop: 'auto', height: '8px', width: '100%', backgroundColor: '#f3f4f6', borderTop: `1px solid ${lightBorder}` }}></div>
+                        <div style={{ height: '8px', width: '100%', backgroundColor: '#f3f4f6', borderTop: `1px solid ${lightBorder}`, flexShrink: 0 }}></div>
                     </div>
                 </div>
 
