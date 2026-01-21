@@ -341,11 +341,11 @@ const TeklifGoruntule: React.FC = () => {
                                         <Info size={12} /> HAKKIMIZDA
                                     </h4>
                                     <p style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.5' }}>
-                                        {companySettings?.about_text || 'İlaçlamatik olarak 2010 yılından beri sektörde öncü konumdayız. Sağlık Bakanlığı onaylı ürünlerimiz ve uzman kadromuzla %100 müşteri memnuniyeti odaklı çalışıyoruz.'}
+                                        {companySettings?.about_text || 'Sistem İlaçlama San.Tic.Ltd.Şti. olarak 1992 yılından beri sektörde öncü konumdayız. Sağlık Bakanlığı onaylı ürünlerimiz ve uzman kadromuzla %100 müşteri memnuniyeti odaklı çalışıyoruz.'}
                                     </p>
                                 </div>
 
-                                {/* Sağ: Hizmet Garantisi */}
+                                {/* Sağ: Hizmet Kalitesi */}
                                 <div style={{ padding: '15px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
                                     <h4 style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <Shield size={12} /> GARANTİMİZ
