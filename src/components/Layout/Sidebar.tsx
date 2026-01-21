@@ -56,7 +56,7 @@ const menuCategories = [
       { name: 'Mesai Çizelgeleri', path: '/admin/mesai-cizelgeleri', icon: <ClockIcon size={20} /> },
       { name: 'İzin Yönetimi', path: '/admin/operator-leaves', icon: <Calendar size={20} /> },
       { name: 'Araç Yönetimi', path: '/admin/vehicles', icon: <Car size={20} /> },
-      { name: 'KM TAKİP',path: '/admin/km-takip', icon: <Car size={20} />, },
+      { name: 'KM TAKİP',path: '/admin/km-takip', icon: <Car size={20} /> },
     ]
   },
   {
