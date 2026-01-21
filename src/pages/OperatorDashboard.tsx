@@ -84,7 +84,6 @@ const OperatorDashboard: React.FC = () => {
   const [vapidPublicKey, setVapidPublicKey] = useState(''); // VAPID genel anahtarı
 
   // ✅ YENİ STATE'LER
-  const [showWeeklyKmModal, setShowWeeklyKmModal] = useState(false);
   const [isWeeklyKmMandatory, setIsWeeklyKmMandatory] = useState(false);
   const [showReviewPopup, setShowReviewPopup] = useState(false); // ✅ YENİ: Google Review Popup state'i
 
