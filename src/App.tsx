@@ -98,6 +98,7 @@ import SatisGorusmeFormu from './pages/SatisGorusmeFormu';
 import AdminTrendAnalysisReport from './pages/AdminTrendAnalysisReport';
 import AdminModuleReports from './pages/AdminModuleReports';
 import TekliflerListesi from './pages/TekliflerListesi';
+import AdminWeeklyKmTracking from './pages/AdminWeeklyKmTracking';
 import AnnualVisitReport from './pages/AnnualVisitReport';
 
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
