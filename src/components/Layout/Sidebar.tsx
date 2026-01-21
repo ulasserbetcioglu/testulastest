@@ -172,20 +172,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
           md:translate-x-0 
           ${isCollapsed ? 'md:w-16' : 'md:w-64'} w-64 shadow-xl`}
       >
-        {/* LOGO */}
-        <div className="h-16 flex items-center justify-center border-b border-gray-100 shrink-0">
-          <div 
-            className="flex items-center gap-2 cursor-pointer" 
-            onClick={() => navigate('/admin')}
-          >
-            <div className="bg-blue-600 p-1.5 rounded-lg shrink-0">
-              <Bug className="text-white h-5 w-5" />
-            </div>
-            {!isCollapsed && (
-              <span className="font-bold text-gray-800 text-lg tracking-tight">İlaçlamatik</span>
-            )}
-          </div>
-        </div>
 
         {/* MENÜ LİSTESİ */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 custom-scrollbar">
