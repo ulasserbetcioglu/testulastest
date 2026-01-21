@@ -151,61 +151,6 @@ const OperatorDashboard: React.FC = () => {
     fetchVapidKeyAndSubscriptionStatus();
   }, [operatorId]); // operatorId değiştiğinde tekrar çalıştır
 
-  // ✅ YENİ: Haftalık KM girişinin zorunlu olup olmadığını kontrol et
-  useEffect(() => {
-    const checkWeeklyKmEntry = async () => {
-      if (!operatorId) return;
-
-      try {
-        const { data: vehicles, error } = await supabase
-          .from('vehicles')
-          .select('id, updated_at')
-          .eq('operator_id', operatorId)
-          .eq('status', 'active');
-
-        if (error) throw error;
-
-        const today = new Date();
-        const startOfThisWeek = startOfWeek(today, { weekStartsOn: 1 }); // Pazartesi haftanın ilk günü
-
-        let kmEntryMadeThisWeek = false;
-        if (vehicles && vehicles.length > 0) {
-          for (const vehicle of vehicles) {
-            if (vehicle.updated_at) {
-              const lastUpdateDate = new Date(vehicle.updated_at);
-              // Eğer son güncelleme bu haftanın başlangıcından sonra ise, giriş yapılmış demektir.
-              if (lastUpdateDate >= startOfThisWeek) {
-                kmEntryMadeThisWeek = true;
-                break;
-              }
-            }
-          }
-        }
-
-        // Eğer bu hafta KM girişi yapılmamışsa ve bugün Pazartesi ise zorunlu yap
-        // VEYA eğer bu hafta KM girişi yapılmamışsa ve haftanın ilk günü değilse ama yine de zorunlu olmasını istiyorsak
-        // (örneğin, her zaman zorunlu bir pop-up olarak çıkmasını istiyorsak)
-        const isMonday = isSameDay(today, startOfThisWeek);
-        if (!kmEntryMadeThisWeek && isMonday) { // Sadece Pazartesi ve giriş yapılmamışsa zorunlu
-          setIsWeeklyKmMandatory(true);
-          setShowWeeklyKmModal(true);
-        } else if (!kmEntryMadeThisWeek && !isMonday) { // Pazartesi değil ama giriş yapılmamışsa, yine de göster (zorunlu değil)
-          setIsWeeklyKmMandatory(false);
-          setShowWeeklyKmModal(true);
-        } else { // Giriş yapılmışsa veya zorunlu değilse gösterme
-          setShowWeeklyKmModal(false);
-        }
-
-      } catch (err) {
-        console.error("Haftalık KM girişi kontrol edilirken hata:", err);
-        toast.error("Haftalık KM durumu kontrol edilemedi.");
-      }
-    };
-
-    if (operatorId) {
-      checkWeeklyKmEntry();
-    }
-  }, [operatorId]); // operatorId değiştiğinde kontrol et
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
