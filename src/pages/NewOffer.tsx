@@ -391,16 +391,18 @@ const NewOfferPage: React.FC = () => {
 
         if (offerError) throw offerError;
 
-        const offerItemsPayload = items.map(item => ({
-            offer_id: offerData.id,
-            description: item.description,
-            explanation: item.explanation,
-            quantity: item.quantity,
-            unit: item.unit,
-            unit_price: item.unitPrice,
-            vat_rate: item.vatRate,
-            total_price: item.quantity * item.unitPrice
-        }));
+const offerItemsPayload = items.map((item, index) => ({ // index parametresini ekleyin
+    offer_id: offerData.id,
+    line_number: index + 1, // line_number'ı ekleyin
+    description: item.description,
+    explanation: item.explanation,
+    quantity: item.quantity,
+    unit: item.unit,
+    unit_price: item.unitPrice,
+    vat_rate: item.vatRate,
+    total_price: item.quantity * item.unitPrice
+}));
+
 
         const { error: itemsError } = await supabase.from('offer_items').insert(offerItemsPayload);
 
