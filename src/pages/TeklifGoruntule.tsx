@@ -178,8 +178,8 @@ const TeklifGoruntule: React.FC = () => {
             <div className="bg-gray-100 min-h-screen flex items-center justify-center p-4">
                 <div className="w-full max-w-md">
                     <div className="bg-white p-8 rounded-2xl shadow-xl text-center border border-gray-100">
-                        <div className="mx-auto w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-                            <KeyRound className="h-8 w-8 text-blue-600" />
+                        <div className="mx-auto w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4">
+                            <KeyRound className="h-8 w-8 text-green-600" />
                         </div>
                         <h2 className="text-2xl font-bold text-gray-800">Güvenli Teklif Erişimi</h2>
                         <p className="mt-2 text-sm text-gray-500">Bu teklifi görüntülemek için lütfen size iletilen 6 haneli erişim kodunu giriniz.</p>
@@ -189,13 +189,13 @@ const TeklifGoruntule: React.FC = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 maxLength={6}
-                                className="w-full p-4 border border-gray-300 rounded-xl text-center text-3xl tracking-[12px] font-mono focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                className="w-full p-4 border border-gray-300 rounded-xl text-center text-3xl tracking-[12px] font-mono focus:ring-4 focus:ring-green-100 focus:border-green-500 outline-none transition-all"
                                 placeholder="••••••"
                             />
                             <button 
                                 type="submit"
                                 disabled={isVerifying}
-                                className="w-full flex items-center justify-center gap-2 p-3.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-70 transition-all shadow-lg shadow-blue-200"
+                                className="w-full flex items-center justify-center gap-2 p-3.5 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:opacity-70 transition-all shadow-lg shadow-green-200"
                             >
                                 {isVerifying ? <Loader className="animate-spin" /> : 'Görüntüle'}
                             </button>
@@ -206,7 +206,7 @@ const TeklifGoruntule: React.FC = () => {
         );
     }
     
-    if (loading || !proposal) return <div className="flex items-center justify-center h-screen bg-gray-50"><Loader className="w-10 h-10 animate-spin text-blue-600" /></div>;
+    if (loading || !proposal) return <div className="flex items-center justify-center h-screen bg-gray-50"><Loader className="w-10 h-10 animate-spin text-green-600" /></div>;
     if (error) return <div className="flex items-center justify-center h-screen text-red-600 bg-gray-50">{error}</div>;
 
     // --- PDF STYLE CONSTANTS ---
@@ -221,7 +221,7 @@ const TeklifGoruntule: React.FC = () => {
             {/* ÜST BAR (Print'te gizlenir) */}
             <div className="max-w-[210mm] mx-auto mb-6 flex flex-col sm:flex-row justify-between items-center gap-4 print:hidden">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm text-blue-700 font-bold text-xl">
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm text-green-700 font-bold text-xl">
                         T
                     </div>
                     <div>
@@ -238,7 +238,7 @@ const TeklifGoruntule: React.FC = () => {
                     </button>
                     <button 
                         onClick={handleDownloadPdf} 
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors font-medium text-sm"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 transition-colors font-medium text-sm"
                     >
                         <FileDown size={18} /> PDF İndir
                     </button>
@@ -365,9 +365,9 @@ const TeklifGoruntule: React.FC = () => {
 
             {/* ONAY/RED ALANI */}
             {proposal.status === 'pending' && (
-                <div className="max-w-[210mm] mx-auto mt-8 bg-white p-6 md:p-8 rounded-xl shadow-lg border border-blue-100 print:hidden">
+                <div className="max-w-[210mm] mx-auto mt-8 bg-white p-6 md:p-8 rounded-xl shadow-lg border border-green-100 print:hidden">
                     <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <Check className="w-5 h-5 text-blue-600" />
+                        <Check className="w-5 h-5 text-green-600" />
                         Teklifi Değerlendirin
                     </h3>
                     <div className="mb-6">
@@ -376,7 +376,7 @@ const TeklifGoruntule: React.FC = () => {
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={3}
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none text-sm"
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none text-sm"
                             placeholder="Eklemek istediğiniz notlar..."
                         />
                     </div>
