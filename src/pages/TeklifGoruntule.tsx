@@ -206,8 +206,8 @@ const TeklifGoruntule: React.FC = () => {
     if (loading || !proposal) return <div className="flex items-center justify-center h-screen bg-gray-50"><Loader className="w-10 h-10 animate-spin text-blue-600" /></div>;
     if (error) return <div className="flex items-center justify-center h-screen text-red-600 bg-gray-50">{error}</div>;
 
-    const primaryColor = '#1e3a8a';
-    const secondaryColor = '#3b82f6';
+    const primaryColor = '#629e48';
+    const secondaryColor = '#acf010';
     const grayText = '#4b5563';
     const lightBorder = '#e5e7eb';
 
