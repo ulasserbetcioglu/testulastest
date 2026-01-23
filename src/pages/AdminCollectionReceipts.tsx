@@ -37,6 +37,195 @@ interface DropdownItem {
   name: string;
 }
 
+// --- YARDIMCI FONKSİYONLAR ---
+const getPaymentMethodText = (method: string) => {
+  switch (method) {
+    case 'cash': return 'Nakit';
+    case 'credit_card': return 'Kredi Kartı';
+    case 'bank_transfer': return 'Havale / EFT';
+    case 'other': return 'Diğer';
+    default: return method;
+  }
+};
+
+const getCheckedStatusBadge = (isChecked: boolean) => {
+  return isChecked ? (
+    <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center justify-center">
+      <CheckSquare className="w-3 h-3 mr-1" /> Onaylandı
+    </span>
+  ) : (
+    <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs flex items-center justify-center">
+      <XSquare className="w-3 h-3 mr-1" /> Beklemede
+    </span>
+  );
+};
+
+// --- BİLEŞEN: MAKBUZ ÖNİZLEME MODALI (Gelişmiş Tasarım) ---
+const ReceiptPreview: React.FC<{ receipt: CollectionReceipt | null; onClose: () => void }> = ({ receipt, onClose }) => {
+  const receiptRef = useRef<HTMLDivElement>(null);
+
+  if (!receipt) return null;
+
+  const customerName = receipt.customer?.kisa_isim || 'Belirtilmemiş Müşteri';
+  const branchName = receipt.branch?.sube_adi || 'Genel Merkez / Şube Yok';
+  const operatorName = receipt.operator?.name || 'Yönetici (Admin)';
+
+  const handlePrint = () => {
+    if (receiptRef.current) {
+      const printContent = receiptRef.current.innerHTML;
+      const printWindow = window.open('', '', 'height=800,width=800');
+      
+      if (printWindow) {
+        printWindow.document.write('<html><head><title>Tahsilat Makbuzu</title>');
+        // Print stilleri - Tailwind benzeri stilleri inject ediyoruz
+        printWindow.document.write(`
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+            body { font-family: 'Inter', sans-serif; padding: 20px; -webkit-print-color-adjust: exact; }
+            .receipt-container { border: 1px solid #e5e7eb; padding: 40px; max-width: 800px; margin: 0 auto; }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #f3f4f6; padding-bottom: 20px; margin-bottom: 30px; }
+            .logo-area { color: #1e40af; font-size: 24px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+            .receipt-title { text-align: right; }
+            .title-text { font-size: 20px; font-weight: 700; color: #1f2937; margin: 0; }
+            .meta-text { font-size: 13px; color: #6b7280; margin-top: 5px; }
+            .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+            .info-box { background-color: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #f3f4f6; }
+            .label { font-size: 11px; text-transform: uppercase; color: #6b7280; font-weight: 600; margin-bottom: 5px; display: block; }
+            .value { font-size: 14px; font-weight: 600; color: #111827; margin: 0; }
+            .total-section { background-color: #ecfdf5; border: 1px solid #d1fae5; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+            .total-label { font-size: 16px; font-weight: 700; color: #065f46; }
+            .total-amount { font-size: 24px; font-weight: 800; color: #059669; }
+            .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 60px; }
+            .sign-box { text-align: center; }
+            .sign-line { height: 1px; background-color: #d1d5db; width: 80%; margin: 0 auto 10px auto; }
+            .sign-label { font-size: 12px; color: #6b7280; font-weight: 500; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #f3f4f6; text-align: center; font-size: 10px; color: #9ca3af; }
+          </style>
+        `);
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(printContent);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4 print:p-0">
+      <div className="relative w-full max-w-3xl bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+        
+        {/* Modal Başlığı */}
+        <div className="flex justify-between items-center p-4 border-b bg-gray-50">
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+            <ReceiptText size={20} className="text-blue-600" /> Makbuz Önizleme
+          </h3>
+          <button className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+        
+        {/* Makbuz İçeriği (Yazdırılacak Alan) */}
+        <div className="overflow-y-auto p-6 bg-gray-100 flex-1 flex justify-center">
+          <div ref={receiptRef} className="bg-white p-8 shadow-md border border-gray-200 w-full max-w-[210mm] min-h-[140mm] relative receipt-container">
+            
+            {/* Üst Kısım: Logo ve Başlık */}
+            <div className="header flex justify-between items-start border-b-2 border-gray-100 pb-6 mb-8">
+              <div>
+                <div className="logo-area flex items-center gap-2 text-blue-800 font-extrabold text-2xl mb-1">
+                  <div className="w-8 h-8 bg-blue-800 rounded flex items-center justify-center text-white text-sm">İ</div>
+                  İLAÇLAMATİK
+                </div>
+                <p className="text-xs text-gray-500 font-medium ml-1">Profesyonel Hizmet Çözümleri</p>
+              </div>
+              <div className="receipt-title text-right">
+                <h2 className="title-text text-xl font-bold text-gray-800 tracking-tight uppercase">TAHSİLAT MAKBUZU</h2>
+                <div className="meta-text text-sm text-gray-500 mt-1 font-mono bg-gray-50 px-2 py-1 rounded inline-block">
+                  No: <span className="text-gray-900 font-bold">{receipt.receipt_no}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Tarih: {format(new Date(receipt.receipt_date), 'dd.MM.yyyy', { locale: tr })}
+                </p>
+              </div>
+            </div>
+
+            {/* Orta Kısım: Grid Bilgiler */}
+            <div className="grid-container grid grid-cols-2 gap-8 mb-8">
+              {/* Sol: Müşteri */}
+              <div className="info-box bg-gray-50 p-4 rounded-lg border border-gray-100 h-full">
+                <span className="label text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Müşteri Bilgileri</span>
+                <p className="value text-base font-bold text-gray-900 mb-1">{customerName}</p>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Building size={14} /> {branchName}
+                </div>
+              </div>
+              
+              {/* Sağ: Ödeme Detayları */}
+              <div className="info-box bg-gray-50 p-4 rounded-lg border border-gray-100 h-full">
+                <span className="label text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Ödeme Detayları</span>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">Ödeme Yöntemi:</span>
+                  <span className="text-sm font-semibold text-gray-900">{getPaymentMethodText(receipt.payment_method)}</span>
+                </div>
+                {receipt.description && (
+                  <div className="text-xs text-gray-500 italic mt-2 border-t pt-2">
+                    "{receipt.description}"
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Alt Kısım: Tutar */}
+            <div className="total-section bg-green-50 border border-green-100 p-5 rounded-lg flex justify-between items-center mb-10 shadow-sm">
+              <span className="total-label text-green-800 font-bold text-lg">TAHSİL EDİLEN TUTAR</span>
+              <span className="total-amount text-3xl font-extrabold text-green-700 tracking-tight">
+                ₺{receipt.amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* İmza Alanları */}
+            <div className="signatures grid grid-cols-2 gap-12 mt-8">
+              <div className="sign-box text-center">
+                <div className="sign-line h-px bg-gray-300 w-3/4 mx-auto mb-2"></div>
+                <p className="sign-label text-xs text-gray-500 font-medium">Tahsil Eden ({operatorName})</p>
+                <p className="text-[10px] text-gray-400">İmza / Kaşe</p>
+              </div>
+              <div className="sign-box text-center">
+                <div className="sign-line h-px bg-gray-300 w-3/4 mx-auto mb-2"></div>
+                <p className="sign-label text-xs text-gray-500 font-medium">Ödeme Yapan</p>
+                <p className="text-[10px] text-gray-400">İmza</p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="footer mt-12 pt-4 border-t border-gray-100 text-center">
+              <p className="text-[10px] text-gray-400">
+                Bu belge elektronik ortamda oluşturulmuştur. Geçerli bir ödeme kanıtı niteliğindedir.<br/>
+                Oluşturulma Zamanı: {format(new Date(receipt.created_at), 'dd.MM.yyyy HH:mm', { locale: tr })}
+              </p>
+            </div>
+
+          </div>
+        </div>
+        
+        {/* Alt Butonlar */}
+        <div className="p-4 border-t bg-white flex gap-3 print:hidden">
+          <button onClick={handlePrint} className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2 shadow-md transition-all">
+            <Printer size={18} /> Yazdır
+          </button>
+          <button onClick={onClose} className="bg-gray-100 text-gray-700 py-2.5 px-6 rounded-lg hover:bg-gray-200 font-medium transition-all">
+            Kapat
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- ANA SAYFA BİLEŞENİ ---
 const AdminCollectionReceipts: React.FC = () => {
   // --- STATE TANIMLARI ---
   const [receipts, setReceipts] = useState<CollectionReceipt[]>([]);
@@ -53,8 +242,8 @@ const AdminCollectionReceipts: React.FC = () => {
   const [customerList, setCustomerList] = useState<DropdownItem[]>([]);
   const [branchList, setBranchList] = useState<DropdownItem[]>([]);
   
-  // ✅ YENİ: Detay Görüntüleme State'leri
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  // Detay Görüntüleme State'leri
+  const [showPreview, setShowPreview] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<CollectionReceipt | null>(null);
   
   const initialFormData: ReceiptFormData = {
@@ -138,13 +327,13 @@ const AdminCollectionReceipts: React.FC = () => {
       const { error } = await supabase.from('collection_receipts').insert({
         receipt_no: formData.receipt_no,
         customer_id: formData.customer_id,
-        branch_id: formData.branch_id || null,
+        branch_id: formData.branch_id || null, 
         amount: parseFloat(formData.amount),
         receipt_date: formData.receipt_date,
         payment_method: formData.payment_method,
         description: formData.description,
         created_by: user?.id,
-        is_checked_by_admin: true
+        is_checked_by_admin: true // Admin oluşturduğu için otomatik onaylı
       });
 
       if (error) throw error;
@@ -152,7 +341,7 @@ const AdminCollectionReceipts: React.FC = () => {
       toast.success('Tahsilat makbuzu başarıyla oluşturuldu.');
       setIsModalOpen(false);
       setFormData(initialFormData);
-      fetchReceipts();
+      fetchReceipts(); // Listeyi yenile
 
     } catch (err: any) {
       toast.error('Makbuz oluşturulurken hata: ' + err.message);
@@ -179,39 +368,9 @@ const AdminCollectionReceipts: React.FC = () => {
     }
   }, []);
 
-  // ✅ YENİ: Detay Görüntüleme Fonksiyonu
   const handleViewDetails = (receipt: CollectionReceipt) => {
     setSelectedReceipt(receipt);
-    setIsDetailModalOpen(true);
-  };
-
-  // ✅ YENİ: Yazdırma Fonksiyonu
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // --- YARDIMCI FONKSİYONLAR ---
-
-  const getPaymentMethodText = (method: string) => {
-    switch (method) {
-      case 'cash': return 'Nakit';
-      case 'credit_card': return 'Kredi Kartı';
-      case 'bank_transfer': return 'Banka Havalesi/EFT';
-      case 'other': return 'Diğer';
-      default: return method;
-    }
-  };
-
-  const getCheckedStatusBadge = (isChecked: boolean) => {
-    return isChecked ? (
-      <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center justify-center">
-        <CheckSquare className="w-3 h-3 mr-1" /> Onaylandı
-      </span>
-    ) : (
-      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs flex items-center justify-center">
-        <XSquare className="w-3 h-3 mr-1" /> Beklemede
-      </span>
-    );
+    setShowPreview(true);
   };
 
   const filteredReceipts = useMemo(() => {
@@ -262,7 +421,7 @@ const AdminCollectionReceipts: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      <header className="flex flex-wrap justify-between items-center gap-4 mb-8 print:hidden">
+      <header className="flex flex-wrap justify-between items-center gap-4 mb-8">
         <h1 className="text-4xl font-bold text-gray-800">Tahsilat Makbuzları Yönetimi</h1>
         <div className="flex gap-2">
             <button
@@ -280,8 +439,8 @@ const AdminCollectionReceipts: React.FC = () => {
         </div>
       </header>
 
-      {/* Arama ve Filtreleme (Print'te Gizli) */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100 print:hidden">
+      {/* Arama ve Filtreleme */}
+      <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
             <input
@@ -334,7 +493,7 @@ const AdminCollectionReceipts: React.FC = () => {
       </div>
 
       {/* Tablo */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 print:hidden">
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -411,7 +570,7 @@ const AdminCollectionReceipts: React.FC = () => {
 
       {/* --- MAKBUZ OLUŞTURMA MODALI --- */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:hidden">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -555,105 +714,9 @@ const AdminCollectionReceipts: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ DETAY GÖRÜNTÜLEME MODALI */}
-      {isDetailModalOpen && selectedReceipt && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:p-0 print:bg-white print:static">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 print:shadow-none print:w-full">
-            
-            {/* Header (Print'te Gizli) */}
-            <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50 print:hidden">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <ReceiptText className="text-blue-600" /> Tahsilat Makbuzu Detayı
-              </h2>
-              <button onClick={() => setIsDetailModalOpen(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-1 rounded-full transition-colors">
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* İçerik */}
-            <div className="p-8 print:p-0">
-                
-                {/* Makbuz Başlığı (Logo Yerine Gelebilir) */}
-                <div className="text-center mb-8 border-b-2 border-dashed border-gray-200 pb-6">
-                    <h1 className="text-2xl font-bold text-gray-800 mb-1">TAHSİLAT MAKBUZU</h1>
-                    <p className="text-gray-500 font-mono text-sm">No: {selectedReceipt.receipt_no}</p>
-                    <p className="text-gray-400 text-xs mt-1">{format(new Date(selectedReceipt.created_at), 'dd.MM.yyyy HH:mm')}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-y-6 gap-x-4 text-sm">
-                    
-                    {/* Tutar (Öne Çıkan) */}
-                    <div className="col-span-2 bg-green-50 border border-green-100 p-4 rounded-lg flex justify-between items-center">
-                        <span className="text-green-700 font-semibold">Tahsil Edilen Tutar</span>
-                        <span className="text-2xl font-bold text-green-700">
-                            {selectedReceipt.amount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
-                        </span>
-                    </div>
-
-                    <div className="col-span-2 sm:col-span-1">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Müşteri</label>
-                        <div className="flex items-start gap-2 text-gray-800 font-medium">
-                            <User size={16} className="mt-0.5 text-gray-400"/>
-                            {selectedReceipt.customer?.kisa_isim}
-                        </div>
-                    </div>
-
-                    <div className="col-span-2 sm:col-span-1">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Şube</label>
-                        <div className="flex items-start gap-2 text-gray-800">
-                            <Building size={16} className="mt-0.5 text-gray-400"/>
-                            {selectedReceipt.branch?.sube_adi || 'Genel Merkez'}
-                        </div>
-                    </div>
-
-                    <div className="col-span-2 sm:col-span-1">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Tarih</label>
-                        <div className="flex items-start gap-2 text-gray-800">
-                            <Calendar size={16} className="mt-0.5 text-gray-400"/>
-                            {format(new Date(selectedReceipt.receipt_date), 'dd MMMM yyyy', { locale: tr })}
-                        </div>
-                    </div>
-
-                    <div className="col-span-2 sm:col-span-1">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Ödeme Yöntemi</label>
-                        <div className="flex items-start gap-2 text-gray-800">
-                            <CreditCard size={16} className="mt-0.5 text-gray-400"/>
-                            {getPaymentMethodText(selectedReceipt.payment_method)}
-                        </div>
-                    </div>
-
-                    <div className="col-span-2">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Açıklama</label>
-                        <div className="flex items-start gap-2 text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 min-h-[60px]">
-                            <FileText size={16} className="mt-0.5 text-gray-400 shrink-0"/>
-                            {selectedReceipt.description || 'Açıklama girilmemiş.'}
-                        </div>
-                    </div>
-
-                    <div className="col-span-2 pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
-                        <span>Tahsil Eden: <strong>{selectedReceipt.operator?.name || 'Admin'}</strong></span>
-                        <span>Durum: {selectedReceipt.is_checked_by_admin ? 'Onaylandı' : 'Beklemede'}</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Footer (Print'te Gizli) */}
-            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end gap-3 print:hidden">
-                <button 
-                    onClick={() => setIsDetailModalOpen(false)} 
-                    className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
-                >
-                    Kapat
-                </button>
-                <button 
-                    onClick={handlePrint} 
-                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium shadow-md"
-                >
-                    <Printer size={18} /> Yazdır
-                </button>
-            </div>
-          </div>
-        </div>
+      {/* ✅ DETAY GÖRÜNTÜLEME ve YAZDIRMA MODALI */}
+      {showPreview && selectedReceipt && (
+        <ReceiptPreview receipt={selectedReceipt} onClose={() => { setShowPreview(false); setSelectedReceipt(null); }} />
       )}
     </div>
   );
