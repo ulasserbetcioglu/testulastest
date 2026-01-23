@@ -73,6 +73,7 @@ const menuCategories = [
       { name: 'Faaliyet Rap.', path: '/faaliyet-rapor-takip', icon: <FileText size={18} /> },
       { name: 'Pestisit', path: '/pestisit-raporu', icon: <Bug size={18} /> },
       { name: 'Faaliyet Dos.', path: '/mentor-module', icon: <FileText size={18} /> },
+      { name: 'Yillik Cari Rap.', path: '/admin/yillik-rapor', icon: <FileText size={18} /> },
       { name: 'Modül Rap.', path: '/admin/modul-raporlari', icon: <Grid size={18} /> },
     ]
   },
