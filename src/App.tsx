@@ -4,6 +4,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './components/Auth/AuthProvider';
 import { supabase } from './lib/supabase';
+import { Toaster } from 'sonner';
 
 // --- LAYOUTS ---
 import Layout from './components/Layout/Layout';
@@ -100,6 +101,7 @@ import AdminModuleReports from './pages/AdminModuleReports';
 import TekliflerListesi from './pages/TekliflerListesi';
 import AdminWeeklyKmTracking from './pages/AdminWeeklyKmTracking';
 import AnnualVisitReport from './pages/AnnualVisitReport';
+import TrainingPresentationPage from './pages/TrainingPresentationPage'; // YENİ EKLENDİ
 
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
@@ -194,8 +196,7 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         if (!user) { setLoading(false); return; }
         setCurrentUser(user);
 
-        // --- DÜZELTME BURADA ---
-        // Önce operators tablosuna bak, çünkü operatörler profiles tablosunda olmayabilir.
+        // Önce operators tablosuna bak
         const { data: operatorData } = await supabase
           .from('operators')
           .select('id')
@@ -208,12 +209,11 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           return;
         }
 
-        // Operatör değilse Profiles tablosuna bak (Admin vb.)
+        // Operatör değilse Profiles tablosuna bak
         const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
         if (profileData?.role) {
           setUserRole(profileData.role);
         } else {
-          // Hiçbir yerde yoksa ama giriş yaptıysa varsayılan (genelde admin yetkisi kısıtlı user)
           setUserRole('user'); 
         }
       } catch (err) { 
@@ -232,7 +232,6 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (userRole === 'customer') return <Navigate to="/customer" />;
   if (userRole === 'branch') return <Navigate to="/branch" />;
   
-  // Admin veya tanımlı olmayan roller içeriği (Admin Paneli) görür
   return children;
 };
 
@@ -240,6 +239,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+        <Toaster position="top-right" richColors />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
@@ -273,6 +273,7 @@ function App() {
             <Route path="tahsilat-makbuzu" element={<OperatorCollectionReceipt />} />
             <Route path="hizli-notlar" element={<OperatorQuickNotes />} />
             <Route path="weekly-km" element={<OperatorWeeklyKmForm />} />
+            <Route path="egitim-sunumlari" element={<TrainingPresentationPage />} /> {/* YENİ: Operatör için */}
           </Route>
 
           {/* Customer Routes */}
@@ -363,6 +364,7 @@ function App() {
             <Route path="ekipman-pazarlama" element={<EkipmanPazarlama />} />
             <Route path="ekipman-yonetimi" element={<EkipmanYonetimi />} />
             <Route path="hizmet-pazarlama" element={<HizmetPazarlama />} />
+            <Route path="egitim-sunumlari" element={<TrainingPresentationPage />} /> {/* YENİ: Admin için */}
             <Route path="gonderilen-epostalar" element={<GonderilenEpostalar />} />
             <Route path="siparis-olustur" element={<SiparisOlusturma />} />
             <Route path="tedarik-siparisi" element={<TedarikSiparisi />} />
@@ -372,7 +374,7 @@ function App() {
             <Route path="rapor/goruntule/:reportId" element={<ModulRaporGoruntuleme />} />
             <Route path="rapor-goruntule" element={<RaporSecVeGoruntule />} />
             <Route path="raporlar" element={<GenelRaporGoruntuleme />} />
-            <Route path="hizmet-pazarlama" element={<BilgilendirimePazarlama />} />
+            <Route path="bilgilendirme-pazarlama" element={<BilgilendirimePazarlama />} /> {/* İsim düzeltildi: Çakışmayı önlemek için */}
             <Route path="eposta-pazarlama" element={<EpostaPazarlama />} />
             <Route path="isletme-kesif" element={<IsletmeKesif />} />
             <Route path="bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
@@ -387,7 +389,6 @@ function App() {
             <Route path="admin/simulator" element={<AdminDataSimulator />} />
             <Route path="admin/yillik-rapor" element={<AnnualVisitReport />} />
             
-
             <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
