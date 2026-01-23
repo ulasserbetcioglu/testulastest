@@ -340,53 +340,6 @@ const ModulesPage = () => {
 
   return (
     <div className="pt-8">
-      {/* User Status */}
-      <section className="py-8 bg-white border-b">
-        <div className="container mx-auto px-4">
-          {user ? (
-            <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="flex items-center mb-4 md:mb-0">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                  <User className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">
-                    Hoş geldiniz, {user.firstName || user.email.split('@')[0]}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {user.role === 'admin' ? 'Admin' : 'Kullanıcı'} hesabı
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex space-x-4">
-                <Link
-                  to="/auth/profile"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Profil Bilgilerim
-                </Link>
-                {user.role === 'admin' && (
-                  <Link
-                    to="/admin/dashboard"
-                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    Yönetim Paneli
-                  </Link>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-              <div className="flex flex-col md:flex-row items-center justify-between">
-                <div className="flex items-center mb-4 md:mb-0">
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* Modules Grid */}
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
