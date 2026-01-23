@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Search, Download, CheckSquare, XSquare, Eye, Loader2, Filter, ReceiptText, Plus, Save, X } from 'lucide-react';
+import { Search, Download, CheckSquare, XSquare, Eye, Loader2, Filter, ReceiptText, Plus, Save, X, Printer, User, Building, Calendar, CreditCard, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
@@ -52,6 +52,10 @@ const AdminCollectionReceipts: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customerList, setCustomerList] = useState<DropdownItem[]>([]);
   const [branchList, setBranchList] = useState<DropdownItem[]>([]);
+  
+  // ✅ YENİ: Detay Görüntüleme State'leri
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<CollectionReceipt | null>(null);
   
   const initialFormData: ReceiptFormData = {
     customer_id: '',
@@ -134,13 +138,13 @@ const AdminCollectionReceipts: React.FC = () => {
       const { error } = await supabase.from('collection_receipts').insert({
         receipt_no: formData.receipt_no,
         customer_id: formData.customer_id,
-        branch_id: formData.branch_id || null, // Şube seçilmediyse null gönder
+        branch_id: formData.branch_id || null,
         amount: parseFloat(formData.amount),
         receipt_date: formData.receipt_date,
         payment_method: formData.payment_method,
         description: formData.description,
         created_by: user?.id,
-        is_checked_by_admin: true // Admin oluşturduğu için otomatik onaylı olsun
+        is_checked_by_admin: true
       });
 
       if (error) throw error;
@@ -148,7 +152,7 @@ const AdminCollectionReceipts: React.FC = () => {
       toast.success('Tahsilat makbuzu başarıyla oluşturuldu.');
       setIsModalOpen(false);
       setFormData(initialFormData);
-      fetchReceipts(); // Listeyi yenile
+      fetchReceipts();
 
     } catch (err: any) {
       toast.error('Makbuz oluşturulurken hata: ' + err.message);
@@ -158,13 +162,6 @@ const AdminCollectionReceipts: React.FC = () => {
   };
 
   const handleCheckReceipt = useCallback(async (receiptId: string, isChecked: boolean) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    // Admin kontrolü (Basit kontrol, production'da role tabanlı olmalı)
-    if (user?.email !== 'admin@ilaclamatik.com') { 
-      // Not: Burayı kendi admin kontrol mantığınıza göre güncelleyebilirsiniz.
-      // Şimdilik işlemi engellemiyorum ama uyarı veriyorum.
-    }
-    
     try {
       const { error } = await supabase
         .from('collection_receipts')
@@ -181,6 +178,17 @@ const AdminCollectionReceipts: React.FC = () => {
       toast.error(`Makbuz durumu güncellenirken hata: ${err.message}`);
     }
   }, []);
+
+  // ✅ YENİ: Detay Görüntüleme Fonksiyonu
+  const handleViewDetails = (receipt: CollectionReceipt) => {
+    setSelectedReceipt(receipt);
+    setIsDetailModalOpen(true);
+  };
+
+  // ✅ YENİ: Yazdırma Fonksiyonu
+  const handlePrint = () => {
+    window.print();
+  };
 
   // --- YARDIMCI FONKSİYONLAR ---
 
@@ -254,7 +262,7 @@ const AdminCollectionReceipts: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      <header className="flex flex-wrap justify-between items-center gap-4 mb-8">
+      <header className="flex flex-wrap justify-between items-center gap-4 mb-8 print:hidden">
         <h1 className="text-4xl font-bold text-gray-800">Tahsilat Makbuzları Yönetimi</h1>
         <div className="flex gap-2">
             <button
@@ -272,8 +280,8 @@ const AdminCollectionReceipts: React.FC = () => {
         </div>
       </header>
 
-      {/* Arama ve Filtreleme */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100">
+      {/* Arama ve Filtreleme (Print'te Gizli) */}
+      <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100 print:hidden">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
             <input
@@ -326,7 +334,7 @@ const AdminCollectionReceipts: React.FC = () => {
       </div>
 
       {/* Tablo */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 print:hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -386,11 +394,11 @@ const AdminCollectionReceipts: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
-                        onClick={() => toast.info(`Açıklama: ${receipt.description || 'Yok'}`)}
+                        onClick={() => handleViewDetails(receipt)}
                         className="text-gray-400 hover:text-blue-600 transition-colors"
                         title="Detay Göster"
                       >
-                        <Eye size={18} />
+                        <Eye size={20} />
                       </button>
                     </td>
                   </tr>
@@ -403,7 +411,7 @@ const AdminCollectionReceipts: React.FC = () => {
 
       {/* --- MAKBUZ OLUŞTURMA MODALI --- */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:hidden">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -543,6 +551,107 @@ const AdminCollectionReceipts: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ DETAY GÖRÜNTÜLEME MODALI */}
+      {isDetailModalOpen && selectedReceipt && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:p-0 print:bg-white print:static">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 print:shadow-none print:w-full">
+            
+            {/* Header (Print'te Gizli) */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50 print:hidden">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <ReceiptText className="text-blue-600" /> Tahsilat Makbuzu Detayı
+              </h2>
+              <button onClick={() => setIsDetailModalOpen(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-1 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* İçerik */}
+            <div className="p-8 print:p-0">
+                
+                {/* Makbuz Başlığı (Logo Yerine Gelebilir) */}
+                <div className="text-center mb-8 border-b-2 border-dashed border-gray-200 pb-6">
+                    <h1 className="text-2xl font-bold text-gray-800 mb-1">TAHSİLAT MAKBUZU</h1>
+                    <p className="text-gray-500 font-mono text-sm">No: {selectedReceipt.receipt_no}</p>
+                    <p className="text-gray-400 text-xs mt-1">{format(new Date(selectedReceipt.created_at), 'dd.MM.yyyy HH:mm')}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-y-6 gap-x-4 text-sm">
+                    
+                    {/* Tutar (Öne Çıkan) */}
+                    <div className="col-span-2 bg-green-50 border border-green-100 p-4 rounded-lg flex justify-between items-center">
+                        <span className="text-green-700 font-semibold">Tahsil Edilen Tutar</span>
+                        <span className="text-2xl font-bold text-green-700">
+                            {selectedReceipt.amount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
+                        </span>
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Müşteri</label>
+                        <div className="flex items-start gap-2 text-gray-800 font-medium">
+                            <User size={16} className="mt-0.5 text-gray-400"/>
+                            {selectedReceipt.customer?.kisa_isim}
+                        </div>
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Şube</label>
+                        <div className="flex items-start gap-2 text-gray-800">
+                            <Building size={16} className="mt-0.5 text-gray-400"/>
+                            {selectedReceipt.branch?.sube_adi || 'Genel Merkez'}
+                        </div>
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Tarih</label>
+                        <div className="flex items-start gap-2 text-gray-800">
+                            <Calendar size={16} className="mt-0.5 text-gray-400"/>
+                            {format(new Date(selectedReceipt.receipt_date), 'dd MMMM yyyy', { locale: tr })}
+                        </div>
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Ödeme Yöntemi</label>
+                        <div className="flex items-start gap-2 text-gray-800">
+                            <CreditCard size={16} className="mt-0.5 text-gray-400"/>
+                            {getPaymentMethodText(selectedReceipt.payment_method)}
+                        </div>
+                    </div>
+
+                    <div className="col-span-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Açıklama</label>
+                        <div className="flex items-start gap-2 text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 min-h-[60px]">
+                            <FileText size={16} className="mt-0.5 text-gray-400 shrink-0"/>
+                            {selectedReceipt.description || 'Açıklama girilmemiş.'}
+                        </div>
+                    </div>
+
+                    <div className="col-span-2 pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
+                        <span>Tahsil Eden: <strong>{selectedReceipt.operator?.name || 'Admin'}</strong></span>
+                        <span>Durum: {selectedReceipt.is_checked_by_admin ? 'Onaylandı' : 'Beklemede'}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Footer (Print'te Gizli) */}
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end gap-3 print:hidden">
+                <button 
+                    onClick={() => setIsDetailModalOpen(false)} 
+                    className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+                >
+                    Kapat
+                </button>
+                <button 
+                    onClick={handlePrint} 
+                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium shadow-md"
+                >
+                    <Printer size={18} /> Yazdır
+                </button>
+            </div>
           </div>
         </div>
       )}
