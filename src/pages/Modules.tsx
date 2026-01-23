@@ -480,5 +480,52 @@ const ModulesPage = () => {
         </div>
       </section>
 
-  
+      {/* Features Section */}
+      <section className="py-20 bg-gradient-to-br from-gray-50 to-blue-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-800 mb-4">Modül Özellikleri</h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Profesyonel modüllerimizle iş süreçlerinizi kolaylaştırın ve müşterilerinize 
+              daha kaliteli hizmet sunun.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-white rounded-xl p-6 shadow-lg">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                <Shield className="h-6 w-6 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-3">Profesyonel Raporlar</h3>
+              <p className="text-gray-600">
+                Müşterilerinize sunabileceğiniz profesyonel görünümlü, markalı raporlar oluşturun.
+              </p>
+            </div>
+            
+            <div className="bg-white rounded-xl p-6 shadow-lg">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                <Zap className="h-6 w-6 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-3">Hızlı ve Kolay</h3>
+              <p className="text-gray-600">
+                Kullanımı kolay arayüz ile dakikalar içinde profesyonel raporlar oluşturun.
+              </p>
+            </div>
+            
+            <div className="bg-white rounded-xl p-6 shadow-lg">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                <FileText className="h-6 w-6 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-3">Özelleştirilebilir</h3>
+              <p className="text-gray-600">
+                Firmanızın logosu ve bilgileriyle özelleştirilmiş raporlar oluşturun.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
 export default ModulesPage;
