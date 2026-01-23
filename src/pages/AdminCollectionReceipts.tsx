@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Search, Download, CheckSquare, XSquare, Eye, Loader2, Filter, ReceiptText, Plus, Save, X, Printer, User, Building, Calendar, CreditCard, FileText } from 'lucide-react';
+import { Search, Download, CheckSquare, XSquare, Eye, Loader2, Filter, ReceiptText, Plus, Save, X, Printer, Building } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
@@ -60,7 +60,7 @@ const getCheckedStatusBadge = (isChecked: boolean) => {
   );
 };
 
-// --- BİLEŞEN: MAKBUZ ÖNİZLEME MODALI (Gelişmiş Tasarım) ---
+// --- BİLEŞEN: MAKBUZ ÖNİZLEME MODALI (PROFESYONEL TASARIM) ---
 const ReceiptPreview: React.FC<{ receipt: CollectionReceipt | null; onClose: () => void }> = ({ receipt, onClose }) => {
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -77,7 +77,7 @@ const ReceiptPreview: React.FC<{ receipt: CollectionReceipt | null; onClose: () 
       
       if (printWindow) {
         printWindow.document.write('<html><head><title>Tahsilat Makbuzu</title>');
-        // Print stilleri - Tailwind benzeri stilleri inject ediyoruz
+        // Print stilleri
         printWindow.document.write(`
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
