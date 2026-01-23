@@ -5,10 +5,10 @@ import {
   Calendar, BarChart2, CheckSquare, Award,
   FileText, FileInput as FileInvoice, Grid, LogOut,
   Users, Settings, UserCog, Route, Building, Home, CalendarClock, MapPin,
-  ChevronsLeft, ChevronsRight, ChevronRight, ChevronDown,
+  ChevronsLeft, ChevronsRight, ChevronDown,
   Mail, Package, MessageSquare, MailCheck, 
   BarChart3, TrendingUp, PlusCircle, NotebookPen, Wallet, ReceiptText, 
-  Image as ImageIcon, Clock as ClockIcon, Car, Bug
+  Image as ImageIcon, Clock as ClockIcon, Car, Bug, Presentation
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -60,7 +60,7 @@ const menuCategories = [
       { name: 'Gelirler', path: '/gelir-yonetimi', icon: <DollarSign size={18} /> },
       { name: 'Ücretli Malz.', path: '/ucretli-malzemeler', icon: <DollarSign size={18} /> },
       { name: 'Faturasızlar', path: '/faturasiz-musteriler', icon: <Wallet size={18} /> },
-      { name: 'Tahsilatlar', path: '/admin/tahsilat-makbuzlari', icon: <ReceiptText size={18} /> },
+      { name: 'Tahsilatlar', path: '/admin/tahsilat-makbuzlari', icon: <ReceiptText size={18} /> }, // YENİ
     ]
   },
   {
@@ -73,7 +73,6 @@ const menuCategories = [
       { name: 'Faaliyet Rap.', path: '/faaliyet-rapor-takip', icon: <FileText size={18} /> },
       { name: 'Pestisit', path: '/pestisit-raporu', icon: <Bug size={18} /> },
       { name: 'Faaliyet Dos.', path: '/mentor-module', icon: <FileText size={18} /> },
-      { name: 'Yillik Cari Rap.', path: '/admin/yillik-rapor', icon: <FileText size={18} /> },
       { name: 'Modül Rap.', path: '/admin/modul-raporlari', icon: <Grid size={18} /> },
     ]
   },
@@ -82,7 +81,8 @@ const menuCategories = [
     items: [
       { name: 'Takvim Gönder', path: '/aylik-takvim-eposta', icon: <Mail size={18} /> },
       { name: 'Ekipman Paz.', path: '/ekipman-pazarlama', icon: <Package size={18} /> },
-      { name: 'Hizmet Paz.', path: '/hizmet-pazarlama', icon: <MessageSquare size={18} /> },
+      { name: 'Hizmet Paz.', path: '/hizmet-pazarlama', icon: <MessageSquare size={18} /> }, // YENİ
+      { name: 'Eğitim Sunum.', path: '/egitim-sunumlari', icon: <Presentation size={18} /> }, // YENİ
       { name: 'E-postalar', path: '/gonderilen-epostalar', icon: <MailCheck size={18} /> },
     ]
   },
@@ -118,15 +118,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Tüm kategorileri varsayılan olarak açık tutmak için hepsini state'e ekliyoruz
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set([...menuCategories.map(c => c.title), adminCategory.title])
   );
 
   useEffect(() => {
     const checkAdminStatus = async () => {
-      // Admin kontrolü (Production için gerçek mantık eklenmeli)
-      setIsAdmin(true); 
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setIsAdmin(true); 
     };
     checkAdminStatus();
   }, []);
@@ -150,7 +149,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
 
   return (
     <>
-      {/* Mobil Menü Butonu */}
       <button
         onClick={toggleSidebar}
         className="fixed top-3 left-3 z-50 md:hidden flex items-center justify-center h-10 w-10 rounded-lg bg-white text-gray-700 shadow-md border border-gray-200"
@@ -158,7 +156,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
 
-      {/* Mobil Overlay */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-gray-600/50 backdrop-blur-sm z-40 md:hidden"
@@ -166,22 +163,32 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
         />
       )}
 
-      {/* Sidebar Container */}
       <aside
         className={`fixed top-0 left-0 z-40 h-screen bg-white border-r border-gray-200 text-gray-700 transition-all duration-300 ease-in-out flex flex-col
           ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
           md:translate-x-0 
           ${isCollapsed ? 'md:w-16' : 'md:w-64'} w-64 shadow-xl`}
       >
+        <div className="h-16 flex items-center justify-center border-b border-gray-100 shrink-0">
+          <div 
+            className="flex items-center gap-2 cursor-pointer" 
+            onClick={() => navigate('/admin')}
+          >
+            <div className="bg-blue-600 p-1.5 rounded-lg shrink-0">
+              <Bug className="text-white h-5 w-5" />
+            </div>
+            {!isCollapsed && (
+              <span className="font-bold text-gray-800 text-lg tracking-tight">İlaçlamatik</span>
+            )}
+          </div>
+        </div>
 
-        {/* MENÜ LİSTESİ */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 custom-scrollbar">
           {menuCategories.map((category) => {
             const isExpanded = expandedCategories.has(category.title);
             
             return (
               <div key={category.title} className="mb-3">
-                {/* Kategori Başlığı (Compact) */}
                 {!isCollapsed ? (
                   <button
                     onClick={() => toggleCategory(category.title)}
@@ -197,7 +204,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
                   <div className="h-px bg-gray-200 mx-2 my-2" />
                 )}
 
-                {/* Alt Menüler (Accordion) */}
                 <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
                   (isExpanded || isCollapsed) ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
                 }`}>
@@ -219,7 +225,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
                           title={isCollapsed ? item.name : ''}
                         >
                           <span className={`shrink-0 ${!isCollapsed && 'mr-3'} ${isCollapsed ? '' : 'text-gray-500 group-hover:text-gray-700'}`}>
-                            {/* Aktifse ikon rengi mavi olsun, değilse gri */}
                             {React.cloneElement(item.icon as React.ReactElement, { 
                               className: location.pathname === item.path ? 'text-blue-600' : '' 
                             })}
@@ -236,7 +241,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
             );
           })}
 
-          {/* Admin Bölümü */}
           {isAdmin && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               {!isCollapsed && (
@@ -269,7 +273,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false, setIsCollapsed =
           )}
         </nav>
 
-        {/* Footer */}
         <div className="p-3 border-t border-gray-200 bg-gray-50/50">
           <div className={`flex items-center ${isCollapsed ? 'flex-col gap-3' : 'justify-between'}`}>
             <button
