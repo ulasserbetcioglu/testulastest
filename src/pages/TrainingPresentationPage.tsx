@@ -2,17 +2,30 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Presentation, Plus, Edit, Trash2, Save, ArrowLeft, ArrowRight, 
-  Maximize, Minimize, Upload, List, Grid, Search, Check, X, Award, Users, FileText
+  Maximize, Minimize, Upload, Check, X, Award, FileText, Image as ImageIcon, 
+  Type, List, Settings
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchTemplates, Template } from '../services/presentationService';
 import { toast } from 'sonner';
 
 // --- TİP TANIMLARI ---
+interface SlideContent {
+  title?: string;
+  subtitle?: string;
+  bullets?: string[];
+  imageUrl?: string;
+  caption?: string;
+  leftTitle?: string;
+  leftContent?: string[];
+  rightTitle?: string;
+  rightContent?: string[];
+}
+
 interface Slide {
   id: string;
   type: 'title' | 'content' | 'two-column' | 'image' | 'thank-you';
-  content: any;
+  content: SlideContent;
 }
 
 interface Presentation {
@@ -43,20 +56,18 @@ const TrainingPresentationPage = () => {
   // Editör State
   const [currentPresentation, setCurrentPresentation] = useState<Presentation | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<'general' | 'slide'>('slide'); // Sol panel tabları
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Sertifika State
   const [showCertModal, setShowCertModal] = useState(false);
   const [participants, setParticipants] = useState('');
   const [trainerName, setTrainerName] = useState('');
-  const [trainerTitle, setTrainerTitle] = useState('Eğitmen'); // Varsayılan ünvan
+  const [trainerTitle, setTrainerTitle] = useState('Eğitmen'); 
   const [trainingDate, setTrainingDate] = useState(new Date().toISOString().split('T')[0]);
   const [isGeneratingCert, setIsGeneratingCert] = useState(false);
 
-  // Filtreleme
-  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  
   const fullscreenRef = useRef<HTMLDivElement>(null);
 
   // --- VERİ YÜKLEME ---
@@ -101,19 +112,30 @@ const TrainingPresentationPage = () => {
 
   // --- CRUD İŞLEMLERİ ---
 
-  const createNewPresentation = (template: Template) => {
+  const createNewPresentation = async (template: Template) => {
+    // Şirket ayarlarını çek
+    let defaultCompanyName = '';
+    let defaultLogo = null;
+    
+    const { data: settings } = await supabase.from('company_settings').select('company_name, logo_url').single();
+    if (settings) {
+        defaultCompanyName = settings.company_name;
+        defaultLogo = settings.logo_url;
+    }
+
     const newPresentation: Presentation = {
       id: '', 
       name: template.name,
-      slides: template.slides,
-      company_name: '',
-      company_logo: null,
-      footer_text: 'İlaçlamatik Eğitim Hizmetleri © 2025',
+      slides: JSON.parse(JSON.stringify(template.slides)), // Deep copy
+      company_name: defaultCompanyName,
+      company_logo: defaultLogo,
+      footer_text: `${defaultCompanyName} Eğitim Hizmetleri © ${new Date().getFullYear()}`,
     };
     
     setCurrentPresentation(newPresentation);
     setCurrentSlideIndex(0);
     setActiveView('editor');
+    setActiveTab('slide');
   };
 
   const savePresentation = async () => {
@@ -168,7 +190,37 @@ const TrainingPresentationPage = () => {
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // --- SLAYT DÜZENLEME FONKSİYONLARI ---
+
+  const updateSlideContent = (key: keyof SlideContent, value: any) => {
+    if (!currentPresentation) return;
+    
+    const updatedSlides = [...currentPresentation.slides];
+    updatedSlides[currentSlideIndex] = {
+      ...updatedSlides[currentSlideIndex],
+      content: {
+        ...updatedSlides[currentSlideIndex].content,
+        [key]: value
+      }
+    };
+
+    setCurrentPresentation({ ...currentPresentation, slides: updatedSlides });
+  };
+
+  const handleSlideImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          updateSlideContent('imageUrl', event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCompanyLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -196,15 +248,12 @@ const TrainingPresentationPage = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Toplu Kayıt Oluşturma (Bulk Insert)
-      // certificates tablosunun yapısına uygun mapping
-      const records = names.map((name, index) => ({
+      const records = names.map((name) => ({
         customer_id: currentPresentation.customer_id,
-        // Benzersiz bir sertifika numarası üretelim: CERT-TIMESTAMP-INDEX
         certificate_number: `CERT-${Math.floor(Date.now() / 1000)}-${Math.floor(Math.random() * 1000)}`, 
         participant_name: name.trim(),
         training_date: trainingDate,
-        training_title: currentPresentation.name, // Sunum adı eğitim başlığı olur
+        training_title: currentPresentation.name, 
         instructor_name: trainerName,
         instructor_title: trainerTitle,
         created_by: user?.id
@@ -217,7 +266,6 @@ const TrainingPresentationPage = () => {
       toast.success(`${names.length} adet sertifika kaydı başarıyla oluşturuldu!`);
       setShowCertModal(false);
       
-      // Kullanıcıyı sertifikalar sayfasına yönlendirme isteği
       if(window.confirm("Sertifikalar oluşturuldu. Sertifikalar sayfasına gitmek ister misiniz?")) {
           navigate('/sertifikalar');
       }
@@ -230,38 +278,110 @@ const TrainingPresentationPage = () => {
     }
   };
 
-  // --- SLAYT RENDER ---
+  // --- SLAYT RENDER (GÜNCELLENMİŞ FONT BOYUTLARI) ---
   const renderSlide = (slide: Slide) => {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center text-center p-12 bg-white relative overflow-hidden">
+      <div className="h-full w-full flex flex-col items-center justify-center text-center p-8 md:p-16 bg-white relative overflow-hidden select-none">
+        {/* Logo */}
         {currentPresentation?.company_logo && (
-          <img src={currentPresentation.company_logo} className="absolute top-8 right-8 h-12 object-contain" alt="Logo" />
+          <img src={currentPresentation.company_logo} className="absolute top-6 right-6 h-10 md:h-14 object-contain opacity-90" alt="Logo" />
         )}
         
+        {/* Title Slide */}
         {slide.type === 'title' && (
-          <>
-            <h1 className="text-5xl font-bold text-gray-900 mb-6">{slide.content.title}</h1>
-            <h2 className="text-3xl text-gray-600">{slide.content.subtitle}</h2>
-          </>
+          <div className="animate-in fade-in zoom-in duration-500">
+            <h1 className="text-3xl md:text-5xl font-extrabold text-gray-800 mb-6 leading-tight max-w-4xl mx-auto">
+                {slide.content.title}
+            </h1>
+            <div className="h-1 w-24 bg-green-500 mx-auto mb-6"></div>
+            <h2 className="text-xl md:text-2xl text-gray-600 font-medium max-w-3xl mx-auto">
+                {slide.content.subtitle}
+            </h2>
+          </div>
         )}
         
+        {/* Content Slide */}
         {slide.type === 'content' && (
-          <div className="text-left w-full max-w-4xl">
-            <h2 className="text-4xl font-bold text-gray-900 mb-8 border-b pb-4">{slide.content.title}</h2>
-            <ul className="space-y-4">
-              {slide.content.bullets?.map((bullet: string, idx: number) => (
-                <li key={idx} className="text-2xl text-gray-700 flex items-start">
-                  <span className="text-green-600 mr-3">•</span> {bullet}
-                </li>
-              ))}
-            </ul>
+          <div className="text-left w-full max-w-5xl h-full flex flex-col pt-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 border-b-2 border-gray-100 pb-3">
+                {slide.content.title}
+            </h2>
+            <div className="flex gap-8 h-full">
+                <ul className="space-y-3 flex-1 overflow-y-auto pr-2">
+                {slide.content.bullets?.map((bullet: string, idx: number) => (
+                    <li key={idx} className="text-lg md:text-xl text-gray-700 flex items-start">
+                    <span className="text-green-600 mr-3 mt-1.5 text-sm">●</span> 
+                    <span>{bullet}</span>
+                    </li>
+                ))}
+                </ul>
+                {/* Opsiyonel Görsel Alanı */}
+                {slide.content.imageUrl && (
+                    <div className="w-1/3 flex items-center justify-center">
+                        <img src={slide.content.imageUrl} className="rounded-lg shadow-lg object-cover max-h-[400px]" alt="Content" />
+                    </div>
+                )}
+            </div>
           </div>
         )}
 
+        {/* Two Column Slide */}
+        {slide.type === 'two-column' && (
+            <div className="text-left w-full max-w-6xl h-full flex flex-col pt-4">
+                <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-8 border-b-2 border-gray-100 pb-3">
+                    {slide.content.title}
+                </h2>
+                <div className="grid grid-cols-2 gap-12 h-full">
+                    <div>
+                        <h3 className="text-xl font-bold text-green-700 mb-4">{slide.content.leftTitle}</h3>
+                        <ul className="space-y-2">
+                            {slide.content.leftContent?.map((item, idx) => (
+                                <li key={idx} className="text-base md:text-lg text-gray-600 flex items-start">
+                                    <Check size={16} className="text-green-500 mr-2 mt-1.5"/> {item}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-bold text-blue-700 mb-4">{slide.content.rightTitle}</h3>
+                         <ul className="space-y-2">
+                            {slide.content.rightContent?.map((item, idx) => (
+                                <li key={idx} className="text-base md:text-lg text-gray-600 flex items-start">
+                                    <Check size={16} className="text-blue-500 mr-2 mt-1.5"/> {item}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Image Slide */}
         {slide.type === 'image' && (
              <div className="w-full h-full flex flex-col items-center justify-center">
-                 <h2 className="text-3xl font-bold mb-6">{slide.content.title}</h2>
-                 <img src={slide.content.imageUrl} className="max-h-[70%] object-contain shadow-lg rounded" alt="Slide" />
+                 {slide.content.title && <h2 className="text-2xl md:text-3xl font-bold mb-6 text-gray-800">{slide.content.title}</h2>}
+                 {slide.content.imageUrl ? (
+                     <img src={slide.content.imageUrl} className="max-h-[70%] max-w-[90%] object-contain shadow-2xl rounded-lg border border-gray-200" alt="Slide" />
+                 ) : (
+                     <div className="h-64 w-full flex items-center justify-center bg-gray-100 rounded border-2 border-dashed border-gray-300 text-gray-400">
+                         Görsel Yok
+                     </div>
+                 )}
+                 {slide.content.caption && <p className="mt-4 text-gray-500 italic text-lg">{slide.content.caption}</p>}
+             </div>
+        )}
+
+        {/* Thank You Slide */}
+        {slide.type === 'thank-you' && (
+             <div className="flex flex-col items-center justify-center h-full">
+                 <Award className="w-24 h-24 text-yellow-500 mb-6 animate-bounce" />
+                 <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-4">{slide.content.title}</h1>
+                 <h2 className="text-xl md:text-2xl text-gray-500">{slide.content.subtitle}</h2>
+                 
+                 <div className="mt-12 p-6 bg-gray-50 rounded-xl border border-gray-100">
+                     <p className="font-bold text-gray-800 text-lg">{currentPresentation?.company_name}</p>
+                     <p className="text-sm text-gray-500">Eğitim Birimi</p>
+                 </div>
              </div>
         )}
       </div>
@@ -313,7 +433,11 @@ const TrainingPresentationPage = () => {
             {presentations.map(p => (
               <div key={p.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden group">
                 <div className="h-32 bg-gradient-to-r from-blue-600 to-blue-800 flex items-center justify-center">
-                    <Presentation className="text-white w-12 h-12 opacity-50" />
+                    {p.company_logo ? (
+                        <img src={p.company_logo} className="h-16 object-contain bg-white p-2 rounded" alt="logo" />
+                    ) : (
+                        <Presentation className="text-white w-12 h-12 opacity-50" />
+                    )}
                 </div>
                 <div className="p-5">
                   <h3 className="font-bold text-lg text-gray-800 mb-1">{p.name}</h3>
@@ -357,7 +481,7 @@ const TrainingPresentationPage = () => {
 
       {/* 2. EDİTÖR GÖRÜNÜMÜ */}
       {activeView === 'editor' && currentPresentation && (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-[1600px] mx-auto">
           <div className="flex justify-between items-center mb-6">
             <button onClick={() => setActiveView('list')} className="flex items-center text-gray-600 hover:text-gray-900">
                 <ArrowLeft className="mr-2" size={20} /> Listeye Dön
@@ -372,78 +496,171 @@ const TrainingPresentationPage = () => {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6 h-[80vh]">
-            {/* Ayarlar */}
-            <div className="md:col-span-1 bg-white rounded-xl shadow-sm border p-4 overflow-y-auto">
-                <div className="mb-6 border-b pb-4">
-                    <h3 className="font-bold text-gray-700 mb-3">Genel Ayarlar</h3>
-                    <div className="space-y-3">
-                        <input 
-                            type="text" 
-                            placeholder="Sunum Başlığı" 
-                            className="w-full border rounded p-2 text-sm"
-                            value={currentPresentation.name}
-                            onChange={(e) => setCurrentPresentation({...currentPresentation, name: e.target.value})}
-                        />
-                        <input 
-                            type="text" 
-                            placeholder="Firma Adı" 
-                            className="w-full border rounded p-2 text-sm"
-                            value={currentPresentation.company_name}
-                            onChange={(e) => setCurrentPresentation({...currentPresentation, company_name: e.target.value})}
-                        />
-                        <div className="flex items-center gap-2">
-                            <label className="flex-1 bg-gray-50 border rounded p-2 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-center text-gray-500">
-                                <Upload size={14} className="mr-2"/> Logo Yükle
-                                <input type="file" className="hidden" onChange={handleLogoUpload} accept="image/*" />
-                            </label>
-                            {currentPresentation.company_logo && (
-                                <img src={currentPresentation.company_logo} className="h-9 w-9 object-contain border rounded" />
-                            )}
-                        </div>
-                        <select 
-                            className="w-full border rounded p-2 text-sm bg-white"
-                            value={currentPresentation.customer_id || ''}
-                            onChange={(e) => setCurrentPresentation({...currentPresentation, customer_id: e.target.value})}
-                        >
-                            <option value="">Bir Müşteriye Ata (Sertifika için zorunlu)</option>
-                            {customers.map(c => (
-                                <option key={c.id} value={c.id}>{c.kisa_isim}</option>
-                            ))}
-                        </select>
-                    </div>
+          <div className="grid grid-cols-12 gap-6 h-[85vh]">
+            
+            {/* SOL PANEL: AYARLAR ve SLAYT LİSTESİ */}
+            <div className="col-span-3 bg-white rounded-xl shadow-sm border flex flex-col overflow-hidden">
+                {/* Tablar */}
+                <div className="flex border-b">
+                    <button 
+                        onClick={() => setActiveTab('slide')}
+                        className={`flex-1 py-3 text-sm font-medium ${activeTab === 'slide' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <Edit size={16} className="inline mr-1" /> Slayt Düzenle
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('general')}
+                        className={`flex-1 py-3 text-sm font-medium ${activeTab === 'general' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <Settings size={16} className="inline mr-1" /> Genel Ayarlar
+                    </button>
                 </div>
 
-                <div>
-                    <h3 className="font-bold text-gray-700 mb-3">Slaytlar</h3>
-                    <div className="space-y-2">
+                <div className="p-4 overflow-y-auto flex-1">
+                    {/* SLAYT DÜZENLEME TABI */}
+                    {activeTab === 'slide' && currentPresentation.slides[currentSlideIndex] && (
+                        <div className="space-y-4">
+                            <div className="bg-blue-50 p-2 rounded text-xs text-blue-700 mb-2 border border-blue-100">
+                                Şu an <strong>{currentSlideIndex + 1}. Slayt</strong> düzenleniyor.
+                            </div>
+
+                            {/* Başlık Düzenleme */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Slayt Başlığı</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={currentPresentation.slides[currentSlideIndex].content.title || ''}
+                                    onChange={(e) => updateSlideContent('title', e.target.value)}
+                                />
+                            </div>
+
+                            {/* Alt Başlık (Varsa) */}
+                            {(currentPresentation.slides[currentSlideIndex].type === 'title' || currentPresentation.slides[currentSlideIndex].type === 'thank-you') && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Alt Başlık</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={currentPresentation.slides[currentSlideIndex].content.subtitle || ''}
+                                        onChange={(e) => updateSlideContent('subtitle', e.target.value)}
+                                    />
+                                </div>
+                            )}
+
+                            {/* İçerik Maddeleri (Content Slayt İçin) */}
+                            {currentPresentation.slides[currentSlideIndex].type === 'content' && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-600 mb-1">Maddeler (Her satır yeni madde)</label>
+                                    <textarea 
+                                        rows={6}
+                                        className="w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                                        value={currentPresentation.slides[currentSlideIndex].content.bullets?.join('\n') || ''}
+                                        onChange={(e) => updateSlideContent('bullets', e.target.value.split('\n'))}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Görsel Yükleme */}
+                            <div className="border-t pt-3">
+                                <label className="block text-xs font-bold text-gray-600 mb-2">Slayt Görseli</label>
+                                <div className="flex items-center gap-2">
+                                    <label className="flex-1 bg-white border border-dashed border-gray-300 rounded p-2 text-xs cursor-pointer hover:bg-gray-50 flex items-center justify-center text-gray-500 transition-colors">
+                                        <ImageIcon size={14} className="mr-2"/> Görsel Seç/Değiştir
+                                        <input type="file" className="hidden" onChange={handleSlideImageUpload} accept="image/*" />
+                                    </label>
+                                    {currentPresentation.slides[currentSlideIndex].content.imageUrl && (
+                                        <button 
+                                            onClick={() => updateSlideContent('imageUrl', '')}
+                                            className="text-red-500 p-2 hover:bg-red-50 rounded"
+                                            title="Görseli Kaldır"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                        </div>
+                    )}
+
+                    {/* GENEL AYARLAR TABI */}
+                    {activeTab === 'general' && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Sunum Adı</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border rounded p-2 text-sm"
+                                    value={currentPresentation.name}
+                                    onChange={(e) => setCurrentPresentation({...currentPresentation, name: e.target.value})}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Firma Adı (Slaytlarda)</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border rounded p-2 text-sm"
+                                    value={currentPresentation.company_name}
+                                    onChange={(e) => setCurrentPresentation({...currentPresentation, company_name: e.target.value})}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Firma Logosu</label>
+                                <div className="flex items-center gap-2">
+                                    <label className="flex-1 bg-white border rounded p-2 text-xs cursor-pointer hover:bg-gray-50 flex items-center justify-center text-gray-500">
+                                        <Upload size={14} className="mr-2"/> Logo Değiştir
+                                        <input type="file" className="hidden" onChange={handleCompanyLogoUpload} accept="image/*" />
+                                    </label>
+                                    {currentPresentation.company_logo && (
+                                        <img src={currentPresentation.company_logo} className="h-8 w-8 object-contain border rounded bg-white" />
+                                    )}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-600 mb-1">Müşteri Ata</label>
+                                <select 
+                                    className="w-full border rounded p-2 text-sm bg-white"
+                                    value={currentPresentation.customer_id || ''}
+                                    onChange={(e) => setCurrentPresentation({...currentPresentation, customer_id: e.target.value})}
+                                >
+                                    <option value="">Seçiniz...</option>
+                                    {customers.map(c => (
+                                        <option key={c.id} value={c.id}>{c.kisa_isim}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                {/* Slayt Listesi (Alt Kısım) */}
+                <div className="border-t bg-gray-50 flex-1 overflow-y-auto p-2">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 px-2">Slayt Sıralaması</h4>
+                    <div className="space-y-1">
                         {currentPresentation.slides.map((slide, idx) => (
                             <div 
                                 key={idx} 
-                                onClick={() => setCurrentSlideIndex(idx)}
-                                className={`p-3 rounded-lg cursor-pointer border flex items-center gap-3 transition-colors ${
-                                    currentSlideIndex === idx ? 'bg-blue-50 border-blue-500 shadow-sm' : 'hover:bg-gray-50 border-gray-200'
+                                onClick={() => { setCurrentSlideIndex(idx); setActiveTab('slide'); }}
+                                className={`p-2 rounded cursor-pointer border flex items-center gap-2 transition-colors text-xs ${
+                                    currentSlideIndex === idx ? 'bg-white border-blue-500 shadow-sm ring-1 ring-blue-200' : 'hover:bg-white border-transparent'
                                 }`}
                             >
-                                <div className="bg-gray-200 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-gray-600">
-                                    {idx + 1}
-                                </div>
-                                <div className="overflow-hidden">
-                                    <p className="text-sm font-medium truncate">{slide.content.title || 'Başlıksız'}</p>
-                                    <p className="text-xs text-gray-400">{slide.type}</p>
-                                </div>
+                                <span className="font-bold text-gray-400 w-4">{idx + 1}.</span>
+                                <span className="truncate flex-1">{slide.content.title || 'Başlıksız'}</span>
+                                {slide.content.imageUrl && <ImageIcon size={12} className="text-gray-400"/>}
                             </div>
                         ))}
                     </div>
                 </div>
             </div>
 
-            {/* Önizleme */}
-            <div className="md:col-span-2 bg-gray-100 rounded-xl flex flex-col justify-center p-8 shadow-inner border relative">
-                <div className="aspect-video bg-white rounded-lg shadow-xl overflow-hidden relative">
+            {/* ORTA PANEL: CANLI ÖNİZLEME */}
+            <div className="col-span-9 bg-gray-100 rounded-xl flex flex-col justify-center p-8 shadow-inner border relative">
+                <div className="aspect-video bg-white rounded-lg shadow-2xl overflow-hidden relative w-full h-full max-h-[80vh]">
                     {currentPresentation.slides[currentSlideIndex] && renderSlide(currentPresentation.slides[currentSlideIndex])}
                     
-                    <div className="absolute bottom-0 w-full bg-gray-50 p-2 text-center text-xs text-gray-400 border-t">
+                    <div className="absolute bottom-0 w-full bg-white/90 backdrop-blur p-2 text-center text-xs text-gray-400 border-t">
                         {currentPresentation.footer_text} | Slayt {currentSlideIndex + 1}
                     </div>
                 </div>
