@@ -101,7 +101,7 @@ import AdminModuleReports from './pages/AdminModuleReports';
 import TekliflerListesi from './pages/TekliflerListesi';
 import AdminWeeklyKmTracking from './pages/AdminWeeklyKmTracking';
 import AnnualVisitReport from './pages/AnnualVisitReport';
-import TrainingPresentationPage from './pages/TrainingPresentationPage'; // YENİ EKLENDİ
+import TrainingPresentationPage from './pages/TrainingPresentationPage';
 
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
@@ -183,7 +183,6 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   React.useEffect(() => {
     const checkUserRole = async () => {
       try {
-        // 1. Önce LocalAuth (Müşteri/Şube) kontrolü
         const localSessionStr = localStorage.getItem('local_session');
         if (localSessionStr) {
           const localSession = JSON.parse(localSessionStr);
@@ -191,12 +190,10 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           else if (localSession.type === 'branch') { setUserRole('branch'); setLoading(false); return; }
         }
 
-        // 2. Supabase Auth (Admin/Operatör) kontrolü
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { setLoading(false); return; }
         setCurrentUser(user);
 
-        // Önce operators tablosuna bak
         const { data: operatorData } = await supabase
           .from('operators')
           .select('id')
@@ -209,7 +206,6 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           return;
         }
 
-        // Operatör değilse Profiles tablosuna bak
         const { data: profileData } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
         if (profileData?.role) {
           setUserRole(profileData.role);
@@ -227,7 +223,6 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (loading) return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
   
-  // Yönlendirme Mantığı
   if (userRole === 'operator') return <Navigate to="/operator" />;
   if (userRole === 'customer') return <Navigate to="/customer" />;
   if (userRole === 'branch') return <Navigate to="/branch" />;
@@ -273,7 +268,7 @@ function App() {
             <Route path="tahsilat-makbuzu" element={<OperatorCollectionReceipt />} />
             <Route path="hizli-notlar" element={<OperatorQuickNotes />} />
             <Route path="weekly-km" element={<OperatorWeeklyKmForm />} />
-            <Route path="egitim-sunumlari" element={<TrainingPresentationPage />} /> {/* YENİ: Operatör için */}
+            <Route path="egitim-sunumlari" element={<TrainingPresentationPage />} />
           </Route>
 
           {/* Customer Routes */}
@@ -364,7 +359,6 @@ function App() {
             <Route path="ekipman-pazarlama" element={<EkipmanPazarlama />} />
             <Route path="ekipman-yonetimi" element={<EkipmanYonetimi />} />
             <Route path="hizmet-pazarlama" element={<HizmetPazarlama />} />
-            <Route path="egitim-sunumlari" element={<TrainingPresentationPage />} /> {/* YENİ: Admin için */}
             <Route path="gonderilen-epostalar" element={<GonderilenEpostalar />} />
             <Route path="siparis-olustur" element={<SiparisOlusturma />} />
             <Route path="tedarik-siparisi" element={<TedarikSiparisi />} />
@@ -374,7 +368,7 @@ function App() {
             <Route path="rapor/goruntule/:reportId" element={<ModulRaporGoruntuleme />} />
             <Route path="rapor-goruntule" element={<RaporSecVeGoruntule />} />
             <Route path="raporlar" element={<GenelRaporGoruntuleme />} />
-            <Route path="bilgilendirme-pazarlama" element={<BilgilendirimePazarlama />} /> {/* İsim düzeltildi: Çakışmayı önlemek için */}
+            <Route path="bilgilendirme-pazarlama" element={<BilgilendirimePazarlama />} />
             <Route path="eposta-pazarlama" element={<EpostaPazarlama />} />
             <Route path="isletme-kesif" element={<IsletmeKesif />} />
             <Route path="bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
@@ -388,7 +382,8 @@ function App() {
             <Route path="yeni-trend-analizi" element={<TrendAnalysis branchId={undefined} />} />
             <Route path="admin/simulator" element={<AdminDataSimulator />} />
             <Route path="admin/yillik-rapor" element={<AnnualVisitReport />} />
-            
+            <Route path="egitim-sunumlari" element={<TrainingPresentationPage />} />
+
             <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
