@@ -340,23 +340,6 @@ const ModulesPage = () => {
 
   return (
     <div className="pt-8">
-      {/* Page Header */}
-      <section className="bg-gradient-to-br from-green-50 to-green-100 py-16">
-        <div className="container mx-auto px-4 text-center">
-          <div className="flex items-center justify-center mb-6">
-            <FileText className="h-12 w-12 text-green-600 mr-4" />
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-800">
-              İlaçlamatik Modüller
-            </h1>
-          </div>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Zararlı mücadelesi için profesyonel araçlar ve modüller. 
-            İş süreçlerinizi kolaylaştıracak ve müşterilerinize sunabileceğiniz 
-            kaliteli raporlar oluşturun.
-          </p>
-        </div>
-      </section>
-
       {/* User Status */}
       <section className="py-8 bg-white border-b">
         <div className="container mx-auto px-4">
