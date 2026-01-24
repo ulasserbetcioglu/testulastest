@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 interface Customer {
   id: string;
   kisa_isim: string;
-  firma_unvani: string;
+  cari_isim: string | null;
+  musteri_no: string | null;
 }
 
 interface Branch {
@@ -66,7 +67,7 @@ const AdminActivityFileManagement: React.FC = () => {
 
       const { data, error: customersError } = await supabase
         .from('customers')
-        .select('id, kisa_isim, firma_unvani')
+        .select('id, kisa_isim, cari_isim, musteri_no')
         .order('kisa_isim', { ascending: true });
 
       if (customersError) {
@@ -208,7 +209,9 @@ const AdminActivityFileManagement: React.FC = () => {
               <option value="">-- Müşteri Seçin --</option>
               {customers.map((customer) => (
                 <option key={customer.id} value={customer.id}>
-                  {customer.kisa_isim} - {customer.firma_unvani}
+                  {customer.kisa_isim}
+                  {customer.cari_isim && ` - ${customer.cari_isim}`}
+                  {customer.musteri_no && ` (${customer.musteri_no})`}
                 </option>
               ))}
             </select>
