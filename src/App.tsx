@@ -130,6 +130,8 @@ import BranchPaidMaterials from './pages/BranchPaidMaterials';
 import BranchDocuments from './pages/BranchDocuments';
 import BranchTrendAnalysisPage from './pages/BranchTrendAnalysisPage';
 import ProtectedReportViewer from './components/ProtectedReportViewer';
+import ActivityFileViewer from './pages/ActivityFileViewer';
+import AdminActivityFileManagement from './pages/AdminActivityFileManagement';
 
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode, allowedUserTypes?: string[] }> = ({ children }) => {
@@ -279,6 +281,7 @@ function App() {
             <Route path="takvim" element={<CustomerCalendar />} />
             <Route path="ziyaretler" element={<CustomerVisits />} />
             <Route path="dof" element={<CustomerDOF />} />
+            <Route path="faaliyet-dosyasi" element={<ActivityFileViewer />} />
             <Route path="dokumanlar" element={<CustomerDocuments />} />
             <Route path="sertifikalar" element={<CustomerCertificates />} />
             <Route path="malzemeler" element={<CustomerPaidMaterials />} />
@@ -295,6 +298,7 @@ function App() {
             <Route index element={<BranchDashboard />} />
             <Route path="modules" element={<Modules />} />
             <Route path="takvim" element={<BranchCalendar />} />
+            <Route path="faaliyet-dosyasi" element={<ActivityFileViewer />} />
             <Route path="dokumanlar" element={<BranchDocuments />} />
             <Route path="sertifikalar" element={<Certificates />} />
             <Route path="malzemeler" element={<BranchPaidMaterials />} />
@@ -387,9 +391,11 @@ function App() {
             <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
             <Route path="admin/monthly-visit-schedule" element={<AdminRoute><AdminMonthlyVisitSchedule /></AdminRoute>} />
             <Route path="subeler/kroki-duzenle" element={<AdminRoute><AdminFloorPlanEditor /></AdminRoute>} />
-            <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />  
-            <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />    
+            <Route path="pestisit-raporu" element={<AdminRoute><AdminPesticideReport /></AdminRoute>} />
+            <Route path="admin/visit-data-entry" element={<AdminRoute><AdminVisitDataEntry /></AdminRoute>} />
             <Route path="satis-gorusme-formu" element={<AdminRoute><SatisGorusmeFormu /></AdminRoute>} />
+            <Route path="admin/faaliyet-dosyasi-yonetimi" element={<AdminRoute><AdminActivityFileManagement /></AdminRoute>} />
+            <Route path="admin/faaliyet-dosyasi-goruntule" element={<AdminRoute><ActivityFileViewer /></AdminRoute>} />
           </Route>
         </Routes>
       </AuthProvider>

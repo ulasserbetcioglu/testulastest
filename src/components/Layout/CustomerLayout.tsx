@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../Auth/AuthProvider';
-import { 
-  LogOut, 
-  Menu, 
-  X, 
-  Home, 
-  Calendar, 
-  FileText, 
-  AlertCircle, 
-  FilePlus, 
-  Award, 
-  Package, 
-  TrendingUp, 
-  Bug, 
-  Layers, 
+import {
+  LogOut,
+  Menu,
+  X,
+  Home,
+  Calendar,
+  FileText,
+  AlertCircle,
+  FilePlus,
+  Award,
+  Package,
+  TrendingUp,
+  Bug,
+  Layers,
   Building,
-  CalendarDays // YENİ EKLENDİ
+  CalendarDays,
+  FolderOpen
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { localAuth } from '../../lib/localAuth';
@@ -66,12 +67,11 @@ const CustomerLayout: React.FC = () => {
   const navItems = [
     { path: '/customer', icon: <Home size={20} />, name: 'Ana Sayfa' },
     { path: '/customer/subeler', icon: <Building size={20} />, name: 'Şubelerim' },
-    // YENİ EKLENEN SATIR BAŞLANGIÇ
     { path: '/customer/ziyaret-plani', icon: <CalendarDays size={20} />, name: 'Ziyaret Planı' },
-    // YENİ EKLENEN SATIR BİTİŞ
     { path: '/customer/ziyaretler', icon: <FileText size={20} />, name: 'Ziyaretler' },
     { path: '/customer/takvim', icon: <Calendar size={20} />, name: 'Takvim' },
     { path: '/customer/dof', icon: <AlertCircle size={20} />, name: 'DÖF' },
+    { path: '/customer/faaliyet-dosyasi', icon: <FolderOpen size={20} />, name: 'Faaliyet Dosyası' },
     { path: '/customer/dokumanlar', icon: <FilePlus size={20} />, name: 'Dökümanlar' },
     { path: '/customer/sertifikalar', icon: <Award size={20} />, name: 'Sertifikalar' },
     { path: '/customer/modul-raporlari', icon: <Layers size={20} />, name: 'Modül Raporları' },
