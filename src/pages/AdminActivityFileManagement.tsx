@@ -24,9 +24,11 @@ const AdminActivityFileManagement: React.FC = () => {
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [loadingBranches, setLoadingBranches] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [authUser, setAuthUser] = useState<any>(null);
 
   useEffect(() => {
-    loadCustomers();
+    checkAuthAndLoadCustomers();
   }, []);
 
   useEffect(() => {
@@ -38,18 +40,52 @@ const AdminActivityFileManagement: React.FC = () => {
     }
   }, [selectedCustomerId]);
 
-  const loadCustomers = async () => {
+  const checkAuthAndLoadCustomers = async () => {
     setLoading(true);
+    setError('');
     try {
-      const { data, error } = await supabase
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError) {
+        console.error('Auth error:', authError);
+        setError(`Kimlik doğrulama hatası: ${authError.message}`);
+        toast.error('Kimlik doğrulama hatası');
+        setLoading(false);
+        return;
+      }
+
+      if (!user) {
+        setError('Kullanıcı oturumu bulunamadı');
+        toast.error('Lütfen giriş yapın');
+        setLoading(false);
+        return;
+      }
+
+      setAuthUser(user);
+      console.log('Authenticated user:', user.email);
+
+      const { data, error: customersError } = await supabase
         .from('customers')
         .select('id, kisa_isim, firma_unvani')
         .order('kisa_isim', { ascending: true });
 
-      if (error) throw error;
+      if (customersError) {
+        console.error('Customers query error:', customersError);
+        setError(`Müşteriler yüklenirken hata: ${customersError.message} (${customersError.code})`);
+        toast.error(`Veritabanı hatası: ${customersError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      console.log('Customers loaded:', data?.length || 0);
       setCustomers(data || []);
-    } catch (error) {
-      console.error('Error loading customers:', error);
+
+      if (!data || data.length === 0) {
+        setError('Henüz hiç müşteri kaydı bulunmuyor');
+      }
+    } catch (error: any) {
+      console.error('Unexpected error loading customers:', error);
+      setError(`Beklenmeyen hata: ${error.message || 'Bilinmeyen hata'}`);
       toast.error('Müşteriler yüklenirken hata oluştu');
     } finally {
       setLoading(false);
@@ -65,12 +101,22 @@ const AdminActivityFileManagement: React.FC = () => {
         .eq('customer_id', customerId)
         .order('sube_adi', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Branches query error:', error);
+        toast.error(`Şubeler yüklenirken hata: ${error.message}`);
+        setBranches([]);
+        setSelectedBranchId('');
+        return;
+      }
+
+      console.log('Branches loaded for customer:', customerId, '- Count:', data?.length || 0);
       setBranches(data || []);
       setSelectedBranchId('');
-    } catch (error) {
-      console.error('Error loading branches:', error);
-      toast.error('Şubeler yüklenirken hata oluştu');
+    } catch (error: any) {
+      console.error('Unexpected error loading branches:', error);
+      toast.error('Şubeler yüklenirken beklenmeyen hata oluştu');
+      setBranches([]);
+      setSelectedBranchId('');
     } finally {
       setLoadingBranches(false);
     }
@@ -93,7 +139,8 @@ const AdminActivityFileManagement: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
         <div className="text-gray-600">Yükleniyor...</div>
       </div>
     );
@@ -106,19 +153,57 @@ const AdminActivityFileManagement: React.FC = () => {
         <p className="text-gray-600 mt-2">
           Müşteri ve şube seçerek ilgili faaliyet dosyasını görüntüleyin ve yönetin
         </p>
+        {authUser && (
+          <p className="text-sm text-gray-500 mt-1">
+            Oturum: {authUser.email}
+          </p>
+        )}
       </div>
 
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Hata</h3>
+              <div className="mt-2 text-sm text-red-700">
+                {error}
+              </div>
+              <button
+                onClick={checkAuthAndLoadCustomers}
+                className="mt-3 text-sm font-medium text-red-600 hover:text-red-500"
+              >
+                Tekrar Dene
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-sm p-6">
+        {customers.length > 0 && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-green-800">
+              ✓ {customers.length} müşteri yüklendi
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Users className="inline w-4 h-4 mr-1" />
-              Müşteri Seçin
+              Müşteri Seçin {customers.length > 0 && `(${customers.length})`}
             </label>
             <select
               value={selectedCustomerId}
               onChange={(e) => setSelectedCustomerId(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+              disabled={customers.length === 0}
             >
               <option value="">-- Müşteri Seçin --</option>
               {customers.map((customer) => (
@@ -127,12 +212,15 @@ const AdminActivityFileManagement: React.FC = () => {
                 </option>
               ))}
             </select>
+            {customers.length === 0 && !error && (
+              <p className="text-sm text-orange-600 mt-1">⚠ Henüz müşteri eklenmemiş</p>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Building className="inline w-4 h-4 mr-1" />
-              Şube Seçin (Opsiyonel)
+              Şube Seçin (Opsiyonel) {branches.length > 0 && `(${branches.length})`}
             </label>
             <select
               value={selectedBranchId}
@@ -148,7 +236,10 @@ const AdminActivityFileManagement: React.FC = () => {
               ))}
             </select>
             {loadingBranches && (
-              <p className="text-sm text-gray-500 mt-1">Şubeler yükleniyor...</p>
+              <p className="text-sm text-blue-600 mt-1">⏳ Şubeler yükleniyor...</p>
+            )}
+            {selectedCustomerId && !loadingBranches && branches.length === 0 && (
+              <p className="text-sm text-gray-500 mt-1">Bu müşteriye ait şube bulunamadı</p>
             )}
           </div>
         </div>
