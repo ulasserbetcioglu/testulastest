@@ -17,6 +17,7 @@ import {
   FileCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
+import FloorPlanPreview from '../components/Branches/FloorPlanPreview';
 
 interface Document {
   id: string;
@@ -72,6 +73,7 @@ const ActivityFileViewer: React.FC = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [customerName, setCustomerName] = useState('');
   const [branchName, setBranchName] = useState('');
+  const [currentBranchId, setCurrentBranchId] = useState<string | null>(null);
 
   const adminCustomerId = searchParams.get('customerId');
   const adminBranchId = searchParams.get('branchId');
@@ -239,6 +241,8 @@ const ActivityFileViewer: React.FC = () => {
       }
 
       if (branchId) {
+        setCurrentBranchId(branchId);
+
         const { data: branchDocs } = await supabase
           .from('documents')
           .select('*')
@@ -260,13 +264,12 @@ const ActivityFileViewer: React.FC = () => {
           .eq('branch_id', branchId)
           .order('created_at', { ascending: false });
 
-        const floorPlansWithImages = floorPlans?.filter(plan => plan.background_url) || [];
-        if (floorPlansWithImages.length > 0) {
+        if (floorPlans && floorPlans.length > 0) {
           categoriesData.push({
             title: 'Kroki ve Yerleşim Planları',
             icon: <ImageIcon className="w-5 h-5" />,
             documents: [],
-            floorPlans: floorPlansWithImages
+            floorPlans
           });
         }
 
@@ -443,7 +446,7 @@ const ActivityFileViewer: React.FC = () => {
                       </div>
                     )}
 
-                    {category.floorPlans && category.floorPlans.length > 0 && (
+                    {category.floorPlans && category.floorPlans.length > 0 && currentBranchId && (
                       <div className="space-y-4 mt-4">
                         <h4 className="font-medium text-gray-700 mb-2">Kroki ve Planlar</h4>
                         {category.floorPlans.map((plan) => (
@@ -461,29 +464,9 @@ const ActivityFileViewer: React.FC = () => {
                                   </p>
                                 </div>
                               </div>
-                              <button
-                                onClick={() => handleViewDocument(plan.background_url)}
-                                className="flex items-center space-x-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Tam Ekran Görüntüle"
-                              >
-                                <Eye className="w-4 h-4" />
-                                <span className="text-sm font-medium">Büyüt</span>
-                              </button>
                             </div>
                             <div className="p-4 bg-gray-50">
-                              <div className="relative group cursor-pointer" onClick={() => handleViewDocument(plan.background_url)}>
-                                <img
-                                  src={plan.background_url}
-                                  alt={plan.title}
-                                  className="w-full h-auto rounded-lg border-2 border-gray-200 group-hover:border-blue-400 transition-all shadow-sm"
-                                  style={{ maxHeight: '500px', objectFit: 'contain' }}
-                                />
-                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all rounded-lg flex items-center justify-center">
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg">
-                                    <Eye className="w-6 h-6 text-blue-600" />
-                                  </div>
-                                </div>
-                              </div>
+                              <FloorPlanPreview planId={plan.id} branchId={currentBranchId} />
                             </div>
                           </div>
                         ))}
