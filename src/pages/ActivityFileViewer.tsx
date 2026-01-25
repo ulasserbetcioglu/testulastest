@@ -30,7 +30,7 @@ interface Document {
 interface FloorPlan {
   id: string;
   title: string;
-  image_url: string;
+  background_url: string;
   created_at: string;
 }
 
@@ -256,16 +256,17 @@ const ActivityFileViewer: React.FC = () => {
 
         const { data: floorPlans } = await supabase
           .from('branch_floor_plans')
-          .select('id, title, image_url, created_at')
+          .select('id, title, background_url, created_at')
           .eq('branch_id', branchId)
           .order('created_at', { ascending: false });
 
-        if (floorPlans && floorPlans.length > 0) {
+        const floorPlansWithImages = floorPlans?.filter(plan => plan.background_url) || [];
+        if (floorPlansWithImages.length > 0) {
           categoriesData.push({
             title: 'Kroki ve Yerleşim Planları',
             icon: <ImageIcon className="w-5 h-5" />,
             documents: [],
-            floorPlans
+            floorPlans: floorPlansWithImages
           });
         }
 
@@ -461,7 +462,7 @@ const ActivityFileViewer: React.FC = () => {
                                 </div>
                               </div>
                               <button
-                                onClick={() => handleViewDocument(plan.image_url)}
+                                onClick={() => handleViewDocument(plan.background_url)}
                                 className="flex items-center space-x-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Tam Ekran Görüntüle"
                               >
@@ -470,9 +471,9 @@ const ActivityFileViewer: React.FC = () => {
                               </button>
                             </div>
                             <div className="p-4 bg-gray-50">
-                              <div className="relative group cursor-pointer" onClick={() => handleViewDocument(plan.image_url)}>
+                              <div className="relative group cursor-pointer" onClick={() => handleViewDocument(plan.background_url)}>
                                 <img
-                                  src={plan.image_url}
+                                  src={plan.background_url}
                                   alt={plan.title}
                                   className="w-full h-auto rounded-lg border-2 border-gray-200 group-hover:border-blue-400 transition-all shadow-sm"
                                   style={{ maxHeight: '500px', objectFit: 'contain' }}
