@@ -465,7 +465,7 @@ const ActivityFileViewer: React.FC = () => {
                                 </div>
                               </div>
                             </div>
-                            <div className="p-4 bg-gray-50">
+                            <div className="p-4 bg-gray-100 overflow-auto flex justify-center">
                               <FloorPlanPreview planId={plan.id} branchId={currentBranchId} />
                             </div>
                           </div>
