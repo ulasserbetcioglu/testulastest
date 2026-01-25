@@ -443,29 +443,47 @@ const ActivityFileViewer: React.FC = () => {
                     )}
 
                     {category.floorPlans && category.floorPlans.length > 0 && (
-                      <div className="space-y-2 mt-4">
+                      <div className="space-y-4 mt-4">
                         <h4 className="font-medium text-gray-700 mb-2">Kroki ve Planlar</h4>
                         {category.floorPlans.map((plan) => (
                           <div
                             key={plan.id}
-                            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            className="bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition-all"
                           >
-                            <div className="flex items-center space-x-3">
-                              <ImageIcon className="w-5 h-5 text-gray-400" />
-                              <div>
-                                <p className="font-medium text-gray-900">{plan.title}</p>
-                                <p className="text-xs text-gray-400">
-                                  {new Date(plan.created_at).toLocaleDateString('tr-TR')}
-                                </p>
+                            <div className="p-3 bg-white border-b border-gray-200 flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <ImageIcon className="w-5 h-5 text-blue-600" />
+                                <div>
+                                  <p className="font-medium text-gray-900">{plan.title}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {new Date(plan.created_at).toLocaleDateString('tr-TR')}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleViewDocument(plan.image_url)}
+                                className="flex items-center space-x-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Tam Ekran Görüntüle"
+                              >
+                                <Eye className="w-4 h-4" />
+                                <span className="text-sm font-medium">Büyüt</span>
+                              </button>
+                            </div>
+                            <div className="p-4 bg-gray-50">
+                              <div className="relative group cursor-pointer" onClick={() => handleViewDocument(plan.image_url)}>
+                                <img
+                                  src={plan.image_url}
+                                  alt={plan.title}
+                                  className="w-full h-auto rounded-lg border-2 border-gray-200 group-hover:border-blue-400 transition-all shadow-sm"
+                                  style={{ maxHeight: '500px', objectFit: 'contain' }}
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all rounded-lg flex items-center justify-center">
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg">
+                                    <Eye className="w-6 h-6 text-blue-600" />
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleViewDocument(plan.image_url)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Görüntüle"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
                           </div>
                         ))}
                       </div>
