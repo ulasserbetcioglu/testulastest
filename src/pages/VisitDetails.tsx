@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Plus, Minus, Trash, MapPin, Navigation, Mail, PenTool as Tool, Edit, Camera, X as CloseIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Minus, Trash, MapPin, Navigation, Mail, PenTool as Tool, Edit, Camera, X as CloseIcon, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
 import { calculateDistance } from '../lib/utils';
 import { sendEmail, getRecipientEmails } from '../lib/emailClient';
 import { toast } from 'sonner';
@@ -16,8 +16,8 @@ const sanitizeFileName = (text: string) => {
     .replace(/ı/g, 'i').replace(/İ/g, 'I')
     .replace(/ö/g, 'o').replace(/Ö/g, 'O')
     .replace(/ç/g, 'c').replace(/Ç/g, 'C')
-    .replace(/\s+/g, '_') // Boşlukları alt çizgi yap
-    .replace(/[^a-zA-Z0-9_]/g, ''); // Harf, rakam ve alt çizgi dışındakileri sil
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_]/g, '');
 };
 
 // --- YARDIMCI FONKSİYON: FOTOĞRAF OPTİMİZASYONU ---
@@ -38,14 +38,12 @@ const resizeImage = async (
       let width = img.width;
       let height = img.height;
 
-      // Oranı koruyarak boyutlandır
       if (width > maxWidth || height > maxHeight) {
         const ratio = Math.min(maxWidth / width, maxHeight / height);
         width = Math.floor(width * ratio);
         height = Math.floor(height * ratio);
       }
 
-      // Canvas oluştur
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
@@ -56,14 +54,11 @@ const resizeImage = async (
         return;
       }
 
-      // Resmi çiz
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Blob olarak dışa aktar
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            // File nesnesine çevir
             const optimizedFile = new File([blob], file.name, {
               type: 'image/jpeg',
               lastModified: Date.now(),
@@ -112,7 +107,7 @@ interface Visit {
   customer: {
     id: string;
     kisa_isim: string;
-    cari_isim?: string; // DÜZELTME: name yerine cari_isim
+    cari_isim?: string;
   };
   branch?: {
     id: string;
@@ -367,6 +362,186 @@ const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({ isOpen, onClose, 
   );
 };
 
+// --- FOTOĞRAF MODAL BİLEŞENİ (YENİ) ---
+
+const PhotoCaptureModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onCapture: (file: File) => void;
+}> = ({ isOpen, onClose, onCapture }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  const startCamera = async () => {
+    try {
+      setError(null);
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment', // Arka kamera
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        videoRef.current.play();
+      }
+      
+      setStream(mediaStream);
+      setIsCameraActive(true);
+    } catch (err: any) {
+      console.error('Kamera erişim hatası:', err);
+      setError('Kameraya erişilemedi. Lütfen izinleri kontrol edin.');
+      toast.error('Kamera erişimi reddedildi');
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+      setIsCameraActive(false);
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0);
+    
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `rapor_${Date.now()}.jpg`, {
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        });
+        onCapture(file);
+        stopCamera();
+        onClose();
+      }
+    }, 'image/jpeg', 0.92);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      onCapture(e.target.files[0]);
+      onClose();
+    }
+  };
+
+  const handleClose = () => {
+    stopCamera();
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <div className="flex justify-between items-center p-4 border-b bg-white">
+          <h2 className="text-lg font-bold text-gray-800">Fotoğraf Ekle</h2>
+          <button onClick={handleClose} className="text-gray-500 hover:text-gray-700 p-2">
+            <CloseIcon size={24} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
+          {!isCameraActive ? (
+            <div className="space-y-3">
+              <button
+                onClick={startCamera}
+                className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
+              >
+                <Camera size={24} />
+                Kamera ile Çek
+              </button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500 font-medium">veya</span>
+                </div>
+              </div>
+
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-green-700 transition-all flex items-center justify-center gap-3"
+              >
+                <ImageIcon size={24} />
+                Galeriden Seç
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="relative bg-black rounded-xl overflow-hidden aspect-video">
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  playsInline
+                />
+                <canvas ref={canvasRef} className="hidden" />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={stopCamera}
+                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-all"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={capturePhoto}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <Camera size={20} />
+                  Fotoğraf Çek
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- ANA BİLEŞEN (VISIT DETAILS) ---
 
 const VisitDetails: React.FC = () => {
@@ -384,6 +559,7 @@ const VisitDetails: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false);
+  const [showPhotoCaptureModal, setShowPhotoCaptureModal] = useState(false);
   
   // Form States
   const [equipmentChecks, setEquipmentChecks] = useState<Record<string, any>>({});
@@ -411,7 +587,6 @@ const VisitDetails: React.FC = () => {
   const [distanceFromPrevious, setDistanceFromPrevious] = useState<number | null>(null);
   const [reportPhotoFile, setReportPhotoFile] = useState<File | null>(null);
   const [reportPhotoPreview, setReportPhotoPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- INITIAL DATA FETCHING ---
 
@@ -439,7 +614,7 @@ const VisitDetails: React.FC = () => {
     setShowPaidVisitAmount(selectedVisitTypes.includes('ucretli'));
   }, [selectedVisitTypes]);
 
-  // --- OTOMATİK AÇIKLAMA METNİ OLUŞTURUCU (YENİ) ---
+  // --- OTOMATİK AÇIKLAMA METNİ OLUŞTURUCU ---
   useEffect(() => {
     const visitTypeLabels = selectedVisitTypes
       .map(id => visitTypes.find(t => t.id === id)?.label)
@@ -526,7 +701,7 @@ const VisitDetails: React.FC = () => {
           id, visit_date, equipment_checks, pest_types, visit_type, notes, report_number, status, report_photo_url, report_photo_file_path,
           customer:customer_id (id, kisa_isim, cari_isim),
           branch:branch_id (id, sube_adi, latitude, longitude)
-        `) // DÜZELTME: name kaldırıldı, cari_isim eklendi
+        `)
         .eq('id', id)
         .single();
 
@@ -604,7 +779,6 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  // --- İSTİSNA YÖNETİMİ ---
   const fetchBranchEquipment = async (branchId: string) => {
     try {
       const { data: branchEquipmentData } = await supabase
@@ -711,31 +885,24 @@ const VisitDetails: React.FC = () => {
     }
   };
 
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const file = e.target.files[0];
+  const handlePhotoCapture = async (file: File) => {
+    try {
+      toast.info('Fotoğraf optimize ediliyor...');
 
-      try {
-        toast.info('Fotoğraf optimize ediliyor...');
+      const { file: optimizedFile, originalSize, newSize } = await resizeImage(file, 1920, 1080, 0.85);
 
-        // Fotoğrafı optimize et
-        const { file: optimizedFile, originalSize, newSize } = await resizeImage(file, 1920, 1080, 0.85);
+      setReportPhotoFile(optimizedFile);
+      setReportPhotoPreview(URL.createObjectURL(optimizedFile));
 
-        setReportPhotoFile(optimizedFile);
-        setReportPhotoPreview(URL.createObjectURL(optimizedFile));
-
-        // Kullanıcıya bilgi ver
-        const reduction = ((1 - newSize / originalSize) * 100).toFixed(1);
-        toast.success(
-          `Fotoğraf optimize edildi: ${(originalSize / 1024 / 1024).toFixed(2)} MB → ${(newSize / 1024 / 1024).toFixed(2)} MB (-%${reduction})`
-        );
-      } catch (error: any) {
-        console.error('Optimizasyon hatası:', error);
-        toast.warning('Optimizasyon başarısız, orijinal dosya kullanılacak');
-        // Hata durumunda orijinal dosyayı kullan
-        setReportPhotoFile(file);
-        setReportPhotoPreview(URL.createObjectURL(file));
-      }
+      const reduction = ((1 - newSize / originalSize) * 100).toFixed(1);
+      toast.success(
+        `Fotoğraf optimize edildi: ${(originalSize / 1024 / 1024).toFixed(2)} MB → ${(newSize / 1024 / 1024).toFixed(2)} MB (-%${reduction})`
+      );
+    } catch (error: any) {
+      console.error('Optimizasyon hatası:', error);
+      toast.warning('Optimizasyon başarısız, orijinal dosya kullanılacak');
+      setReportPhotoFile(file);
+      setReportPhotoPreview(URL.createObjectURL(file));
     }
   };
 
@@ -753,28 +920,16 @@ const VisitDetails: React.FC = () => {
       let uploadedPhotoUrl = visit?.report_photo_url || null;
       let uploadedPhotoFilePath = visit?.report_photo_file_path || null;
 
-      // --- DÜZENLENEN KISIM: DOSYA ADI FORMATLAMA ---
       if (reportPhotoFile && visit) {
-        // Tarih formatı: YYYY-MM-DD
         const formattedDate = new Date(visit.visit_date).toISOString().split('T')[0]; 
-        
-        // Müşteri ve Şube isimleri (DÜZELTME: name yerine cari_isim kullanıldı)
         const customerName = visit.customer.kisa_isim || visit.customer.cari_isim || 'Musteri';
         const branchName = visit.branch?.sube_adi || 'Sube';
-        
-        // Dosya uzantısı
         const fileExt = reportPhotoFile.name.split('.').pop();
-
-        // Yeni Dosya Adı: MUSTERI_SUBE_TARIH_RAPORNO.ext
         const newFileName = `${sanitizeFileName(customerName)}_${sanitizeFileName(branchName)}_${formattedDate}_${reportNumber}.${fileExt}`;
-        
-        // Storage yolu (Klasör yapısını koruyarak)
         const filePath = `report_photos/${newFileName}`;
 
-        // Yükleme
         await supabase.storage.from('documents').upload(filePath, reportPhotoFile, { upsert: true });
         
-        // URL Alma
         const { data: urlData } = supabase.storage.from('documents').getPublicUrl(filePath);
         uploadedPhotoUrl = urlData.publicUrl;
         uploadedPhotoFilePath = filePath;
@@ -782,7 +937,6 @@ const VisitDetails: React.FC = () => {
         uploadedPhotoUrl = null;
         uploadedPhotoFilePath = null;
       }
-      // ------------------------------------------------
 
       let finalNotes = notes;
       
@@ -807,7 +961,6 @@ const VisitDetails: React.FC = () => {
 
       if (visitError) throw visitError;
 
-      // Ücretli Ürün Kaydı
       if (!noPaidProductsUsed) {
         const validPaidItems = paidProductUsage.filter(i => i.productId && i.quantity);
         if (validPaidItems.length > 0) {
@@ -837,7 +990,6 @@ const VisitDetails: React.FC = () => {
         await supabase.from('paid_material_sales').delete().eq('id', existingSaleId);
       }
 
-      // Biyosidal Kaydı
       if (isEditMode) await supabase.from('biocidal_products_usage').delete().eq('visit_id', id);
       const validBiocidal = biocidalUsage.filter(i => i.productId && i.quantity);
       if (validBiocidal.length > 0) {
@@ -874,7 +1026,7 @@ const VisitDetails: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-3 sm:p-6 space-y-6 pb-24">
-      {/* HEADER - Mobil Uyumlu */}
+      {/* HEADER */}
       <div className="flex flex-col gap-2">
         <div className="text-sm text-gray-500 flex justify-between">
           <span>{new Date(visit.visit_date).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
@@ -899,7 +1051,7 @@ const VisitDetails: React.FC = () => {
         )}
       </div>
 
-      {/* EKİPMANLAR - Mobil Uyumlu Grid */}
+      {/* EKİPMANLAR */}
       {visit.branch && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-3 flex justify-between items-center">
@@ -985,9 +1137,8 @@ const VisitDetails: React.FC = () => {
         </div>
       )}
 
-      {/* SEÇENEKLER & ZARARLILAR - Mobil Uyumlu Grid */}
+      {/* SEÇENEKLER & ZARARLILAR */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Ziyaret Türü */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <h3 className="font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100 text-lg">Ziyaret Türü</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -1017,7 +1168,6 @@ const VisitDetails: React.FC = () => {
           )}
         </div>
 
-        {/* Zararlılar */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <h3 className="font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100 text-lg">Hedef Zararlılar</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -1160,10 +1310,12 @@ const VisitDetails: React.FC = () => {
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">Rapor Fotoğrafı</label>
           <div className="flex gap-3 items-start">
-            <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handlePhotoChange} />
-            <button onClick={() => fileInputRef.current?.click()} className="flex-1 border-2 border-dashed border-gray-300 p-6 rounded-xl flex flex-col justify-center items-center gap-2 text-gray-500 hover:bg-gray-50 hover:border-gray-400 transition-all">
+            <button 
+              onClick={() => setShowPhotoCaptureModal(true)} 
+              className="flex-1 border-2 border-dashed border-gray-300 p-6 rounded-xl flex flex-col justify-center items-center gap-2 text-gray-500 hover:bg-gray-50 hover:border-gray-400 transition-all"
+            >
               <Camera size={28} className="text-gray-400" /> 
-              <span className="text-sm font-medium">Fotoğraf Çek / Yükle</span>
+              <span className="text-sm font-medium">Fotoğraf Ekle</span>
             </button>
             {reportPhotoPreview && (
               <div className="relative w-24 h-24 shrink-0">
@@ -1191,6 +1343,12 @@ const VisitDetails: React.FC = () => {
       </button>
 
       <AddEquipmentModal isOpen={showAddEquipmentModal} onClose={() => setShowAddEquipmentModal(false)} branchId={visit?.branch?.id || ''} onSave={() => visit?.branch?.id && fetchBranchEquipment(visit.branch.id)} />
+      
+      <PhotoCaptureModal 
+        isOpen={showPhotoCaptureModal} 
+        onClose={() => setShowPhotoCaptureModal(false)} 
+        onCapture={handlePhotoCapture}
+      />
     </div>
   );
 };
