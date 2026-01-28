@@ -370,7 +370,7 @@ const TeklifGoruntule: React.FC = () => {
                                     <Bug size={12} /> HEDEF ZARARLILAR
                                 </h4>
                                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                    {['Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Gümüşçün'].map((pest, i) => (
+                                    {['Kemirgen'].map((pest, i) => (
                                         <span key={i} style={{ fontSize: '9px', padding: '4px 8px', backgroundColor: '#f3f4f6', borderRadius: '4px', color: '#374151', border: `1px solid ${lightBorder}` }}>
                                             {pest}
                                         </span>
