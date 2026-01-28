@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Mail, Users, Send, Loader2 as Loader, MessageSquare, Check, Plus, FileDown, Save } from 'lucide-react';
+import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug } from 'lucide-react';
 
-// Arayüz (Interface) tanımları
+// --- ARAYÜZLER ---
 interface Customer {
   id: string;
   kisa_isim: string;
@@ -19,29 +19,32 @@ interface Service {
   visit_count: number | null;
 }
 
-// GÜNCELLENDİ: unitType eklendi
 interface SelectedService {
-    id: number;
-    visitCount: number;
-    price: number;
-    explanation: string;
-    unitType: 'aylik' | 'seferlik'; // YENİ
-    name?: string;
-    description?: string;
-    image_url?: string;
+  id: number;
+  visitCount: number;
+  price: number;
+  explanation: string;
+  unitType: 'aylik' | 'seferlik';
+  name?: string;
+  description?: string;
+  image_url?: string;
 }
 
-// YENİ: Footer için arayüz
 interface FooterInfo {
-    id?: number;
-    name: string;
-    title: string;
-    website: string;
-    phone: string;
-    logo_url: string;
+  id?: number;
+  name: string;
+  title: string;
+  website: string;
+  phone: string;
+  logo_url: string;
 }
 
-// YENİ: Footer'ı dinamik oluşturan fonksiyon
+// Zararlı Türleri Listesi
+const PEST_TYPES = [
+  'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene'
+];
+
+// Footer HTML Oluşturucu
 const generateSignatureHtml = (footer: FooterInfo): string => `
   <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eeeeee;">
     <tr>
@@ -60,26 +63,30 @@ const generateSignatureHtml = (footer: FooterInfo): string => `
   </table>
 `;
 
-
 const HizmetPazarlama: React.FC = () => {
+  // --- STATE ---
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [serviceList, setServiceList] = useState<Service[]>([]);
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>([]);
-  const [emailSubject, setEmailSubject] = useState('Hizmet Teklifimiz');
+  const [emailSubject, setEmailSubject] = useState('Hizmet Teklifimiz - Fiyat Teklifi Sunulur');
   const [emailPreview, setEmailPreview] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
-  const [isSavingSettings, setIsSavingSettings] = useState(false); // YENİ
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  // Müşteri bilgileri için state'ler
+  // Form Alanları
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [ccEmail, setCcEmail] = useState(''); // YENİ: CC E-posta
   
+  // Zararlı Seçimi
+  const [selectedPests, setSelectedPests] = useState<string[]>(['Hamam Böceği', 'Kemirgen']); // Varsayılanlar
+
   const [manualService, setManualService] = useState({ name: '', description: '', visitCount: 1, price: 0 });
 
-  // YENİ: Dinamik footer state'i
+  // Footer Ayarları
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
     name: 'İlaçlamatik Ekibi',
     title: 'Profesyonel Zararlı Kontrol Çözümleri',
@@ -88,7 +95,7 @@ const HizmetPazarlama: React.FC = () => {
     logo_url: 'https://i.imgur.com/PajSpus.png'
   });
 
-  // GÜNCELLENDİ: Verileri ve ayarları ilk yüklemede çek
+  // --- VERİ ÇEKME ---
   useEffect(() => {
     const fetchInitialData = async () => {
       setLoading(true);
@@ -96,7 +103,7 @@ const HizmetPazarlama: React.FC = () => {
         const [customerRes, serviceRes, settingsRes] = await Promise.all([
             supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
             supabase.from('services').select('*').order('name'),
-            supabase.from('company_settings').select('*').limit(1).single() // YENİ: Ayarları çek
+            supabase.from('company_settings').select('*').limit(1).single()
         ]);
 
         if (customerRes.error) throw customerRes.error;
@@ -104,7 +111,7 @@ const HizmetPazarlama: React.FC = () => {
         
         setCustomers(customerRes.data || []);
         setServiceList(serviceRes.data || []);
-        if (settingsRes.data) { // YENİ: Ayarlar varsa state'i güncelle
+        if (settingsRes.data) {
             setFooterInfo(settingsRes.data);
         }
 
@@ -118,7 +125,7 @@ const HizmetPazarlama: React.FC = () => {
     fetchInitialData();
   }, []);
 
-  // Müşteri seçildiğinde manuel alanları doldur - BU KISIM AYNI KALDI
+  // Müşteri seçimi
   useEffect(() => {
       if (selectedCustomer) {
           const customer = customers.find(c => c.id === selectedCustomer);
@@ -129,52 +136,101 @@ const HizmetPazarlama: React.FC = () => {
       }
   }, [selectedCustomer, customers]);
 
-  // E-posta içeriğini oluşturan fonksiyon - GÜNCELLENDİ
-  const generateEmailHtml = (customer: string, contact: string, selectedItems: (Partial<Service> & { visitCount: number, customPrice: number, explanation: string, unitType: 'aylik' | 'seferlik' })[], signature: string, proposalLink?: string, password?: string): string => {
+  // --- HTML OLUŞTURUCU ---
+  const generateEmailHtml = (customer: string, contact: string, selectedItems: any[], signature: string, proposalLink?: string, password?: string): string => {
     let grandTotal = 0;
     const itemRows = selectedItems.map(item => {
       const price = item.customPrice || 0;
       const visitCount = item.visitCount || 1;
-      const itemTotal = item.unitType === 'aylik' ? visitCount * price : price; // Seferlikte ziyaret sayısı çarpılmaz
+      const itemTotal = item.unitType === 'aylik' ? visitCount * price : price;
       grandTotal += itemTotal;
       
-      // YENİ: unitType'a göre metin belirleme
-      const unitText = item.unitType === 'aylik' ? `Ayda ${visitCount} Ziyaret` : `Sefer Başı`;
+      const unitText = item.unitType === 'aylik' ? `${visitCount} Ziyaret / Ay` : `Tek Seferlik Uygulama`;
 
       return `
       <tr style="border-bottom: 1px solid #eeeeee;">
-        <td style="padding: 15px; width: 100px; vertical-align: top;">
-          <img src="${item.image_url || 'https://placehold.co/80x80/e2e8f0/334155?text=Hizmet'}" alt="${item.name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
+        <td style="padding: 15px; width: 80px; vertical-align: top;">
+          <img src="${item.image_url || 'https://placehold.co/80x80/e2e8f0/334155?text=Hizmet'}" alt="${item.name}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px;">
         </td>
         <td style="padding: 15px; vertical-align: top;">
-          <p style="margin: 0; font-weight: bold; font-size: 16px; color: #333;">${item.name}</p>
-          <p style="margin: 5px 0 0 0; font-size: 14px; color: #555;">${item.description}</p>
-          ${item.explanation ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #4f46e5; background-color: #eef2ff; border-left: 3px solid #4f46e5; padding: 8px;"><strong>Not:</strong> ${item.explanation}</p>` : ''}
+          <p style="margin: 0; font-weight: bold; font-size: 15px; color: #333;">${item.name}</p>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #666;">${item.description}</p>
+          ${item.explanation ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #4f46e5; font-style: italic;">Not: ${item.explanation}</p>` : ''}
         </td>
-        <td style="padding: 15px; font-size: 14px; text-align: center; vertical-align: top;">${unitText}</td>
-        <td style="padding: 15px; font-size: 14px; text-align: right; vertical-align: top;">${price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+        <td style="padding: 15px; font-size: 13px; text-align: center; vertical-align: top; white-space: nowrap;">${unitText}</td>
+        <td style="padding: 15px; font-size: 14px; text-align: right; vertical-align: top; font-weight: bold;">${price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
       </tr>
     `}).join('');
 
+    const pestListHtml = PEST_TYPES.map(pest => {
+        const isSelected = selectedPests.includes(pest);
+        const color = isSelected ? '#059669' : '#d1d5db';
+        const bg = isSelected ? '#ecfdf5' : '#f3f4f6';
+        const decoration = isSelected ? 'none' : 'line-through';
+        return `<span style="display:inline-block; padding: 4px 8px; margin: 2px; font-size: 11px; border-radius: 4px; background-color: ${bg}; color: ${color}; border: 1px solid ${color}; text-decoration: ${decoration};">${pest}</span>`;
+    }).join(' ');
+
     const pdfSection = proposalLink && password ? `
-        <div style="margin-top: 30px; padding: 20px; background-color: #f8fafc; border-radius: 8px; text-align: center;">
-            <p style="margin:0; font-size: 16px; font-weight: bold; color: #333;">Teklifin PDF Versiyonu</p>
-            <p style="margin-top:10px;font-size:14px;color:#555;">Teklifi görüntülemek veya indirmek için aşağıdaki butona tıklayın ve size özel şifreyi girin.</p>
-            <div style="background-color:#f0fdf4;border:1px solid #a7f3d0;padding:15px;border-radius:8px;margin-top:20px;">
-                <p style="margin:0;font-size:14px;color:#333;">Teklif Görüntüleme Şifreniz:</p>
-                <p style="font-size:24px;font-weight:bold;color:#065f46;letter-spacing:3px;margin:10px 0;">${password}</p>
+        <div style="margin-top: 30px; padding: 25px; background-color: #f8fafc; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0;">
+            <p style="margin:0; font-size: 16px; font-weight: bold; color: #1e293b;">Resmi Teklif Dökümanı</p>
+            <p style="margin-top:8px;font-size:14px;color:#64748b;">Teklifinizi detaylı incelemek ve indirmek için aşağıdaki butonu kullanabilirsiniz.</p>
+            
+            <div style="margin: 20px auto; max-width: 300px; background: #ffffff; padding: 15px; border-radius: 6px; border: 1px dashed #cbd5e1;">
+                <p style="margin:0;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;">ERİŞİM KODU</p>
+                <p style="margin:5px 0 0 0;font-size:24px;font-weight:bold;color:#0f172a;letter-spacing:4px;font-family:monospace;">${password}</p>
             </div>
-            <a href="${proposalLink}" style="display:inline-block;background-color:#059669;color:white !important;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;margin-top:20px;">Teklifi Görüntüle</a>
+            
+            <a href="${proposalLink}" style="display:inline-block;background-color:#2563eb;color:white !important;padding:12px 30px;text-decoration:none;border-radius:6px;font-weight:bold;font-size:14px;">Teklifi Görüntüle</a>
         </div>
     ` : '';
 
-    // E-postanın tam HTML yapısı
     return `
-      <!DOCTYPE html><html><head><style>body{font-family:Arial,sans-serif;color:#333}.container{max-width:700px;margin:auto;border:1px solid #eee;padding:20px}.header{background-color:#059669;color:white;padding:10px;text-align:center}h2{margin:0}.content{padding:20px}table{width:100%;border-collapse:collapse}th{background-color:#f2f2f2;text-align:left;padding:10px;font-size:12px;text-transform:uppercase}</style></head><body><div class="container"><div class="header"><h2>Hizmet Teklifimiz</h2></div><div class="content"><p>Merhaba ${contact || customer},</p><p><b>${customer}</b> firmanız için hazırladığımız hizmet teklifimiz aşağıda bilgilerinize sunulmuştur.</p><table style="margin-top:20px;margin-bottom:20px"><thead><tr><th>Hizmet</th><th>Açıklama</th><th style="text-align:center">Adet</th><th style="text-align:right">Birim Fiyat</th></tr></thead><tbody>${itemRows}</tbody><tfoot><tr style="border-top: 2px solid #333;"><td colspan="3" style="text-align:right;padding:15px;font-weight:bold;font-size:16px;">GENEL TOPLAM:</td><td style="text-align:right;padding:15px;font-weight:bold;font-size:18px;color:#059669;">${grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td></tr><tr><td colspan="4" style="text-align:right;padding-top: 5px; font-size: 12px; color: #777;"><i>Fiyatlara KDV dahil değildir.</i></td></tr></tfoot></table>${pdfSection}<p>Detaylı bilgi için bu e-postayı yanıtlayabilir veya bizimle iletişime geçebilirsiniz.</p>${signature}</div></div></body></html>
+      <!DOCTYPE html><html><head><style>body{font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333; line-height: 1.6;}.container{max-width:700px;margin:auto;border:1px solid #e5e7eb; border-radius: 8px; overflow: hidden;}.header{background-color:#1e293b;color:white;padding:20px;text-align:center}.content{padding:30px}table{width:100%;border-collapse:collapse}th{background-color:#f8fafc;text-align:left;padding:12px;font-size:12px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;}</style></head><body>
+      <div class="container">
+        <div class="header">
+            <h2 style="margin:0; font-size: 24px;">FİYAT TEKLİFİ SUNULUR</h2>
+            <p style="margin:5px 0 0 0; opacity: 0.8; font-size: 14px;">Hizmet Detayları ve Maliyet Analizi</p>
+        </div>
+        <div class="content">
+            <p>Sayın <b>${contact || 'Yetkili'}</b>,</p>
+            <p><b>${customer}</b> firması için özel olarak hazırladığımız hizmet ve fiyat teklifimizi aşağıda bilgilerinize sunarız.</p>
+            
+            <div style="margin: 20px 0; padding: 15px; background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px;">
+                <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; color: #92400e;">KAPSAM DAHİLİNDEKİ HEDEF ZARARLILAR:</p>
+                <div>${pestListHtml}</div>
+            </div>
+
+            <table style="margin-top:20px;margin-bottom:20px">
+                <thead><tr><th>Hizmet & Açıklama</th><th style="text-align:center">Kapsam</th><th style="text-align:right">Birim Fiyat</th></tr></thead>
+                <tbody>${itemRows}</tbody>
+                <tfoot>
+                    <tr><td colspan="3" style="padding-top:15px;border-top:2px solid #333;"></td></tr>
+                    <tr>
+                        <td colspan="2" style="text-align:right;padding:5px;font-size:14px;color:#666;">Ara Toplam:</td>
+                        <td style="text-align:right;padding:5px;font-size:14px;font-weight:bold;">${grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="text-align:right;padding:5px;font-size:14px;color:#666;">KDV (%20):</td>
+                        <td style="text-align:right;padding:5px;font-size:14px;font-weight:bold;">${(grandTotal * 0.2).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="text-align:right;padding:10px;font-size:16px;font-weight:bold;color:#1e293b;">GENEL TOPLAM:</td>
+                        <td style="text-align:right;padding:10px;font-size:18px;font-weight:bold;color:#059669;">${(grandTotal * 1.2).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            ${pdfSection}
+            
+            <p style="margin-top: 30px; font-size: 13px; color: #666;">Not: Bu teklif 15 gün süreyle geçerlidir. Onayınız durumunda hizmet planlaması yapılacaktır.</p>
+            ${signature}
+        </div>
+      </div>
+      </body></html>
     `;
   };
 
-  // Seçimler değiştiğinde önizlemeyi otomatik güncelle - GÜNCELLENDİ
+  // Önizleme Güncelleme
   useEffect(() => {
     if (selectedServices.length === 0) {
       setEmailPreview('');
@@ -187,13 +243,12 @@ const HizmetPazarlama: React.FC = () => {
             { id: selected.id, name: (selected as any).name, description: (selected as any).description, image_url: null, visitCount: selected.visitCount, customPrice: selected.price, explanation: selected.explanation, unitType: selected.unitType };
     });
     
-    // YENİ: Dinamik signature oluşturulup fonksiyona gönderiliyor
     const signature = generateSignatureHtml(footerInfo);
-    const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails as any, signature);
+    const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails, signature);
     setEmailPreview(html);
-  }, [selectedServices, serviceList, companyName, contactPerson, footerInfo]); // footerInfo bağımlılık olarak eklendi
+  }, [selectedServices, serviceList, companyName, contactPerson, footerInfo, selectedPests]);
 
-  // E-posta gönderme ve teklif oluşturma - GÜNCELLENDİ
+  // TEKLİF GÖNDERME
   const handleSendEmail = async () => {
     if (!recipientEmail || !companyName) {
       toast.error('Lütfen Alıcı E-posta ve Firma Adı alanlarını doldurun.');
@@ -211,6 +266,7 @@ const HizmetPazarlama: React.FC = () => {
         const proposalNumber = `TEKLIF-${Date.now().toString().slice(-6)}`;
         const accessPassword = Math.floor(100000 + Math.random() * 900000).toString();
 
+        // 1. Ana Teklif Kaydı (pests array'i JSON olarak kaydediliyor)
         const { data: proposalData, error: proposalError } = await supabase
             .from('proposals')
             .insert({
@@ -220,7 +276,10 @@ const HizmetPazarlama: React.FC = () => {
                 recipient_email: recipientEmail,
                 total_amount: totalAmount,
                 created_by: user?.id,
-                access_password: accessPassword
+                access_password: accessPassword,
+                status: 'pending',
+                included_pests: selectedPests, // YENİ: Zararlı türleri
+                cc_email: ccEmail || null // YENİ: CC
             })
             .select('id')
             .single();
@@ -228,6 +287,7 @@ const HizmetPazarlama: React.FC = () => {
         if (proposalError) throw proposalError;
         const newProposalId = proposalData.id;
 
+        // 2. Hizmet Kalemleri Kaydı
         const itemsToInsert = selectedServices.map(item => {
             const serviceDetails = serviceList.find(s => s.id === item.id) || item;
             return {
@@ -238,53 +298,59 @@ const HizmetPazarlama: React.FC = () => {
                 visit_count: item.visitCount,
                 unit_price: item.price,
                 explanation: item.explanation,
-                unit_type: item.unitType, // YENİ: unitType'ı veritabanına ekle
+                unit_type: item.unitType,
             };
         });
 
         const { error: itemsError } = await supabase.from('proposal_items').insert(itemsToInsert);
         if (itemsError) throw itemsError;
 
+        // 3. E-posta Gönderimi
         const proposalLink = `https://ilaclamatik.com/teklif-goruntule/${newProposalId}`;
         
         const selectedItemsForEmail = selectedServices.map(selected => {
             const serviceDetails = serviceList.find(item => item.id === selected.id);
-            return { ...serviceDetails, visitCount: selected.visitCount, customPrice: selected.price, explanation: selected.explanation, unitType: selected.unitType }; // YENİ: unitType eklendi
+            return { ...serviceDetails, visitCount: selected.visitCount, customPrice: selected.price, explanation: selected.explanation, unitType: selected.unitType };
         });
 
-        const signature = generateSignatureHtml(footerInfo); // YENİ: Dinamik signature
-        const emailHtml = generateEmailHtml(companyName, contactPerson, selectedItemsForEmail as any, signature, proposalLink, accessPassword);
+        const signature = generateSignatureHtml(footerInfo);
+        const emailHtml = generateEmailHtml(companyName, contactPerson, selectedItemsForEmail, signature, proposalLink, accessPassword);
 
-        const { error: emailError } = await supabase.functions.invoke('send-schedule-email', {
-            body: { to: recipientEmail, subject: emailSubject, html: emailHtml },
-        });
+        // CC ekleniyor
+        const emailPayload = {
+            to: recipientEmail,
+            cc: ccEmail, // YENİ
+            subject: emailSubject,
+            html: emailHtml
+        };
+
+        const { error: emailError } = await supabase.functions.invoke('send-schedule-email', { body: emailPayload });
 
         if (emailError) throw emailError;
-        toast.success(`Teklif e-postası başarıyla ${recipientEmail} adresine gönderildi!`);
-      
+        toast.success(`Teklif başarıyla oluşturuldu ve gönderildi!`);
+        
     } catch (error: any) {
-      toast.error('İşlem sırasında bir hata oluştu: ' + error.message);
+      toast.error('İşlem hatası: ' + error.message);
     } finally {
       setIsSending(false);
     }
   };
   
-  // YENİ: Footer ayarlarını kaydetme fonksiyonu
+  // Footer Kaydet
   const handleSaveFooterSettings = async () => {
       setIsSavingSettings(true);
       try {
-          // upsert: id varsa günceller, yoksa ekler. id=1 varsayımıyla tek bir ayar satırı olmasını sağlar.
           const { error } = await supabase.from('company_settings').upsert({ ...footerInfo, id: 1 }).select();
           if (error) throw error;
           toast.success("Ayarlar başarıyla kaydedildi!");
       } catch (error: any) {
-          toast.error("Ayarlar kaydedilirken bir hata oluştu: " + error.message);
+          toast.error("Hata: " + error.message);
       } finally {
           setIsSavingSettings(false);
       }
   };
 
-  // Genel Toplam Hesaplaması - GÜNCELLENDİ
+  // Toplam Hesaplama
   const grandTotal = useMemo(() => {
       return selectedServices.reduce((total, item) => {
           const price = item.price || 0;
@@ -294,17 +360,16 @@ const HizmetPazarlama: React.FC = () => {
       }, 0);
   }, [selectedServices]);
 
-  // GÜNCELLENDİ: Hizmet seçme/bırakma
+  // Hizmet Seçimi
   const handleServiceSelect = (item: Service, isSelected: boolean) => {
       if (isSelected) {
-          // unitType 'aylik' olarak başlatılıyor
           setSelectedServices(prev => [...prev, { id: item.id, visitCount: item.visit_count || 1, price: item.price || 0, explanation: '', unitType: 'aylik' }]);
       } else {
           setSelectedServices(prev => prev.filter(selected => selected.id !== item.id));
       }
   };
 
-  // GÜNCELLENDİ: Hizmet detaylarını güncelleme
+  // Hizmet Güncelleme
   const handleServiceUpdate = (id: number, field: 'visitCount' | 'price' | 'explanation' | 'unitType', value: string | number) => {
       setSelectedServices(prev => prev.map(item => {
           if (item.id === id) {
@@ -316,13 +381,18 @@ const HizmetPazarlama: React.FC = () => {
       }));
   };
   
-  // Manuel hizmet ekleme - GÜNCELLENDİ
+  // Zararlı Seçimi Toggle
+  const togglePest = (pest: string) => {
+      setSelectedPests(prev => prev.includes(pest) ? prev.filter(p => p !== pest) : [...prev, pest]);
+  };
+
+  // Manuel Hizmet Ekleme
   const handleAddManualService = () => {
       if(!manualService.name) {
-          toast.error("Lütfen manuel hizmet için bir isim girin.");
+          toast.error("Hizmet adı giriniz.");
           return;
       }
-      const newManualService = { ...manualService, id: Date.now() * -1, unitType: 'aylik' as 'aylik' | 'seferlik' }; // unitType eklendi
+      const newManualService = { ...manualService, id: Date.now() * -1, unitType: 'aylik' as 'aylik' | 'seferlik' };
       setServiceList(prev => [...prev, newManualService as unknown as Service]);
       setSelectedServices(prev => [...prev, { ...newManualService, explanation: '' }]);
       setManualService({ name: '', description: '', visitCount: 1, price: 0 });
@@ -333,82 +403,97 @@ const HizmetPazarlama: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <MessageSquare className="w-8 h-8 text-green-600" />
-          <h1 className="text-3xl font-bold text-gray-800">Hizmet Pazarlama Modülü</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Hizmet Pazarlama & Teklif Modülü</h1>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-md space-y-6">
+        <div className="bg-white p-6 rounded-xl shadow-md space-y-6 max-h-[90vh] overflow-y-auto">
           
+          {/* 1. ALICI BİLGİLERİ */}
           <div>
-            <label className="block text-lg font-semibold text-gray-700 mb-2">1. Alıcı Bilgileri</label>
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Kayıtlı Müşteri Seç (Opsiyonel)</label>
+            <label className="block text-lg font-semibold text-gray-700 mb-2">1. Alıcı & Firma Bilgileri</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                    <label className="text-xs text-gray-500">Kayıtlı Müşteri</label>
                     <select
                         value={selectedCustomer}
                         onChange={e => setSelectedCustomer(e.target.value)}
-                        className="w-full p-2 border rounded-lg bg-white"
+                        className="w-full p-2 border rounded-lg bg-gray-50"
                         disabled={loading}
                     >
-                        <option value="">Manuel Giriş Yap</option>
+                        <option value="">Manuel Giriş</option>
                         {customers.map(c => <option key={c.id} value={c.id}>{c.kisa_isim}</option>)}
                     </select>
                 </div>
                 <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Firma Adı *" className="w-full p-2 border rounded-lg" disabled={!!selectedCustomer} />
-                <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Yetkili Kişi (Opsiyonel)" className="w-full p-2 border rounded-lg" />
-                <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Alıcı E-posta Adresi *" className="w-full p-2 border rounded-lg" disabled={!!selectedCustomer} />
+                <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Yetkili Kişi" className="w-full p-2 border rounded-lg" />
+                <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Alıcı E-posta *" className="w-full p-2 border rounded-lg" disabled={!!selectedCustomer} />
+                <input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} placeholder="CC (Bilgi) E-posta" className="w-full p-2 border rounded-lg" />
             </div>
           </div>
 
+          {/* 2. HEDEF ZARARLILAR */}
           <div>
-            <label className="block text-lg font-semibold text-gray-700 mb-2">2. Hizmetleri Seçin ve Düzenleyin</label>
-              <div className="border rounded-lg max-h-60 overflow-y-auto">
+             <label className="block text-lg font-semibold text-gray-700 mb-2">2. Kapsam Dahilindeki Zararlılar</label>
+             <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border">
+                 {PEST_TYPES.map(pest => (
+                     <button
+                        key={pest}
+                        onClick={() => togglePest(pest)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
+                            selectedPests.includes(pest) 
+                            ? 'bg-green-100 text-green-700 border-green-200' 
+                            : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+                        }`}
+                     >
+                        {selectedPests.includes(pest) && <Check size={12}/>}
+                        <Bug size={12} className={selectedPests.includes(pest) ? 'text-green-600' : 'text-gray-300'} />
+                        {pest}
+                     </button>
+                 ))}
+             </div>
+          </div>
+
+          {/* 3. HİZMETLER */}
+          <div>
+            <label className="block text-lg font-semibold text-gray-700 mb-2">3. Hizmet Seçimi</label>
+              <div className="border rounded-lg max-h-80 overflow-y-auto">
                 {serviceList.map(item => {
                     const selectedItem = selectedServices.find(s => s.id === item.id);
                     return (
                         <div key={item.id} className={`border-b last:border-b-0 p-3 ${selectedItem ? 'bg-green-50' : ''}`}>
-                            <div className="flex items-center space-x-4">
-                                <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" checked={!!selectedItem} onChange={(e) => handleServiceSelect(item, e.target.checked)} />
-                                <img src={item.image_url || 'https://placehold.co/64x64/e2e8f0/334155?text=?'} alt={item.name} className="w-12 h-12 object-cover rounded-md bg-gray-100" />
+                            <div className="flex items-center space-x-3">
+                                <input type="checkbox" className="h-5 w-5 rounded border-gray-300 text-green-600 focus:ring-green-500" checked={!!selectedItem} onChange={(e) => handleServiceSelect(item, e.target.checked)} />
                                 <div className="flex-grow">
-                                    <p className="text-sm font-semibold text-gray-900">{item.name}</p>
-                                    <p className="text-xs text-gray-500">{item.description}</p>
+                                    <p className="text-sm font-bold text-gray-900">{item.name}</p>
+                                    <p className="text-xs text-gray-500 line-clamp-1">{item.description}</p>
                                 </div>
                             </div>
                             {selectedItem && (
-                                <div className="space-y-3 mt-3 pl-10">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        
-                                        {/* YENİ: Fiyatlandırma Tipi Seçimi */}
-                                        <div>
-                                            <label className="text-xs font-medium text-gray-500">Fiyatlandırma Tipi</label>
-                                            <select
-                                                value={selectedItem.unitType}
-                                                onChange={(e) => handleServiceUpdate(item.id, 'unitType', e.target.value)}
-                                                className="w-full p-1 border rounded-md text-sm"
-                                            >
-                                                <option value="aylik">Aylık Ziyaret</option>
-                                                <option value="seferlik">Sefer Başı</option>
-                                            </select>
-                                        </div>
-
-                                        {/* GÜNCELLENDİ: Koşullu gösterim */}
-                                        {selectedItem.unitType === 'aylik' ? (
-                                            <div>
-                                                <label className="text-xs font-medium text-gray-500">Ayda Kaç Ziyaret?</label>
-                                                <input type="number" value={selectedItem.visitCount} onChange={(e) => handleServiceUpdate(item.id, 'visitCount', parseInt(e.target.value) || 1)} className="w-full p-1 border rounded-md text-sm" min="1" />
-                                            </div>
-                                        ) : <div />}
-                                        
-                                        <div>
-                                            <label className="text-xs font-medium text-gray-500">{selectedItem.unitType === 'aylik' ? 'Birim Fiyat (₺)' : 'Sefer Başı Fiyat (₺)'}</label>
-                                            <input type="number" value={selectedItem.price} onChange={(e) => handleServiceUpdate(item.id, 'price', parseFloat(e.target.value) || 0)} className="w-full p-1 border rounded-md text-sm" step="0.01" />
-                                        </div>
+                                <div className="mt-3 pl-8 grid grid-cols-12 gap-3 bg-white p-3 rounded border border-green-100 shadow-sm animate-in slide-in-from-top-2">
+                                    <div className="col-span-6">
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold">Fiyatlandırma</label>
+                                        <select
+                                            value={selectedItem.unitType}
+                                            onChange={(e) => handleServiceUpdate(item.id, 'unitType', e.target.value)}
+                                            className="w-full p-1.5 border rounded text-sm bg-gray-50"
+                                        >
+                                            <option value="aylik">Aylık Periyodik</option>
+                                            <option value="seferlik">Tek Seferlik</option>
+                                        </select>
                                     </div>
-                                    <div>
-                                        <label className="text-xs font-medium text-gray-500">Teklife Özel Açıklama (Opsiyonel)</label>
-                                        <textarea value={selectedItem.explanation} onChange={(e) => handleServiceUpdate(item.id, 'explanation', e.target.value)} rows={2} className="w-full p-1 border rounded-md text-sm" />
+                                    <div className="col-span-3">
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold">{selectedItem.unitType === 'aylik' ? 'Ziyaret/Ay' : 'Adet'}</label>
+                                        <input type="number" value={selectedItem.visitCount} onChange={(e) => handleServiceUpdate(item.id, 'visitCount', parseInt(e.target.value))} className="w-full p-1.5 border rounded text-sm text-center" min="1" disabled={selectedItem.unitType === 'seferlik'} />
+                                    </div>
+                                    <div className="col-span-3">
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold">Birim Fiyat</label>
+                                        <input type="number" value={selectedItem.price} onChange={(e) => handleServiceUpdate(item.id, 'price', parseFloat(e.target.value))} className="w-full p-1.5 border rounded text-sm text-right font-bold text-green-600" />
+                                    </div>
+                                    <div className="col-span-12">
+                                        <label className="text-[10px] text-gray-500 uppercase font-bold">Özel Açıklama (İsteğe Bağlı)</label>
+                                        <input type="text" value={selectedItem.explanation} onChange={(e) => handleServiceUpdate(item.id, 'explanation', e.target.value)} className="w-full p-1.5 border rounded text-sm" placeholder="Örn: 1. kat ve bodrum dahil" />
                                     </div>
                                 </div>
                             )}
@@ -418,64 +503,66 @@ const HizmetPazarlama: React.FC = () => {
             </div>
           </div>
           
+          {/* MANUEL HİZMET */}
           <div className="border-t pt-4">
-            <label className="block text-lg font-semibold text-gray-700 mb-2">Manuel Hizmet Ekle</label>
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-                <input type="text" placeholder="Hizmet Adı" value={manualService.name} onChange={e => setManualService(prev => ({...prev, name: e.target.value}))} className="w-full p-2 border rounded-md" />
-                <textarea placeholder="Hizmet Açıklaması" value={manualService.description} onChange={e => setManualService(prev => ({...prev, description: e.target.value}))} rows={2} className="w-full p-2 border rounded-md" />
-                <div className="grid grid-cols-2 gap-4">
-                    <input type="number" placeholder="Ziyaret Sayısı" value={manualService.visitCount} onChange={e => setManualService(prev => ({...prev, visitCount: parseInt(e.target.value) || 1}))} className="w-full p-2 border rounded-md" />
-                    <input type="number" placeholder="Fiyat" value={manualService.price} onChange={e => setManualService(prev => ({...prev, price: parseFloat(e.target.value) || 0}))} className="w-full p-2 border rounded-md" />
+            <details className="group">
+                <summary className="flex cursor-pointer items-center text-sm font-medium text-gray-600 hover:text-green-600">
+                    <Plus className="mr-2 h-4 w-4" /> Manuel Hizmet Ekle
+                </summary>
+                <div className="mt-3 space-y-3 p-4 bg-gray-50 rounded-lg">
+                    <input type="text" placeholder="Hizmet Adı" value={manualService.name} onChange={e => setManualService(prev => ({...prev, name: e.target.value}))} className="w-full p-2 border rounded text-sm" />
+                    <textarea placeholder="Açıklama" value={manualService.description} onChange={e => setManualService(prev => ({...prev, description: e.target.value}))} rows={2} className="w-full p-2 border rounded text-sm" />
+                    <div className="grid grid-cols-2 gap-4">
+                        <input type="number" placeholder="Fiyat" value={manualService.price} onChange={e => setManualService(prev => ({...prev, price: parseFloat(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
+                        <button onClick={handleAddManualService} className="w-full bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700">Ekle</button>
+                    </div>
                 </div>
-                <button onClick={handleAddManualService} className="w-full flex items-center justify-center gap-2 p-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition-colors">
-                    <Plus size={16} /> Manuel Hizmeti Teklife Ekle
-                </button>
-            </div>
+            </details>
           </div>
 
-          {/* YENİ: E-posta Alt Bilgi Ayarları */}
-          <div className="border-t pt-4">
-            <label className="block text-lg font-semibold text-gray-700 mb-2">3. E-posta Alt Bilgi Ayarları</label>
-            <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-                <input type="text" placeholder="Görünen İsim" value={footerInfo.name} onChange={e => setFooterInfo(prev => ({...prev, name: e.target.value}))} className="w-full p-2 border rounded-md" />
-                <input type="text" placeholder="Unvan / Slogan" value={footerInfo.title} onChange={e => setFooterInfo(prev => ({...prev, title: e.target.value}))} className="w-full p-2 border rounded-md" />
-                <div className="grid grid-cols-2 gap-4">
-                    <input type="text" placeholder="Web Sitesi" value={footerInfo.website} onChange={e => setFooterInfo(prev => ({...prev, website: e.target.value}))} className="w-full p-2 border rounded-md" />
-                    <input type="text" placeholder="Telefon Numarası" value={footerInfo.phone} onChange={e => setFooterInfo(prev => ({...prev, phone: e.target.value}))} className="w-full p-2 border rounded-md" />
-                </div>
-                <input type="text" placeholder="Logo URL" value={footerInfo.logo_url} onChange={e => setFooterInfo(prev => ({...prev, logo_url: e.target.value}))} className="w-full p-2 border rounded-md" />
-                <button onClick={handleSaveFooterSettings} disabled={isSavingSettings} className="w-full flex items-center justify-center gap-2 p-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400">
-                    {isSavingSettings ? <Loader className="animate-spin" /> : <Save size={16} />}
-                    {isSavingSettings ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
-                </button>
+          {/* TOPLAM VE GÖNDER */}
+          <div className="border-t pt-4 bg-green-50 p-4 rounded-xl">
+            <div className="flex justify-between items-center text-lg font-bold text-gray-800 mb-1">
+                <span>GENEL TOPLAM (KDV HARİÇ):</span>
+                <span className="text-2xl text-green-700">{(grandTotal || 0).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
             </div>
-          </div>
-          
-          <div className="border-t pt-4 space-y-2">
-            <div className="flex justify-between items-center text-lg font-semibold">
-                <span>Genel Toplam:</span>
-                <span className="text-green-600">{(grandTotal || 0).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
-            </div>
-            <p className="text-xs text-gray-500 text-right -mt-2">Fiyatlara KDV dahil değildir.</p>
-            <div className="flex gap-3 mt-4">
-                <button onClick={handleSendEmail} disabled={isSending || !recipientEmail || !companyname || selectedServices.length === 0} className="w-full flex items-center justify-center gap-2 p-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors text-lg">
-                    {isSending ? <Loader className="animate-spin" /> : <Send />}
-                    {isSending ? 'Gönderiliyor...' : 'Teklifi Gönder'}
-                </button>
-            </div>
+            <p className="text-xs text-gray-500 text-right mb-4">+ %20 KDV: {((grandTotal || 0) * 0.2).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</p>
+            
+            <button onClick={handleSendEmail} disabled={isSending || selectedServices.length === 0} className="w-full flex items-center justify-center gap-2 p-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-all shadow-lg hover:shadow-xl">
+                {isSending ? <Loader className="animate-spin" /> : <Send />}
+                {isSending ? 'Teklif Hazırlanıyor...' : 'TEKLİFİ OLUŞTUR VE GÖNDER'}
+            </button>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-md">
-            <h3 className="text-lg font-semibold mb-4">E-posta Önizlemesi</h3>
-            <div className="border rounded-lg h-[80vh] overflow-hidden">
+        {/* SAĞ PANEL: ÖNİZLEME */}
+        <div className="bg-white p-6 rounded-xl shadow-md flex flex-col h-[90vh]">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><FileDown size={20}/> Canlı Önizleme</h3>
+            <div className="border rounded-lg flex-grow overflow-hidden bg-gray-100">
                 {emailPreview ? (
-                    <iframe srcDoc={emailPreview} title="E-posta Önizlemesi" className="w-full h-full border-0" />
+                    <iframe srcDoc={emailPreview} title="Önizleme" className="w-full h-full border-0 bg-white" />
                 ) : (
-                    <div className="flex items-center justify-center h-full bg-gray-50 text-gray-500">
-                        <p>Lütfen göndermek için hizmet seçin.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-4">
+                        <Mail size={48} />
+                        <p>Hizmet seçimi yapıldığında önizleme burada görünecektir.</p>
                     </div>
                 )}
+            </div>
+            
+            {/* Footer Ayarları (Collapse) */}
+            <div className="mt-4 border-t pt-2">
+                <details className="group">
+                    <summary className="flex cursor-pointer items-center text-xs font-medium text-gray-500 hover:text-gray-800 select-none">
+                        <Save className="mr-1 h-3 w-3" /> E-posta İmza Ayarları
+                    </summary>
+                    <div className="mt-2 grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded text-xs">
+                        <input type="text" placeholder="İsim" value={footerInfo.name} onChange={e => setFooterInfo(prev => ({...prev, name: e.target.value}))} className="p-1 border rounded" />
+                        <input type="text" placeholder="Unvan" value={footerInfo.title} onChange={e => setFooterInfo(prev => ({...prev, title: e.target.value}))} className="p-1 border rounded" />
+                        <input type="text" placeholder="Web" value={footerInfo.website} onChange={e => setFooterInfo(prev => ({...prev, website: e.target.value}))} className="p-1 border rounded" />
+                        <input type="text" placeholder="Tel" value={footerInfo.phone} onChange={e => setFooterInfo(prev => ({...prev, phone: e.target.value}))} className="p-1 border rounded" />
+                        <button onClick={handleSaveFooterSettings} disabled={isSavingSettings} className="col-span-2 bg-blue-500 text-white p-1 rounded hover:bg-blue-600">Ayarları Kaydet</button>
+                    </div>
+                </details>
             </div>
         </div>
       </div>
