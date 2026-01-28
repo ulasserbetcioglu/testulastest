@@ -344,20 +344,22 @@ const TeklifGoruntule: React.FC = () => {
                                         <Info size={12} /> HAKKIMIZDA
                                     </h4>
                                     <p style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.5' }}>
-                                        {companySettings?.about_text || 'İlaçlamatik olarak sektörde öncü konumdayız. Sağlık Bakanlığı onaylı ürünlerimiz ve uzman kadromuzla %100 müşteri memnuniyeti odaklı çalışıyoruz.'}
+                                        {companySettings?.about_text || 'PestMentor olarak sektörde öncü konumdayız. Sağlık Bakanlığı ve WHO onaylı ürünlerimiz ve uzman kadromuzla %100 müşteri memnuniyeti odaklı çalışıyoruz.'}
                                     </p>
                                 </div>
 
                                 {/* Sağ: Hizmet Garantisi */}
                                 <div style={{ padding: '15px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
                                     <h4 style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <Shield size={12} /> GARANTİMİZ
+                                        <Shield size={12} />HİZMETLERİMİZ
                                     </h4>
                                     <ul style={{ fontSize: '10px', color: '#1e3a8a', paddingLeft: '12px', lineHeight: '1.5', listStyleType: 'disc' }}>
-                                        <li>Sağlık Bakanlığı onaylı biyosidal ürünler.</li>
-                                        <li>Kokusuz, leke bırakmayan uygulama.</li>
-                                        <li>İşlem sonrası ücretsiz kontrol garantisi.</li>
-                                        <li>7/24 teknik destek ve danışmanlık.</li>
+                                        <li>ENTEGRE ZARARLI MÜCADELESİ</li>
+                                        <li>KUŞ KONTROLÜ VE MÜCADELESİ</li>
+                                        <li>DEZENFEKSİYON</li>
+                                        <li>FUMİGASYON</li>
+                                        <li>SÜRÜNGEN KONTROLÜ VE MÜCADELESİ</li>
+                                        <li>SU DEPOSU VE SU SEBİLİ TEMİZLİĞİ, DEZENFEKSİYONU</li>
                                     </ul>
                                 </div>
                             </div>
