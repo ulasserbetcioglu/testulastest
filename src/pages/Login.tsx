@@ -88,7 +88,6 @@ const Login: React.FC = () => {
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           SİSTEM İLAÇLAMA SANAYİ VE TİCARET LİMİTED ŞİRKETİ
-          ZARARLI MÜCADELESİ CRM PROGRAMI
         </p>
       </div>
 
