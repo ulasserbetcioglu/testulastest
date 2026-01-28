@@ -458,7 +458,7 @@ const HizmetPazarlama: React.FC = () => {
             </div>
             <p className="text-xs text-gray-500 text-right -mt-2">Fiyatlara KDV dahil değildir.</p>
             <div className="flex gap-3 mt-4">
-                <button onClick={handleSendEmail} disabled={isSending || !recipientEmail || !company_name || selectedServices.length === 0} className="w-full flex items-center justify-center gap-2 p-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors text-lg">
+                <button onClick={handleSendEmail} disabled={isSending || !recipientEmail || !companyname || selectedServices.length === 0} className="w-full flex items-center justify-center gap-2 p-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors text-lg">
                     {isSending ? <Loader className="animate-spin" /> : <Send />}
                     {isSending ? 'Gönderiliyor...' : 'Teklifi Gönder'}
                 </button>
