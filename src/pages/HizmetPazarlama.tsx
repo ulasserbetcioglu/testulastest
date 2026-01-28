@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug } from 'lucide-react';
+import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown } from 'lucide-react';
 
 // --- ARAYÜZLER ---
 interface Customer {
