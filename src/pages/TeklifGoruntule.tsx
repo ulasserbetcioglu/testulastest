@@ -137,7 +137,7 @@ const TeklifGoruntule: React.FC = () => {
         (window as any).html2pdf().set(options).from(element).save();
     };
 
-    // --- SÖZLEŞME OLUŞTURMA FONKSİYONU (REVİZE EDİLDİ) ---
+    // --- SÖZLEŞME OLUŞTURMA FONKSİYONU (HARMONİZE EDİLMİŞ VERSİYON) ---
     const generateContractContent = (prop: Proposal, settings: CompanySettings | null, contractNo: string) => {
         const startDate = format(new Date(), 'dd.MM.yyyy');
         const endDate = `31/12/${new Date().getFullYear()}`; 
@@ -213,6 +213,9 @@ const TeklifGoruntule: React.FC = () => {
                             <td style="font-weight: bold;">TELEFON / YETKİLİ</td>
                             <td>: ${prop.contact_person}</td>
                         </tr>
+                        <tr>
+                            <td colspan="2" style="font-style: italic; padding-top: 3px; font-size: 8pt;">SÖZLEŞME METNİNDE BUNDAN SONRA SADECE "İŞVEREN" OLARAK ANILACAKTIR.</td>
+                        </tr>
                     </table>
 
                     <table style="width: 100%; border: none; font-size: 9pt;">
@@ -231,6 +234,9 @@ const TeklifGoruntule: React.FC = () => {
                         <tr>
                             <td style="font-weight: bold;">VERGİ NO / DAİRE</td>
                             <td>: 771 003 5611 / SETBAŞI</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="font-style: italic; padding-top: 3px; font-size: 8pt;">SÖZLEŞME METNİNDE BUNDAN SONRA SADECE "PestMENTOR" OLARAK ANILACAKTIR.</td>
                         </tr>
                     </table>
                 </div>
@@ -257,15 +263,31 @@ const TeklifGoruntule: React.FC = () => {
                 <div style="margin-bottom: 12px;">
                     <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">4. YETKİ VE SORUMLULUKLAR</div>
                     <div style="margin-left: 10px; font-size: 9.5pt;">
-                        <p style="margin: 2px 0;"><strong>4.1. PestMENTOR:</strong> Hizmetleri İŞVEREN gözetiminde, gizlilik kurallarına uyarak icra edecektir. Sağlık Bakanlığı onaylı ürünleri kullanmaya yetkilidir. Ürün türü, dozajı ve uygulama yöntemine karar verme yetkisi PestMENTOR'a aittir. Hizmet sonrası raporlama yapar.</p>
-                        <p style="margin: 2px 0;"><strong>4.2. İŞVEREN:</strong> Çalışma alanlarını (dolap arkaları, depo vb.) erişilebilir hale getirmekle yükümlüdür. Yeni zararlı aktivitesi görülmesi durumunda derhal bilgi vermelidir. PestMENTOR bilgisi dışında üçüncü taraflardan hizmet alamaz.</p>
+                        <p style="margin: 2px 0;"><strong>4.1. PestMENTOR:</strong></p>
+                        <p style="margin: 2px 0; margin-left: 10px;">4.1.1. Hizmetleri İŞVEREN gözetiminde, gizlilik kurallarına uyarak icra edecektir.</p>
+                        <p style="margin: 2px 0; margin-left: 10px;">4.1.2. Sağlık Bakanlığı onaylı ürünleri kullanmaya yetkilidir.</p>
+                        <p style="margin: 2px 0; margin-left: 10px;">4.1.3. Ürün türü, dozajı ve uygulama yöntemine karar verme yetkisi PestMENTOR'a aittir.</p>
+                        <p style="margin: 2px 0; margin-left: 10px;">4.1.5. Hizmet sonrası raporlama yapar.</p>
+                        
+                        <p style="margin: 6px 0 2px 0;"><strong>4.2. İŞVEREN:</strong></p>
+                        <p style="margin: 2px 0; margin-left: 10px;">4.2.1. Çalışma alanlarını (dolap arkaları, depo vb.) erişilebilir hale getirmekle yükümlüdür.</p>
+                        <p style="margin: 2px 0; margin-left: 10px;">4.2.2. Yeni zararlı aktivitesi görülmesi durumunda derhal bilgi vermelidir.</p>
+                        <p style="margin: 2px 0; margin-left: 10px;">4.2.3. PestMENTOR bilgisi dışında üçüncü taraflardan hizmet alamaz.</p>
+                        <p style="margin: 2px 0; margin-left: 10px;">4.2.5. Raporda belirtilen yalıtım ve hijyen eksikliklerini gidermekle yükümlüdür.</p>
                     </div>
                 </div>
 
                 <div style="margin-bottom: 12px;">
                     <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">5. SÖZLEŞME SÜRESİ VE FESİH</div>
                     <p style="margin: 2px 0;">İşbu sözleşme, <strong>${startDate}</strong> tarihinde yürürlüğe girer ve <strong>${endDate}</strong> tarihine kadar geçerlidir.</p>
-                    <p style="margin: 2px 0;">Sözleşme bitiş tarihinden en az 30 gün önce yazılı fesih ihbarı yapılmazsa, sözleşme sona erer. Karşılıklı anlaşma ile yenilenebilir.</p>
+                    <p style="margin: 2px 0;">5.1.1. Sözleşme bitiş tarihinden en az 30 gün önce yazılı fesih ihbarı yapılmazsa, sözleşme sona erer. Karşılıklı anlaşma ile yenilenebilir.</p>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">6. UYUŞMAZLIKLAR & 7. MÜCBİR SEBEPLER & 8. MALİ YÜKÜMLÜLÜKLER</div>
+                    <p style="margin: 2px 0; font-size: 9pt;">6.1. Uyuşmazlıklarda Bursa Mahkemeleri yetkilidir.</p>
+                    <p style="margin: 2px 0; font-size: 9pt;">7.1. Doğal afetler vb. durumlar mücbir sebep sayılır.</p>
+                    <p style="margin: 2px 0; font-size: 9pt;">8.1. Damga Vergisi PestMENTOR tarafından ödenecektir.</p>
                 </div>
 
                 <div style="margin-bottom: 20px;">
@@ -491,7 +513,7 @@ const TeklifGoruntule: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* 4. HEDEF ZARARLILAR (DAHİL OLANLAR RENKLİ, OLMAYANLAR GRİ) */}
+                        {/* 4. HEDEF ZARARLILAR */}
                         <div style={{ marginBottom: '30px' }}>
                             <h4 style={{ fontSize: '11px', fontWeight: '700', color: primaryColor, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: `1px solid ${lightBorder}`, paddingBottom: '5px' }}>
                                 <Bug size={12} /> HEDEF ZARARLILAR KAPSAMI
@@ -617,7 +639,7 @@ const TeklifGoruntule: React.FC = () => {
                     <div style={{ height: '8px', width: '100%', backgroundColor: '#f1f5f9', borderTop: `1px solid ${lightBorder}` }}></div>
                 </div>
 
-                {/* ONAY BUTONLARI (Sadece Beklemedeyse) */}
+                {/* ONAY BUTONLARI */}
                 {proposal.status === 'pending' && (
                     <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-2xl flex justify-center gap-4 print:hidden z-50">
                         <div className="flex flex-col md:flex-row items-center gap-4 max-w-2xl w-full">
@@ -641,7 +663,7 @@ const TeklifGoruntule: React.FC = () => {
                 )}
             </div>
 
-            {/* --- SÖZLEŞME MODALI --- */}
+            {/* SÖZLEŞME MODALI */}
             {showContractModal && (
                 <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl w-full max-w-4xl p-6 shadow-2xl flex flex-col max-h-[90vh]">
