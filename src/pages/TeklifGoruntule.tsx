@@ -24,6 +24,7 @@ interface Proposal {
     proposal_number: string;
     company_name: string;
     contact_person: string;
+    recipient_email: string; // Eklendi
     total_amount: number;
     proposal_items: ProposalItem[];
     status: 'pending' | 'approved' | 'rejected';
@@ -39,7 +40,7 @@ interface CompanySettings {
     phone: string;
     footer_text: string;
     about_text?: string;
-    website?: string; // Eklendi
+    website?: string;
 }
 
 const PEST_TYPES = [
@@ -127,7 +128,7 @@ const TeklifGoruntule: React.FC = () => {
         
         const element = elementRef.current;
         const options = {
-            margin:       5,
+            margin:       10, // Kenar boşluklarını ayarladım
             filename:     `${fileName}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
@@ -136,98 +137,219 @@ const TeklifGoruntule: React.FC = () => {
         (window as any).html2pdf().set(options).from(element).save();
     };
 
-    // --- SÖZLEŞME OLUŞTURMA FONKSİYONU ---
+    // --- SÖZLEŞME OLUŞTURMA FONKSİYONU (GÜNCELLENMİŞ) ---
     const generateContractContent = (prop: Proposal, settings: CompanySettings | null, contractNo: string) => {
-        const startDate = format(new Date(), 'dd.MM.yyyy');
-        const endDate = format(addYears(new Date(), 1), 'dd.MM.yyyy');
+        const startDate = format(new Date(), 'dd.MM.yyyy'); // Bugün
+        const startYear = new Date().getFullYear();
+        const endYear = startYear; // Örnekte aynı yıl bitiyor (31/12/2026)
         
-        const pestsString = Array.isArray(prop.included_pests) 
+        // Örnekteki gibi yıl sonuna kadar
+        const endDate = `31/12/${startYear}`; 
+        
+        const pestsString = Array.isArray(prop.included_pests) && prop.included_pests.length > 0
             ? prop.included_pests.join(', ') 
-            : 'Genel Haşere ve Kemirgen';
+            : 'Hamam böceği, Karınca, Kemirgenler';
 
-        // Sözleşme HTML Yapısı (Logo, Header, Footer)
+        // Hizmet Tablosu Satırları
+        const serviceRows = prop.proposal_items.map(item => {
+             let visitFreq = '';
+             if(item.unit_type === 'aylik') visitFreq = `AYDA ${item.visit_count} ZİYARET`;
+             else if(item.unit_type === 'seferlik') visitFreq = 'TEK SEFERLİK';
+             else visitFreq = `${item.visit_count} ADET`;
+
+             // Hizmet adından kategori tahmini (Basit mantık)
+             let category = item.service_name.toUpperCase();
+             let pestType = pestsString; // Varsayılan hepsi
+             
+             if(item.service_name.toLowerCase().includes('kemirgen')) {
+                 pestType = 'Fare ve Sıçanlar';
+             } else if (item.service_name.toLowerCase().includes('yürüyen')) {
+                 pestType = 'Hamam böceği ve Karınca';
+             }
+
+             return `
+            <tr>
+                <td style="border: 1px solid #000; padding: 8px;">${category}</td>
+                <td style="border: 1px solid #000; padding: 8px;">${pestType}</td>
+                <td style="border: 1px solid #000; padding: 8px; text-align: center;">${visitFreq}</td>
+                <td style="border: 1px solid #000; padding: 8px; text-align: center;">İŞLETME GENELİ</td>
+            </tr>
+        `}).join('');
+
         return `
-            <div style="font-family: 'Times New Roman', serif; line-height: 1.6; color: #000; position: relative; min-height: 280mm;">
+            <div style="font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.3; color: #000; padding: 20px;">
                 
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 30px;">
-                    <div>
-                        ${settings?.logo_url ? `<img src="${settings.logo_url}" style="height: 60px;" alt="Logo" />` : `<h2>${settings?.company_name}</h2>`}
-                    </div>
-                    <div style="text-align: right; font-size: 12px;">
-                        <p style="margin: 0; font-weight: bold; font-size: 14px;">SÖZLEŞME NO: ${contractNo}</p>
-                        <p style="margin: 0;">Tarih: ${startDate}</p>
-                    </div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px;">
+                    <div style="font-weight: bold; font-size: 14pt;">HİZMET SÖZLEŞMESİ</div>
+                    <div style="font-weight: bold; font-size: 12pt;">SÖZLEŞME NUMARASI : ${contractNo}</div>
                 </div>
 
-                <h2 style="text-align: center; text-decoration: underline; margin-bottom: 20px;">HİZMET SÖZLEŞMESİ</h2>
-                
-                <p><strong>1. TARAFLAR</strong></p>
-                <p>İşbu sözleşme, bir tarafta <strong>${settings?.company_name || 'Yüklenici Firma'}</strong> (Bundan sonra "YÜKLENİCİ" olarak anılacaktır) ile diğer tarafta <strong>${prop.company_name}</strong> (Bundan sonra "MÜŞTERİ" olarak anılacaktır) arasında aşağıda belirtilen şartlar dahilinde akdedilmiştir.</p>
-                
-                <p><strong>2. SÖZLEŞMENİN KONUSU</strong></p>
-                <p>Müşterinin işyerinde/tesisinde yapılacak olan haşere ve kemirgen kontrol hizmetlerinin (Pest Control) periyodik olarak yürütülmesi, raporlanması ve takibi işidir.</p>
-                
-                <p><strong>3. HİZMET KAPSAMI VE HEDEF ZARARLILAR</strong></p>
-                <p>Mücadele edilecek hedef zararlılar: ${pestsString}.</p>
-                
-                <p><strong>4. HİZMET DETAYLARI VE ÜCRET</strong></p>
-                <table style="width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 10px; font-size: 12px;">
-                    <thead>
-                        <tr style="background-color: #f3f4f6;">
-                            <th style="border: 1px solid #ccc; padding: 8px;">Hizmet/Ürün</th>
-                            <th style="border: 1px solid #ccc; padding: 8px;">Miktar/Kapsam</th>
-                            <th style="border: 1px solid #ccc; padding: 8px;">Fiyat</th>
+                <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">1. SÖZLEŞMENİN KONUSU</div>
+                    <p style="margin: 5px 0;">İşbu sözleşme, bir tarafta <strong>${prop.company_name.toUpperCase()}</strong> (Sözleşmede "İŞVEREN" olarak anılacaktır) ile diğer tarafta <strong>${settings?.company_name?.toUpperCase() || 'SİSTEM İLAÇLAMA SAN. VE TİC. LTD. ŞTİ.'}</strong> (Sözleşmede "PestMENTOR" olarak anılacaktır) arasında akdedilmiştir.</p>
+                    <p style="margin: 5px 0;">Sözleşmenin konusu; İŞVEREN'e ait tesislerde,</p>
+                    <ul style="list-style-type: none; padding-left: 0; margin: 5px 0;">
+                        <li>1.1. İnsan sağlığını,</li>
+                        <li>1.2. Hammadde güvenliğini,</li>
+                        <li>1.3. Ürün kalitesini olumsuz yönde etkileyebilecek zararlı popülasyonunun kontrol altına alınması,</li>
+                    </ul>
+                    <p style="margin: 5px 0;">amacıyla, PestMENTOR tarafından "Onaylanmış Alanlarda" sunulacak Entegre Zararlı Mücadelesi (IPM) hizmetlerinin; teknik, idari, mali ve hukuki şartlarını ve tarafların karşılıklı yükümlülüklerini tanımlar.</p>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">2. TARAFLAR</div>
+                    <table style="width: 100%; border: none; margin-bottom: 10px;">
+                        <tr>
+                            <td style="width: 180px; vertical-align: top; font-weight: bold;">HİZMET ALAN FİRMA</td>
+                            <td style="vertical-align: top;">: ${prop.company_name.toUpperCase()}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        ${prop.proposal_items.map(item => {
-                             let unitText = '';
-                             if(item.item_type === 'product') {
-                                 unitText = `${item.visit_count} ${item.unit_type || 'Adet'}`;
-                             } else {
-                                 unitText = item.unit_type === 'seferlik' ? 'Tek Sefer' : `${item.visit_count} Ziyaret/Ay`;
-                             }
-                             return `
-                            <tr>
-                                <td style="border: 1px solid #ccc; padding: 8px;">${item.service_name}</td>
-                                <td style="border: 1px solid #ccc; padding: 8px;">${unitText}</td>
-                                <td style="border: 1px solid #ccc; padding: 8px;">${item.unit_price} TL</td>
+                        <tr>
+                            <td style="vertical-align: top; font-weight: bold;">ADRES</td>
+                            <td style="vertical-align: top;">: ${prop.customer_notes || 'Adres belirtilmedi'}</td> 
+                        </tr>
+                        <tr>
+                            <td style="vertical-align: top; font-weight: bold;">TELEFON</td>
+                            <td style="vertical-align: top;">: ${prop.contact_person} (Yetkili)</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="font-style: italic; padding-top: 5px;">SÖZLEŞME METNİNDE BUNDAN SONRA SADECE ‘’ İŞVEREN ‘’ OLARAK ANILACAKTIR.</td>
+                        </tr>
+                    </table>
+
+                    <table style="width: 100%; border: none;">
+                        <tr>
+                            <td style="width: 180px; vertical-align: top; font-weight: bold;">HİZMET VEREN FİRMA</td>
+                            <td style="vertical-align: top;">: SİSTEM İLAÇLAMA SANAYİ VE TİCARET LİMİTED ŞİRKETİ – PestMentor</td>
+                        </tr>
+                        <tr>
+                            <td style="vertical-align: top; font-weight: bold;">ADRES</td>
+                            <td style="vertical-align: top;">: ${settings?.address || 'KÜKÜRTLÜ MH. BELGE CD. 6. GÜNDÜZ SOKAK TAN APARTMANI NO:2 OSMANGAZİ BURSA'}</td>
+                        </tr>
+                        <tr>
+                            <td style="vertical-align: top; font-weight: bold;">TELEFON</td>
+                            <td style="vertical-align: top;">: ${settings?.phone || '0224 233 83 87'}</td>
+                        </tr>
+                        <tr>
+                            <td style="vertical-align: top; font-weight: bold;">E-POSTA</td>
+                            <td style="vertical-align: top;">: ${settings?.email || 'info@pestmentor.com.tr'}</td>
+                        </tr>
+                        <tr>
+                            <td style="vertical-align: top; font-weight: bold;">VERGİ NUMARASI</td>
+                            <td style="vertical-align: top;">: 771 003 5611</td>
+                        </tr>
+                        <tr>
+                            <td style="vertical-align: top; font-weight: bold;">VERGİ DAİRESİ</td>
+                            <td style="vertical-align: top;">: SETBAŞI</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="font-style: italic; padding-top: 5px;">SÖZLEŞME METNİNDE BUNDAN SONRA SADECE ‘’ PestMENTOR ‘’ OLARAK ANILACAKTIR.</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">3. YAPILACAK İŞİN TANIMI</div>
+                    <p style="margin: 5px 0;">Yukarıda adresi belirtilen İŞVEREN işletmesinde aşağıda belirtilen zararlılara karşı yapılacak mücadelenin denetimi, engellenmesi ve yok edilmesi hizmetleridir.</p>
+                    
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt;">
+                        <thead>
+                            <tr style="background-color: #f0f0f0;">
+                                <th style="border: 1px solid #000; padding: 8px;">HİZMET KATEGORİSİ</th>
+                                <th style="border: 1px solid #000; padding: 8px;">ZARARLI TÜRÜ</th>
+                                <th style="border: 1px solid #000; padding: 8px;">PERİYODİK ZİYARET SIKLIĞI</th>
+                                <th style="border: 1px solid #000; padding: 8px;">UYGULAMA ALAN(LAR)I</th>
                             </tr>
-                        `}).join('')}
-                    </tbody>
-                </table>
-                <p><strong>Genel Toplam (KDV Hariç):</strong> ${prop.total_amount.toLocaleString('tr-TR')} TL</p>
-                
-                <p><strong>5. SÖZLEŞME SÜRESİ</strong></p>
-                <p>İşbu sözleşme <strong>${startDate}</strong> tarihinde başlar ve <strong>${endDate}</strong> tarihinde sona erer.</p>
-                
-                <p><strong>6. YÜKÜMLÜLÜKLER</strong></p>
-                <ul>
-                    <li>YÜKLENİCİ, hizmeti Sağlık Bakanlığı ve ilgili mevzuatlara uygun olarak vereceğini taahhüt eder.</li>
-                    <li>MÜŞTERİ, uygulama yapılacak alanlara giriş izni ve gerekli kolaylığı sağlayacaktır.</li>
-                    <li>Ödemeler, hizmetin tamamlanmasını takiben kesilen fatura tarihinden itibaren 7 iş günü içinde yapılacaktır.</li>
-                </ul>
-                
-                <div style="margin-top: 50px; display: flex; justify-content: space-between;">
-                    <div style="text-align: center; width: 45%;">
-                        <p><strong>YÜKLENİCİ</strong></p>
-                        <p>${settings?.company_name}</p>
-                        <div style="height: 60px;"></div>
-                        <p>İmza / Kaşe</p>
-                    </div>
-                    <div style="text-align: center; width: 45%;">
-                        <p><strong>MÜŞTERİ</strong></p>
-                        <p>${prop.company_name}</p>
-                        <p>${prop.contact_person}</p>
-                        <div style="height: 60px;"></div>
-                        <p>İmza / Kaşe</p>
+                        </thead>
+                        <tbody>
+                            ${serviceRows}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">4. YETKİ VE SORUMLULUKLAR</div>
+                    <p style="margin: 5px 0;">PestMENTOR (Hizmet Sağlayıcı) ve İŞVEREN (Müşteri) taraflarının, sözleşme kapsamındaki entegre zararlı mücadelesi (IPM) hizmetlerine ilişkin yetki ve sorumluluklarını tanımlar.</p>
+                    
+                    <div style="margin-left: 15px;">
+                        <p><strong>4.1. PestMENTOR'un Yetki ve Sorumlulukları</strong></p>
+                        <p>4.1.1. <strong>Hizmetin İcrası ve Gizlilik:</strong> PestMENTOR, IPM hizmetlerini İŞVEREN yetkilisinin gözetiminde icra edecektir. Hizmet süresince elde edilen tüm ticari bilgilere yönelik gizlilik kurallarına riayet edecektir.</p>
+                        <p>4.1.2. <strong>Profesyonel Yetkinlik:</strong> PestMENTOR, Sağlık Bakanlığı onaylı ürünleri ve ekipmanları kullanmaya yetkilidir.</p>
+                        <p>4.1.3. <strong>Operasyonel Karar Yetkisi:</strong> Ürün türü, dozajı, tuzak yerleşimi ve uygulama yöntemine karar verme yetkisi PestMENTOR'a aittir.</p>
+                        <p>4.1.5. <strong>Raporlama:</strong> Hizmet sonrası raporlama PestMENTOR'un sorumluluğundadır.</p>
+                        
+                        <p style="margin-top: 10px;"><strong>4.2. İŞVEREN'in Yükümlülükleri</strong></p>
+                        <p>4.2.1. <strong>Alan Hazırlığı:</strong> İŞVEREN, çalışma alanlarını erişilebilir hale getirmekle yükümlüdür.</p>
+                        <p>4.2.2. <strong>Aktivite Bildirimi:</strong> Yeni zararlı aktivitesi görülmesi durumunda PestMENTOR'a bilgi verilmelidir.</p>
+                        <p>4.2.3. <strong>Tek Yetkililik:</strong> İŞVEREN, üçüncü taraflardan hizmet alamaz ve kendisi ilaçlama yapamaz.</p>
+                        <p>4.2.5. <strong>Düzeltici Faaliyetler:</strong> İŞVEREN, raporda belirtilen yalıtım ve hijyen eksikliklerini gidermekle yükümlüdür.</p>
                     </div>
                 </div>
 
-                <div style="position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
-                    <p>${settings?.company_name} | ${settings?.address}</p>
-                    <p>${settings?.email} | ${settings?.phone} | ${settings?.website || ''}</p>
+                <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">5. SÖZLEŞME SÜRESİ, YENİLENME VE FESİH</div>
+                    <p>İşbu sözleşme, <strong>${startDate}</strong> tarihinde yürürlüğe girer ve <strong>${endDate}</strong> tarihine kadar geçerlidir.</p>
+                    <p>5.1.1. Sözleşme bitiş tarihinden en az 30 gün önce yazılı fesih ihbarı yapılmazsa, sözleşme sona erer. Karşılıklı anlaşma ile yenilenebilir.</p>
                 </div>
+
+                <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">6. UYUŞMAZLIKLAR & 7. MÜCBİR SEBEPLER & 8. MALİ YÜKÜMLÜLÜKLER</div>
+                    <p>6.1. Uyuşmazlıklarda Bursa Mahkemeleri yetkilidir.</p>
+                    <p>7.1. Doğal afetler vb. durumlar mücbir sebep sayılır.</p>
+                    <p>8.1. Damga Vergisi PestMENTOR tarafından ödenecektir.</p>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">9. MALİ HÜKÜMLER (FİYATLANDIRMA VE ÖDEME)</div>
+                    <p><strong>9.1. Hizmet Bedeli</strong></p>
+                    <div style="border: 2px solid #000; padding: 10px; margin: 10px 0; text-align: center; font-weight: bold; font-size: 12pt;">
+                        9.1.1. Periyodik Hizmet Bedeli: ${prop.total_amount.toLocaleString('tr-TR')} TL + KDV / AY
+                    </div>
+                    
+                    <p><strong>9.2. Faturalandırma ve Ödeme</strong></p>
+                    <p>9.2.2. Ödemeler fatura tarihinden itibaren 30 gün içinde yapılacaktır.</p>
+                    <p>9.2.4. <strong>Banka Bilgileri:</strong></p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 5px;">
+                        <thead>
+                            <tr style="background-color: #f0f0f0;">
+                                <th style="border: 1px solid #000; padding: 5px;">BANKA ADI</th>
+                                <th style="border: 1px solid #000; padding: 5px;">ŞUBE ADI</th>
+                                <th style="border: 1px solid #000; padding: 5px;">HESAP NO</th>
+                                <th style="border: 1px solid #000; padding: 5px;">IBAN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border: 1px solid #000; padding: 5px;">GARANTİ BBVA</td>
+                                <td style="border: 1px solid #000; padding: 5px;">Gazcılar Şubesi</td>
+                                <td style="border: 1px solid #000; padding: 5px;">37-6202789</td>
+                                <td style="border: 1px solid #000; padding: 5px;">TR66 0006 2000 0037 0000 6202 789</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">10. HÜKÜMLER VE TEBLİGAT</div>
+                    <p>İşbu sözleşme 10 madde ve 2 nüsha olarak ${startDate} tarihinde imzalanmıştır.</p>
+                    
+                    <table style="width: 100%; margin-top: 40px; border-collapse: collapse;">
+                        <tr>
+                            <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
+                                <strong>HİZMETİ VEREN (PestMENTOR)</strong><br/><br/>
+                                SİSTEM İLAÇLAMA SAN. VE TİC. LTD. ŞTİ.<br/><br/>
+                                <div style="height: 80px;"></div>
+                                <strong>İmza / Kaşe</strong>
+                            </td>
+                            <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
+                                <strong>HİZMETİ ALAN (İŞVEREN)</strong><br/><br/>
+                                ${prop.company_name.toUpperCase()}<br/><br/>
+                                <div style="height: 80px;"></div>
+                                <strong>İmza / Kaşe</strong>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
             </div>
         `;
     };
@@ -236,13 +358,13 @@ const TeklifGoruntule: React.FC = () => {
         if (!proposal) return;
         setIsSubmitting(true);
         try {
-            // 1. Sözleşme Numarası Oluştur (2026-100'den başlar)
+            // 1. Sözleşme Numarası (2026-100'den başlar)
             const currentYear = new Date().getFullYear();
             const { count } = await supabase
                 .from('service_contracts')
-                .select('*', { count: 'exact', head: true }); // Toplam sözleşme sayısını al
+                .select('*', { count: 'exact', head: true });
             
-            const nextSequence = 100 + (count || 0) + 1; // 100'den başlat, her yeni kayıtta artır
+            const nextSequence = 100 + (count || 0) + 1;
             const contractNumber = `${currentYear}-${nextSequence}`;
 
             // 2. Teklifi Onayla
@@ -253,10 +375,10 @@ const TeklifGoruntule: React.FC = () => {
             
             if (updateError) throw updateError;
 
-            // 3. Sözleşme İçeriğini Oluştur
+            // 3. Sözleşme İçeriği
             const content = generateContractContent(proposal, companySettings, contractNumber);
 
-            // 4. Sözleşmeyi Veritabanına Kaydet
+            // 4. Kayıt
             const { error: contractError } = await supabase
                 .from('service_contracts')
                 .insert({
@@ -276,10 +398,10 @@ const TeklifGoruntule: React.FC = () => {
             setProposal(prev => prev ? { ...prev, status: 'approved', customer_notes: notes } : null);
             setContractHtml(content);
             setShowContractModal(true); 
-            toast.success(`Teklif onaylandı. Hizmet Sözleşmesi (${contractNumber}) oluşturuldu.`);
+            toast.success(`Hizmet Sözleşmesi (${contractNumber}) oluşturuldu.`);
 
         } catch (err: any) {
-            toast.error("İşlem sırasında hata oluştu: " + err.message);
+            toast.error("Hata: " + err.message);
         } finally {
             setIsSubmitting(false);
         }
@@ -437,7 +559,7 @@ const TeklifGoruntule: React.FC = () => {
                                     const isProduct = item.item_type === 'product';
                                     let unitText = '';
                                     if(isProduct) unitText = `${item.visit_count} ${item.unit_type || 'Adet'}`;
-                                    else unitText = item.unit_type === 'seferlik' ? 'Tek Sefer' : `${item.visit_count} Ziyaret / Ay`;
+                                    else unitText = item.unit_type === 'seferlik' ? 'Tek Seferlik' : `${item.visit_count} Ziyaret / Ay`;
 
                                     return (
                                         <tr key={index} style={{ borderBottom: `1px solid ${lightBorder}` }}>
