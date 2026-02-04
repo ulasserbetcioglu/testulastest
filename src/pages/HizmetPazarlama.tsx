@@ -11,7 +11,7 @@ interface Customer {
 }
 
 interface Service {
-  id: number; // Hizmetler genelde int id kullanır
+  id: number;
   name: string;
   description: string;
   image_url: string;
@@ -20,28 +20,27 @@ interface Service {
   type: 'service';
 }
 
-// Veritabanındaki "paid_materials" tablosuna uygun arayüz
-interface PaidMaterial {
-  id: string; // UUID
+// GÜNCELLENDİ: Equipment tablosu yapısı
+interface Equipment {
+  id: string;
   name: string;
   description?: string;
-  sale_price: number; // Satış fiyatı
-  stock_quantity?: number;
+  sale_price: number; // Satış Fiyatı
+  unit: string;       // Birim (Adet, Kg, Lt...)
   image_url?: string;
   type: 'product';
 }
 
-// Ortak Seçili Öğe Arayüzü
 interface SelectedItem {
   id: number | string;
   type: 'service' | 'product';
   name: string;
   description?: string;
   image_url?: string;
-  visitCount: number; // Ürünler için 'Adet'
+  visitCount: number; // Miktar
   price: number;
   explanation: string;
-  unitType: 'aylik' | 'seferlik' | 'adet';
+  unitType: string;   // 'aylik', 'seferlik' veya ekipman birimi ('Adet', 'Kg' vb.)
 }
 
 interface FooterInfo {
@@ -53,12 +52,10 @@ interface FooterInfo {
   logo_url: string;
 }
 
-// Zararlı Türleri Listesi
 const PEST_TYPES = [
   'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
 ];
 
-// Footer HTML Oluşturucu
 const generateSignatureHtml = (footer: FooterInfo): string => `
   <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eeeeee;">
     <tr>
@@ -78,33 +75,28 @@ const generateSignatureHtml = (footer: FooterInfo): string => `
 `;
 
 const HizmetPazarlama: React.FC = () => {
-  // --- STATE ---
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [serviceList, setServiceList] = useState<Service[]>([]);
-  const [materialList, setMaterialList] = useState<PaidMaterial[]>([]); // YENİ: Veritabanından gelen malzemeler
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]); // GÜNCELLENDİ: Equipment listesi
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   
-  const [emailSubject, setEmailSubject] = useState('Hizmet ve Ürün Teklifimiz');
+  const [emailSubject, setEmailSubject] = useState('Hizmet ve Ürün Teklifimiz - Fiyat Teklifi Sunulur');
   const [emailPreview, setEmailPreview] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  // Form Alanları
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
   
-  // Zararlı Seçimi
   const [selectedPests, setSelectedPests] = useState<string[]>(['Hamam Böceği', 'Kemirgen']);
 
-  // Manuel Ekleme State'i
   const [manualType, setManualType] = useState<'service' | 'product'>('service');
-  const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0 });
+  const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
 
-  // Footer Ayarları
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
     name: 'İlaçlamatik Ekibi',
     title: 'Profesyonel Zararlı Kontrol Çözümleri',
@@ -118,28 +110,25 @@ const HizmetPazarlama: React.FC = () => {
     const fetchInitialData = async () => {
       setLoading(true);
       try {
-        const [customerRes, serviceRes, materialRes, settingsRes] = await Promise.all([
+        const [customerRes, serviceRes, equipmentRes, settingsRes] = await Promise.all([
             supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
             supabase.from('services').select('*').order('name'),
-            supabase.from('paid_materials').select('*').eq('is_active', true).order('name'), // Ücretli malzemeleri çek
+            // GÜNCELLENDİ: Equipment tablosundan çekiliyor
+            supabase.from('equipment').select('*').eq('is_active', true).order('name'), 
             supabase.from('company_settings').select('*').limit(1).single()
         ]);
 
         setCustomers(customerRes.data || []);
-        
-        // Hizmetleri set et
         setServiceList((serviceRes.data || []).map((s: any) => ({ ...s, type: 'service' })));
-        
-        // Malzemeleri set et
-        setMaterialList((materialRes.data || []).map((m: any) => ({ ...m, type: 'product' })));
+        setEquipmentList((equipmentRes.data || []).map((e: any) => ({ ...e, type: 'product' })));
 
         if (settingsRes.data) {
             setFooterInfo(settingsRes.data);
         }
 
       } catch (error: any) {
-        // Hata olsa bile sayfanın çalışmaya devam etmesi için sessiz kalabilir veya loglayabiliriz
-        console.error("Veri çekme hatası:", error);
+        // Hata olsa bile devam et
+        console.error("Veri yükleme hatası:", error);
       } finally {
         setLoading(false);
       }
@@ -148,7 +137,6 @@ const HizmetPazarlama: React.FC = () => {
     fetchInitialData();
   }, []);
 
-  // Müşteri seçimi
   useEffect(() => {
       if (selectedCustomer) {
           const customer = customers.find(c => c.id === selectedCustomer);
@@ -159,9 +147,10 @@ const HizmetPazarlama: React.FC = () => {
       }
   }, [selectedCustomer, customers]);
 
-  // --- HTML OLUŞTURUCU ---
+  // --- HTML GENERATOR ---
   const generateEmailHtml = (customer: string, contact: string, items: SelectedItem[], signature: string, proposalLink?: string, password?: string): string => {
     let grandTotal = 0;
+    
     const itemRows = items.map(item => {
       const totalItemPrice = item.unitType === 'aylik' ? (item.visitCount * item.price) : (item.visitCount * item.price);
       grandTotal += totalItemPrice;
@@ -170,7 +159,8 @@ const HizmetPazarlama: React.FC = () => {
       if (item.type === 'service') {
           unitText = item.unitType === 'aylik' ? `${item.visitCount} Ziyaret / Ay` : `Tek Seferlik`;
       } else {
-          unitText = `${item.visitCount} Adet`;
+          // GÜNCELLENDİ: Dinamik birim gösterimi
+          unitText = `${item.visitCount} ${item.unitType}`;
       }
 
       return `
@@ -258,7 +248,6 @@ const HizmetPazarlama: React.FC = () => {
     `;
   };
 
-  // Önizleme Güncelleme
   useEffect(() => {
     if (selectedItems.length === 0) {
       setEmailPreview('');
@@ -270,7 +259,6 @@ const HizmetPazarlama: React.FC = () => {
     setEmailPreview(html);
   }, [selectedItems, companyName, contactPerson, footerInfo, selectedPests]);
 
-  // TEKLİF GÖNDERME
   const handleSendEmail = async () => {
     if (!recipientEmail || !companyName) {
       toast.error('Lütfen Alıcı E-posta ve Firma Adı alanlarını doldurun.');
@@ -288,7 +276,6 @@ const HizmetPazarlama: React.FC = () => {
         const proposalNumber = `TEKLIF-${Date.now().toString().slice(-6)}`;
         const accessPassword = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // 1. Ana Teklif Kaydı
         const { data: proposalData, error: proposalError } = await supabase
             .from('proposals')
             .insert({
@@ -309,7 +296,6 @@ const HizmetPazarlama: React.FC = () => {
         if (proposalError) throw proposalError;
         const newProposalId = proposalData.id;
 
-        // 2. Teklif Kalemleri Kaydı
         const itemsToInsert = selectedItems.map(item => {
             return {
                 proposal_id: newProposalId,
@@ -319,15 +305,14 @@ const HizmetPazarlama: React.FC = () => {
                 visit_count: item.visitCount,
                 unit_price: item.price,
                 explanation: item.explanation,
-                unit_type: item.unitType,
-                item_type: item.type // 'service' veya 'product' olarak DB'ye gider
+                unit_type: item.unitType, // Birim bilgisi burada saklanıyor
+                item_type: item.type
             };
         });
 
         const { error: itemsError } = await supabase.from('proposal_items').insert(itemsToInsert);
         if (itemsError) throw itemsError;
 
-        // 3. E-posta Gönderimi
         const proposalLink = `https://ilaclamatik.com/teklif-goruntule/${newProposalId}`;
         const signature = generateSignatureHtml(footerInfo);
         const emailHtml = generateEmailHtml(companyName, contactPerson, selectedItems, signature, proposalLink, accessPassword);
@@ -344,8 +329,7 @@ const HizmetPazarlama: React.FC = () => {
         if (emailError) throw emailError;
         toast.success(`Teklif başarıyla oluşturuldu ve gönderildi!`);
         
-        // Formu temizle (Opsiyonel)
-        // setSelectedItems([]);
+        setSelectedItems([]);
         
     } catch (error: any) {
       toast.error('İşlem hatası: ' + error.message);
@@ -354,7 +338,6 @@ const HizmetPazarlama: React.FC = () => {
     }
   };
   
-  // Footer Kaydet
   const handleSaveFooterSettings = async () => {
       setIsSavingSettings(true);
       try {
@@ -368,15 +351,13 @@ const HizmetPazarlama: React.FC = () => {
       }
   };
 
-  // Toplam Hesaplama
   const grandTotal = useMemo(() => {
       return selectedItems.reduce((total, item) => {
           return total + (item.unitType === 'aylik' ? (item.visitCount * item.price) : (item.visitCount * item.price));
       }, 0);
   }, [selectedItems]);
 
-  // Öğe Ekleme/Çıkarma
-  const toggleItemSelection = (item: Service | PaidMaterial, type: 'service' | 'product', isSelected: boolean) => {
+  const toggleItemSelection = (item: Service | Equipment, type: 'service' | 'product', isSelected: boolean) => {
       if (isSelected) {
           const newItem: SelectedItem = {
               id: item.id,
@@ -384,12 +365,11 @@ const HizmetPazarlama: React.FC = () => {
               name: item.name,
               description: item.description,
               image_url: item.image_url,
-              // Eğer Hizmet ise varsayılan 1 ziyaret, Ürün ise 1 adet
               visitCount: type === 'service' ? ((item as Service).visit_count || 1) : 1,
-              // Eğer Ürün ise sale_price, Hizmet ise price
-              price: type === 'product' ? (item as PaidMaterial).sale_price : (item as Service).price || 0,
+              price: type === 'product' ? (item as Equipment).sale_price : (item as Service).price || 0,
               explanation: '',
-              unitType: type === 'service' ? 'aylik' : 'adet'
+              // GÜNCELLENDİ: Ekipman ise kendi birimini, hizmet ise 'aylik' varsayılanını al
+              unitType: type === 'product' ? (item as Equipment).unit || 'Adet' : 'aylik'
           };
           setSelectedItems(prev => [...prev, newItem]);
       } else {
@@ -397,7 +377,6 @@ const HizmetPazarlama: React.FC = () => {
       }
   };
 
-  // Öğe Güncelleme
   const handleItemUpdate = (id: number | string, type: 'service' | 'product', field: keyof SelectedItem, value: any) => {
       setSelectedItems(prev => prev.map(item => {
           if (item.id === id && item.type === type) {
@@ -407,12 +386,10 @@ const HizmetPazarlama: React.FC = () => {
       }));
   };
   
-  // Zararlı Seçimi Toggle
   const togglePest = (pest: string) => {
       setSelectedPests(prev => prev.includes(pest) ? prev.filter(p => p !== pest) : [...prev, pest]);
   };
 
-  // Manuel Ekleme
   const handleAddManualItem = () => {
       if(!manualItem.name) {
           toast.error("İsim giriniz.");
@@ -426,10 +403,10 @@ const HizmetPazarlama: React.FC = () => {
           visitCount: manualItem.count,
           price: manualItem.price,
           explanation: '',
-          unitType: manualType === 'service' ? 'aylik' : 'adet'
+          unitType: manualType === 'service' ? 'aylik' : manualItem.unit
       };
       setSelectedItems(prev => [...prev, newItem]);
-      setManualItem({ name: '', description: '', count: 1, price: 0 });
+      setManualItem({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
   };
 
   return (
@@ -493,10 +470,8 @@ const HizmetPazarlama: React.FC = () => {
           <div>
             <label className="block text-lg font-semibold text-gray-700 mb-2">3. Teklif Kalemleri</label>
             
-            {/* Sekmeler */}
             <div className="flex border-b mb-3">
-                <div className="px-4 py-2 border-b-2 border-green-600 text-green-700 font-medium text-sm">Hizmetler</div>
-                <div className="px-4 py-2 text-gray-500 font-medium text-sm">Ürünler (Aşağıda)</div>
+                <div className="px-4 py-2 border-b-2 border-green-600 text-green-700 font-medium text-sm">Seçenekler</div>
             </div>
 
             <div className="border rounded-lg max-h-96 overflow-y-auto space-y-6 p-2">
@@ -542,10 +517,10 @@ const HizmetPazarlama: React.FC = () => {
                     })}
                 </div>
 
-                {/* Ürün Listesi */}
+                {/* Ürün Listesi - GÜNCELLENDİ (Equipment) */}
                 <div className="border-t pt-4">
-                    <h4 className="font-bold text-gray-700 px-2 mb-2 text-sm sticky top-0 bg-white z-10 py-1">ÜRÜN & MALZEMELER (Stoktan)</h4>
-                    {materialList.map(item => {
+                    <h4 className="font-bold text-gray-700 px-2 mb-2 text-sm sticky top-0 bg-white z-10 py-1">EKİPMAN & ÜRÜNLER (Stok)</h4>
+                    {equipmentList.map(item => {
                         const selectedItem = selectedItems.find(s => s.id === item.id && s.type === 'product');
                         return (
                             <div key={`prd-${item.id}`} className={`border rounded-lg mb-2 p-3 ${selectedItem ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}>
@@ -558,14 +533,17 @@ const HizmetPazarlama: React.FC = () => {
                                     )}
                                     <div className="flex-grow">
                                         <p className="text-sm font-bold text-gray-900">{item.name}</p>
-                                        <p className="text-xs text-gray-500">Satış: {item.sale_price} ₺ {item.stock_quantity ? `(Stok: ${item.stock_quantity})` : ''}</p>
+                                        <p className="text-xs text-gray-500">{item.sale_price} ₺ / {item.unit}</p>
                                     </div>
                                 </div>
                                 {selectedItem && (
                                     <div className="mt-3 pl-8 grid grid-cols-12 gap-3 animate-in slide-in-from-top-2">
                                         <div className="col-span-4">
-                                            <label className="text-[10px] font-bold text-gray-500">ADET</label>
-                                            <input type="number" value={selectedItem.visitCount} onChange={(e) => handleItemUpdate(item.id, 'product', 'visitCount', parseInt(e.target.value))} className="w-full p-1 border rounded text-xs text-center" min="1" />
+                                            <label className="text-[10px] font-bold text-gray-500">MİKTAR</label>
+                                            <div className="flex items-center gap-1">
+                                                <input type="number" value={selectedItem.visitCount} onChange={(e) => handleItemUpdate(item.id, 'product', 'visitCount', parseInt(e.target.value))} className="w-full p-1 border rounded text-xs text-center" min="1" />
+                                                <span className="text-xs text-gray-500">{item.unit}</span>
+                                            </div>
                                         </div>
                                         <div className="col-span-4">
                                             <label className="text-[10px] font-bold text-gray-500">BİRİM FİYAT</label>
@@ -596,13 +574,14 @@ const HizmetPazarlama: React.FC = () => {
                 <div className="mt-3 space-y-3 p-4 bg-gray-50 rounded-lg">
                     <div className="flex gap-4 mb-2">
                         <label className="flex items-center text-xs"><input type="radio" checked={manualType==='service'} onChange={()=>setManualType('service')} className="mr-1"/> Hizmet</label>
-                        <label className="flex items-center text-xs"><input type="radio" checked={manualType==='product'} onChange={()=>setManualType('product')} className="mr-1"/> Ürün</label>
+                        <label className="flex items-center text-xs"><input type="radio" checked={manualType==='product'} onChange={()=>setManualType('product')} className="mr-1"/> Ürün/Ekipman</label>
                     </div>
                     <input type="text" placeholder="İsim" value={manualItem.name} onChange={e => setManualItem(prev => ({...prev, name: e.target.value}))} className="w-full p-2 border rounded text-sm" />
                     <textarea placeholder="Açıklama" value={manualItem.description} onChange={e => setManualItem(prev => ({...prev, description: e.target.value}))} rows={2} className="w-full p-2 border rounded text-sm" />
-                    <div className="grid grid-cols-2 gap-4">
-                        <input type="number" placeholder="Miktar / Adet" value={manualItem.count} onChange={e => setManualItem(prev => ({...prev, count: parseInt(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
-                        <input type="number" placeholder="Birim Fiyat" value={manualItem.price} onChange={e => setManualItem(prev => ({...prev, price: parseFloat(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
+                    <div className="grid grid-cols-3 gap-3">
+                        <input type="number" placeholder="Miktar" value={manualItem.count} onChange={e => setManualItem(prev => ({...prev, count: parseInt(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
+                        <input type="text" placeholder="Birim (Adet/Kg)" value={manualItem.unit} onChange={e => setManualItem(prev => ({...prev, unit: e.target.value}))} className="w-full p-2 border rounded text-sm" disabled={manualType === 'service'} />
+                        <input type="number" placeholder="Fiyat" value={manualItem.price} onChange={e => setManualItem(prev => ({...prev, price: parseFloat(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
                     </div>
                     <button onClick={handleAddManualItem} className="w-full bg-gray-800 text-white rounded text-sm font-medium p-2 hover:bg-gray-700">Listeye Ekle</button>
                 </div>
@@ -638,7 +617,6 @@ const HizmetPazarlama: React.FC = () => {
                 )}
             </div>
             
-            {/* Footer Ayarları (Collapse) */}
             <div className="mt-4 border-t pt-2">
                 <details className="group">
                     <summary className="flex cursor-pointer items-center text-xs font-medium text-gray-500 hover:text-gray-800 select-none">
