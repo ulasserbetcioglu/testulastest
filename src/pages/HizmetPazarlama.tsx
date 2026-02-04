@@ -20,13 +20,12 @@ interface Service {
   type: 'service';
 }
 
-// GÜNCELLENDİ: Equipment tablosu yapısı
 interface Equipment {
   id: string;
   name: string;
   description?: string;
-  sale_price: number; // Satış Fiyatı
-  unit: string;       // Birim (Adet, Kg, Lt...)
+  sale_price: number;
+  unit: string;
   image_url?: string;
   type: 'product';
 }
@@ -37,10 +36,10 @@ interface SelectedItem {
   name: string;
   description?: string;
   image_url?: string;
-  visitCount: number; // Miktar
+  visitCount: number;
   price: number;
   explanation: string;
-  unitType: string;   // 'aylik', 'seferlik' veya ekipman birimi ('Adet', 'Kg' vb.)
+  unitType: string;
 }
 
 interface FooterInfo {
@@ -77,7 +76,7 @@ const generateSignatureHtml = (footer: FooterInfo): string => `
 const HizmetPazarlama: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [serviceList, setServiceList] = useState<Service[]>([]);
-  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]); // GÜNCELLENDİ: Equipment listesi
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   
   const [emailSubject, setEmailSubject] = useState('Hizmet ve Ürün Teklifimiz - Fiyat Teklifi Sunulur');
@@ -105,7 +104,6 @@ const HizmetPazarlama: React.FC = () => {
     logo_url: 'https://i.imgur.com/PajSpus.png'
   });
 
-  // --- VERİ ÇEKME ---
   useEffect(() => {
     const fetchInitialData = async () => {
       setLoading(true);
@@ -113,8 +111,7 @@ const HizmetPazarlama: React.FC = () => {
         const [customerRes, serviceRes, equipmentRes, settingsRes] = await Promise.all([
             supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
             supabase.from('services').select('*').order('name'),
-            // GÜNCELLENDİ: Equipment tablosundan çekiliyor
-            supabase.from('equipment').select('*').eq('is_active', true).order('name'), 
+            supabase.from('equipment').select('*').eq('is_active', true).order('name'),
             supabase.from('company_settings').select('*').limit(1).single()
         ]);
 
@@ -127,7 +124,6 @@ const HizmetPazarlama: React.FC = () => {
         }
 
       } catch (error: any) {
-        // Hata olsa bile devam et
         console.error("Veri yükleme hatası:", error);
       } finally {
         setLoading(false);
@@ -147,19 +143,19 @@ const HizmetPazarlama: React.FC = () => {
       }
   }, [selectedCustomer, customers]);
 
-  // --- HTML GENERATOR ---
   const generateEmailHtml = (customer: string, contact: string, items: SelectedItem[], signature: string, proposalLink?: string, password?: string): string => {
     let grandTotal = 0;
     
     const itemRows = items.map(item => {
-      const totalItemPrice = item.unitType === 'aylik' ? (item.visitCount * item.price) : (item.visitCount * item.price);
+      // item.price guaranteed to be number by interface/state logic
+      const price = item.price || 0;
+      const totalItemPrice = item.visitCount * price;
       grandTotal += totalItemPrice;
       
       let unitText = '';
       if (item.type === 'service') {
           unitText = item.unitType === 'aylik' ? `${item.visitCount} Ziyaret / Ay` : `Tek Seferlik`;
       } else {
-          // GÜNCELLENDİ: Dinamik birim gösterimi
           unitText = `${item.visitCount} ${item.unitType}`;
       }
 
@@ -174,7 +170,7 @@ const HizmetPazarlama: React.FC = () => {
           ${item.explanation ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #4f46e5; font-style: italic;">Not: ${item.explanation}</p>` : ''}
         </td>
         <td style="padding: 15px; font-size: 13px; text-align: center; vertical-align: top; white-space: nowrap;">${unitText}</td>
-        <td style="padding: 15px; font-size: 14px; text-align: right; vertical-align: top; font-weight: bold;">${item.price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+        <td style="padding: 15px; font-size: 14px; text-align: right; vertical-align: top; font-weight: bold;">${price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
       </tr>
     `}).join('');
 
@@ -254,10 +250,26 @@ const HizmetPazarlama: React.FC = () => {
       return;
     }
     
+    // Combine selected items from state with details from lists
+    const selectedItemsWithDetails = selectedItems.map(selected => {
+        let original: any = null;
+        if (selected.type === 'service') {
+             original = serviceList.find(s => s.id === selected.id);
+        } else {
+             original = equipmentList.find(e => e.id === selected.id);
+        }
+        
+        return {
+            ...selected,
+            image_url: original?.image_url || selected.image_url,
+            // description: original?.description || selected.description // Keep edited description if any, but state should hold it
+        };
+    });
+    
     const signature = generateSignatureHtml(footerInfo);
-    const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItems, signature);
+    const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails, signature);
     setEmailPreview(html);
-  }, [selectedItems, companyName, contactPerson, footerInfo, selectedPests]);
+  }, [selectedItems, serviceList, equipmentList, companyName, contactPerson, footerInfo, selectedPests]);
 
   const handleSendEmail = async () => {
     if (!recipientEmail || !companyName) {
@@ -272,7 +284,7 @@ const HizmetPazarlama: React.FC = () => {
     setIsSending(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
-        const totalAmount = selectedItems.reduce((sum, item) => sum + (item.unitType === 'aylik' ? (item.visitCount * item.price) : (item.visitCount * item.price)), 0);
+        const totalAmount = selectedItems.reduce((sum, item) => sum + (item.visitCount * item.price), 0);
         const proposalNumber = `TEKLIF-${Date.now().toString().slice(-6)}`;
         const accessPassword = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -305,7 +317,7 @@ const HizmetPazarlama: React.FC = () => {
                 visit_count: item.visitCount,
                 unit_price: item.price,
                 explanation: item.explanation,
-                unit_type: item.unitType, // Birim bilgisi burada saklanıyor
+                unit_type: item.unitType,
                 item_type: item.type
             };
         });
@@ -353,7 +365,7 @@ const HizmetPazarlama: React.FC = () => {
 
   const grandTotal = useMemo(() => {
       return selectedItems.reduce((total, item) => {
-          return total + (item.unitType === 'aylik' ? (item.visitCount * item.price) : (item.visitCount * item.price));
+          return total + (item.visitCount * item.price);
       }, 0);
   }, [selectedItems]);
 
@@ -368,7 +380,6 @@ const HizmetPazarlama: React.FC = () => {
               visitCount: type === 'service' ? ((item as Service).visit_count || 1) : 1,
               price: type === 'product' ? (item as Equipment).sale_price : (item as Service).price || 0,
               explanation: '',
-              // GÜNCELLENDİ: Ekipman ise kendi birimini, hizmet ise 'aylik' varsayılanını al
               unitType: type === 'product' ? (item as Equipment).unit || 'Adet' : 'aylik'
           };
           setSelectedItems(prev => [...prev, newItem]);
