@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, Search, Eye, FileDown, FileText, Calendar, X, Printer } from 'lucide-react';
+import { Loader2, Search, Eye, FileDown, FileText, Calendar, X, Edit, Save, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -23,9 +23,15 @@ const Sozlesmeler: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Modal State
+  // Görüntüleme Modalı State
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  
+  // Düzenleme Modalı State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<Contract>>({});
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,6 +54,7 @@ const Sozlesmeler: React.FC = () => {
     }
   };
 
+  // PDF İndirme
   const handleDownloadPdf = () => {
     if (!printRef.current || !(window as any).html2pdf) {
         toast.error("PDF oluşturucu hazır değil.");
@@ -63,6 +70,50 @@ const Sozlesmeler: React.FC = () => {
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     (window as any).html2pdf().set(options).from(element).save();
+  };
+
+  // Düzenleme Butonuna Tıklama
+  const handleEditClick = (contract: Contract) => {
+    setEditFormData({
+      id: contract.id,
+      company_name: contract.company_name,
+      contact_person: contract.contact_person,
+      contract_amount: contract.contract_amount,
+      start_date: contract.start_date,
+      end_date: contract.end_date,
+      content: contract.content // İçeriği de düzenlemeye açıyoruz
+    });
+    setShowEditModal(true);
+  };
+
+  // Güncelleme İşlemi
+  const handleUpdateContract = async () => {
+    if (!editFormData.id) return;
+    setIsUpdating(true);
+
+    try {
+      const { error } = await supabase
+        .from('service_contracts')
+        .update({
+          company_name: editFormData.company_name,
+          contact_person: editFormData.contact_person,
+          contract_amount: editFormData.contract_amount,
+          start_date: editFormData.start_date,
+          end_date: editFormData.end_date,
+          content: editFormData.content, // HTML içeriği de güncelliyoruz
+        })
+        .eq('id', editFormData.id);
+
+      if (error) throw error;
+
+      toast.success('Sözleşme başarıyla güncellendi.');
+      setShowEditModal(false);
+      fetchContracts(); // Listeyi yenile
+    } catch (error: any) {
+      toast.error('Güncelleme sırasında hata oluştu: ' + error.message);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const filteredContracts = contracts.filter(c => 
@@ -99,7 +150,7 @@ const Sozlesmeler: React.FC = () => {
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase">Yetkili</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase">Başlangıç / Bitiş</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase text-right">Tutar</th>
-                <th className="p-4 text-xs font-bold text-gray-500 uppercase text-center">İşlem</th>
+                <th className="p-4 text-xs font-bold text-gray-500 uppercase text-center">İşlemler</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -123,13 +174,22 @@ const Sozlesmeler: React.FC = () => {
                       {contract.contract_amount?.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
                     </td>
                     <td className="p-4 text-center">
-                      <button 
-                        onClick={() => { setSelectedContract(contract); setShowModal(true); }}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Görüntüle"
-                      >
-                        <Eye size={18} />
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button 
+                          onClick={() => { setSelectedContract(contract); setShowViewModal(true); }}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Görüntüle"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        <button 
+                          onClick={() => handleEditClick(contract)}
+                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          title="Düzenle"
+                        >
+                          <Edit size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -139,15 +199,15 @@ const Sozlesmeler: React.FC = () => {
         </div>
       </div>
 
-      {/* DETAY MODALI */}
-      {showModal && selectedContract && (
+      {/* --- GÖRÜNTÜLEME MODALI --- */}
+      {showViewModal && selectedContract && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl">
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <FileText className="text-blue-600"/> Sözleşme Detayı: {selectedContract.contract_number}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-500 hover:bg-gray-100 p-1 rounded-full"><X size={24}/></button>
+              <button onClick={() => setShowViewModal(false)} className="text-gray-500 hover:bg-gray-100 p-1 rounded-full"><X size={24}/></button>
             </div>
             
             <div className="flex-1 overflow-y-auto bg-gray-100 p-8">
@@ -157,7 +217,7 @@ const Sozlesmeler: React.FC = () => {
             </div>
 
             <div className="p-4 border-t bg-white flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-gray-700">Kapat</button>
+              <button onClick={() => setShowViewModal(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50 text-gray-700">Kapat</button>
               <button onClick={() => handleDownloadPdf()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
                 <FileDown size={18}/> PDF İndir
               </button>
@@ -165,6 +225,96 @@ const Sozlesmeler: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* --- DÜZENLEME MODALI --- */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-5 border-b">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <Edit className="text-orange-600"/> Sözleşme Düzenle
+              </h2>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-500 hover:bg-gray-100 p-1 rounded-full"><X size={24}/></button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Firma Ünvanı</label>
+                  <input 
+                    type="text" 
+                    value={editFormData.company_name} 
+                    onChange={e => setEditFormData({...editFormData, company_name: e.target.value})}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Yetkili Kişi</label>
+                  <input 
+                    type="text" 
+                    value={editFormData.contact_person} 
+                    onChange={e => setEditFormData({...editFormData, contact_person: e.target.value})}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Başlangıç Tarihi</label>
+                  <input 
+                    type="date" 
+                    value={editFormData.start_date ? format(new Date(editFormData.start_date), 'yyyy-MM-dd') : ''}
+                    onChange={e => setEditFormData({...editFormData, start_date: e.target.value})}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bitiş Tarihi</label>
+                  <input 
+                    type="date" 
+                    value={editFormData.end_date ? format(new Date(editFormData.end_date), 'yyyy-MM-dd') : ''} 
+                    onChange={e => setEditFormData({...editFormData, end_date: e.target.value})}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sözleşme Tutarı (TL)</label>
+                  <input 
+                    type="number" 
+                    value={editFormData.contract_amount} 
+                    onChange={e => setEditFormData({...editFormData, contract_amount: parseFloat(e.target.value)})}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-gray-800"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sözleşme Metni (HTML) 
+                  <span className="text-xs text-red-500 ml-2 font-normal">* Dikkat: Buradaki değişiklikler direkt sözleşme metnini etkiler.</span>
+                </label>
+                <textarea 
+                  rows={8}
+                  value={editFormData.content} 
+                  onChange={e => setEditFormData({...editFormData, content: e.target.value})}
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs text-gray-600"
+                />
+              </div>
+            </div>
+
+            <div className="p-5 border-t bg-gray-50 flex justify-end gap-3">
+              <button onClick={() => setShowEditModal(false)} className="px-4 py-2 border bg-white rounded-lg hover:bg-gray-50 text-gray-700">İptal</button>
+              <button 
+                onClick={handleUpdateContract} 
+                disabled={isUpdating}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-sm font-medium disabled:opacity-70"
+              >
+                {isUpdating ? <Loader2 className="animate-spin size-4"/> : <Save size={18}/>}
+                Değişiklikleri Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
