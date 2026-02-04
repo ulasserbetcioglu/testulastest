@@ -317,6 +317,7 @@ function App() {
             
             <Route path="modules" element={<Modules />} />
             <Route path="musteriler" element={<Customers />} />
+            <Route path="sozlesmeler" element={<Sozlesmeler />} />
             <Route path="musteriler/:id" element={<CustomerDetails />} />
             <Route path="ziyaretler" element={<AdminVisits />} />
             <Route path="ziyaretler/yeni" element={<VisitForm />} />
