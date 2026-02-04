@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Info, Bug, Calendar, Package } from 'lucide-react';
-import { format } from 'date-fns';
+import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Info, Bug, Calendar, Package, FileSignature, FileText } from 'lucide-react';
+import { format, addYears } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
 
@@ -15,7 +15,7 @@ interface ProposalItem {
     unit_price: number;
     explanation: string;
     unit_type: 'aylik' | 'seferlik' | 'adet';
-    item_type?: 'service' | 'product'; // Yeni alan
+    item_type?: 'service' | 'product';
 }
 
 interface Proposal {
@@ -52,12 +52,17 @@ const TeklifGoruntule: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const proposalRef = useRef<HTMLDivElement>(null);
+    const contractRef = useRef<HTMLDivElement>(null); // Sözleşme için ref
     
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState('');
     const [isVerifying, setIsVerifying] = useState(false);
     const [notes, setNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Sözleşme State'leri
+    const [showContractModal, setShowContractModal] = useState(false);
+    const [contractHtml, setContractHtml] = useState('');
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -113,16 +118,16 @@ const TeklifGoruntule: React.FC = () => {
         }
     };
 
-    const handleDownloadPdf = () => {
-        if (!proposalRef.current || !(window as any).html2pdf) {
+    const handleDownloadPdf = (elementRef: React.RefObject<HTMLDivElement>, fileName: string) => {
+        if (!elementRef.current || !(window as any).html2pdf) {
             toast.error("PDF oluşturucu hazır değil.");
             return;
         }
         
-        const element = proposalRef.current;
+        const element = elementRef.current;
         const options = {
-            margin:       0,
-            filename:     `Teklif_${proposal?.proposal_number}.pdf`,
+            margin:       5,
+            filename:     `${fileName}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -130,7 +135,119 @@ const TeklifGoruntule: React.FC = () => {
         (window as any).html2pdf().set(options).from(element).save();
     };
 
-    const handleUpdateStatus = async (newStatus: 'approved' | 'rejected') => {
+    // --- SÖZLEŞME OLUŞTURMA FONKSİYONU ---
+    const generateContractContent = (prop: Proposal, settings: CompanySettings | null) => {
+        const startDate = format(new Date(), 'dd.MM.yyyy');
+        const endDate = format(addYears(new Date(), 1), 'dd.MM.yyyy');
+        
+        return `
+            <div style="font-family: 'Times New Roman', serif; line-height: 1.6; color: #000;">
+                <h2 style="text-align: center; text-decoration: underline; margin-bottom: 20px;">HİZMET SÖZLEŞMESİ</h2>
+                
+                <p><strong>1. TARAFLAR</strong></p>
+                <p>İşbu sözleşme, bir tarafta <strong>${settings?.company_name || 'Yüklenici Firma'}</strong> (Bundan sonra "YÜKLENİCİ" olarak anılacaktır) ile diğer tarafta <strong>${prop.company_name}</strong> (Bundan sonra "MÜŞTERİ" olarak anılacaktır) arasında aşağıda belirtilen şartlar dahilinde akdedilmiştir.</p>
+                
+                <p><strong>2. SÖZLEŞMENİN KONUSU</strong></p>
+                <p>Müşterinin işyerinde/tesisinde yapılacak olan haşere ve kemirgen kontrol hizmetlerinin (Pest Control) periyodik olarak yürütülmesi, raporlanması ve takibi işidir.</p>
+                
+                <p><strong>3. HİZMET KAPSAMI VE HEDEF ZARARLILAR</strong></p>
+                <p>Mücadele edilecek hedef zararlılar: ${prop.included_pests ? prop.included_pests.join(', ') : 'Genel Haşere ve Kemirgen'}.</p>
+                
+                <p><strong>4. HİZMET DETAYLARI VE ÜCRET</strong></p>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 10px; font-size: 12px;">
+                    <thead>
+                        <tr style="background-color: #f3f4f6;">
+                            <th style="border: 1px solid #ccc; padding: 8px;">Hizmet/Ürün</th>
+                            <th style="border: 1px solid #ccc; padding: 8px;">Miktar/Kapsam</th>
+                            <th style="border: 1px solid #ccc; padding: 8px;">Fiyat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${prop.proposal_items.map(item => `
+                            <tr>
+                                <td style="border: 1px solid #ccc; padding: 8px;">${item.service_name}</td>
+                                <td style="border: 1px solid #ccc; padding: 8px;">${item.unit_type === 'seferlik' ? 'Tek Sefer' : item.unit_type === 'aylik' ? item.visit_count + ' Ziyaret/Ay' : item.visit_count + ' Adet'}</td>
+                                <td style="border: 1px solid #ccc; padding: 8px;">${item.unit_price} TL</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <p><strong>Genel Toplam (KDV Hariç):</strong> ${prop.total_amount.toLocaleString('tr-TR')} TL</p>
+                
+                <p><strong>5. SÖZLEŞME SÜRESİ</strong></p>
+                <p>İşbu sözleşme <strong>${startDate}</strong> tarihinde başlar ve <strong>${endDate}</strong> tarihinde sona erer.</p>
+                
+                <p><strong>6. YÜKÜMLÜLÜKLER</strong></p>
+                <ul>
+                    <li>YÜKLENİCİ, hizmeti Sağlık Bakanlığı ve ilgili mevzuatlara uygun olarak vereceğini taahhüt eder.</li>
+                    <li>MÜŞTERİ, uygulama yapılacak alanlara giriş izni ve gerekli kolaylığı sağlayacaktır.</li>
+                </ul>
+                
+                <div style="margin-top: 50px; display: flex; justify-content: space-between;">
+                    <div style="text-align: center;">
+                        <p><strong>YÜKLENİCİ</strong></p>
+                        <p>${settings?.company_name}</p>
+                        <br/><br/>
+                        <p>İmza / Kaşe</p>
+                    </div>
+                    <div style="text-align: center;">
+                        <p><strong>MÜŞTERİ</strong></p>
+                        <p>${prop.company_name}</p>
+                        <p>${prop.contact_person}</p>
+                        <br/>
+                        <p>İmza / Kaşe</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    };
+
+    const handleApproveAndCreateContract = async () => {
+        if (!proposal) return;
+        setIsSubmitting(true);
+        try {
+            // 1. Teklifi Onayla
+            const { error: updateError } = await supabase
+                .from('proposals')
+                .update({ status: 'approved', customer_notes: notes })
+                .eq('id', proposal.id);
+            
+            if (updateError) throw updateError;
+
+            // 2. Sözleşme İçeriğini Oluştur
+            const content = generateContractContent(proposal, companySettings);
+            const contractNumber = `CNT-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`;
+
+            // 3. Sözleşmeyi Veritabanına Kaydet
+            const { error: contractError } = await supabase
+                .from('service_contracts')
+                .insert({
+                    proposal_id: proposal.id,
+                    contract_number: contractNumber,
+                    company_name: proposal.company_name,
+                    contact_person: proposal.contact_person,
+                    start_date: new Date(),
+                    end_date: addYears(new Date(), 1),
+                    contract_amount: proposal.total_amount,
+                    content: content,
+                    status: 'active'
+                });
+
+            if (contractError) throw contractError;
+
+            setProposal(prev => prev ? { ...prev, status: 'approved', customer_notes: notes } : null);
+            setContractHtml(content);
+            setShowContractModal(true); // Modalı aç
+            toast.success("Teklif onaylandı ve hizmet sözleşmesi başarıyla oluşturuldu.");
+
+        } catch (err: any) {
+            toast.error("İşlem sırasında hata oluştu: " + err.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleUpdateStatus = async (newStatus: 'rejected') => {
         if (!proposal) return;
         setIsSubmitting(true);
         try {
@@ -140,7 +257,7 @@ const TeklifGoruntule: React.FC = () => {
                 .eq('id', proposal.id);
             if (error) throw error;
             setProposal(prev => prev ? { ...prev, status: newStatus, customer_notes: notes } : null);
-            toast.success(`Teklif ${newStatus === 'approved' ? 'onaylandı' : 'reddedildi'}.`);
+            toast.success("Teklif reddedildi.");
         } catch (err) {
             toast.error("İşlem başarısız.");
         } finally {
@@ -189,14 +306,14 @@ const TeklifGoruntule: React.FC = () => {
                         <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-xs font-medium text-gray-700">
                             <Printer size={16} /> Yazdır
                         </button>
-                        <button onClick={handleDownloadPdf} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-medium">
+                        <button onClick={() => handleDownloadPdf(proposalRef, `Teklif_${proposal.proposal_number}`)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-medium">
                             <FileDown size={16} /> İndir
                         </button>
                     </div>
                 </div>
             </div>
             
-            {/* KAĞIT */}
+            {/* KAĞIT (TEKLİF) */}
             <div className="py-8 px-4 print:p-0 flex justify-center">
                 <div ref={proposalRef} className="bg-white shadow-xl print:shadow-none relative flex flex-col" style={{ width: '210mm', minHeight: '297mm' }}>
                     
@@ -281,7 +398,7 @@ const TeklifGoruntule: React.FC = () => {
                                 {proposal.proposal_items.map((item, index) => {
                                     const isProduct = item.item_type === 'product';
                                     let unitText = '';
-                                    if(isProduct) unitText = `${item.visit_count} Adet`;
+                                    if(isProduct) unitText = `${item.visit_count} ${item.unit_type || 'Adet'}`; // Birim eklendi
                                     else unitText = item.unit_type === 'seferlik' ? 'Tek Seferlik' : `${item.visit_count} Ziyaret / Ay`;
 
                                     return (
@@ -380,10 +497,10 @@ const TeklifGoruntule: React.FC = () => {
                                 rows={1}
                             />
                             <div className="flex gap-2 w-full md:w-auto">
-                                <button onClick={() => handleUpdateStatus('approved')} disabled={isSubmitting} className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2">
-                                    {isSubmitting ? <Loader className="animate-spin size-4"/> : <Check size={18} />} Onayla
+                                <button onClick={handleApproveAndCreateContract} disabled={isSubmitting} className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 text-sm whitespace-nowrap">
+                                    {isSubmitting ? <Loader className="animate-spin size-4"/> : <FileSignature size={18} />} Onayla ve Sözleşme Hazırla
                                 </button>
-                                <button onClick={() => handleUpdateStatus('rejected')} disabled={isSubmitting} className="flex-1 md:flex-none bg-white border border-red-200 text-red-600 hover:bg-red-50 px-6 py-2 rounded-lg font-bold shadow flex items-center justify-center gap-2">
+                                <button onClick={() => handleUpdateStatus('rejected')} disabled={isSubmitting} className="flex-1 md:flex-none bg-white border border-red-200 text-red-600 hover:bg-red-50 px-6 py-2 rounded-lg font-bold shadow flex items-center justify-center gap-2 text-sm">
                                     <X size={18} /> Reddet
                                 </button>
                             </div>
@@ -391,6 +508,32 @@ const TeklifGoruntule: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* --- SÖZLEŞME MODALI --- */}
+            {showContractModal && (
+                <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-4xl p-6 shadow-2xl flex flex-col max-h-[90vh]">
+                        <div className="flex justify-between items-center mb-4 border-b pb-4">
+                            <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
+                                <FileText className="text-blue-600" /> Hizmet Sözleşmesi Oluşturuldu
+                            </h2>
+                            <button onClick={() => setShowContractModal(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
+                        </div>
+                        
+                        <div className="flex-grow overflow-y-auto bg-gray-50 p-8 rounded border mb-4">
+                            <div ref={contractRef} className="bg-white shadow-lg p-10 max-w-[210mm] mx-auto min-h-[297mm]" dangerouslySetInnerHTML={{ __html: contractHtml }} />
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-2">
+                            <button onClick={() => setShowContractModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Kapat</button>
+                            <button onClick={() => handleDownloadPdf(contractRef, `Sozlesme_${proposal.company_name}`)} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2">
+                                <FileDown size={18} /> Sözleşmeyi İndir (PDF)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };
