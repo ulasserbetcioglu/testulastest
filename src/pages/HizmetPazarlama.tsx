@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package } from 'lucide-react';
+import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield } from 'lucide-react';
 
 // --- ARAYÜZLER ---
 interface Customer {
@@ -11,35 +11,37 @@ interface Customer {
 }
 
 interface Service {
-  id: number;
+  id: number; // Hizmetler genelde int id kullanır
   name: string;
   description: string;
   image_url: string;
   price: number | null;
   visit_count: number | null;
-  type: 'service'; // Tür belirtmek için
+  type: 'service';
 }
 
-interface Product {
-  id: string; // Genelde uuid olur
+// Veritabanındaki "paid_materials" tablosuna uygun arayüz
+interface PaidMaterial {
+  id: string; // UUID
   name: string;
-  description: string;
-  price: number;
+  description?: string;
+  sale_price: number; // Satış fiyatı
+  stock_quantity?: number;
   image_url?: string;
-  type: 'product'; // Tür belirtmek için
+  type: 'product';
 }
 
 // Ortak Seçili Öğe Arayüzü
 interface SelectedItem {
-  id: number | string; // Hem number (service) hem string (product) olabilir
+  id: number | string;
   type: 'service' | 'product';
   name: string;
   description?: string;
   image_url?: string;
-  visitCount: number; // Ürünler için 'Adet' olarak kullanılacak
+  visitCount: number; // Ürünler için 'Adet'
   price: number;
   explanation: string;
-  unitType: 'aylik' | 'seferlik' | 'adet'; // 'adet' eklendi
+  unitType: 'aylik' | 'seferlik' | 'adet';
 }
 
 interface FooterInfo {
@@ -79,8 +81,8 @@ const HizmetPazarlama: React.FC = () => {
   // --- STATE ---
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [serviceList, setServiceList] = useState<Service[]>([]);
-  const [productList, setProductList] = useState<Product[]>([]); // YENİ: Ürün Listesi
-  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]); // GÜNCELLENDİ: Hem hizmet hem ürün
+  const [materialList, setMaterialList] = useState<PaidMaterial[]>([]); // YENİ: Veritabanından gelen malzemeler
+  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   
   const [emailSubject, setEmailSubject] = useState('Hizmet ve Ürün Teklifimiz');
   const [emailPreview, setEmailPreview] = useState<string>('');
@@ -116,25 +118,28 @@ const HizmetPazarlama: React.FC = () => {
     const fetchInitialData = async () => {
       setLoading(true);
       try {
-        const [customerRes, serviceRes, productRes, settingsRes] = await Promise.all([
+        const [customerRes, serviceRes, materialRes, settingsRes] = await Promise.all([
             supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
             supabase.from('services').select('*').order('name'),
-            supabase.from('products').select('*').eq('is_active', true).order('name'), // Ürünleri çek
+            supabase.from('paid_materials').select('*').eq('is_active', true).order('name'), // Ücretli malzemeleri çek
             supabase.from('company_settings').select('*').limit(1).single()
         ]);
 
         setCustomers(customerRes.data || []);
         
-        // Tipleri ekleyerek set et
+        // Hizmetleri set et
         setServiceList((serviceRes.data || []).map((s: any) => ({ ...s, type: 'service' })));
-        setProductList((productRes.data || []).map((p: any) => ({ ...p, type: 'product' })));
+        
+        // Malzemeleri set et
+        setMaterialList((materialRes.data || []).map((m: any) => ({ ...m, type: 'product' })));
 
         if (settingsRes.data) {
             setFooterInfo(settingsRes.data);
         }
 
       } catch (error: any) {
-        toast.error('Veriler yüklenirken bir hata oluştu.');
+        // Hata olsa bile sayfanın çalışmaya devam etmesi için sessiz kalabilir veya loglayabiliriz
+        console.error("Veri çekme hatası:", error);
       } finally {
         setLoading(false);
       }
@@ -158,7 +163,7 @@ const HizmetPazarlama: React.FC = () => {
   const generateEmailHtml = (customer: string, contact: string, items: SelectedItem[], signature: string, proposalLink?: string, password?: string): string => {
     let grandTotal = 0;
     const itemRows = items.map(item => {
-      const totalItemPrice = item.unitType === 'aylik' ? (item.visitCount * item.price) : (item.visitCount * item.price); // Ürün için de adet * fiyat
+      const totalItemPrice = item.unitType === 'aylik' ? (item.visitCount * item.price) : (item.visitCount * item.price);
       grandTotal += totalItemPrice;
       
       let unitText = '';
@@ -183,10 +188,9 @@ const HizmetPazarlama: React.FC = () => {
       </tr>
     `}).join('');
 
-    // Zararlı Listesi HTML'i (Dahil olanlar koyu, olmayanlar silik)
     const pestListHtml = PEST_TYPES.map(pest => {
         const isSelected = selectedPests.includes(pest);
-        const color = isSelected ? '#059669' : '#9ca3af'; // Yeşil veya Gri
+        const color = isSelected ? '#059669' : '#9ca3af';
         const bg = isSelected ? '#ecfdf5' : '#f3f4f6';
         const decoration = isSelected ? 'none' : 'line-through';
         const opacity = isSelected ? '1' : '0.6';
@@ -296,7 +300,7 @@ const HizmetPazarlama: React.FC = () => {
                 created_by: user?.id,
                 access_password: accessPassword,
                 status: 'pending',
-                included_pests: selectedPests, // Zararlı türleri
+                included_pests: selectedPests,
                 cc_email: ccEmail || null
             })
             .select('id')
@@ -316,7 +320,7 @@ const HizmetPazarlama: React.FC = () => {
                 unit_price: item.price,
                 explanation: item.explanation,
                 unit_type: item.unitType,
-                item_type: item.type // 'service' veya 'product'
+                item_type: item.type // 'service' veya 'product' olarak DB'ye gider
             };
         });
 
@@ -340,8 +344,8 @@ const HizmetPazarlama: React.FC = () => {
         if (emailError) throw emailError;
         toast.success(`Teklif başarıyla oluşturuldu ve gönderildi!`);
         
-        // Reset
-        setSelectedItems([]);
+        // Formu temizle (Opsiyonel)
+        // setSelectedItems([]);
         
     } catch (error: any) {
       toast.error('İşlem hatası: ' + error.message);
@@ -372,7 +376,7 @@ const HizmetPazarlama: React.FC = () => {
   }, [selectedItems]);
 
   // Öğe Ekleme/Çıkarma
-  const toggleItemSelection = (item: Service | Product, type: 'service' | 'product', isSelected: boolean) => {
+  const toggleItemSelection = (item: Service | PaidMaterial, type: 'service' | 'product', isSelected: boolean) => {
       if (isSelected) {
           const newItem: SelectedItem = {
               id: item.id,
@@ -380,10 +384,12 @@ const HizmetPazarlama: React.FC = () => {
               name: item.name,
               description: item.description,
               image_url: item.image_url,
-              visitCount: type === 'service' ? ((item as Service).visit_count || 1) : 1, // Ürünse 1 adet
-              price: item.price || 0,
+              // Eğer Hizmet ise varsayılan 1 ziyaret, Ürün ise 1 adet
+              visitCount: type === 'service' ? ((item as Service).visit_count || 1) : 1,
+              // Eğer Ürün ise sale_price, Hizmet ise price
+              price: type === 'product' ? (item as PaidMaterial).sale_price : (item as Service).price || 0,
               explanation: '',
-              unitType: type === 'service' ? 'aylik' : 'adet' // Varsayılan tipler
+              unitType: type === 'service' ? 'aylik' : 'adet'
           };
           setSelectedItems(prev => [...prev, newItem]);
       } else {
@@ -538,17 +544,21 @@ const HizmetPazarlama: React.FC = () => {
 
                 {/* Ürün Listesi */}
                 <div className="border-t pt-4">
-                    <h4 className="font-bold text-gray-700 px-2 mb-2 text-sm sticky top-0 bg-white z-10 py-1">ÜRÜN & MALZEMELER</h4>
-                    {productList.map(item => {
+                    <h4 className="font-bold text-gray-700 px-2 mb-2 text-sm sticky top-0 bg-white z-10 py-1">ÜRÜN & MALZEMELER (Stoktan)</h4>
+                    {materialList.map(item => {
                         const selectedItem = selectedItems.find(s => s.id === item.id && s.type === 'product');
                         return (
                             <div key={`prd-${item.id}`} className={`border rounded-lg mb-2 p-3 ${selectedItem ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}>
                                 <div className="flex items-center space-x-3">
                                     <input type="checkbox" className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={!!selectedItem} onChange={(e) => toggleItemSelection(item, 'product', e.target.checked)} />
-                                    {item.image_url && <img src={item.image_url} className="w-8 h-8 object-cover rounded" />}
+                                    {item.image_url ? (
+                                        <img src={item.image_url} className="w-8 h-8 object-cover rounded" />
+                                    ) : (
+                                        <Package className="w-8 h-8 text-gray-400" />
+                                    )}
                                     <div className="flex-grow">
                                         <p className="text-sm font-bold text-gray-900">{item.name}</p>
-                                        <p className="text-xs text-gray-500">{item.price} ₺</p>
+                                        <p className="text-xs text-gray-500">Satış: {item.sale_price} ₺ {item.stock_quantity ? `(Stok: ${item.stock_quantity})` : ''}</p>
                                     </div>
                                 </div>
                                 {selectedItem && (
@@ -561,7 +571,7 @@ const HizmetPazarlama: React.FC = () => {
                                             <label className="text-[10px] font-bold text-gray-500">BİRİM FİYAT</label>
                                             <input type="number" value={selectedItem.price} onChange={(e) => handleItemUpdate(item.id, 'product', 'price', parseFloat(e.target.value))} className="w-full p-1 border rounded text-xs text-right font-bold" />
                                         </div>
-                                        <div className="col-span-4 flex items-end">
+                                        <div className="col-span-4 flex items-end justify-end">
                                             <span className="text-xs font-bold text-blue-600">{(selectedItem.visitCount * selectedItem.price).toLocaleString()} ₺</span>
                                         </div>
                                         <div className="col-span-12">
@@ -628,6 +638,7 @@ const HizmetPazarlama: React.FC = () => {
                 )}
             </div>
             
+            {/* Footer Ayarları (Collapse) */}
             <div className="mt-4 border-t pt-2">
                 <details className="group">
                     <summary className="flex cursor-pointer items-center text-xs font-medium text-gray-500 hover:text-gray-800 select-none">
