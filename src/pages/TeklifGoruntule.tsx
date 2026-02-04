@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Info, Bug, Calendar } from 'lucide-react';
+import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Info, Bug, Calendar, Package } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -14,7 +14,8 @@ interface ProposalItem {
     visit_count: number;
     unit_price: number;
     explanation: string;
-    unit_type: 'aylik' | 'seferlik';
+    unit_type: 'aylik' | 'seferlik' | 'adet';
+    item_type?: 'service' | 'product'; // Yeni alan
 }
 
 interface Proposal {
@@ -27,7 +28,7 @@ interface Proposal {
     proposal_items: ProposalItem[];
     status: 'pending' | 'approved' | 'rejected';
     customer_notes: string | null;
-    included_pests: string[] | null; // YENİ: Zararlı Türleri
+    included_pests: string[] | null;
 }
 
 interface CompanySettings {
@@ -41,7 +42,7 @@ interface CompanySettings {
 }
 
 const PEST_TYPES = [
-  'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene'
+  'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
 ];
 
 const TeklifGoruntule: React.FC = () => {
@@ -70,7 +71,6 @@ const TeklifGoruntule: React.FC = () => {
              }
         };
 
-        // html2pdf kütüphanesini yükle
         const pdfScript = document.createElement('script');
         pdfScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
         pdfScript.async = true;
@@ -171,8 +171,6 @@ const TeklifGoruntule: React.FC = () => {
     if (!proposal) return null;
 
     const primaryColor = '#15803d'; // Green-700
-    const secondaryColor = '#86efac'; // Green-300
-    const grayText = '#4b5563';
     const lightBorder = '#e5e7eb';
 
     return (
@@ -210,7 +208,7 @@ const TeklifGoruntule: React.FC = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
                             <div>
                                 <img src={companySettings?.logo_url || "https://i.imgur.com/PajSpus.png"} alt="Logo" style={{ height: '60px', objectFit: 'contain', marginBottom: '10px' }} />
-                                <div style={{ fontSize: '10px', color: grayText, lineHeight: '1.4' }}>
+                                <div style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>
                                     <strong>{companySettings?.company_name}</strong><br/>
                                     {companySettings?.address}<br/>
                                     {companySettings?.email} | {companySettings?.phone}
@@ -218,7 +216,7 @@ const TeklifGoruntule: React.FC = () => {
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <h1 style={{ fontSize: '24px', fontWeight: '800', color: primaryColor, margin: 0 }}>FİYAT TEKLİFİ SUNULUR</h1>
-                                <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px', letterSpacing: '1px' }}>HİZMET DETAYLARI</p>
+                                <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px', letterSpacing: '1px' }}>HİZMET & ÜRÜN DETAYLARI</p>
                                 <div style={{ marginTop: '10px', display: 'inline-block', padding: '4px 12px', borderRadius: '12px', backgroundColor: proposal.status === 'approved' ? '#dcfce7' : proposal.status === 'rejected' ? '#fee2e2' : '#fef9c3', color: proposal.status === 'approved' ? '#166534' : proposal.status === 'rejected' ? '#991b1b' : '#854d0e', fontSize: '11px', fontWeight: 'bold' }}>
                                     {proposal.status === 'approved' ? 'ONAYLANDI' : proposal.status === 'rejected' ? 'REDDEDİLDİ' : 'BEKLEMEDE'}
                                 </div>
@@ -244,7 +242,7 @@ const TeklifGoruntule: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* 4. HEDEF ZARARLILAR (YENİ) */}
+                        {/* 4. HEDEF ZARARLILAR (DAHİL OLANLAR RENKLİ, OLMAYANLAR GRİ) */}
                         <div style={{ marginBottom: '30px' }}>
                             <h4 style={{ fontSize: '11px', fontWeight: '700', color: primaryColor, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: `1px solid ${lightBorder}`, paddingBottom: '5px' }}>
                                 <Bug size={12} /> HEDEF ZARARLILAR KAPSAMI
@@ -259,46 +257,63 @@ const TeklifGoruntule: React.FC = () => {
                                             color: isActive ? '#15803d' : '#9ca3af', 
                                             border: `1px solid ${isActive ? '#bbf7d0' : '#e5e7eb'}`,
                                             fontWeight: isActive ? 'bold' : 'normal',
-                                            textDecoration: isActive ? 'none' : 'line-through',
+                                            textDecoration: isActive ? 'none' : 'line-through', // Çizili yapabiliriz
+                                            opacity: isActive ? 1 : 0.6,
                                             display: 'flex', alignItems: 'center', gap: '4px'
                                         }}>
-                                            {isActive && <Check size={10}/>} {pest}
+                                            {isActive ? <Check size={10}/> : <X size={10}/>} {pest}
                                         </div>
                                     )
                                 })}
                             </div>
                         </div>
 
-                        {/* 5. HİZMET TABLOSU */}
+                        {/* 5. HİZMET VE ÜRÜN TABLOSU */}
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
                             <thead>
                                 <tr style={{ borderBottom: `2px solid ${primaryColor}` }}>
-                                    <th style={{ padding: '10px 0', textAlign: 'left', fontSize: '10px', fontWeight: '700', color: primaryColor, textTransform: 'uppercase' }}>HİZMET DETAYI</th>
-                                    <th style={{ padding: '10px 0', textAlign: 'center', fontSize: '10px', fontWeight: '700', color: primaryColor, textTransform: 'uppercase', width: '20%' }}>KAPSAM</th>
+                                    <th style={{ padding: '10px 0', textAlign: 'left', fontSize: '10px', fontWeight: '700', color: primaryColor, textTransform: 'uppercase' }}>AÇIKLAMA</th>
+                                    <th style={{ padding: '10px 0', textAlign: 'center', fontSize: '10px', fontWeight: '700', color: primaryColor, textTransform: 'uppercase', width: '20%' }}>MİKTAR/KAPSAM</th>
                                     <th style={{ padding: '10px 0', textAlign: 'right', fontSize: '10px', fontWeight: '700', color: primaryColor, textTransform: 'uppercase', width: '25%' }}>BİRİM FİYAT</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {proposal.proposal_items.map((item, index) => (
-                                    <tr key={index} style={{ borderBottom: `1px solid ${lightBorder}` }}>
-                                        <td style={{ padding: '15px 0', verticalAlign: 'top' }}>
-                                            <div style={{ display: 'flex', gap: '12px' }}>
-                                                {item.image_url && <img src={item.image_url} style={{ width: '45px', height: '45px', borderRadius: '4px', objectFit: 'cover' }} />}
-                                                <div>
-                                                    <p style={{ fontSize: '13px', fontWeight: '700', color: '#1f2937', margin: 0 }}>{item.service_name}</p>
-                                                    <p style={{ fontSize: '11px', color: '#6b7280', margin: '2px 0 0 0', lineHeight: '1.3' }}>{item.service_description}</p>
-                                                    {item.explanation && <p style={{ fontSize: '10px', color: '#4f46e5', marginTop: '4px', fontStyle: 'italic' }}>* {item.explanation}</p>}
+                                {proposal.proposal_items.map((item, index) => {
+                                    const isProduct = item.item_type === 'product';
+                                    let unitText = '';
+                                    if(isProduct) unitText = `${item.visit_count} Adet`;
+                                    else unitText = item.unit_type === 'seferlik' ? 'Tek Seferlik' : `${item.visit_count} Ziyaret / Ay`;
+
+                                    return (
+                                        <tr key={index} style={{ borderBottom: `1px solid ${lightBorder}` }}>
+                                            <td style={{ padding: '15px 0', verticalAlign: 'top' }}>
+                                                <div style={{ display: 'flex', gap: '12px' }}>
+                                                    {item.image_url ? (
+                                                        <img src={item.image_url} style={{ width: '45px', height: '45px', borderRadius: '4px', objectFit: 'cover' }} />
+                                                    ) : (
+                                                        <div style={{ width: '45px', height: '45px', borderRadius: '4px', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            {isProduct ? <Package size={20} color="#9ca3af"/> : <Shield size={20} color="#9ca3af"/>}
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <p style={{ fontSize: '13px', fontWeight: '700', color: '#1f2937', margin: 0 }}>
+                                                            {item.service_name} 
+                                                            {isProduct && <span style={{fontSize:'9px', backgroundColor:'#eff6ff', color:'#1e40af', padding:'2px 6px', borderRadius:'4px', marginLeft:'6px'}}>ÜRÜN</span>}
+                                                        </p>
+                                                        <p style={{ fontSize: '11px', color: '#6b7280', margin: '2px 0 0 0', lineHeight: '1.3' }}>{item.service_description}</p>
+                                                        {item.explanation && <p style={{ fontSize: '10px', color: '#4f46e5', marginTop: '4px', fontStyle: 'italic' }}>* {item.explanation}</p>}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td style={{ padding: '15px 0', textAlign: 'center', verticalAlign: 'top', fontSize: '11px', fontWeight: '500', color: '#374151' }}>
-                                            {item.unit_type === 'seferlik' ? 'Tek Seferlik' : `${item.visit_count} Ziyaret / Ay`}
-                                        </td>
-                                        <td style={{ padding: '15px 0', textAlign: 'right', verticalAlign: 'top', fontSize: '13px', fontWeight: '700', color: '#1f2937' }}>
-                                            {item.unit_price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td style={{ padding: '15px 0', textAlign: 'center', verticalAlign: 'top', fontSize: '11px', fontWeight: '500', color: '#374151' }}>
+                                                {unitText}
+                                            </td>
+                                            <td style={{ padding: '15px 0', textAlign: 'right', verticalAlign: 'top', fontSize: '13px', fontWeight: '700', color: '#1f2937' }}>
+                                                {item.unit_price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
 
