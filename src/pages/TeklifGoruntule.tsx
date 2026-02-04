@@ -39,6 +39,7 @@ interface CompanySettings {
     phone: string;
     footer_text: string;
     about_text?: string;
+    website?: string; // Eklendi
 }
 
 const PEST_TYPES = [
@@ -136,17 +137,28 @@ const TeklifGoruntule: React.FC = () => {
     };
 
     // --- SÖZLEŞME OLUŞTURMA FONKSİYONU ---
-    const generateContractContent = (prop: Proposal, settings: CompanySettings | null) => {
+    const generateContractContent = (prop: Proposal, settings: CompanySettings | null, contractNo: string) => {
         const startDate = format(new Date(), 'dd.MM.yyyy');
         const endDate = format(addYears(new Date(), 1), 'dd.MM.yyyy');
         
-        // Hata Düzeltme: Dizi kontrolü eklendi
         const pestsString = Array.isArray(prop.included_pests) 
             ? prop.included_pests.join(', ') 
             : 'Genel Haşere ve Kemirgen';
 
+        // Sözleşme HTML Yapısı (Logo, Header, Footer)
         return `
-            <div style="font-family: 'Times New Roman', serif; line-height: 1.6; color: #000;">
+            <div style="font-family: 'Times New Roman', serif; line-height: 1.6; color: #000; position: relative; min-height: 280mm;">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 30px;">
+                    <div>
+                        ${settings?.logo_url ? `<img src="${settings.logo_url}" style="height: 60px;" alt="Logo" />` : `<h2>${settings?.company_name}</h2>`}
+                    </div>
+                    <div style="text-align: right; font-size: 12px;">
+                        <p style="margin: 0; font-weight: bold; font-size: 14px;">SÖZLEŞME NO: ${contractNo}</p>
+                        <p style="margin: 0;">Tarih: ${startDate}</p>
+                    </div>
+                </div>
+
                 <h2 style="text-align: center; text-decoration: underline; margin-bottom: 20px;">HİZMET SÖZLEŞMESİ</h2>
                 
                 <p><strong>1. TARAFLAR</strong></p>
@@ -193,22 +205,28 @@ const TeklifGoruntule: React.FC = () => {
                 <ul>
                     <li>YÜKLENİCİ, hizmeti Sağlık Bakanlığı ve ilgili mevzuatlara uygun olarak vereceğini taahhüt eder.</li>
                     <li>MÜŞTERİ, uygulama yapılacak alanlara giriş izni ve gerekli kolaylığı sağlayacaktır.</li>
+                    <li>Ödemeler, hizmetin tamamlanmasını takiben kesilen fatura tarihinden itibaren 7 iş günü içinde yapılacaktır.</li>
                 </ul>
                 
                 <div style="margin-top: 50px; display: flex; justify-content: space-between;">
-                    <div style="text-align: center;">
+                    <div style="text-align: center; width: 45%;">
                         <p><strong>YÜKLENİCİ</strong></p>
                         <p>${settings?.company_name}</p>
-                        <br/><br/>
+                        <div style="height: 60px;"></div>
                         <p>İmza / Kaşe</p>
                     </div>
-                    <div style="text-align: center;">
+                    <div style="text-align: center; width: 45%;">
                         <p><strong>MÜŞTERİ</strong></p>
                         <p>${prop.company_name}</p>
                         <p>${prop.contact_person}</p>
-                        <br/>
+                        <div style="height: 60px;"></div>
                         <p>İmza / Kaşe</p>
                     </div>
+                </div>
+
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
+                    <p>${settings?.company_name} | ${settings?.address}</p>
+                    <p>${settings?.email} | ${settings?.phone} | ${settings?.website || ''}</p>
                 </div>
             </div>
         `;
@@ -218,7 +236,16 @@ const TeklifGoruntule: React.FC = () => {
         if (!proposal) return;
         setIsSubmitting(true);
         try {
-            // 1. Teklifi Onayla
+            // 1. Sözleşme Numarası Oluştur (2026-100'den başlar)
+            const currentYear = new Date().getFullYear();
+            const { count } = await supabase
+                .from('service_contracts')
+                .select('*', { count: 'exact', head: true }); // Toplam sözleşme sayısını al
+            
+            const nextSequence = 100 + (count || 0) + 1; // 100'den başlat, her yeni kayıtta artır
+            const contractNumber = `${currentYear}-${nextSequence}`;
+
+            // 2. Teklifi Onayla
             const { error: updateError } = await supabase
                 .from('proposals')
                 .update({ status: 'approved', customer_notes: notes })
@@ -226,11 +253,10 @@ const TeklifGoruntule: React.FC = () => {
             
             if (updateError) throw updateError;
 
-            // 2. Sözleşme İçeriğini Oluştur
-            const content = generateContractContent(proposal, companySettings);
-            const contractNumber = `CNT-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`;
+            // 3. Sözleşme İçeriğini Oluştur
+            const content = generateContractContent(proposal, companySettings, contractNumber);
 
-            // 3. Sözleşmeyi Veritabanına Kaydet
+            // 4. Sözleşmeyi Veritabanına Kaydet
             const { error: contractError } = await supabase
                 .from('service_contracts')
                 .insert({
@@ -249,8 +275,8 @@ const TeklifGoruntule: React.FC = () => {
 
             setProposal(prev => prev ? { ...prev, status: 'approved', customer_notes: notes } : null);
             setContractHtml(content);
-            setShowContractModal(true); // Modalı aç
-            toast.success("Teklif onaylandı ve hizmet sözleşmesi başarıyla oluşturuldu.");
+            setShowContractModal(true); 
+            toast.success(`Teklif onaylandı. Hizmet Sözleşmesi (${contractNumber}) oluşturuldu.`);
 
         } catch (err: any) {
             toast.error("İşlem sırasında hata oluştu: " + err.message);
@@ -378,7 +404,6 @@ const TeklifGoruntule: React.FC = () => {
                             </h4>
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 {PEST_TYPES.map((pest, i) => {
-                                    // Hata düzeltme: Dizi olup olmadığını kontrol et
                                     const isActive = Array.isArray(proposal.included_pests) && proposal.included_pests.includes(pest);
                                     return (
                                         <div key={i} style={{ 
@@ -412,7 +437,7 @@ const TeklifGoruntule: React.FC = () => {
                                     const isProduct = item.item_type === 'product';
                                     let unitText = '';
                                     if(isProduct) unitText = `${item.visit_count} ${item.unit_type || 'Adet'}`;
-                                    else unitText = item.unit_type === 'seferlik' ? 'Tek Seferlik' : `${item.visit_count} Ziyaret / Ay`;
+                                    else unitText = item.unit_type === 'seferlik' ? 'Tek Sefer' : `${item.visit_count} Ziyaret / Ay`;
 
                                     return (
                                         <tr key={index} style={{ borderBottom: `1px solid ${lightBorder}` }}>
