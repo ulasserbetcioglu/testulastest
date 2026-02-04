@@ -101,6 +101,7 @@ import AdminModuleReports from './pages/AdminModuleReports';
 import TekliflerListesi from './pages/TekliflerListesi';
 import AdminWeeklyKmTracking from './pages/AdminWeeklyKmTracking';
 import AnnualVisitReport from './pages/AnnualVisitReport';
+import Sozlesmeler from './pages/Sozlesmeler';
 import TrainingPresentationPage from './pages/TrainingPresentationPage';
 
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
