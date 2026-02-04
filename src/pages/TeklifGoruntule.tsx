@@ -52,7 +52,7 @@ const TeklifGoruntule: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const proposalRef = useRef<HTMLDivElement>(null);
-    const contractRef = useRef<HTMLDivElement>(null); // Sözleşme için ref
+    const contractRef = useRef<HTMLDivElement>(null); 
     
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [password, setPassword] = useState('');
@@ -140,6 +140,11 @@ const TeklifGoruntule: React.FC = () => {
         const startDate = format(new Date(), 'dd.MM.yyyy');
         const endDate = format(addYears(new Date(), 1), 'dd.MM.yyyy');
         
+        // Hata Düzeltme: Dizi kontrolü eklendi
+        const pestsString = Array.isArray(prop.included_pests) 
+            ? prop.included_pests.join(', ') 
+            : 'Genel Haşere ve Kemirgen';
+
         return `
             <div style="font-family: 'Times New Roman', serif; line-height: 1.6; color: #000;">
                 <h2 style="text-align: center; text-decoration: underline; margin-bottom: 20px;">HİZMET SÖZLEŞMESİ</h2>
@@ -151,7 +156,7 @@ const TeklifGoruntule: React.FC = () => {
                 <p>Müşterinin işyerinde/tesisinde yapılacak olan haşere ve kemirgen kontrol hizmetlerinin (Pest Control) periyodik olarak yürütülmesi, raporlanması ve takibi işidir.</p>
                 
                 <p><strong>3. HİZMET KAPSAMI VE HEDEF ZARARLILAR</strong></p>
-                <p>Mücadele edilecek hedef zararlılar: ${prop.included_pests ? prop.included_pests.join(', ') : 'Genel Haşere ve Kemirgen'}.</p>
+                <p>Mücadele edilecek hedef zararlılar: ${pestsString}.</p>
                 
                 <p><strong>4. HİZMET DETAYLARI VE ÜCRET</strong></p>
                 <table style="width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 10px; font-size: 12px;">
@@ -163,13 +168,20 @@ const TeklifGoruntule: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${prop.proposal_items.map(item => `
+                        ${prop.proposal_items.map(item => {
+                             let unitText = '';
+                             if(item.item_type === 'product') {
+                                 unitText = `${item.visit_count} ${item.unit_type || 'Adet'}`;
+                             } else {
+                                 unitText = item.unit_type === 'seferlik' ? 'Tek Sefer' : `${item.visit_count} Ziyaret/Ay`;
+                             }
+                             return `
                             <tr>
                                 <td style="border: 1px solid #ccc; padding: 8px;">${item.service_name}</td>
-                                <td style="border: 1px solid #ccc; padding: 8px;">${item.unit_type === 'seferlik' ? 'Tek Sefer' : item.unit_type === 'aylik' ? item.visit_count + ' Ziyaret/Ay' : item.visit_count + ' Adet'}</td>
+                                <td style="border: 1px solid #ccc; padding: 8px;">${unitText}</td>
                                 <td style="border: 1px solid #ccc; padding: 8px;">${item.unit_price} TL</td>
                             </tr>
-                        `).join('')}
+                        `}).join('')}
                     </tbody>
                 </table>
                 <p><strong>Genel Toplam (KDV Hariç):</strong> ${prop.total_amount.toLocaleString('tr-TR')} TL</p>
@@ -366,7 +378,8 @@ const TeklifGoruntule: React.FC = () => {
                             </h4>
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 {PEST_TYPES.map((pest, i) => {
-                                    const isActive = proposal.included_pests?.includes(pest);
+                                    // Hata düzeltme: Dizi olup olmadığını kontrol et
+                                    const isActive = Array.isArray(proposal.included_pests) && proposal.included_pests.includes(pest);
                                     return (
                                         <div key={i} style={{ 
                                             fontSize: '10px', padding: '4px 10px', borderRadius: '4px', 
@@ -374,7 +387,7 @@ const TeklifGoruntule: React.FC = () => {
                                             color: isActive ? '#15803d' : '#9ca3af', 
                                             border: `1px solid ${isActive ? '#bbf7d0' : '#e5e7eb'}`,
                                             fontWeight: isActive ? 'bold' : 'normal',
-                                            textDecoration: isActive ? 'none' : 'line-through', // Çizili yapabiliriz
+                                            textDecoration: isActive ? 'none' : 'line-through',
                                             opacity: isActive ? 1 : 0.6,
                                             display: 'flex', alignItems: 'center', gap: '4px'
                                         }}>
@@ -398,7 +411,7 @@ const TeklifGoruntule: React.FC = () => {
                                 {proposal.proposal_items.map((item, index) => {
                                     const isProduct = item.item_type === 'product';
                                     let unitText = '';
-                                    if(isProduct) unitText = `${item.visit_count} ${item.unit_type || 'Adet'}`; // Birim eklendi
+                                    if(isProduct) unitText = `${item.visit_count} ${item.unit_type || 'Adet'}`;
                                     else unitText = item.unit_type === 'seferlik' ? 'Tek Seferlik' : `${item.visit_count} Ziyaret / Ay`;
 
                                     return (
