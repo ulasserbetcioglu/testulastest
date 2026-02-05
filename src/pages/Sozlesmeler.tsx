@@ -86,7 +86,7 @@ const Sozlesmeler: React.FC = () => {
     }
     const element = printRef.current;
     const options = {
-        margin:       5,
+        margin:       10, // Kenar boşluğu artırıldı
         filename:     `Sozlesme_${selectedContract?.contract_number}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
@@ -108,12 +108,14 @@ const Sozlesmeler: React.FC = () => {
   };
 
   // HTML OLUŞTURUCU (Veritabanına Kaydedilecek Metin)
+  // NOT: TeklifGoruntule.tsx'deki tam metin yapısı buraya taşındı.
   const generateContractHtml = (data: Contract, companySettings: CompanySettings | null) => {
       const startDateFormatted = data.start_date ? format(new Date(data.start_date), 'dd.MM.yyyy') : '...';
       const endDateFormatted = data.end_date ? format(new Date(data.end_date), 'dd.MM.yyyy') : '...';
 
       return `
-        <div style="font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.4; color: #000; padding: 30px; position: relative; min-height: 297mm;">
+        <div style="font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.4; color: #000; padding: 30px; position: relative;">
+            
             <table style="width: 100%; border-bottom: 2px solid #000; margin-bottom: 20px; padding-bottom: 10px;">
                 <tr>
                     <td style="vertical-align: bottom;">
@@ -127,13 +129,28 @@ const Sozlesmeler: React.FC = () => {
                 </tr>
             </table>
 
-            <div style="margin-bottom: 12px;">
-                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">1. SÖZLEŞMENİN KONUSU</div>
-                <p style="margin: 3px 0;">İşbu sözleşme, bir tarafta <strong>${data.company_name.toUpperCase()}</strong> (İŞVEREN) ile diğer tarafta <strong>${companySettings?.company_name?.toUpperCase() || 'SİSTEM İLAÇLAMA LTD. ŞTİ.'}</strong> (PestMENTOR) arasında akdedilmiştir.</p>
+            <div style="margin-bottom: 15px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">1. SÖZLEŞMENİN KONUSU</div>
+                <p style="margin: 3px 0; text-align: justify;">İşbu sözleşme, bir tarafta <strong>${data.company_name.toUpperCase()}</strong> (Sözleşmede "İŞVEREN" olarak anılacaktır) ile diğer tarafta <strong>${companySettings?.company_name?.toUpperCase() || 'SİSTEM İLAÇLAMA LTD. ŞTİ.'}</strong> (Sözleşmede "PestMENTOR" olarak anılacaktır) arasında akdedilmiştir.</p>
+                <p style="margin: 3px 0;">Sözleşmenin konusu; İŞVEREN'e ait tesislerde, 1.1. İnsan sağlığını, 1.2. Hammadde güvenliğini, 1.3. Ürün kalitesini olumsuz yönde etkileyebilecek zararlı popülasyonunun kontrol altına alınması amacıyla, PestMENTOR tarafından "Onaylanmış Alanlarda" sunulacak Entegre Zararlı Mücadelesi (IPM) hizmetlerinin; teknik, idari, mali ve hukuki şartlarını ve tarafların karşılıklı yükümlülüklerini tanımlar.</p>
             </div>
 
-            <div style="margin-bottom: 12px;">
-                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">2. HİZMET KAPSAMI VE DETAYLAR</div>
+            <div style="margin-bottom: 15px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">2. TARAFLAR</div>
+                <table style="width: 100%; border: none; font-size: 9pt;">
+                    <tr><td style="width: 150px; font-weight: bold;">HİZMET ALAN FİRMA</td><td>: ${data.company_name.toUpperCase()}</td></tr>
+                    <tr><td style="font-weight: bold;">YETKİLİ</td><td>: ${data.contact_person}</td></tr>
+                </table>
+                <br/>
+                <table style="width: 100%; border: none; font-size: 9pt;">
+                    <tr><td style="width: 150px; font-weight: bold;">HİZMET VEREN FİRMA</td><td>: ${companySettings?.company_name}</td></tr>
+                    <tr><td style="font-weight: bold;">ADRES</td><td>: ${companySettings?.address}</td></tr>
+                    <tr><td style="font-weight: bold;">TELEFON</td><td>: ${companySettings?.phone}</td></tr>
+                </table>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">3. YAPILACAK İŞİN TANIMI</div>
                 <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 9pt;">
                     <thead>
                         <tr style="background-color: #f0f0f0;">
@@ -154,16 +171,32 @@ const Sozlesmeler: React.FC = () => {
                 </table>
             </div>
 
-            <div style="margin-bottom: 12px;">
-                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">3. SÖZLEŞME SÜRESİ</div>
-                <p style="margin: 2px 0;">İşbu sözleşme, <strong>${startDateFormatted}</strong> tarihinde yürürlüğe girer ve <strong>${endDateFormatted}</strong> tarihine kadar geçerlidir.</p>
+            <div style="margin-bottom: 15px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">4. YETKİ VE SORUMLULUKLAR</div>
+                <div style="margin-left: 10px; font-size: 9.5pt;">
+                    <p style="margin-top: 5px;"><strong>4.1. PestMENTOR'un Yetki ve Sorumlulukları</strong></p>
+                    <p>4.1.1. Hizmetin İcrası ve Gizlilik: PestMENTOR, IPM hizmetlerini İŞVEREN yetkilisinin gözetiminde icra edecektir.</p>
+                    <p>4.1.2. Profesyonel Yetkinlik: Sağlık Bakanlığı onaylı ürünler kullanılacaktır.</p>
+                    <p>4.1.3. Operasyonel Karar Yetkisi: Ürün türü, dozajı ve uygulama yöntemine karar verme yetkisi PestMENTOR'a aittir.</p>
+                    <p>4.1.5. Raporlama: Hizmet sonrası raporlama yapılacaktır.</p>
+                    <p style="margin-top: 5px;"><strong>4.2. İŞVEREN'in Yükümlülükleri</strong></p>
+                    <p>4.2.1. Alan Hazırlığı: Çalışma alanları erişilebilir hale getirilmelidir.</p>
+                    <p>4.2.3. Tek Yetkililik: İŞVEREN, üçüncü taraflardan hizmet alamaz.</p>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">5. SÖZLEŞME SÜRESİ</div>
+                <p>İşbu sözleşme, <strong>${startDateFormatted}</strong> tarihinde yürürlüğe girer ve <strong>${endDateFormatted}</strong> tarihine kadar geçerlidir.</p>
+                <p>5.1. Otomatik Yenileme: Bitiş tarihinden 30 gün önce fesih ihbarı yapılmazsa sözleşme sona erer. Karşılıklı anlaşma ile yenilenebilir.</p>
             </div>
 
             <div style="margin-bottom: 20px;">
-                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">4. MALİ HÜKÜMLER</div>
-                <div style="border: 2px solid #000; padding: 8px; margin: 5px 0; text-align: center; font-weight: bold; font-size: 11pt;">
-                    Hizmet Bedeli: ${data.contract_amount.toLocaleString('tr-TR')} TL + KDV
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 5px;">9. MALİ HÜKÜMLER</div>
+                <div style="border: 2px solid #000; padding: 10px; margin: 5px 0; text-align: center; font-weight: bold; font-size: 11pt;">
+                    Hizmet Bedeli: ${data.contract_amount.toLocaleString('tr-TR')} TL + KDV / AY
                 </div>
+                <p>9.2. Ödemeler fatura tarihinden itibaren 30 gün içinde yapılacaktır.</p>
             </div>
 
             <div style="margin-top: 40px;">
@@ -177,8 +210,7 @@ const Sozlesmeler: React.FC = () => {
                         </td>
                         <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
                             <strong>HİZMETİ ALAN</strong><br/>
-                            <span style="font-size: 9pt;">${data.company_name.toUpperCase()}</span><br/>
-                            <span style="font-size: 8pt;">${data.contact_person}</span><br/><br/>
+                            <span style="font-size: 9pt;">${data.company_name.toUpperCase()}</span><br/><br/>
                             <div style="height: 60px;"></div>
                             <strong>İmza / Kaşe</strong>
                         </td>
