@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { CheckSquare, Plus, Edit, Trash2, Save, X, Loader2 as Loader } from 'lucide-react';
+import { CheckSquare, Plus, Edit, Trash2, Save, X, Loader2 as Loader, Bug, Check } from 'lucide-react';
 
 // Arayüz (Interface) tanımları
 interface Service {
@@ -10,7 +10,13 @@ interface Service {
   description: string | null;
   price: number | null;
   image_url: string | null;
+  target_pests: string[] | null; // YENİ: Zararlı listesi
 }
+
+// Zararlı Listesi (Diğer sayfalarla aynı olmalı)
+const PEST_TYPES = [
+  'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
+];
 
 const HizmetYonetimi: React.FC = () => {
   const [serviceList, setServiceList] = useState<Service[]>([]);
@@ -43,7 +49,10 @@ const HizmetYonetimi: React.FC = () => {
   // Modal işlemleri
   const handleOpenModal = (item: Service | null = null) => {
     setEditingItem(item);
-    setFormData(item ? { ...item } : { name: '', description: '', price: null, image_url: '' });
+    setFormData(item 
+      ? { ...item, target_pests: item.target_pests || [] } 
+      : { name: '', description: '', price: null, image_url: '', target_pests: [] }
+    );
     setIsModalOpen(true);
   };
 
@@ -55,6 +64,18 @@ const HizmetYonetimi: React.FC = () => {
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: name === 'price' ? (value === '' ? null : parseFloat(value)) : value }));
+  };
+
+  // Zararlı Seçimi Toggle
+  const togglePest = (pest: string) => {
+    setFormData(prev => {
+        const currentPests = prev.target_pests || [];
+        if (currentPests.includes(pest)) {
+            return { ...prev, target_pests: currentPests.filter(p => p !== pest) };
+        } else {
+            return { ...prev, target_pests: [...currentPests, pest] };
+        }
+    });
   };
 
   // Kaydetme ve Güncelleme
@@ -69,7 +90,13 @@ const HizmetYonetimi: React.FC = () => {
         // Güncelleme
         const { error } = await supabase
           .from('services')
-          .update(formData)
+          .update({
+              name: formData.name,
+              description: formData.description,
+              price: formData.price,
+              image_url: formData.image_url,
+              target_pests: formData.target_pests // Zararlıları kaydet
+          })
           .eq('id', editingItem.id);
         if (error) throw error;
         toast.success('Hizmet başarıyla güncellendi.');
@@ -77,7 +104,13 @@ const HizmetYonetimi: React.FC = () => {
         // Ekleme
         const { error } = await supabase
           .from('services')
-          .insert(formData);
+          .insert({
+              name: formData.name,
+              description: formData.description,
+              price: formData.price,
+              image_url: formData.image_url,
+              target_pests: formData.target_pests // Zararlıları kaydet
+          });
         if (error) throw error;
         toast.success('Yeni hizmet başarıyla eklendi.');
       }
@@ -129,7 +162,7 @@ const HizmetYonetimi: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Görsel</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hizmet Adı</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Açıklama</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kapsadığı Zararlılar</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Fiyat</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">İşlemler</th>
               </tr>
@@ -143,8 +176,19 @@ const HizmetYonetimi: React.FC = () => {
                     <td className="px-6 py-4">
                       <img src={item.image_url || 'https://placehold.co/64x64/e2e8f0/334155?text=?'} alt={item.name} className="w-16 h-16 object-cover rounded-md bg-gray-100" />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 max-w-sm truncate" title={item.description || ''}>{item.description}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {item.name}
+                        <div className="text-xs text-gray-500 mt-1 max-w-xs truncate">{item.description}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-1">
+                            {item.target_pests && item.target_pests.length > 0 ? (
+                                item.target_pests.map((p, i) => (
+                                    <span key={i} className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded border border-green-100">{p}</span>
+                                ))
+                            ) : <span className="text-xs text-gray-400">-</span>}
+                        </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-700">
                       {item.price ? item.price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' }) : '-'}
                     </td>
@@ -163,19 +207,43 @@ const HizmetYonetimi: React.FC = () => {
       {/* Ekleme/Düzenleme Modalı */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg m-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg m-4 flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="text-xl font-bold text-gray-800">{editingItem ? 'Hizmeti Düzenle' : 'Yeni Hizmet Ekle'}</h2>
               <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
             </div>
-            <div className="p-6 space-y-4">
+            
+            <div className="p-6 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Hizmet Adı</label>
                 <input type="text" name="name" value={formData.name || ''} onChange={handleFormChange} className="w-full p-2 border rounded-lg" />
               </div>
+              
+              {/* ZARARLI SEÇİMİ */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Kapsadığı Zararlılar</label>
+                <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border">
+                    {PEST_TYPES.map(pest => (
+                        <button
+                            key={pest}
+                            onClick={() => togglePest(pest)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
+                                formData.target_pests?.includes(pest) 
+                                ? 'bg-green-600 text-white border-green-600' 
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                            {formData.target_pests?.includes(pest) && <Check size={12}/>}
+                            {pest}
+                        </button>
+                    ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">* Bu hizmet seçildiğinde teklif ekranında bu zararlılar otomatik seçilecektir.</p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Açıklama</label>
-                <textarea name="description" value={formData.description || ''} onChange={handleFormChange} rows={3} className="w-full p-2 border rounded-lg" />
+                <textarea name="description" value={formData.description || ''} onChange={handleFormChange} rows={2} className="w-full p-2 border rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fiyat (₺) (Opsiyonel)</label>
@@ -186,7 +254,7 @@ const HizmetYonetimi: React.FC = () => {
                 <input type="text" name="image_url" value={formData.image_url || ''} onChange={handleFormChange} className="w-full p-2 border rounded-lg" placeholder="https://ornek.com/gorsel.png" />
               </div>
             </div>
-            <div className="flex justify-end items-center p-4 bg-gray-50 border-t rounded-b-xl">
+            <div className="flex justify-end items-center p-4 bg-gray-50 border-t rounded-b-xl mt-auto">
               <button onClick={handleCloseModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 mr-2">İptal</button>
               <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
                 <Save size={18} /> Kaydet
