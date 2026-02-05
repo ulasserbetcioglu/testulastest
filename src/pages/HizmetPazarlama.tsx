@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield, FileText } from 'lucide-react';
+import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield } from 'lucide-react';
 
 // --- ARAYÜZLER ---
 interface Customer {
@@ -20,12 +20,12 @@ interface Service {
   type: 'service';
 }
 
-interface PaidMaterial {
+interface Equipment {
   id: string;
   name: string;
   description?: string;
   sale_price: number;
-  stock_quantity?: number;
+  unit: string;
   image_url?: string;
   type: 'product';
 }
@@ -39,11 +39,10 @@ interface SelectedItem {
   visitCount: number;
   price: number;
   explanation: string;
-  unitType: 'aylik' | 'seferlik' | 'adet';
+  unitType: string;
 }
 
 interface FooterInfo {
-  id?: number;
   name: string;
   title: string;
   website: string;
@@ -55,18 +54,19 @@ const PEST_TYPES = [
   'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
 ];
 
+// İmza HTML Oluşturucu (Varsayılan değerlerle korumalı)
 const generateSignatureHtml = (footer: FooterInfo): string => `
   <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eeeeee;">
     <tr>
       <td style="width: 80px; vertical-align: top;">
-        <img src="${footer.logo_url}" alt="Logo" style="width: 70px; height: auto;">
+        <img src="${footer.logo_url || 'https://via.placeholder.com/70'}" alt="Logo" style="width: 70px; height: auto;">
       </td>
       <td style="vertical-align: top; padding-left: 15px; font-family: Arial, sans-serif;">
-        <p style="margin: 0; font-weight: bold; color: #059669; font-size: 14px;">${footer.name}</p>
-        <p style="margin: 4px 0; font-size: 12px; color: #555555;">${footer.title}</p>
+        <p style="margin: 0; font-weight: bold; color: #059669; font-size: 14px;">${footer.name || 'Firma Yetkilisi'}</p>
+        <p style="margin: 4px 0; font-size: 12px; color: #555555;">${footer.title || ''}</p>
         <p style="margin: 4px 0; font-size: 12px; color: #555555;">
-          <a href="http://${footer.website}" style="color: #059669; text-decoration: none;">${footer.website}</a> | 
-          <span style="color: #333333;">${footer.phone}</span>
+          <a href="http://${footer.website || '#'}" style="color: #059669; text-decoration: none;">${footer.website || ''}</a> 
+          ${footer.phone ? `| <span style="color: #333333;">${footer.phone}</span>` : ''}
         </p>
       </td>
     </tr>
@@ -76,7 +76,7 @@ const generateSignatureHtml = (footer: FooterInfo): string => `
 const HizmetPazarlama: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [serviceList, setServiceList] = useState<Service[]>([]);
-  const [materialList, setMaterialList] = useState<PaidMaterial[]>([]);
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   
   const [emailSubject, setEmailSubject] = useState('Hizmet ve Ürün Teklifimiz - Fiyat Teklifi Sunulur');
@@ -85,50 +85,57 @@ const HizmetPazarlama: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  // Form Alanları
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
   
-  // YENİ: Sözleşme Seçeneği
   const [allowContract, setAllowContract] = useState(true);
-  
   const [selectedPests, setSelectedPests] = useState<string[]>(['Hamam Böceği', 'Kemirgen']);
 
   const [manualType, setManualType] = useState<'service' | 'product'>('service');
   const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
 
+  // Varsayılan değerlerle başlatıyoruz ki "undefined" yazmasın
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
     name: 'İlaçlamatik Ekibi',
-    title: 'Profesyonel Zararlı Kontrol Çözümleri',
-    website: 'www.ilaclamatik.com.tr',
-    phone: '+90 555 123 4567',
+    title: 'Profesyonel Çözümler',
+    website: 'www.ilaclamatik.com',
+    phone: '+90 555 000 0000',
     logo_url: 'https://i.imgur.com/PajSpus.png'
   });
 
+  // --- VERİ ÇEKME ---
   useEffect(() => {
     const fetchInitialData = async () => {
       setLoading(true);
       try {
-        const [customerRes, serviceRes, materialRes, settingsRes] = await Promise.all([
+        const [customerRes, serviceRes, equipmentRes, settingsRes] = await Promise.all([
             supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
             supabase.from('services').select('*').order('name'),
-            supabase.from('paid_materials').select('*').eq('is_active', true).order('name'),
+            supabase.from('equipment').select('*').eq('is_active', true).order('name'),
             supabase.from('company_settings').select('*').limit(1).single()
         ]);
 
-        setCustomers(customerRes.data || []);
-        setServiceList((serviceRes.data || []).map((s: any) => ({ ...s, type: 'service' })));
-        setMaterialList((materialRes.data || []).map((m: any) => ({ ...m, type: 'product' })));
+        if (customerRes.data) setCustomers(customerRes.data);
+        if (serviceRes.data) setServiceList(serviceRes.data.map((s: any) => ({ ...s, type: 'service' })));
+        if (equipmentRes.data) setEquipmentList(equipmentRes.data.map((e: any) => ({ ...e, type: 'product' })));
 
         if (settingsRes.data) {
-            setFooterInfo(settingsRes.data);
+            // Veritabanından gelen veriyi state'e aktar, eksik alan varsa varsayılanı koru
+            setFooterInfo(prev => ({
+                name: settingsRes.data.name || prev.name,
+                title: settingsRes.data.title || prev.title,
+                website: settingsRes.data.website || prev.website,
+                phone: settingsRes.data.phone || prev.phone,
+                logo_url: settingsRes.data.logo_url || prev.logo_url
+            }));
         }
 
       } catch (error: any) {
-        console.error("Veri çekme hatası:", error);
+        console.error("Veri yükleme hatası:", error);
+        toast.error("Veriler yüklenirken hata oluştu.");
       } finally {
         setLoading(false);
       }
@@ -147,31 +154,41 @@ const HizmetPazarlama: React.FC = () => {
       }
   }, [selectedCustomer, customers]);
 
+  // --- HTML OLUŞTURUCU ---
   const generateEmailHtml = (customer: string, contact: string, items: SelectedItem[], signature: string, proposalLink?: string, password?: string): string => {
     let grandTotal = 0;
+    
     const itemRows = items.map(item => {
-      const totalItemPrice = item.unitType === 'aylik' ? (item.visitCount * item.price) : (item.visitCount * item.price);
+      // Fiyat ve sayı kontrolü (NaN veya undefined önleme)
+      const price = Number(item.price) || 0;
+      const count = Number(item.visitCount) || 1;
+      const totalItemPrice = count * price;
       grandTotal += totalItemPrice;
       
       let unitText = '';
       if (item.type === 'service') {
-          unitText = item.unitType === 'aylik' ? `${item.visitCount} Ziyaret / Ay` : `Tek Seferlik`;
+          unitText = item.unitType === 'aylik' ? `${count} Ziyaret / Ay` : `Tek Seferlik`;
       } else {
-          unitText = `${item.visitCount} Adet`;
+          unitText = `${count} ${item.unitType || 'Adet'}`;
       }
+
+      const imageUrl = item.image_url || `https://placehold.co/60x60/e2e8f0/334155?text=${item.type === 'service' ? 'Hizmet' : 'Urun'}`;
 
       return `
       <tr style="border-bottom: 1px solid #eeeeee;">
         <td style="padding: 15px; width: 60px; vertical-align: top;">
-          <img src="${item.image_url || 'https://placehold.co/60x60/e2e8f0/334155?text=' + (item.type === 'service' ? 'Hizmet' : 'Urun')}" alt="${item.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;">
+          <img src="${imageUrl}" alt="${item.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;">
         </td>
         <td style="padding: 15px; vertical-align: top;">
-          <p style="margin: 0; font-weight: bold; font-size: 14px; color: #333;">${item.name} <span style="font-size:10px; color:#666; background:#f3f4f6; padding:2px 6px; border-radius:4px;">${item.type === 'service' ? 'HİZMET' : 'ÜRÜN'}</span></p>
+          <p style="margin: 0; font-weight: bold; font-size: 14px; color: #333;">
+            ${item.name} 
+            <span style="font-size:10px; color:#666; background:#f3f4f6; padding:2px 6px; border-radius:4px; margin-left: 5px;">${item.type === 'service' ? 'HİZMET' : 'ÜRÜN'}</span>
+          </p>
           <p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">${item.description || ''}</p>
           ${item.explanation ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #4f46e5; font-style: italic;">Not: ${item.explanation}</p>` : ''}
         </td>
         <td style="padding: 15px; font-size: 13px; text-align: center; vertical-align: top; white-space: nowrap;">${unitText}</td>
-        <td style="padding: 15px; font-size: 14px; text-align: right; vertical-align: top; font-weight: bold;">${item.price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+        <td style="padding: 15px; font-size: 14px; text-align: right; vertical-align: top; font-weight: bold;">${price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
       </tr>
     `}).join('');
 
@@ -181,6 +198,7 @@ const HizmetPazarlama: React.FC = () => {
         const bg = isSelected ? '#ecfdf5' : '#f3f4f6';
         const decoration = isSelected ? 'none' : 'line-through';
         const opacity = isSelected ? '1' : '0.6';
+        
         return `<span style="display:inline-block; padding: 4px 8px; margin: 2px; font-size: 11px; border-radius: 4px; background-color: ${bg}; color: ${color}; border: 1px solid ${isSelected ? '#a7f3d0' : '#e5e7eb'}; text-decoration: ${decoration}; opacity: ${opacity};">${pest}</span>`;
     }).join(' ');
 
@@ -244,28 +262,37 @@ const HizmetPazarlama: React.FC = () => {
     `;
   };
 
+  // Önizleme Güncelleme (Hata Düzeltildi)
   useEffect(() => {
     if (selectedItems.length === 0) {
       setEmailPreview('');
       return;
     }
+    
+    // Seçili öğeleri ana listelerden bulup detaylarını (resim vb.) dolduruyoruz
     const selectedItemsWithDetails = selectedItems.map(selected => {
         let original: any = null;
         if (selected.type === 'service') {
              original = serviceList.find(s => s.id === selected.id);
         } else {
-             original = materialList.find(e => e.id === selected.id);
+             original = equipmentList.find(e => e.id === selected.id);
         }
+        
         return {
             ...selected,
+            name: selected.name || original?.name || 'Bilinmeyen Öğe',
+            description: selected.description || original?.description || '',
             image_url: original?.image_url || selected.image_url,
+            // Fiyatı selectedItems'tan alıyoruz çünkü kullanıcı değiştirmiş olabilir
+            price: Number(selected.price) || 0, 
+            visitCount: Number(selected.visitCount) || 1
         };
     });
     
     const signature = generateSignatureHtml(footerInfo);
     const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails, signature);
     setEmailPreview(html);
-  }, [selectedItems, serviceList, materialList, companyName, contactPerson, footerInfo, selectedPests]);
+  }, [selectedItems, serviceList, equipmentList, companyName, contactPerson, footerInfo, selectedPests]);
 
   const handleSendEmail = async () => {
     if (!recipientEmail || !companyName) {
@@ -280,11 +307,10 @@ const HizmetPazarlama: React.FC = () => {
     setIsSending(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
-        const totalAmount = selectedItems.reduce((sum, item) => sum + (item.visitCount * item.price), 0);
+        const totalAmount = selectedItems.reduce((sum, item) => sum + (Number(item.visitCount) * Number(item.price)), 0);
         const proposalNumber = `TEKLIF-${Date.now().toString().slice(-6)}`;
         const accessPassword = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // 1. Ana Teklif Kaydı
         const { data: proposalData, error: proposalError } = await supabase
             .from('proposals')
             .insert({
@@ -298,7 +324,7 @@ const HizmetPazarlama: React.FC = () => {
                 status: 'pending',
                 included_pests: selectedPests,
                 cc_email: ccEmail || null,
-                contract_available: allowContract // YENİ: Sözleşme opsiyonu
+                contract_available: allowContract
             })
             .select('id')
             .single();
@@ -306,17 +332,16 @@ const HizmetPazarlama: React.FC = () => {
         if (proposalError) throw proposalError;
         const newProposalId = proposalData.id;
 
-        // 2. Teklif Kalemleri
         const itemsToInsert = selectedItems.map(item => {
             return {
                 proposal_id: newProposalId,
                 service_name: item.name,
                 service_description: item.description,
                 image_url: item.image_url,
-                visit_count: item.visitCount,
-                unit_price: item.price,
+                visit_count: Number(item.visitCount),
+                unit_price: Number(item.price),
                 explanation: item.explanation,
-                unit_type: item.unitType,
+                unit_type: item.unitType, 
                 item_type: item.type
             };
         });
@@ -324,10 +349,20 @@ const HizmetPazarlama: React.FC = () => {
         const { error: itemsError } = await supabase.from('proposal_items').insert(itemsToInsert);
         if (itemsError) throw itemsError;
 
-        // 3. E-posta Gönderimi
         const proposalLink = `https://ilaclamatik.com/teklif-goruntule/${newProposalId}`;
         const signature = generateSignatureHtml(footerInfo);
-        const emailHtml = generateEmailHtml(companyName, contactPerson, selectedItems, signature, proposalLink, accessPassword);
+        
+        // E-posta gönderimi için detayları hazırla
+        const selectedItemsForEmail = selectedItems.map(selected => {
+             // Detayları tekrar bulmaya gerek yok, zaten state'de var ama garanti olsun diye mapliyoruz
+             return {
+                 ...selected,
+                 price: Number(selected.price) || 0,
+                 visitCount: Number(selected.visitCount) || 1
+             };
+        });
+
+        const emailHtml = generateEmailHtml(companyName, contactPerson, selectedItemsForEmail, signature, proposalLink, accessPassword);
 
         const emailPayload = {
             to: recipientEmail,
@@ -340,6 +375,7 @@ const HizmetPazarlama: React.FC = () => {
 
         if (emailError) throw emailError;
         toast.success(`Teklif başarıyla oluşturuldu ve gönderildi!`);
+        
         setSelectedItems([]);
         
     } catch (error: any) {
@@ -352,7 +388,21 @@ const HizmetPazarlama: React.FC = () => {
   const handleSaveFooterSettings = async () => {
       setIsSavingSettings(true);
       try {
-          const { error } = await supabase.from('company_settings').upsert({ ...footerInfo, id: 1 }).select();
+          // company_settings tablosunda en az bir satır olduğunu varsayıyoruz veya ilk satırı güncelliyoruz
+          // En güvenlisi: Varsa güncelle, yoksa ekle. ID genellikle 1 veya sabit UUID olabilir.
+          // Basitlik için ilk kaydı alıp güncellemeyi deneyelim veya ekleyelim.
+          
+          const { data: existing } = await supabase.from('company_settings').select('id').limit(1).single();
+          
+          let error;
+          if (existing) {
+              const { error: updateError } = await supabase.from('company_settings').update(footerInfo).eq('id', existing.id);
+              error = updateError;
+          } else {
+              const { error: insertError } = await supabase.from('company_settings').insert(footerInfo);
+              error = insertError;
+          }
+
           if (error) throw error;
           toast.success("Ayarlar başarıyla kaydedildi!");
       } catch (error: any) {
@@ -364,11 +414,11 @@ const HizmetPazarlama: React.FC = () => {
 
   const grandTotal = useMemo(() => {
       return selectedItems.reduce((total, item) => {
-          return total + (item.visitCount * item.price);
+          return total + (Number(item.visitCount) * Number(item.price));
       }, 0);
   }, [selectedItems]);
 
-  const toggleItemSelection = (item: Service | PaidMaterial, type: 'service' | 'product', isSelected: boolean) => {
+  const toggleItemSelection = (item: Service | Equipment, type: 'service' | 'product', isSelected: boolean) => {
       if (isSelected) {
           const newItem: SelectedItem = {
               id: item.id,
@@ -377,9 +427,9 @@ const HizmetPazarlama: React.FC = () => {
               description: item.description,
               image_url: item.image_url,
               visitCount: type === 'service' ? ((item as Service).visit_count || 1) : 1,
-              price: type === 'product' ? (item as PaidMaterial).sale_price : (item as Service).price || 0,
+              price: type === 'product' ? (item as Equipment).sale_price : (item as Service).price || 0,
               explanation: '',
-              unitType: type === 'product' ? (item as PaidMaterial).unit || 'Adet' : 'aylik'
+              unitType: type === 'product' ? (item as Equipment).unit || 'Adet' : 'aylik'
           };
           setSelectedItems(prev => [...prev, newItem]);
       } else {
@@ -410,8 +460,8 @@ const HizmetPazarlama: React.FC = () => {
           type: manualType,
           name: manualItem.name,
           description: manualItem.description,
-          visitCount: manualItem.count,
-          price: manualItem.price,
+          visitCount: Number(manualItem.count),
+          price: Number(manualItem.price),
           explanation: '',
           unitType: manualType === 'service' ? 'aylik' : manualItem.unit
       };
@@ -540,7 +590,7 @@ const HizmetPazarlama: React.FC = () => {
                 {/* Ürün Listesi */}
                 <div className="border-t pt-4">
                     <h4 className="font-bold text-gray-700 px-2 mb-2 text-sm sticky top-0 bg-white z-10 py-1">EKİPMAN & ÜRÜNLER (Stok)</h4>
-                    {materialList.map(item => {
+                    {equipmentList.map(item => {
                         const selectedItem = selectedItems.find(s => s.id === item.id && s.type === 'product');
                         return (
                             <div key={`prd-${item.id}`} className={`border rounded-lg mb-2 p-3 ${selectedItem ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}>
@@ -570,7 +620,7 @@ const HizmetPazarlama: React.FC = () => {
                                             <input type="number" value={selectedItem.price} onChange={(e) => handleItemUpdate(item.id, 'product', 'price', parseFloat(e.target.value))} className="w-full p-1 border rounded text-xs text-right font-bold" />
                                         </div>
                                         <div className="col-span-4 flex items-end justify-end">
-                                            <span className="text-xs font-bold text-blue-600">{(selectedItem.visitCount * selectedItem.price).toLocaleString()} ₺</span>
+                                            <span className="text-xs font-bold text-blue-600">{(selectedItem.visitCount * selectedItem.price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
                                         </div>
                                     </div>
                                 )}
@@ -582,6 +632,29 @@ const HizmetPazarlama: React.FC = () => {
             </div>
           </div>
           
+          {/* MANUEL EKLEME */}
+          <div className="border-t pt-4">
+            <details className="group">
+                <summary className="flex cursor-pointer items-center text-sm font-medium text-gray-600 hover:text-green-600">
+                    <Plus className="mr-2 h-4 w-4" /> Manuel Kalem Ekle
+                </summary>
+                <div className="mt-3 space-y-3 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex gap-4 mb-2">
+                        <label className="flex items-center text-xs"><input type="radio" checked={manualType==='service'} onChange={()=>setManualType('service')} className="mr-1"/> Hizmet</label>
+                        <label className="flex items-center text-xs"><input type="radio" checked={manualType==='product'} onChange={()=>setManualType('product')} className="mr-1"/> Ürün/Ekipman</label>
+                    </div>
+                    <input type="text" placeholder="İsim" value={manualItem.name} onChange={e => setManualItem(prev => ({...prev, name: e.target.value}))} className="w-full p-2 border rounded text-sm" />
+                    <textarea placeholder="Açıklama" value={manualItem.description} onChange={e => setManualItem(prev => ({...prev, description: e.target.value}))} rows={2} className="w-full p-2 border rounded text-sm" />
+                    <div className="grid grid-cols-3 gap-3">
+                        <input type="number" placeholder="Miktar" value={manualItem.count} onChange={e => setManualItem(prev => ({...prev, count: parseInt(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
+                        <input type="text" placeholder="Birim (Adet/Kg)" value={manualItem.unit} onChange={e => setManualItem(prev => ({...prev, unit: e.target.value}))} className="w-full p-2 border rounded text-sm" disabled={manualType === 'service'} />
+                        <input type="number" placeholder="Fiyat" value={manualItem.price} onChange={e => setManualItem(prev => ({...prev, price: parseFloat(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
+                    </div>
+                    <button onClick={handleAddManualItem} className="w-full bg-gray-800 text-white rounded text-sm font-medium p-2 hover:bg-gray-700">Listeye Ekle</button>
+                </div>
+            </details>
+          </div>
+
           {/* TOPLAM VE GÖNDER */}
           <div className="border-t pt-4 bg-green-50 p-4 rounded-xl">
             <div className="flex justify-between items-center text-lg font-bold text-gray-800 mb-1">
@@ -609,6 +682,21 @@ const HizmetPazarlama: React.FC = () => {
                         <p>Hizmet veya ürün seçimi yapıldığında önizleme burada görünecektir.</p>
                     </div>
                 )}
+            </div>
+            
+            <div className="mt-4 border-t pt-2">
+                <details className="group">
+                    <summary className="flex cursor-pointer items-center text-xs font-medium text-gray-500 hover:text-gray-800 select-none">
+                        <Save className="mr-1 h-3 w-3" /> E-posta İmza Ayarları
+                    </summary>
+                    <div className="mt-2 grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded text-xs">
+                        <input type="text" placeholder="İsim" value={footerInfo.name} onChange={e => setFooterInfo(prev => ({...prev, name: e.target.value}))} className="p-1 border rounded" />
+                        <input type="text" placeholder="Unvan" value={footerInfo.title} onChange={e => setFooterInfo(prev => ({...prev, title: e.target.value}))} className="p-1 border rounded" />
+                        <input type="text" placeholder="Web" value={footerInfo.website} onChange={e => setFooterInfo(prev => ({...prev, website: e.target.value}))} className="p-1 border rounded" />
+                        <input type="text" placeholder="Tel" value={footerInfo.phone} onChange={e => setFooterInfo(prev => ({...prev, phone: e.target.value}))} className="p-1 border rounded" />
+                        <button onClick={handleSaveFooterSettings} disabled={isSavingSettings} className="col-span-2 bg-blue-500 text-white p-1 rounded hover:bg-blue-600">Ayarları Kaydet</button>
+                    </div>
+                </details>
             </div>
         </div>
       </div>
