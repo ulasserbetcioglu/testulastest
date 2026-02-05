@@ -54,6 +54,7 @@ const PEST_TYPES = [
   'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
 ];
 
+// İmza HTML Oluşturucu (Hata korumalı)
 const generateSignatureHtml = (footer: FooterInfo): string => `
   <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eeeeee;">
     <tr>
@@ -99,6 +100,7 @@ const HizmetPazarlama: React.FC = () => {
   const [manualType, setManualType] = useState<'service' | 'product'>('service');
   const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
 
+  // Varsayılan footer (Undefined hatasını önlemek için)
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
     name: 'İlaçlamatik Ekibi',
     title: 'Profesyonel Çözümler',
@@ -141,6 +143,7 @@ const HizmetPazarlama: React.FC = () => {
     fetchInitialData();
   }, []);
 
+  // Müşteri seçildiğinde bilgileri doldur
   useEffect(() => {
       if (selectedCustomer) {
           const customer = customers.find(c => c.id === selectedCustomer);
@@ -151,13 +154,13 @@ const HizmetPazarlama: React.FC = () => {
       }
   }, [selectedCustomer, customers]);
 
-  // TOPLAM HESABI (İskonto Dahil)
+  // TOPLAM HESABI (İskonto Dahil) - useMemo
   const { subTotal, grandTotal, vatAmount } = useMemo(() => {
       const sub = selectedItems.reduce((total, item) => {
           return total + (Number(item.visitCount) * Number(item.price));
       }, 0);
       
-      const discountedSub = sub - discountAmount;
+      const discountedSub = sub - (Number(discountAmount) || 0);
       const finalSub = discountedSub > 0 ? discountedSub : 0;
       const vat = finalSub * 0.20;
       const total = finalSub + vat;
@@ -165,9 +168,11 @@ const HizmetPazarlama: React.FC = () => {
       return { subTotal: sub, vatAmount: vat, grandTotal: total };
   }, [selectedItems, discountAmount]);
 
+  // HTML Üretici (Hata Korumalı)
   const generateEmailHtml = (customer: string, contact: string, items: SelectedItem[], signature: string, proposalLink?: string, password?: string): string => {
     
     const itemRows = items.map(item => {
+      // Sayısal değerleri güvenli hale getiriyoruz
       const price = Number(item.price) || 0;
       const count = Number(item.visitCount) || 1;
       
@@ -178,6 +183,7 @@ const HizmetPazarlama: React.FC = () => {
           unitText = `${count} ${item.unitType || 'Adet'}`;
       }
 
+      // Resim yoksa placeholder kullan
       const imageUrl = item.image_url || `https://placehold.co/60x60/e2e8f0/334155?text=${item.type === 'service' ? 'Hizmet' : 'Urun'}`;
 
       return `
@@ -231,7 +237,7 @@ const HizmetPazarlama: React.FC = () => {
             <p><b>${customer}</b> firması için özel olarak hazırladığımız teklifimiz aşağıda sunulmuştur.</p>
             
             <div style="margin: 20px 0; padding: 15px; background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px;">
-                <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; color: #92400e;">HEDEF ZARARLILAR VE KAPSAM (${applicationArea}):</p>
+                <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; color: #92400e;">HEDEF ZARARLILAR VE KAPSAM (${applicationArea || 'Genel'}):</p>
                 <div>${pestListHtml}</div>
             </div>
 
@@ -268,11 +274,14 @@ const HizmetPazarlama: React.FC = () => {
     `;
   };
 
+  // Önizleme Güncelleme (Detayları state ile birleştir)
   useEffect(() => {
     if (selectedItems.length === 0) {
       setEmailPreview('');
       return;
     }
+    
+    // Güvenli şekilde detayları birleştir
     const selectedItemsWithDetails = selectedItems.map(selected => {
         let original: any = null;
         if (selected.type === 'service') {
@@ -280,17 +289,21 @@ const HizmetPazarlama: React.FC = () => {
         } else {
              original = equipmentList.find(e => e.id === selected.id);
         }
+        
         return {
             ...selected,
-            name: selected.name || original?.name || 'Bilinmeyen Öğe',
+            name: selected.name || original?.name || 'İsimsiz Öğe',
             description: selected.description || original?.description || '',
+            // Resim yoksa varsayılanı kullan
             image_url: original?.image_url || selected.image_url,
+            // Sayısal değerleri garantiye al
             price: Number(selected.price) || 0, 
             visitCount: Number(selected.visitCount) || 1
         };
     });
     
     const signature = generateSignatureHtml(footerInfo);
+    // Güvenli hesaplama değerlerini geç
     const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails, signature);
     setEmailPreview(html);
   }, [selectedItems, serviceList, equipmentList, companyName, contactPerson, footerInfo, selectedPests, discountAmount, applicationArea]);
@@ -308,9 +321,12 @@ const HizmetPazarlama: React.FC = () => {
     setIsSending(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
-        // grandTotal useMemo'dan geliyor ama veritabanına sadece "Hizmet/Ürün Toplamı"nı mı yoksa "İskonto Düşülmüş" halini mi yazacağız?
-        // Genelde veritabanına iskonto öncesi tutarı yazıp, iskontoyu ayrı yazarız.
+        // İskonto öncesi ham toplam
         const itemsTotal = selectedItems.reduce((sum, item) => sum + (Number(item.visitCount) * Number(item.price)), 0);
+        
+        // Veritabanına gidecek net tutar (İskonto düşülmüş)
+        const netTotal = itemsTotal - (Number(discountAmount) || 0);
+
         const proposalNumber = `TEKLIF-${Date.now().toString().slice(-6)}`;
         const accessPassword = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -321,9 +337,9 @@ const HizmetPazarlama: React.FC = () => {
                 company_name: companyName,
                 contact_person: contactPerson,
                 recipient_email: recipientEmail,
-                total_amount: itemsTotal - discountAmount, // Veritabanına net tutarı yazalım
-                discount_amount: discountAmount, // YENİ: İskonto
-                application_area: applicationArea, // YENİ: Uygulama Alanı
+                total_amount: netTotal, // Net tutar
+                discount_amount: Number(discountAmount) || 0,
+                application_area: applicationArea,
                 created_by: user?.id,
                 access_password: accessPassword,
                 status: 'pending',
@@ -357,13 +373,12 @@ const HizmetPazarlama: React.FC = () => {
         const proposalLink = `https://ilaclamatik.com/teklif-goruntule/${newProposalId}`;
         const signature = generateSignatureHtml(footerInfo);
         
-        const selectedItemsForEmail = selectedItems.map(selected => {
-             return {
-                 ...selected,
-                 price: Number(selected.price) || 0,
-                 visitCount: Number(selected.visitCount) || 1
-             };
-        });
+        // E-posta için verileri hazırla
+        const selectedItemsForEmail = selectedItems.map(selected => ({
+             ...selected,
+             price: Number(selected.price) || 0,
+             visitCount: Number(selected.visitCount) || 1
+        }));
 
         const emailHtml = generateEmailHtml(companyName, contactPerson, selectedItemsForEmail, signature, proposalLink, accessPassword);
 
@@ -378,6 +393,8 @@ const HizmetPazarlama: React.FC = () => {
 
         if (emailError) throw emailError;
         toast.success(`Teklif başarıyla oluşturuldu ve gönderildi!`);
+        
+        // Formu temizle
         setSelectedItems([]);
         setDiscountAmount(0);
         
@@ -385,6 +402,25 @@ const HizmetPazarlama: React.FC = () => {
       toast.error('İşlem hatası: ' + error.message);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // --- DİĞER YARDIMCI FONKSİYONLAR ---
+  
+  const handleSaveFooterSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+        const { data: existing } = await supabase.from('company_settings').select('id').limit(1).single();
+        if (existing) {
+            await supabase.from('company_settings').update(footerInfo).eq('id', existing.id);
+        } else {
+            await supabase.from('company_settings').insert(footerInfo);
+        }
+        toast.success("Ayarlar kaydedildi");
+    } catch {
+        toast.error("Hata");
+    } finally {
+        setIsSavingSettings(false);
     }
   };
 
@@ -420,23 +456,6 @@ const HizmetPazarlama: React.FC = () => {
       setSelectedPests(prev => prev.includes(pest) ? prev.filter(p => p !== pest) : [...prev, pest]);
   };
 
-  const handleSaveFooterSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-        const { data: existing } = await supabase.from('company_settings').select('id').limit(1).single();
-        if (existing) {
-            await supabase.from('company_settings').update(footerInfo).eq('id', existing.id);
-        } else {
-            await supabase.from('company_settings').insert(footerInfo);
-        }
-        toast.success("Ayarlar kaydedildi");
-    } catch {
-        toast.error("Hata");
-    } finally {
-        setIsSavingSettings(false);
-    }
-  };
-
   const handleAddManualItem = () => {
     if(!manualItem.name) return;
     const newItem: SelectedItem = {
@@ -465,7 +484,7 @@ const HizmetPazarlama: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-md space-y-6 max-h-[90vh] overflow-y-auto">
           
-          {/* 1. ALICI BİLGİLERİ */}
+          {/* ALICI BİLGİLERİ */}
           <div>
             <label className="block text-lg font-semibold text-gray-700 mb-2">1. Alıcı & Firma Bilgileri</label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -481,9 +500,10 @@ const HizmetPazarlama: React.FC = () => {
                         {customers.map(c => <option key={c.id} value={c.id}>{c.kisa_isim}</option>)}
                     </select>
                 </div>
-                <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Firma Adı *" className="w-full p-2 border rounded-lg" disabled={!!selectedCustomer} />
+                <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Firma Adı *" className="w-full p-2 border rounded-lg" />
                 <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Yetkili Kişi" className="w-full p-2 border rounded-lg" />
-                <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Alıcı E-posta *" className="w-full p-2 border rounded-lg" disabled={!!selectedCustomer} />
+                {/* DÜZELTME: disabled kaldırıldı */}
+                <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Alıcı E-posta *" className="w-full p-2 border rounded-lg" />
                 <input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} placeholder="CC (Bilgi) E-posta" className="w-full p-2 border rounded-lg" />
             </div>
           </div>
@@ -597,7 +617,7 @@ const HizmetPazarlama: React.FC = () => {
                                 <div className="mt-3 pl-8 grid grid-cols-12 gap-3 animate-in slide-in-from-top-2">
                                     <div className="col-span-4 flex items-center gap-1">
                                         <input type="number" value={selectedItem.visitCount} onChange={(e) => handleItemUpdate(item.id, 'product', 'visitCount', parseInt(e.target.value))} className="w-full p-1 border rounded text-xs text-center" min="1" />
-                                        <span className="text-xs text-gray-500">{item.unit}</span>
+                                        <span className="text-xs text-gray-500">{item.unitType}</span>
                                     </div>
                                     <div className="col-span-4">
                                         <input type="number" value={selectedItem.price} onChange={(e) => handleItemUpdate(item.id, 'product', 'price', parseFloat(e.target.value))} className="w-full p-1 border rounded text-xs text-right font-bold" />
