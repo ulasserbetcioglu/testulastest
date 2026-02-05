@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield } from 'lucide-react';
+import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield, FileText } from 'lucide-react';
 
-// --- ARAYÜZLER ---
+// --- INTERFACES ---
 interface Customer {
   id: string;
   kisa_isim: string;
@@ -43,6 +43,7 @@ interface SelectedItem {
 }
 
 interface FooterInfo {
+  id?: number;
   name: string;
   title: string;
   website: string;
@@ -54,19 +55,18 @@ const PEST_TYPES = [
   'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
 ];
 
-// İmza HTML Oluşturucu (Varsayılan değerlerle korumalı)
 const generateSignatureHtml = (footer: FooterInfo): string => `
   <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eeeeee;">
     <tr>
       <td style="width: 80px; vertical-align: top;">
-        <img src="${footer.logo_url || 'https://via.placeholder.com/70'}" alt="Logo" style="width: 70px; height: auto;">
+        <img src="${footer.logo_url}" alt="Logo" style="width: 70px; height: auto;">
       </td>
       <td style="vertical-align: top; padding-left: 15px; font-family: Arial, sans-serif;">
-        <p style="margin: 0; font-weight: bold; color: #059669; font-size: 14px;">${footer.name || 'Firma Yetkilisi'}</p>
-        <p style="margin: 4px 0; font-size: 12px; color: #555555;">${footer.title || ''}</p>
+        <p style="margin: 0; font-weight: bold; color: #059669; font-size: 14px;">${footer.name}</p>
+        <p style="margin: 4px 0; font-size: 12px; color: #555555;">${footer.title}</p>
         <p style="margin: 4px 0; font-size: 12px; color: #555555;">
-          <a href="http://${footer.website || '#'}" style="color: #059669; text-decoration: none;">${footer.website || ''}</a> 
-          ${footer.phone ? `| <span style="color: #333333;">${footer.phone}</span>` : ''}
+          <a href="http://${footer.website}" style="color: #059669; text-decoration: none;">${footer.website}</a> | 
+          <span style="color: #333333;">${footer.phone}</span>
         </p>
       </td>
     </tr>
@@ -97,16 +97,15 @@ const HizmetPazarlama: React.FC = () => {
   const [manualType, setManualType] = useState<'service' | 'product'>('service');
   const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
 
-  // Varsayılan değerlerle başlatıyoruz ki "undefined" yazmasın
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
     name: 'İlaçlamatik Ekibi',
-    title: 'Profesyonel Çözümler',
-    website: 'www.ilaclamatik.com',
-    phone: '+90 555 000 0000',
+    title: 'Profesyonel Zararlı Kontrol Çözümleri',
+    website: 'www.ilaclamatik.com.tr',
+    phone: '+90 555 123 4567',
     logo_url: 'https://i.imgur.com/PajSpus.png'
   });
 
-  // --- VERİ ÇEKME ---
+  // --- DATA FETCHING ---
   useEffect(() => {
     const fetchInitialData = async () => {
       setLoading(true);
@@ -114,28 +113,20 @@ const HizmetPazarlama: React.FC = () => {
         const [customerRes, serviceRes, equipmentRes, settingsRes] = await Promise.all([
             supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
             supabase.from('services').select('*').order('name'),
-            supabase.from('equipment').select('*').eq('is_active', true).order('name'),
+            supabase.from('equipment').select('*').eq('is_active', true).order('name'), 
             supabase.from('company_settings').select('*').limit(1).single()
         ]);
 
-        if (customerRes.data) setCustomers(customerRes.data);
-        if (serviceRes.data) setServiceList(serviceRes.data.map((s: any) => ({ ...s, type: 'service' })));
-        if (equipmentRes.data) setEquipmentList(equipmentRes.data.map((e: any) => ({ ...e, type: 'product' })));
+        setCustomers(customerRes.data || []);
+        setServiceList((serviceRes.data || []).map((s: any) => ({ ...s, type: 'service' })));
+        setEquipmentList((equipmentRes.data || []).map((e: any) => ({ ...e, type: 'product' })));
 
         if (settingsRes.data) {
-            // Veritabanından gelen veriyi state'e aktar, eksik alan varsa varsayılanı koru
-            setFooterInfo(prev => ({
-                name: settingsRes.data.name || prev.name,
-                title: settingsRes.data.title || prev.title,
-                website: settingsRes.data.website || prev.website,
-                phone: settingsRes.data.phone || prev.phone,
-                logo_url: settingsRes.data.logo_url || prev.logo_url
-            }));
+            setFooterInfo(settingsRes.data);
         }
 
       } catch (error: any) {
         console.error("Veri yükleme hatası:", error);
-        toast.error("Veriler yüklenirken hata oluştu.");
       } finally {
         setLoading(false);
       }
@@ -154,12 +145,11 @@ const HizmetPazarlama: React.FC = () => {
       }
   }, [selectedCustomer, customers]);
 
-  // --- HTML OLUŞTURUCU ---
+  // --- HTML GENERATOR ---
   const generateEmailHtml = (customer: string, contact: string, items: SelectedItem[], signature: string, proposalLink?: string, password?: string): string => {
     let grandTotal = 0;
     
     const itemRows = items.map(item => {
-      // Fiyat ve sayı kontrolü (NaN veya undefined önleme)
       const price = Number(item.price) || 0;
       const count = Number(item.visitCount) || 1;
       const totalItemPrice = count * price;
@@ -262,14 +252,13 @@ const HizmetPazarlama: React.FC = () => {
     `;
   };
 
-  // Önizleme Güncelleme (Hata Düzeltildi)
   useEffect(() => {
     if (selectedItems.length === 0) {
       setEmailPreview('');
       return;
     }
     
-    // Seçili öğeleri ana listelerden bulup detaylarını (resim vb.) dolduruyoruz
+    // Combine selected items from state with details from lists
     const selectedItemsWithDetails = selectedItems.map(selected => {
         let original: any = null;
         if (selected.type === 'service') {
@@ -283,7 +272,6 @@ const HizmetPazarlama: React.FC = () => {
             name: selected.name || original?.name || 'Bilinmeyen Öğe',
             description: selected.description || original?.description || '',
             image_url: original?.image_url || selected.image_url,
-            // Fiyatı selectedItems'tan alıyoruz çünkü kullanıcı değiştirmiş olabilir
             price: Number(selected.price) || 0, 
             visitCount: Number(selected.visitCount) || 1
         };
@@ -352,9 +340,7 @@ const HizmetPazarlama: React.FC = () => {
         const proposalLink = `https://ilaclamatik.com/teklif-goruntule/${newProposalId}`;
         const signature = generateSignatureHtml(footerInfo);
         
-        // E-posta gönderimi için detayları hazırla
         const selectedItemsForEmail = selectedItems.map(selected => {
-             // Detayları tekrar bulmaya gerek yok, zaten state'de var ama garanti olsun diye mapliyoruz
              return {
                  ...selected,
                  price: Number(selected.price) || 0,
@@ -388,10 +374,6 @@ const HizmetPazarlama: React.FC = () => {
   const handleSaveFooterSettings = async () => {
       setIsSavingSettings(true);
       try {
-          // company_settings tablosunda en az bir satır olduğunu varsayıyoruz veya ilk satırı güncelliyoruz
-          // En güvenlisi: Varsa güncelle, yoksa ekle. ID genellikle 1 veya sabit UUID olabilir.
-          // Basitlik için ilk kaydı alıp güncellemeyi deneyelim veya ekleyelim.
-          
           const { data: existing } = await supabase.from('company_settings').select('id').limit(1).single();
           
           let error;
@@ -620,7 +602,10 @@ const HizmetPazarlama: React.FC = () => {
                                             <input type="number" value={selectedItem.price} onChange={(e) => handleItemUpdate(item.id, 'product', 'price', parseFloat(e.target.value))} className="w-full p-1 border rounded text-xs text-right font-bold" />
                                         </div>
                                         <div className="col-span-4 flex items-end justify-end">
-                                            <span className="text-xs font-bold text-blue-600">{(selectedItem.visitCount * selectedItem.price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
+                                            <span className="text-xs font-bold text-blue-600">{(selectedItem.visitCount * selectedItem.price).toLocaleString()} ₺</span>
+                                        </div>
+                                        <div className="col-span-12">
+                                            <input type="text" value={selectedItem.explanation} onChange={(e) => handleItemUpdate(item.id, 'product', 'explanation', e.target.value)} className="w-full p-1 border rounded text-xs" placeholder="Ürün notu..." />
                                         </div>
                                     </div>
                                 )}
