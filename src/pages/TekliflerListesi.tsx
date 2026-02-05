@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-import { FileText, Eye, Loader2 as Loader, KeyRound, Search, Copy } from 'lucide-react';
+import { FileText, Eye, Loader2 as Loader, KeyRound, Search, Copy, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -15,6 +15,7 @@ interface Proposal {
   total_amount: number;
   status: 'pending' | 'approved' | 'rejected';
   access_password?: string;
+  contract_available: boolean; // Yeni alan eklendi
 }
 
 const TekliflerListesi: React.FC = () => {
@@ -77,6 +78,7 @@ const TekliflerListesi: React.FC = () => {
         <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-28 ml-auto"></div></td>
         <td className="px-6 py-4 text-center"><div className="h-5 bg-gray-200 rounded-full w-20 mx-auto"></div></td>
         <td className="px-6 py-4 text-center"><div className="h-4 bg-gray-200 rounded w-16 mx-auto"></div></td>
+        <td className="px-6 py-4 text-center"><div className="h-4 bg-gray-200 rounded w-16 mx-auto"></div></td>
         <td className="px-6 py-4 text-right"><div className="h-6 bg-gray-200 rounded-md w-24 ml-auto"></div></td>
     </tr>
   );
@@ -107,9 +109,10 @@ const TekliflerListesi: React.FC = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Teklif No</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Firma Adı</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Oluşturma Tarihi</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tarih</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Toplam Tutar</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Durum</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase" title="Sözleşme yapılabilir mi?">Sözleşme</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Şifre</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">İşlemler</th>
               </tr>
@@ -122,10 +125,17 @@ const TekliflerListesi: React.FC = () => {
                   <tr key={proposal.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-600">{proposal.proposal_number}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{proposal.company_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{format(new Date(proposal.created_at), 'dd MMMM yyyy', { locale: tr })}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{format(new Date(proposal.created_at), 'dd MMM yyyy', { locale: tr })}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-700">{(proposal.total_amount || 0).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <StatusBadge status={proposal.status} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                        {proposal.contract_available ? (
+                            <CheckCircle size={18} className="mx-auto text-green-500" title="Sözleşme Yapılabilir" />
+                        ) : (
+                            <XCircle size={18} className="mx-auto text-gray-300" title="Sözleşme Yok" />
+                        )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-2 font-mono text-sm text-gray-600">
@@ -141,7 +151,7 @@ const TekliflerListesi: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button 
                         onClick={() => navigate(`/teklif-goruntule/${proposal.id}`)} 
-                        className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-md hover:bg-blue-200 transition-colors"
+                        className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-md hover:bg-blue-200 transition-colors ml-auto"
                       >
                         <Eye size={14}/> Görüntüle
                       </button>
@@ -150,7 +160,7 @@ const TekliflerListesi: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                    <td colSpan={7} className="text-center py-10 text-gray-500">
+                    <td colSpan={8} className="text-center py-10 text-gray-500">
                         {searchTerm ? `"${searchTerm}" için sonuç bulunamadı.` : "Gösterilecek teklif yok."}
                     </td>
                 </tr>
