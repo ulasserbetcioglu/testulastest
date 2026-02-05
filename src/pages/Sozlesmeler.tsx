@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, Search, Eye, FileDown, FileText, Calendar, X, Edit, Save, RefreshCw } from 'lucide-react';
+import { Loader2, Search, Eye, FileDown, FileText, Calendar, X, Edit, Save, RefreshCw, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
 
+// --- ARAYÜZLER ---
 interface Contract {
   id: string;
   contract_number: string;
@@ -16,50 +17,50 @@ interface Contract {
   content: string; 
   created_at: string;
   status: string;
+  // Yeni eklenen detay alanları
+  pest_types?: string;
+  service_frequency?: string;
+  application_area?: string;
 }
 
-// Düzenleme Formu İçin Arayüz
-interface EditFormState {
-  id: string;
-  company_name: string;
-  contact_person: string;
-  start_date: string;
-  end_date: string;
-  contract_amount: number;
-  // Detaylar (HTML'den parse edilip formda gösterilecek)
-  pest_types: string;
-  service_frequency: string;
-  application_area: string;
+// Şirket Ayarları Arayüzü
+interface CompanySettings {
+    company_name: string;
+    logo_url: string;
+    address: string;
+    email: string;
+    phone: string;
+    footer_text: string;
+    website?: string;
 }
 
 const Sozlesmeler: React.FC = () => {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
   
+  // Modallar
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Form State
-  const [editFormData, setEditFormData] = useState<EditFormState>({
-    id: '',
-    company_name: '',
-    contact_person: '',
-    start_date: '',
-    end_date: '',
-    contract_amount: 0,
-    pest_types: '',
-    service_frequency: '',
-    application_area: ''
-  });
+  // Edit Form State
+  const [editFormData, setEditFormData] = useState<Contract | null>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
 
+  // Verileri Çek
   useEffect(() => {
     fetchContracts();
+    fetchSettings();
   }, []);
+
+  const fetchSettings = async () => {
+      const { data } = await supabase.from('company_settings').select('*').single();
+      if(data) setSettings(data);
+  };
 
   const fetchContracts = async () => {
     try {
@@ -77,6 +78,7 @@ const Sozlesmeler: React.FC = () => {
     }
   };
 
+  // PDF İndir
   const handleDownloadPdf = () => {
     if (!printRef.current || !(window as any).html2pdf) {
         toast.error("PDF oluşturucu hazır değil.");
@@ -93,117 +95,115 @@ const Sozlesmeler: React.FC = () => {
     (window as any).html2pdf().set(options).from(element).save();
   };
 
-  // Düzenleme Modalı Açıldığında Verileri Yükle
+  // Düzenle Butonuna Tıklayınca
   const handleEditClick = (contract: Contract) => {
-    // Varsayılan değerler veya mevcut veriden tahmin yürütme
-    // Not: HTML içeriğinden regex ile veri çekmek zor olduğu için varsayılanları koyuyoruz, kullanıcı güncelleyip "Yeniden Oluştur" demeli.
     setEditFormData({
-      id: contract.id,
-      company_name: contract.company_name,
-      contact_person: contract.contact_person,
-      contract_amount: contract.contract_amount,
-      start_date: contract.start_date,
-      end_date: contract.end_date,
-      pest_types: 'Hamam böceği, Karınca, Kemirgenler',
-      service_frequency: 'AYDA 1 ZİYARET',
-      application_area: 'İŞLETME GENELİ'
+        ...contract,
+        // Eğer veritabanında bu alanlar boşsa varsayılanları ata
+        pest_types: contract.pest_types || 'Hamam böceği, Karınca, Kemirgenler',
+        service_frequency: contract.service_frequency || 'AYDA 1 ZİYARET',
+        application_area: contract.application_area || 'İŞLETME GENELİ'
     });
     setShowEditModal(true);
   };
 
-  // HTML İçeriğini Yeniden Oluştur (Form Verilerine Göre)
-  const regenerateContent = async () => {
-    try {
-        const { data: settings } = await supabase.from('company_settings').select('*').single();
-        const selectedOriginal = contracts.find(c => c.id === editFormData.id);
-        
-        if (!selectedOriginal) return;
+  // HTML OLUŞTURUCU (Veritabanına Kaydedilecek Metin)
+  const generateContractHtml = (data: Contract, companySettings: CompanySettings | null) => {
+      const startDateFormatted = data.start_date ? format(new Date(data.start_date), 'dd.MM.yyyy') : '...';
+      const endDateFormatted = data.end_date ? format(new Date(data.end_date), 'dd.MM.yyyy') : '...';
 
-        const startDateFormatted = format(new Date(editFormData.start_date), 'dd.MM.yyyy');
-        const endDateFormatted = format(new Date(editFormData.end_date), 'dd.MM.yyyy');
+      return `
+        <div style="font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.4; color: #000; padding: 30px; position: relative; min-height: 297mm;">
+            <table style="width: 100%; border-bottom: 2px solid #000; margin-bottom: 20px; padding-bottom: 10px;">
+                <tr>
+                    <td style="vertical-align: bottom;">
+                         ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" style="height: 50px;" alt="Logo" />` : `<h2>${companySettings?.company_name}</h2>`}
+                    </td>
+                    <td style="text-align: right; vertical-align: bottom;">
+                        <div style="font-weight: bold; font-size: 11pt;">HİZMET SÖZLEŞMESİ</div>
+                        <div style="font-size: 10pt;">SÖZLEŞME NO: <strong>${data.contract_number}</strong></div>
+                        <div style="font-size: 9pt;">TARİH: ${startDateFormatted}</div>
+                    </td>
+                </tr>
+            </table>
 
-        const newContent = `
-            <div style="font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.4; color: #000; padding: 30px; position: relative; min-height: 297mm;">
-                <table style="width: 100%; border-bottom: 2px solid #000; margin-bottom: 20px; padding-bottom: 10px;">
+            <div style="margin-bottom: 12px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">1. SÖZLEŞMENİN KONUSU</div>
+                <p style="margin: 3px 0;">İşbu sözleşme, bir tarafta <strong>${data.company_name.toUpperCase()}</strong> (İŞVEREN) ile diğer tarafta <strong>${companySettings?.company_name?.toUpperCase() || 'SİSTEM İLAÇLAMA LTD. ŞTİ.'}</strong> (PestMENTOR) arasında akdedilmiştir.</p>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">2. HİZMET KAPSAMI VE DETAYLAR</div>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 9pt;">
+                    <thead>
+                        <tr style="background-color: #f0f0f0;">
+                            <th style="border: 1px solid #000; padding: 5px;">HİZMET KATEGORİSİ</th>
+                            <th style="border: 1px solid #000; padding: 5px;">ZARARLI TÜRÜ</th>
+                            <th style="border: 1px solid #000; padding: 5px;">PERİYODİK ZİYARET SIKLIĞI</th>
+                            <th style="border: 1px solid #000; padding: 5px;">UYGULAMA ALAN(LAR)I</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 6px;">GENEL HAŞERE MÜCADELESİ</td>
+                            <td style="border: 1px solid #000; padding: 6px;">${data.pest_types}</td>
+                            <td style="border: 1px solid #000; padding: 6px; text-align: center;">${data.service_frequency}</td>
+                            <td style="border: 1px solid #000; padding: 6px; text-align: center;">${data.application_area}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">3. SÖZLEŞME SÜRESİ</div>
+                <p style="margin: 2px 0;">İşbu sözleşme, <strong>${startDateFormatted}</strong> tarihinde yürürlüğe girer ve <strong>${endDateFormatted}</strong> tarihine kadar geçerlidir.</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">4. MALİ HÜKÜMLER</div>
+                <div style="border: 2px solid #000; padding: 8px; margin: 5px 0; text-align: center; font-weight: bold; font-size: 11pt;">
+                    Hizmet Bedeli: ${data.contract_amount.toLocaleString('tr-TR')} TL + KDV
+                </div>
+            </div>
+
+            <div style="margin-top: 40px;">
+                <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
                     <tr>
-                        <td style="vertical-align: bottom;">
-                             ${settings?.logo_url ? `<img src="${settings.logo_url}" style="height: 50px;" alt="Logo" />` : `<h2>${settings?.company_name}</h2>`}
+                        <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
+                            <strong>HİZMETİ VEREN</strong><br/>
+                            <span style="font-size: 9pt;">${companySettings?.company_name}</span><br/><br/>
+                            <div style="height: 60px;"></div>
+                            <strong>İmza / Kaşe</strong>
                         </td>
-                        <td style="text-align: right; vertical-align: bottom;">
-                            <div style="font-weight: bold; font-size: 11pt;">HİZMET SÖZLEŞMESİ</div>
-                            <div style="font-size: 10pt;">SÖZLEŞME NO: <strong>${selectedOriginal.contract_number}</strong></div>
-                            <div style="font-size: 9pt;">TARİH: ${startDateFormatted}</div>
+                        <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
+                            <strong>HİZMETİ ALAN</strong><br/>
+                            <span style="font-size: 9pt;">${data.company_name.toUpperCase()}</span><br/>
+                            <span style="font-size: 8pt;">${data.contact_person}</span><br/><br/>
+                            <div style="height: 60px;"></div>
+                            <strong>İmza / Kaşe</strong>
                         </td>
                     </tr>
                 </table>
-
-                <div style="margin-bottom: 12px;">
-                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">1. SÖZLEŞMENİN KONUSU</div>
-                    <p style="margin: 3px 0;">İşbu sözleşme, bir tarafta <strong>${editFormData.company_name.toUpperCase()}</strong> (İŞVEREN) ile diğer tarafta <strong>${settings?.company_name?.toUpperCase() || 'SİSTEM İLAÇLAMA LTD. ŞTİ.'}</strong> (PestMENTOR) arasında akdedilmiştir.</p>
-                </div>
-
-                <div style="margin-bottom: 12px;">
-                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">2. HİZMET KAPSAMI</div>
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 9pt;">
-                        <thead>
-                            <tr style="background-color: #f0f0f0;">
-                                <th style="border: 1px solid #000; padding: 5px;">HİZMET KATEGORİSİ</th>
-                                <th style="border: 1px solid #000; padding: 5px;">ZARARLI TÜRÜ</th>
-                                <th style="border: 1px solid #000; padding: 5px;">PERİYODİK ZİYARET SIKLIĞI</th>
-                                <th style="border: 1px solid #000; padding: 5px;">UYGULAMA ALAN(LAR)I</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style="border: 1px solid #000; padding: 6px;">GENEL HAŞERE MÜCADELESİ</td>
-                                <td style="border: 1px solid #000; padding: 6px;">${editFormData.pest_types}</td>
-                                <td style="border: 1px solid #000; padding: 6px; text-align: center;">${editFormData.service_frequency}</td>
-                                <td style="border: 1px solid #000; padding: 6px; text-align: center;">${editFormData.application_area}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div style="margin-bottom: 12px;">
-                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">3. SÖZLEŞME SÜRESİ</div>
-                    <p style="margin: 2px 0;">İşbu sözleşme, <strong>${startDateFormatted}</strong> tarihinde yürürlüğe girer ve <strong>${endDateFormatted}</strong> tarihine kadar geçerlidir.</p>
-                </div>
-
-                <div style="margin-bottom: 20px;">
-                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">4. MALİ HÜKÜMLER</div>
-                    <div style="border: 2px solid #000; padding: 8px; margin: 5px 0; text-align: center; font-weight: bold; font-size: 11pt;">
-                        Hizmet Bedeli: ${editFormData.contract_amount.toLocaleString('tr-TR')} TL + KDV
-                    </div>
-                </div>
-
-                <div style="margin-top: 40px;">
-                    <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
-                        <tr>
-                            <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
-                                <strong>HİZMETİ VEREN</strong><br/>
-                                <span style="font-size: 9pt;">${settings?.company_name}</span><br/><br/>
-                                <div style="height: 60px;"></div>
-                                <strong>İmza / Kaşe</strong>
-                            </td>
-                            <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
-                                <strong>HİZMETİ ALAN</strong><br/>
-                                <span style="font-size: 9pt;">${editFormData.company_name.toUpperCase()}</span><br/>
-                                <span style="font-size: 8pt;">${editFormData.contact_person}</span><br/><br/>
-                                <div style="height: 60px;"></div>
-                                <strong>İmza / Kaşe</strong>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-
-                 <div style="position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8pt; color: #555; border-top: 1px solid #ccc; padding-top: 5px;">
-                    <strong>${settings?.company_name}</strong> | ${settings?.address}<br/>
-                    Tel: ${settings?.phone} | Web: ${settings?.website || ''} | E-posta: ${settings?.email}
-                </div>
             </div>
-        `;
 
-        // Veritabanını Güncelle
+             <div style="position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8pt; color: #555; border-top: 1px solid #ccc; padding-top: 5px;">
+                <strong>${companySettings?.company_name}</strong> | ${companySettings?.address}<br/>
+                Tel: ${companySettings?.phone} | Web: ${companySettings?.website || ''} | E-posta: ${companySettings?.email}
+            </div>
+        </div>
+      `;
+  };
+
+  // KAYDET VE GÜNCELLE
+  const handleSaveChanges = async () => {
+    if (!editFormData) return;
+    setIsUpdating(true);
+
+    try {
+        // 1. Yeni HTML içeriğini oluştur
+        const newHtmlContent = generateContractHtml(editFormData, settings);
+
+        // 2. Veritabanını Güncelle
         const { error } = await supabase
             .from('service_contracts')
             .update({
@@ -212,17 +212,25 @@ const Sozlesmeler: React.FC = () => {
                 start_date: editFormData.start_date,
                 end_date: editFormData.end_date,
                 contract_amount: editFormData.contract_amount,
-                content: newContent
+                pest_types: editFormData.pest_types,          // Yeni sütun
+                service_frequency: editFormData.service_frequency, // Yeni sütun
+                application_area: editFormData.application_area,   // Yeni sütun
+                content: newHtmlContent // Oluşturulan HTML'i de güncelle
             })
             .eq('id', editFormData.id);
 
         if (error) throw error;
-        toast.success("Sözleşme içeriği başarıyla yenilendi ve güncellendi.");
+
+        // 3. UI'ı Güncelle (Yeniden fetch etmeden)
+        setContracts(prev => prev.map(c => c.id === editFormData.id ? { ...editFormData, content: newHtmlContent } : c));
+        
+        toast.success("Sözleşme bilgileri ve dökümanı başarıyla güncellendi.");
         setShowEditModal(false);
-        fetchContracts(); // Listeyi yenile
 
     } catch (error: any) {
-        toast.error("Hata: " + error.message);
+        toast.error("Güncelleme hatası: " + error.message);
+    } finally {
+        setIsUpdating(false);
     }
   };
 
@@ -336,8 +344,8 @@ const Sozlesmeler: React.FC = () => {
         </div>
       )}
 
-      {/* --- DÜZENLEME MODALI --- */}
-      {showEditModal && (
+      {/* --- DÜZENLEME MODALI (YENİLENMİŞ) --- */}
+      {showEditModal && editFormData && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-5 border-b">
@@ -349,8 +357,9 @@ const Sozlesmeler: React.FC = () => {
 
             <div className="p-6 overflow-y-auto space-y-5">
               
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                <p><strong>Bilgi:</strong> Aşağıdaki bilgileri değiştirdikten sonra "Kaydet ve Sözleşmeyi Yenile" butonuna bastığınızda, sözleşme metni yeni verilerle baştan oluşturulacaktır.</p>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800 flex gap-2">
+                <RefreshCw className="shrink-0" size={18}/>
+                <p>Burada yaptığınız değişiklikler "Kaydet" dediğinizde sözleşme belgesine (PDF içeriğine) otomatik olarak yansıtılacaktır.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -377,7 +386,7 @@ const Sozlesmeler: React.FC = () => {
               </div>
 
               <div className="border-t pt-4 mt-4">
-                <h3 className="font-bold text-gray-700 mb-3">Hizmet Detayları</h3>
+                <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><CheckCircle size={16}/> Hizmet Kapsam Detayları</h3>
                 <div className="space-y-3">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Zararlı Türleri</label>
@@ -385,7 +394,7 @@ const Sozlesmeler: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Hizmet Sıklığı</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Hizmet Sıklığı (Sefer)</label>
                             <input type="text" value={editFormData.service_frequency} onChange={e => setEditFormData({...editFormData, service_frequency: e.target.value})} className="w-full p-2 border rounded-lg" placeholder="Örn: AYDA 1 ZİYARET" />
                         </div>
                         <div>
@@ -401,12 +410,12 @@ const Sozlesmeler: React.FC = () => {
             <div className="p-5 border-t bg-gray-50 flex justify-end gap-3">
               <button onClick={() => setShowEditModal(false)} className="px-4 py-2 border bg-white rounded-lg hover:bg-gray-50 text-gray-700">İptal</button>
               <button 
-                onClick={regenerateContent} 
+                onClick={handleSaveChanges} 
                 disabled={isUpdating}
                 className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-sm font-medium disabled:opacity-70"
               >
                 {isUpdating ? <Loader2 className="animate-spin size-4"/> : <RefreshCw size={18}/>}
-                Kaydet ve Sözleşmeyi Yenile
+                Kaydet ve Sözleşmeyi Güncelle
               </button>
             </div>
           </div>
