@@ -18,6 +18,7 @@ interface Service {
   price: number | null;
   visit_count: number | null;
   type: 'service';
+  target_pests?: string[]; // YENİ: Hedef Zararlılar
 }
 
 interface Equipment {
@@ -54,7 +55,7 @@ const PEST_TYPES = [
   'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
 ];
 
-// İmza HTML Oluşturucu (Hata korumalı)
+// İmza HTML Oluşturucu
 const generateSignatureHtml = (footer: FooterInfo): string => `
   <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eeeeee;">
     <tr>
@@ -91,7 +92,6 @@ const HizmetPazarlama: React.FC = () => {
   const [recipientEmail, setRecipientEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
   
-  // YENİ ALANLAR
   const [allowContract, setAllowContract] = useState(true);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [applicationArea, setApplicationArea] = useState<string>('İŞLETME GENELİ');
@@ -100,7 +100,6 @@ const HizmetPazarlama: React.FC = () => {
   const [manualType, setManualType] = useState<'service' | 'product'>('service');
   const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
 
-  // Varsayılan footer (Undefined hatasını önlemek için)
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
     name: 'İlaçlamatik Ekibi',
     title: 'Profesyonel Çözümler',
@@ -143,7 +142,6 @@ const HizmetPazarlama: React.FC = () => {
     fetchInitialData();
   }, []);
 
-  // Müşteri seçildiğinde bilgileri doldur
   useEffect(() => {
       if (selectedCustomer) {
           const customer = customers.find(c => c.id === selectedCustomer);
@@ -154,7 +152,7 @@ const HizmetPazarlama: React.FC = () => {
       }
   }, [selectedCustomer, customers]);
 
-  // TOPLAM HESABI (İskonto Dahil) - useMemo
+  // TOPLAM HESABI
   const { subTotal, grandTotal, vatAmount } = useMemo(() => {
       const sub = selectedItems.reduce((total, item) => {
           return total + (Number(item.visitCount) * Number(item.price));
@@ -168,11 +166,10 @@ const HizmetPazarlama: React.FC = () => {
       return { subTotal: sub, vatAmount: vat, grandTotal: total };
   }, [selectedItems, discountAmount]);
 
-  // HTML Üretici (Hata Korumalı)
+  // HTML GENERATOR
   const generateEmailHtml = (customer: string, contact: string, items: SelectedItem[], signature: string, proposalLink?: string, password?: string): string => {
     
     const itemRows = items.map(item => {
-      // Sayısal değerleri güvenli hale getiriyoruz
       const price = Number(item.price) || 0;
       const count = Number(item.visitCount) || 1;
       
@@ -183,7 +180,6 @@ const HizmetPazarlama: React.FC = () => {
           unitText = `${count} ${item.unitType || 'Adet'}`;
       }
 
-      // Resim yoksa placeholder kullan
       const imageUrl = item.image_url || `https://placehold.co/60x60/e2e8f0/334155?text=${item.type === 'service' ? 'Hizmet' : 'Urun'}`;
 
       return `
@@ -274,14 +270,11 @@ const HizmetPazarlama: React.FC = () => {
     `;
   };
 
-  // Önizleme Güncelleme (Detayları state ile birleştir)
   useEffect(() => {
     if (selectedItems.length === 0) {
       setEmailPreview('');
       return;
     }
-    
-    // Güvenli şekilde detayları birleştir
     const selectedItemsWithDetails = selectedItems.map(selected => {
         let original: any = null;
         if (selected.type === 'service') {
@@ -289,21 +282,17 @@ const HizmetPazarlama: React.FC = () => {
         } else {
              original = equipmentList.find(e => e.id === selected.id);
         }
-        
         return {
             ...selected,
-            name: selected.name || original?.name || 'İsimsiz Öğe',
+            name: selected.name || original?.name || 'Bilinmeyen Öğe',
             description: selected.description || original?.description || '',
-            // Resim yoksa varsayılanı kullan
             image_url: original?.image_url || selected.image_url,
-            // Sayısal değerleri garantiye al
             price: Number(selected.price) || 0, 
             visitCount: Number(selected.visitCount) || 1
         };
     });
     
     const signature = generateSignatureHtml(footerInfo);
-    // Güvenli hesaplama değerlerini geç
     const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails, signature);
     setEmailPreview(html);
   }, [selectedItems, serviceList, equipmentList, companyName, contactPerson, footerInfo, selectedPests, discountAmount, applicationArea]);
@@ -321,10 +310,7 @@ const HizmetPazarlama: React.FC = () => {
     setIsSending(true);
     try {
         const { data: { user } } = await supabase.auth.getUser();
-        // İskonto öncesi ham toplam
         const itemsTotal = selectedItems.reduce((sum, item) => sum + (Number(item.visitCount) * Number(item.price)), 0);
-        
-        // Veritabanına gidecek net tutar (İskonto düşülmüş)
         const netTotal = itemsTotal - (Number(discountAmount) || 0);
 
         const proposalNumber = `TEKLIF-${Date.now().toString().slice(-6)}`;
@@ -337,7 +323,7 @@ const HizmetPazarlama: React.FC = () => {
                 company_name: companyName,
                 contact_person: contactPerson,
                 recipient_email: recipientEmail,
-                total_amount: netTotal, // Net tutar
+                total_amount: netTotal, 
                 discount_amount: Number(discountAmount) || 0,
                 application_area: applicationArea,
                 created_by: user?.id,
@@ -373,7 +359,6 @@ const HizmetPazarlama: React.FC = () => {
         const proposalLink = `https://ilaclamatik.com/teklif-goruntule/${newProposalId}`;
         const signature = generateSignatureHtml(footerInfo);
         
-        // E-posta için verileri hazırla
         const selectedItemsForEmail = selectedItems.map(selected => ({
              ...selected,
              price: Number(selected.price) || 0,
@@ -394,7 +379,6 @@ const HizmetPazarlama: React.FC = () => {
         if (emailError) throw emailError;
         toast.success(`Teklif başarıyla oluşturuldu ve gönderildi!`);
         
-        // Formu temizle
         setSelectedItems([]);
         setDiscountAmount(0);
         
@@ -405,8 +389,6 @@ const HizmetPazarlama: React.FC = () => {
     }
   };
 
-  // --- DİĞER YARDIMCI FONKSİYONLAR ---
-  
   const handleSaveFooterSettings = async () => {
     setIsSavingSettings(true);
     try {
@@ -424,6 +406,7 @@ const HizmetPazarlama: React.FC = () => {
     }
   };
 
+  // Öğe Ekleme/Çıkarma (GÜNCELLENMİŞ)
   const toggleItemSelection = (item: Service | Equipment, type: 'service' | 'product', isSelected: boolean) => {
       if (isSelected) {
           const newItem: SelectedItem = {
@@ -438,6 +421,19 @@ const HizmetPazarlama: React.FC = () => {
               unitType: type === 'product' ? (item as Equipment).unit || 'Adet' : 'aylik'
           };
           setSelectedItems(prev => [...prev, newItem]);
+
+          // --- ZARARLI ENTEGRASYONU ---
+          if (type === 'service') {
+              const service = item as Service;
+              const targetPests = service.target_pests; // Interface'de tanımlı
+              
+              if (targetPests && Array.isArray(targetPests) && targetPests.length > 0) {
+                  setSelectedPests(prev => Array.from(new Set([...prev, ...targetPests])));
+                  toast.info(`${targetPests.length} adet zararlı kapsama eklendi: ${targetPests.join(', ')}`);
+              }
+          }
+          // --------------------------------
+
       } else {
           setSelectedItems(prev => prev.filter(selected => !(selected.id === item.id && selected.type === type)));
       }
@@ -502,7 +498,6 @@ const HizmetPazarlama: React.FC = () => {
                 </div>
                 <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Firma Adı *" className="w-full p-2 border rounded-lg" />
                 <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Yetkili Kişi" className="w-full p-2 border rounded-lg" />
-                {/* DÜZELTME: disabled kaldırıldı */}
                 <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Alıcı E-posta *" className="w-full p-2 border rounded-lg" />
                 <input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} placeholder="CC (Bilgi) E-posta" className="w-full p-2 border rounded-lg" />
             </div>
