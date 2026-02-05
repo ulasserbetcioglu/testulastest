@@ -13,7 +13,7 @@ interface ProposalItem {
     visit_count: number;
     unit_price: number;
     explanation: string;
-    unit_type: 'aylik' | 'seferlik' | 'adet' | string;
+    unit_type: string;
     item_type?: 'service' | 'product';
 }
 
@@ -23,12 +23,16 @@ interface Proposal {
     proposal_number: string;
     company_name: string;
     contact_person: string;
+    recipient_email: string;
     total_amount: number;
+    discount_amount: number; // İskonto
+    application_area: string; // Alan
     proposal_items: ProposalItem[];
     status: 'pending' | 'approved' | 'rejected';
     customer_notes: string | null;
     included_pests: string[] | null;
-    contract_available: boolean; // EKLENDİ
+    contract_available: boolean;
+    revision_number: number;
 }
 
 interface CompanySettings {
@@ -136,7 +140,7 @@ const TeklifGoruntule: React.FC = () => {
         (window as any).html2pdf().set(options).from(element).save();
     };
 
-    // --- SÖZLEŞME OLUŞTURMA ---
+    // --- SÖZLEŞME OLUŞTURMA FONKSİYONU ---
     const generateContractContent = (prop: Proposal, settings: CompanySettings | null, contractNo: string) => {
         const startDate = format(new Date(), 'dd.MM.yyyy');
         const endDate = `31/12/${new Date().getFullYear()}`; 
@@ -144,32 +148,60 @@ const TeklifGoruntule: React.FC = () => {
         const pestsString = Array.isArray(prop.included_pests) && prop.included_pests.length > 0
             ? prop.included_pests.join(', ') 
             : 'Genel Haşere ve Kemirgen';
+        
+        const appArea = prop.application_area || 'İŞLETME GENELİ';
 
-        // İSTENEN TABLO FORMATI: HİZMET KATEGORİSİ | ZARARLI TÜRÜ | SIKLIK | ALAN
-        const serviceRows = prop.proposal_items.map(item => {
+        // 1. HİZMETLER TABLOSU
+        const serviceItems = prop.proposal_items.filter(i => i.item_type !== 'product');
+        const serviceRows = serviceItems.map(item => {
              let visitFreq = '';
              if(item.unit_type === 'aylik') visitFreq = `AYDA ${item.visit_count} ZİYARET`;
              else if(item.unit_type === 'seferlik') visitFreq = 'TEK SEFERLİK';
-             else visitFreq = `${item.visit_count} ${item.unit_type}`; // Ürünler için birim
+             else visitFreq = `${item.visit_count} ADET`;
 
              let category = item.service_name.toUpperCase();
              let pestType = pestsString; 
-             
-             // Kategoriye göre pestType filtrelemesi (Basit mantık)
-             if(item.service_name.toLowerCase().includes('kemirgen')) {
-                 pestType = 'Fare ve Sıçanlar';
-             } else if (item.service_name.toLowerCase().includes('yürüyen')) {
-                 pestType = 'Hamam böceği ve Karınca';
-             }
+
+             if(item.service_name.toLowerCase().includes('kemirgen')) pestType = 'Fare ve Sıçanlar';
+             else if (item.service_name.toLowerCase().includes('yürüyen')) pestType = 'Hamam böceği ve Karınca';
 
              return `
             <tr>
                 <td style="border: 1px solid #000; padding: 6px;">${category}</td>
                 <td style="border: 1px solid #000; padding: 6px;">${pestType}</td>
                 <td style="border: 1px solid #000; padding: 6px; text-align: center;">${visitFreq}</td>
-                <td style="border: 1px solid #000; padding: 6px; text-align: center;">İŞLETME GENELİ</td>
+                <td style="border: 1px solid #000; padding: 6px; text-align: center;">${appArea}</td>
             </tr>
         `}).join('');
+
+        // 2. EKİPMAN TABLOSU (Varsa)
+        const productItems = prop.proposal_items.filter(i => i.item_type === 'product');
+        let productSection = '';
+        if (productItems.length > 0) {
+            const productRows = productItems.map(item => `
+                <tr>
+                    <td style="border: 1px solid #000; padding: 6px;">${item.service_name}</td>
+                    <td style="border: 1px solid #000; padding: 6px; text-align: center;">${item.visit_count} ${item.unit_type}</td>
+                    <td style="border: 1px solid #000; padding: 6px; text-align: right;">${item.unit_price} TL</td>
+                </tr>
+            `).join('');
+
+            productSection = `
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">EKİPMAN VE MALZEMELER</div>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 9pt;">
+                        <thead>
+                            <tr style="background-color: #f0f0f0;">
+                                <th style="border: 1px solid #000; padding: 5px;">ÜRÜN ADI</th>
+                                <th style="border: 1px solid #000; padding: 5px;">MİKTAR</th>
+                                <th style="border: 1px solid #000; padding: 5px;">BİRİM FİYAT</th>
+                            </tr>
+                        </thead>
+                        <tbody>${productRows}</tbody>
+                    </table>
+                </div>
+            `;
+        }
 
         return `
             <div style="font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.4; color: #000; padding: 30px; position: relative; min-height: 297mm;">
@@ -189,34 +221,57 @@ const TeklifGoruntule: React.FC = () => {
 
                 <div style="margin-bottom: 12px;">
                     <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">1. SÖZLEŞMENİN KONUSU</div>
-                    <p style="margin: 3px 0;">İşbu sözleşme, bir tarafta <strong>${prop.company_name.toUpperCase()}</strong> (İŞVEREN) ile diğer tarafta <strong>${settings?.company_name?.toUpperCase() || 'SİSTEM İLAÇLAMA LTD. ŞTİ.'}</strong> (PestMENTOR) arasında akdedilmiştir.</p>
-                    <p style="margin: 3px 0;">Sözleşmenin konusu; İŞVEREN'e ait tesislerde, insan sağlığını ve ürün güvenliğini tehdit eden zararlıların kontrol altına alınmasıdır.</p>
+                    <p style="margin: 3px 0; text-align: justify;">İşbu sözleşme, bir tarafta <strong>${prop.company_name.toUpperCase()}</strong> (Sözleşmede "İŞVEREN" olarak anılacaktır) ile diğer tarafta <strong>${settings?.company_name?.toUpperCase() || 'SİSTEM İLAÇLAMA SAN. VE TİC. LTD. ŞTİ.'}</strong> (Sözleşmede "PestMENTOR" olarak anılacaktır) arasında akdedilmiştir.</p>
                 </div>
 
                 <div style="margin-bottom: 12px;">
                     <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">2. TARAFLAR</div>
-                    <table style="width: 100%; border: none; font-size: 9pt;">
-                        <tr><td style="width: 140px; font-weight: bold;">HİZMET ALAN:</td><td>${prop.company_name.toUpperCase()}</td></tr>
-                        <tr><td style="font-weight: bold;">ADRES:</td><td>${prop.customer_notes || '-'}</td></tr>
-                        <tr><td style="font-weight: bold;">YETKİLİ:</td><td>${prop.contact_person}</td></tr>
+                    <table style="width: 100%; border: none; margin-bottom: 8px; font-size: 9pt;">
+                        <tr>
+                            <td style="width: 140px; font-weight: bold;">HİZMET ALAN FİRMA</td>
+                            <td>: ${prop.company_name.toUpperCase()}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">ADRES</td>
+                            <td>: ${prop.customer_notes || 'Adres belirtilmedi'}</td> 
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">TELEFON / YETKİLİ</td>
+                            <td>: ${prop.contact_person}</td>
+                        </tr>
                     </table>
-                    <br/>
+
                     <table style="width: 100%; border: none; font-size: 9pt;">
-                        <tr><td style="width: 140px; font-weight: bold;">HİZMET VEREN:</td><td>${settings?.company_name?.toUpperCase()}</td></tr>
-                        <tr><td style="font-weight: bold;">ADRES:</td><td>${settings?.address}</td></tr>
-                        <tr><td style="font-weight: bold;">İLETİŞİM:</td><td>${settings?.phone} | ${settings?.email}</td></tr>
+                        <tr>
+                            <td style="width: 140px; font-weight: bold;">HİZMET VEREN FİRMA</td>
+                            <td>: ${settings?.company_name?.toUpperCase() || 'SİSTEM İLAÇLAMA LTD. ŞTİ.'}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">ADRES</td>
+                            <td>: ${settings?.address || 'BURSA'}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">İLETİŞİM</td>
+                            <td>: ${settings?.phone} | ${settings?.email}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: bold;">VERGİ NO / DAİRE</td>
+                            <td>: 771 003 5611 / SETBAŞI</td>
+                        </tr>
                     </table>
                 </div>
 
                 <div style="margin-bottom: 12px;">
                     <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">3. YAPILACAK İŞİN TANIMI</div>
+                    <p style="margin: 3px 0;">Aşağıda belirtilen zararlılara karşı yapılacak mücadelenin denetimi, engellenmesi ve yok edilmesi hizmetleridir.</p>
+                    
                     <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 9pt;">
                         <thead>
                             <tr style="background-color: #f0f0f0;">
                                 <th style="border: 1px solid #000; padding: 5px;">HİZMET KATEGORİSİ</th>
                                 <th style="border: 1px solid #000; padding: 5px;">ZARARLI TÜRÜ</th>
-                                <th style="border: 1px solid #000; padding: 5px;">PERİYODİK ZİYARET SIKLIĞI</th>
-                                <th style="border: 1px solid #000; padding: 5px;">UYGULAMA ALAN(LAR)I</th>
+                                <th style="border: 1px solid #000; padding: 5px;">SIKLIK</th>
+                                <th style="border: 1px solid #000; padding: 5px;">ALAN</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -224,25 +279,64 @@ const TeklifGoruntule: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
+                
+                ${productSection}
 
-                <div style="margin-bottom: 20px;">
-                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">4. MALİ HÜKÜMLER</div>
-                    <div style="border: 2px solid #000; padding: 8px; margin: 5px 0; text-align: center; font-weight: bold; font-size: 11pt;">
-                        Hizmet Bedeli: ${prop.total_amount.toLocaleString('tr-TR')} TL + KDV
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">4. YETKİ VE SORUMLULUKLAR</div>
+                    <div style="margin-left: 10px; font-size: 9.5pt;">
+                        <p style="margin: 2px 0;"><strong>4.1. PestMENTOR:</strong> Hizmetleri İŞVEREN gözetiminde, gizlilik kurallarına uyarak icra edecektir. Sağlık Bakanlığı onaylı ürünleri kullanmaya yetkilidir. Ürün türü, dozajı ve uygulama yöntemine karar verme yetkisi PestMENTOR'a aittir. Hizmet sonrası raporlama yapar.</p>
+                        <p style="margin: 2px 0;"><strong>4.2. İŞVEREN:</strong> Çalışma alanlarını (dolap arkaları, depo vb.) erişilebilir hale getirmekle yükümlüdür. Yeni zararlı aktivitesi görülmesi durumunda derhal bilgi vermelidir. PestMENTOR bilgisi dışında üçüncü taraflardan hizmet alamaz.</p>
                     </div>
                 </div>
 
-                <div style="margin-top: 40px;">
+                <div style="margin-bottom: 12px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">5. SÖZLEŞME SÜRESİ VE FESİH</div>
+                    <p style="margin: 2px 0;">İşbu sözleşme, <strong>${startDate}</strong> tarihinde yürürlüğe girer ve <strong>${endDate}</strong> tarihine kadar geçerlidir.</p>
+                    <p style="margin: 2px 0;">Sözleşme bitiş tarihinden en az 30 gün önce yazılı fesih ihbarı yapılmazsa, sözleşme sona erer. Karşılıklı anlaşma ile yenilenebilir.</p>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">9. MALİ HÜKÜMLER</div>
+                    <div style="border: 2px solid #000; padding: 8px; margin: 5px 0; text-align: center; font-weight: bold; font-size: 11pt;">
+                        Hizmet Bedeli: ${prop.total_amount.toLocaleString('tr-TR')} TL + KDV
+                    </div>
+                    
+                    <p style="margin: 2px 0; font-size: 9pt;">Ödemeler fatura tarihinden itibaren 30 gün içinde, aşağıdaki hesaba yapılacaktır:</p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 9pt;">
+                        <thead>
+                            <tr style="background-color: #f0f0f0;">
+                                <th style="border: 1px solid #000; padding: 4px;">BANKA</th>
+                                <th style="border: 1px solid #000; padding: 4px;">ŞUBE</th>
+                                <th style="border: 1px solid #000; padding: 4px;">HESAP NO</th>
+                                <th style="border: 1px solid #000; padding: 4px;">IBAN</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border: 1px solid #000; padding: 4px;">GARANTİ BBVA</td>
+                                <td style="border: 1px solid #000; padding: 4px;">Gazcılar Şb.</td>
+                                <td style="border: 1px solid #000; padding: 4px;">37-6202789</td>
+                                <td style="border: 1px solid #000; padding: 4px;">TR66 0006 2000 0037 0000 6202 789</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <div style="font-weight: bold; border-bottom: 1px solid #000; display: inline-block; margin-bottom: 4px;">10. İMZA</div>
+                    <p style="margin: 2px 0;">İşbu sözleşme 10 madde ve 2 nüsha olarak ${startDate} tarihinde imzalanmıştır.</p>
+                    
                     <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
                         <tr>
                             <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
-                                <strong>HİZMETİ VEREN</strong><br/>
-                                <span style="font-size: 9pt;">${settings?.company_name}</span><br/><br/>
+                                <strong style="font-size: 10pt;">HİZMETİ VEREN</strong><br/>
+                                <span style="font-size: 9pt;">${settings?.company_name || 'SİSTEM İLAÇLAMA LTD. ŞTİ.'}</span><br/><br/>
                                 <div style="height: 60px;"></div>
                                 <strong>İmza / Kaşe</strong>
                             </td>
                             <td style="width: 50%; text-align: center; vertical-align: top; padding: 10px; border: 1px solid #000;">
-                                <strong>HİZMETİ ALAN</strong><br/>
+                                <strong style="font-size: 10pt;">HİZMETİ ALAN</strong><br/>
                                 <span style="font-size: 9pt;">${prop.company_name.toUpperCase()}</span><br/><br/>
                                 <div style="height: 60px;"></div>
                                 <strong>İmza / Kaşe</strong>
@@ -252,15 +346,14 @@ const TeklifGoruntule: React.FC = () => {
                 </div>
 
                 <div style="position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8pt; color: #555; border-top: 1px solid #ccc; padding-top: 5px;">
-                    <strong>${settings?.company_name}</strong> | ${settings?.address}<br/>
-                    Tel: ${settings?.phone} | Web: ${settings?.website || ''} | E-posta: ${settings?.email}
+                    <strong>${settings?.company_name || 'Sistem İlaçlama San. ve Tic. Ltd. Şti.'}</strong><br/>
+                    ${settings?.address} | Tel: ${settings?.phone} | Web: ${settings?.website || 'www.pestmentor.com.tr'} | E-posta: ${settings?.email}
                 </div>
 
             </div>
         `;
     };
 
-    // SADECE ONAYLA (SÖZLEŞME YOK)
     const handleApproveOnly = async () => {
         if (!proposal) return;
         setIsSubmitting(true);
@@ -279,7 +372,6 @@ const TeklifGoruntule: React.FC = () => {
         }
     };
 
-    // ONAYLA VE SÖZLEŞME OLUŞTUR
     const handleApproveAndCreateContract = async () => {
         if (!proposal) return;
         setIsSubmitting(true);
@@ -299,6 +391,9 @@ const TeklifGoruntule: React.FC = () => {
             
             if (updateError) throw updateError;
 
+            // application_area veritabanına eklenmişti ama proposal interface'e de eklenmeli
+            // proposal objesi zaten çekilmiş durumda.
+            
             const content = generateContractContent(proposal, companySettings, contractNumber);
 
             const { error: contractError } = await supabase
@@ -312,7 +407,9 @@ const TeklifGoruntule: React.FC = () => {
                     end_date: addYears(new Date(), 1),
                     contract_amount: proposal.total_amount,
                     content: content,
-                    status: 'active'
+                    status: 'active',
+                    pest_types: proposal.included_pests?.join(', ') || '',
+                    application_area: proposal.application_area || ''
                 });
 
             if (contractError) throw contractError;
@@ -329,8 +426,8 @@ const TeklifGoruntule: React.FC = () => {
         }
     };
 
+    // ... (Diğer fonksiyonlar aynı)
     const handleUpdateStatus = async (newStatus: 'rejected') => {
-        // Reddetme işlemi (Aynı)
         if (!proposal) return;
         setIsSubmitting(true);
         try {
@@ -344,11 +441,9 @@ const TeklifGoruntule: React.FC = () => {
             setIsSubmitting(false);
         }
     };
-    
-    // ... (isAuthenticated ve render kısmı aynı, sadece buton kısmını aşağıda güncelliyorum)
 
     if (!isAuthenticated) {
-        // ... (Login ekranı aynı)
+        // ... Login UI
         return (
             <div className="bg-gray-50 min-h-screen flex items-center justify-center p-4">
                 <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl text-center border border-gray-100">
@@ -370,12 +465,17 @@ const TeklifGoruntule: React.FC = () => {
     
     if (!proposal) return null;
 
-    const primaryColor = '#15803d'; 
+    const primaryColor = '#15803d'; // Green-700
     const lightBorder = '#e5e7eb';
+    
+    // HATA GİDERME: Tutar boşsa 0 kullan
+    const totalAmount = proposal.total_amount || 0;
+    const discountAmount = proposal.discount_amount || 0;
+    const grandTotal = totalAmount + (totalAmount * 0.20); // KDV Dahil
 
     return (
         <div className="bg-gray-100 min-h-screen font-sans pb-10">
-            {/* ÜST BAR (Aynı) */}
+            {/* ÜST BAR */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-10 print:hidden shadow-sm">
                 <div className="max-w-[210mm] mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-3">
@@ -396,13 +496,15 @@ const TeklifGoruntule: React.FC = () => {
                 </div>
             </div>
             
-            {/* KAĞIT (TEKLİF DETAYI) - Bu kısım değişmedi, yukarıdaki kodun aynısı */}
+            {/* KAĞIT (TEKLİF) */}
             <div className="py-8 px-4 print:p-0 flex justify-center">
                 <div ref={proposalRef} className="bg-white shadow-xl print:shadow-none relative flex flex-col" style={{ width: '210mm', minHeight: '297mm' }}>
-                    {/* ... (Teklif İçeriği Buraya Gelecek - Aynen Korundu) ... */}
-                    {/* Header */}
+                    
+                    {/* 1. HEADER */}
                     <div style={{ height: '8px', width: '100%', backgroundColor: primaryColor }}></div>
                     <div style={{ padding: '40px 50px', flexGrow: 1 }}>
+                        
+                        {/* 2. LOGO & BAŞLIK */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px' }}>
                             <div>
                                 <img src={companySettings?.logo_url || "https://i.imgur.com/PajSpus.png"} alt="Logo" style={{ height: '60px', objectFit: 'contain', marginBottom: '10px' }} />
@@ -421,9 +523,26 @@ const TeklifGoruntule: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* ... (Diğer teklif detayları aynı) ... */}
-                        
-                        {/* 4. HEDEF ZARARLILAR */}
+                        {/* 3. ALICI BİLGİLERİ */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', backgroundColor: '#f8fafc', padding: '20px', borderRadius: '8px', border: `1px solid ${lightBorder}` }}>
+                            <div style={{ width: '60%' }}>
+                                <p style={{ fontSize: '9px', color: '#9ca3af', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>SAYIN / FİRMA</p>
+                                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', margin: '0 0 2px 0' }}>{proposal.company_name}</h3>
+                                <p style={{ fontSize: '12px', color: '#64748b' }}>{proposal.contact_person}</p>
+                            </div>
+                            <div style={{ width: '35%', textAlign: 'right' }}>
+                                <div style={{ marginBottom: '10px' }}>
+                                    <p style={{ fontSize: '9px', color: '#9ca3af', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '2px' }}>TARİH</p>
+                                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>{format(new Date(proposal.created_at), 'dd MMMM yyyy', { locale: tr })}</p>
+                                </div>
+                                <div>
+                                    <p style={{ fontSize: '9px', color: '#9ca3af', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '2px' }}>TEKLİF NO</p>
+                                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>#{proposal.proposal_number}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 4. HEDEF ZARARLILAR (DAHİL OLANLAR RENKLİ, OLMAYANLAR GRİ) */}
                         <div style={{ marginBottom: '30px' }}>
                             <h4 style={{ fontSize: '11px', fontWeight: '700', color: primaryColor, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: `1px solid ${lightBorder}`, paddingBottom: '5px' }}>
                                 <Bug size={12} /> HEDEF ZARARLILAR KAPSAMI
@@ -449,8 +568,7 @@ const TeklifGoruntule: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* ... Tablolar ve Footer ... */}
-                        
+                        {/* 5. HİZMET VE ÜRÜN TABLOSU */}
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
                             <thead>
                                 <tr style={{ borderBottom: `2px solid ${primaryColor}` }}>
@@ -465,6 +583,9 @@ const TeklifGoruntule: React.FC = () => {
                                     let unitText = '';
                                     if(isProduct) unitText = `${item.visit_count} ${item.unit_type || 'Adet'}`;
                                     else unitText = item.unit_type === 'seferlik' ? 'Tek Sefer' : `${item.visit_count} Ziyaret / Ay`;
+
+                                    // HATA GİDERME: item.unit_price null ise 0 yap
+                                    const itemPrice = item.unit_price || 0;
 
                                     return (
                                         <tr key={index} style={{ borderBottom: `1px solid ${lightBorder}` }}>
@@ -491,7 +612,7 @@ const TeklifGoruntule: React.FC = () => {
                                                 {unitText}
                                             </td>
                                             <td style={{ padding: '15px 0', textAlign: 'right', verticalAlign: 'top', fontSize: '13px', fontWeight: '700', color: '#1f2937' }}>
-                                                {item.unit_price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
+                                                {itemPrice.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
                                             </td>
                                         </tr>
                                     );
@@ -499,21 +620,57 @@ const TeklifGoruntule: React.FC = () => {
                             </tbody>
                         </table>
 
+                        {/* 6. TOPLAM ALANI */}
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '40px' }}>
                             <div style={{ width: '250px', backgroundColor: '#f9fafb', padding: '15px', borderRadius: '8px', border: `1px solid ${lightBorder}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '11px', color: '#6b7280' }}>Ara Toplam</span>
+                                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{totalAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                                </div>
+                                {discountAmount > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#ef4444' }}>
+                                        <span style={{ fontSize: '11px' }}>İskonto</span>
+                                        <span style={{ fontSize: '12px', fontWeight: '600' }}>-{discountAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', paddingBottom: '10px', borderBottom: `1px solid ${lightBorder}` }}>
+                                    <span style={{ fontSize: '11px', color: '#6b7280' }}>KDV (%20)</span>
+                                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#374151' }}>{(totalAmount * 0.20).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                                </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ fontSize: '14px', fontWeight: '800', color: primaryColor }}>GENEL TOPLAM</span>
-                                    <span style={{ fontSize: '18px', fontWeight: '800', color: primaryColor }}>{(proposal.total_amount * 1.20).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                                    <span style={{ fontSize: '18px', fontWeight: '800', color: primaryColor }}>{grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
                                 </div>
                             </div>
                         </div>
 
+                        {/* 7. HAKKIMIZDA & BİLGİ */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px', marginBottom: '30px' }}>
+                            <div style={{ padding: '15px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                                <h4 style={{ fontSize: '11px', fontWeight: '700', color: '#166534', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Info size={12} /> FİRMA HAKKINDA
+                                </h4>
+                                <p style={{ fontSize: '10px', color: '#14532d', lineHeight: '1.5' }}>
+                                    {companySettings?.about_text || 'Sektörün öncü firması olarak, en son teknoloji ve Sağlık Bakanlığı onaylı ürünlerle %100 müşteri memnuniyeti odaklı hizmet sunuyoruz. Uzman kadromuzla yanınızdayız.'}
+                                </p>
+                            </div>
+                            <div style={{ padding: '15px', backgroundColor: '#fff7ed', borderRadius: '8px', border: '1px solid #fed7aa' }}>
+                                <h4 style={{ fontSize: '11px', fontWeight: '700', color: '#9a3412', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Calendar size={12} /> HİZMET GARANTİSİ
+                                </h4>
+                                <p style={{ fontSize: '10px', color: '#7c2d12', lineHeight: '1.5' }}>
+                                    Tüm hizmetlerimiz garanti kapsamındadır. Memnun kalmadığınız durumlarda ücretsiz tekrar uygulama yapılmaktadır.
+                                </p>
+                            </div>
+                        </div>
+
                     </div>
-                    {/* Teklif Footer */}
+                    
+                    {/* 8. FOOTER */}
                     <div style={{ padding: '0 50px 25px 50px', textAlign: 'center', color: '#9ca3af', fontSize: '9px', flexShrink: 0 }}>
                         <div style={{ borderTop: `1px solid ${lightBorder}`, paddingTop: '15px' }}>
                             <p style={{ fontStyle: 'italic' }}>
-                                {companySettings?.footer_text || 'Bu teklif bilgisayar ortamında oluşturulmuştur.'}
+                                {companySettings?.footer_text || 'Bu teklif bilgisayar ortamında oluşturulmuştur. Onaylanması durumunda sözleşme yerine geçer.'}
                             </p>
                         </div>
                     </div>
@@ -532,7 +689,6 @@ const TeklifGoruntule: React.FC = () => {
                                 rows={1}
                             />
                             <div className="flex gap-2 w-full md:w-auto">
-                                {/* KOŞULLU BUTON GÖSTERİMİ */}
                                 {proposal.contract_available ? (
                                     <button onClick={handleApproveAndCreateContract} disabled={isSubmitting} className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 text-sm whitespace-nowrap">
                                         {isSubmitting ? <Loader className="animate-spin size-4"/> : <FileSignature size={18} />} Onayla ve Sözleşme Hazırla
