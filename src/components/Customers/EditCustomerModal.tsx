@@ -14,7 +14,7 @@ interface PaidProduct {
 
 interface CustomerProductPrice {
   product_id: string;
-  custom_price: number;
+  price: number;
 }
 
 interface EditCustomerModalProps {
@@ -193,10 +193,10 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
     try {
       const { data } = await supabase
         .from('customer_product_prices')
-        .select('product_id, custom_price')
+        .select('product_id, price')
         .eq('customer_id', customer.id);
       const priceMap = new Map<string, number>();
-      (data || []).forEach(p => priceMap.set(p.product_id, p.custom_price));
+      (data || []).forEach(p => priceMap.set(p.product_id, p.price));
       setCustomerProductPrices(priceMap);
     } catch (err: any) {
       console.error('Error fetching customer product prices:', err);
@@ -210,10 +210,10 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
 
       const pricesToInsert = Array.from(customerProductPrices.entries())
         .filter(([_, price]) => price > 0)
-        .map(([product_id, custom_price]) => ({
+        .map(([product_id, price]) => ({
           customer_id: customer.id,
           product_id,
-          custom_price,
+          price,
         }));
 
       if (pricesToInsert.length > 0) {

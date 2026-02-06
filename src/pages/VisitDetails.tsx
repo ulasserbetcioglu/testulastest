@@ -599,10 +599,10 @@ const VisitDetails: React.FC = () => {
     try {
       const { data } = await supabase
         .from('customer_product_prices')
-        .select('product_id, custom_price')
+        .select('product_id, price')
         .eq('customer_id', customerId);
       const priceMap = new Map<string, number>();
-      (data || []).forEach(p => priceMap.set(p.product_id, p.custom_price));
+      (data || []).forEach(p => priceMap.set(p.product_id, p.price));
       setCustomerProductPrices(priceMap);
     } catch (err) { console.error(err); }
   };
