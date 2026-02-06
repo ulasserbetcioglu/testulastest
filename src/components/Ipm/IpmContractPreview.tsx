@@ -51,19 +51,27 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
     printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>IPM Sozlesmesi - ${contract.customer_name}</title>
     <style>
       @page { size: A4 portrait; margin: 20mm 15mm; }
+      @page:not(:first) { margin-top: 30mm; }
       body { margin: 0; padding: 20px; font-family: Arial, sans-serif; font-size: 11px; color: #1e293b; line-height: 1.5; }
       h1 { font-size: 18px; color: #15803d; text-align: center; margin: 0 0 20px; }
-      h2 { font-size: 13px; color: #15803d; border-bottom: 1px solid #d1d5db; padding-bottom: 4px; margin: 16px 0 8px; }
-      h3 { font-size: 11px; color: #374151; margin: 8px 0 4px; }
+      h2 { font-size: 13px; color: #15803d; border-bottom: 1px solid #d1d5db; padding-bottom: 4px; margin: 16px 0 8px; page-break-after: avoid; }
+      h3 { font-size: 11px; color: #374151; margin: 8px 0 4px; page-break-after: avoid; }
       p { margin: 4px 0; }
       .section { margin-bottom: 12px; }
       .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; margin: 2px; }
       .badge-active { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
       .badge-inactive { background: #f3f4f6; color: #9ca3af; border: 1px solid #e5e7eb; text-decoration: line-through; }
-      table { width: 100%; border-collapse: collapse; }
+      table { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
       td, th { padding: 4px 8px; border: 1px solid #e5e7eb; font-size: 10px; }
       th { background: #f0fdf4; color: #166534; font-weight: 600; }
-    </style></head><body>${reportRef.current.innerHTML}</body></html>`);
+      .print-header { display: none; position: fixed; top: 0; left: 0; right: 0; height: 20mm; background: #fff; border-bottom: 2px solid #15803d; padding: 4mm 15mm; font-size: 9px; color: #15803d; font-weight: bold; z-index: 100; }
+      @media print { .print-header { display: flex; justify-content: space-between; align-items: center; } }
+    </style></head><body>
+    <div class="print-header">
+      <span>IPM PROGRAMI - ${contract.customer_name}</span>
+      <span style="color:#999">${startDateFormatted}</span>
+    </div>
+    ${reportRef.current.innerHTML}</body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 300);
   };
@@ -79,23 +87,66 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
         backgroundColor: '#ffffff',
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 0.72);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgScaledHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      let heightLeft = pdfHeight;
-      let position = 0;
+      const headerH = 14;
+      const footerH = 8;
+      const page1Content = pageHeight - footerH;
+      const pageNContent = pageHeight - headerH - footerH;
 
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pageHeight;
+      const totalPages = 1 + Math.max(0, Math.ceil((imgScaledHeight - page1Content) / pageNContent));
 
-      while (heightLeft > 0) {
-        position -= pageHeight;
+      const drawFooter = (pg: number) => {
+        pdf.setFontSize(7);
+        pdf.setTextColor(180, 180, 180);
+        pdf.text(
+          `Sayfa ${pg} / ${totalPages}`,
+          pdfWidth / 2,
+          pageHeight - 3,
+          { align: 'center' }
+        );
+        pdf.setDrawColor(230, 230, 230);
+        pdf.line(10, pageHeight - footerH, pdfWidth - 10, pageHeight - footerH);
+      };
+
+      const drawHeader = (pg: number) => {
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, pdfWidth, headerH, 'F');
+        pdf.setFillColor(21, 128, 61);
+        pdf.rect(0, 0, pdfWidth, 1.5, 'F');
+        pdf.setFontSize(8);
+        pdf.setTextColor(21, 128, 61);
+        pdf.text('IPM PROGRAMI', 10, 7);
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(contract.customer_name, 10, 11);
+        pdf.setTextColor(180, 180, 180);
+        pdf.text(`Sayfa ${pg} / ${totalPages}`, pdfWidth - 10, 7, { align: 'right' });
+        pdf.setDrawColor(220, 220, 220);
+        pdf.line(10, headerH - 1, pdfWidth - 10, headerH - 1);
+      };
+
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgScaledHeight);
+      drawFooter(1);
+
+      let consumed = page1Content;
+      let pageNum = 2;
+
+      while (consumed < imgScaledHeight) {
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
+        pdf.addImage(imgData, 'JPEG', 0, headerH - consumed, pdfWidth, imgScaledHeight);
+        drawHeader(pageNum);
+
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, pageHeight - footerH, pdfWidth, footerH, 'F');
+        drawFooter(pageNum);
+
+        consumed += pageNContent;
+        pageNum++;
       }
 
       const safeName = contract.customer_name.replace(/[^a-zA-Z0-9_\-]/g, '_');
