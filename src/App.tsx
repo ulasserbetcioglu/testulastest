@@ -25,6 +25,7 @@ import TrendAnalysis from './pages/TrendAnalysis';
 import AdminPhotoMigration from './pages/AdminPhotoMigration';
 import AdminDataSimulator from './pages/AdminDataSimulator';
 import CustomerDetails from './components/Customers/CustomerDetails';
+import AdminEnvironmentalRiskAssessment from './pages/AdminEnvironmentalRiskAssessment';
 import Offers from './pages/Offers';
 import OfferTemplates from './pages/OfferTemplates';
 import NewOffer from './pages/NewOffer';
@@ -347,6 +348,7 @@ function App() {
             <Route path="operator-mesafeleri" element={<AdminOperatorDistances />} />
             <Route path="subeler" element={<AdminBranches />} /> 
             <Route path="sube-fiyatlandirma" element={<AdminBranchPricing />} />
+            <Route path="environmental-risk-assessment" element={<AdminEnvironmentalRiskAssessment />} />
             <Route path="fatura-export" element={<AdminRoute><InvoiceExport /></AdminRoute>} />
             <Route path="faaliyet-rapor-takip" element={<ActivityReportsTracking />} />
             <Route path="moduller/risk-degerlendirme" element={<RiskAssessmentModule />} />
