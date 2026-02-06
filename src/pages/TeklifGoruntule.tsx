@@ -52,6 +52,10 @@ const PEST_TYPES = [
   'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
 ];
 
+const SCOPE_AREAS = [
+  'İşletme Geneli', 'İdari Ofisler', 'Üretim Alanı', 'Depo Alanları', 'Dış Alan', 'İç Alan', 'Mutfak & Yemekhane', 'Sosyal Alanlar', 'Otopark', 'Bahçe & Peyzaj'
+];
+
 const TeklifGoruntule: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const [proposal, setProposal] = useState<Proposal | null>(null);
@@ -460,18 +464,18 @@ ${contractRef.current.innerHTML}
                         </div>
 
                         {/* HEDEF ZARARLILAR */}
-                        <div style={{ marginBottom: '30px' }}>
+                        <div style={{ marginBottom: '20px' }}>
                             <h4 style={{ fontSize: '11px', fontWeight: '700', color: primaryColor, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: `1px solid ${lightBorder}`, paddingBottom: '5px' }}>
-                                <Bug size={12} /> HEDEF ZARARLILAR KAPSAMI ({proposal.application_area})
+                                <Bug size={12} /> HEDEF ZARARLILAR
                             </h4>
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 {PEST_TYPES.map((pest, i) => {
                                     const isActive = Array.isArray(proposal.included_pests) && proposal.included_pests.includes(pest);
                                     return (
-                                        <div key={i} style={{ 
-                                            fontSize: '10px', padding: '4px 10px', borderRadius: '4px', 
-                                            backgroundColor: isActive ? '#f0fdf4' : '#f9fafb', 
-                                            color: isActive ? '#15803d' : '#9ca3af', 
+                                        <div key={i} style={{
+                                            fontSize: '10px', padding: '4px 10px', borderRadius: '4px',
+                                            backgroundColor: isActive ? '#f0fdf4' : '#f9fafb',
+                                            color: isActive ? '#15803d' : '#9ca3af',
                                             border: `1px solid ${isActive ? '#bbf7d0' : '#e5e7eb'}`,
                                             fontWeight: isActive ? 'bold' : 'normal',
                                             textDecoration: isActive ? 'none' : 'line-through',
@@ -482,6 +486,36 @@ ${contractRef.current.innerHTML}
                                         </div>
                                     )
                                 })}
+                            </div>
+                        </div>
+
+                        {/* UYGULAMA KAPSAMI */}
+                        <div style={{ marginBottom: '30px' }}>
+                            <h4 style={{ fontSize: '11px', fontWeight: '700', color: '#2563eb', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: `1px solid ${lightBorder}`, paddingBottom: '5px' }}>
+                                <Shield size={12} /> UYGULAMA KAPSAMI
+                            </h4>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {(() => {
+                                    const activeScopes = proposal.application_area
+                                        ? proposal.application_area.split(',').map(s => s.trim())
+                                        : [];
+                                    return SCOPE_AREAS.map((scope, i) => {
+                                        const isActive = activeScopes.some(s => s.toLowerCase() === scope.toLowerCase());
+                                        return (
+                                            <div key={i} style={{
+                                                fontSize: '10px', padding: '4px 10px', borderRadius: '4px',
+                                                backgroundColor: isActive ? '#eff6ff' : '#f9fafb',
+                                                color: isActive ? '#1d4ed8' : '#9ca3af',
+                                                border: `1px solid ${isActive ? '#93c5fd' : '#e5e7eb'}`,
+                                                fontWeight: isActive ? 'bold' : 'normal',
+                                                opacity: isActive ? 1 : 0.5,
+                                                display: 'flex', alignItems: 'center', gap: '4px'
+                                            }}>
+                                                {isActive ? <Check size={10}/> : <X size={10}/>} {scope}
+                                            </div>
+                                        );
+                                    });
+                                })()}
                             </div>
                         </div>
 

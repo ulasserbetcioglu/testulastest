@@ -56,6 +56,10 @@ const PEST_TYPES = [
   'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
 ];
 
+const SCOPE_AREAS = [
+  'İşletme Geneli', 'İdari Ofisler', 'Üretim Alanı', 'Depo Alanları', 'Dış Alan', 'İç Alan', 'Mutfak & Yemekhane', 'Sosyal Alanlar', 'Otopark', 'Bahçe & Peyzaj'
+];
+
 // İmza HTML Oluşturucu
 const generateSignatureHtml = (footer: FooterInfo): string => `
   <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eeeeee;">
@@ -95,7 +99,7 @@ const HizmetPazarlama: React.FC = () => {
   
   const [allowContract, setAllowContract] = useState(true);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
-  const [applicationArea, setApplicationArea] = useState<string>('İŞLETME GENELİ');
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(['İşletme Geneli']);
   const [selectedPests, setSelectedPests] = useState<string[]>(['Hamam Böceği', 'Kemirgen']);
 
   const [manualType, setManualType] = useState<'service' | 'product'>('service');
@@ -210,6 +214,14 @@ const HizmetPazarlama: React.FC = () => {
         return `<span style="display:inline-block; padding: 4px 8px; margin: 2px; font-size: 11px; border-radius: 4px; background-color: ${bg}; color: ${color}; border: 1px solid ${isSelected ? '#a7f3d0' : '#e5e7eb'}; text-decoration: ${decoration}; opacity: ${opacity};">${pest}</span>`;
     }).join(' ');
 
+    const scopeListHtml = SCOPE_AREAS.map(scope => {
+        const isSelected = selectedScopes.includes(scope);
+        const color = isSelected ? '#2563eb' : '#9ca3af';
+        const bg = isSelected ? '#eff6ff' : '#f3f4f6';
+        const opacity = isSelected ? '1' : '0.6';
+        return `<span style="display:inline-block; padding: 4px 8px; margin: 2px; font-size: 11px; border-radius: 4px; background-color: ${bg}; color: ${color}; border: 1px solid ${isSelected ? '#93c5fd' : '#e5e7eb'}; opacity: ${opacity}; font-weight: ${isSelected ? 'bold' : 'normal'};">${isSelected ? '&#10003; ' : ''}${scope}</span>`;
+    }).join(' ');
+
     const pdfSection = proposalLink && password ? `
         <div style="margin-top: 30px; padding: 25px; background-color: #f8fafc; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0;">
             <p style="margin:0; font-size: 16px; font-weight: bold; color: #1e293b;">Resmi Teklif Dökümanı</p>
@@ -234,30 +246,34 @@ const HizmetPazarlama: React.FC = () => {
             <p><b>${customer}</b> firması için özel olarak hazırladığımız teklifimiz aşağıda sunulmuştur.</p>
             
             <div style="margin: 20px 0; padding: 15px; background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px;">
-                <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; color: #92400e;">HEDEF ZARARLILAR VE KAPSAM (${applicationArea || 'Genel'}):</p>
+                <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; color: #92400e;">HEDEF ZARARLILAR:</p>
                 <div>${pestListHtml}</div>
+            </div>
+            <div style="margin: 0 0 20px 0; padding: 15px; background-color: #eff6ff; border: 1px solid #93c5fd; border-radius: 6px;">
+                <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; color: #1e40af;">UYGULAMA KAPSAMI:</p>
+                <div>${scopeListHtml}</div>
             </div>
 
             <table style="margin-top:20px;margin-bottom:20px">
-                <thead><tr><th>Açıklama</th><th style="text-align:center">Miktar/Kapsam</th><th style="text-align:right">Birim Fiyat</th></tr></thead>
+                <thead><tr><th style="width:60px"></th><th>Açıklama</th><th style="text-align:center">Miktar/Kapsam</th><th style="text-align:right">Birim Fiyat</th></tr></thead>
                 <tbody>${itemRows}</tbody>
                 <tfoot>
-                    <tr><td colspan="3" style="padding-top:15px;border-top:2px solid #333;"></td></tr>
+                    <tr><td colspan="4" style="padding-top:15px;border-top:2px solid #333;"></td></tr>
                     <tr>
-                        <td colspan="2" style="text-align:right;padding:5px;font-size:14px;color:#666;">Ara Toplam:</td>
+                        <td colspan="3" style="text-align:right;padding:5px;font-size:14px;color:#666;">Ara Toplam:</td>
                         <td style="text-align:right;padding:5px;font-size:14px;font-weight:bold;">${subTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
                     </tr>
                     ${discountAmount > 0 ? `
                     <tr>
-                        <td colspan="2" style="text-align:right;padding:5px;font-size:14px;color:#ef4444;">İskonto:</td>
+                        <td colspan="3" style="text-align:right;padding:5px;font-size:14px;color:#ef4444;">İskonto:</td>
                         <td style="text-align:right;padding:5px;font-size:14px;font-weight:bold;color:#ef4444;">-${discountAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
                     </tr>` : ''}
                     <tr>
-                        <td colspan="2" style="text-align:right;padding:5px;font-size:14px;color:#666;">KDV (%20):</td>
+                        <td colspan="3" style="text-align:right;padding:5px;font-size:14px;color:#666;">KDV (%20):</td>
                         <td style="text-align:right;padding:5px;font-size:14px;font-weight:bold;">${vatAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
                     </tr>
                     <tr>
-                        <td colspan="2" style="text-align:right;padding:10px;font-size:16px;font-weight:bold;color:#1e293b;">GENEL TOPLAM:</td>
+                        <td colspan="3" style="text-align:right;padding:10px;font-size:16px;font-weight:bold;color:#1e293b;">GENEL TOPLAM:</td>
                         <td style="text-align:right;padding:10px;font-size:18px;font-weight:bold;color:#059669;">${grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
                     </tr>
                 </tfoot>
@@ -296,7 +312,7 @@ const HizmetPazarlama: React.FC = () => {
     const signature = generateSignatureHtml(footerInfo);
     const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails, signature);
     setEmailPreview(html);
-  }, [selectedItems, serviceList, equipmentList, companyName, contactPerson, footerInfo, selectedPests, discountAmount, applicationArea]);
+  }, [selectedItems, serviceList, equipmentList, companyName, contactPerson, footerInfo, selectedPests, discountAmount, selectedScopes]);
 
   const handleSendEmail = async () => {
     if (!recipientEmail || !companyName) {
@@ -326,7 +342,7 @@ const HizmetPazarlama: React.FC = () => {
                 recipient_email: recipientEmail,
                 total_amount: netTotal, 
                 discount_amount: Number(discountAmount) || 0,
-                application_area: applicationArea,
+                application_area: selectedScopes.join(', '),
                 created_by: createdBy,
                 access_password: accessPassword,
                 status: 'pending',
@@ -453,6 +469,10 @@ const HizmetPazarlama: React.FC = () => {
       setSelectedPests(prev => prev.includes(pest) ? prev.filter(p => p !== pest) : [...prev, pest]);
   };
 
+  const toggleScope = (scope: string) => {
+      setSelectedScopes(prev => prev.includes(scope) ? prev.filter(s => s !== scope) : [...prev, scope]);
+  };
+
   const handleAddManualItem = () => {
     if(!manualItem.name) return;
     const newItem: SelectedItem = {
@@ -519,19 +539,34 @@ const HizmetPazarlama: React.FC = () => {
               </label>
           </div>
 
-          {/* EK AYARLAR: İSKONTO & ALAN */}
-          <div className="grid grid-cols-2 gap-4">
-              <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">İskonto Tutarı (TL)</label>
-                  <div className="relative">
-                      <Percent size={16} className="absolute left-2 top-2.5 text-gray-400" />
-                      <input type="number" value={discountAmount} onChange={e => setDiscountAmount(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 border rounded-lg" />
-                  </div>
+          {/* İSKONTO */}
+          <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">İskonto Tutarı (TL)</label>
+              <div className="relative max-w-xs">
+                  <Percent size={16} className="absolute left-2 top-2.5 text-gray-400" />
+                  <input type="number" value={discountAmount} onChange={e => setDiscountAmount(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 border rounded-lg" />
               </div>
-              <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Uygulama Alanı</label>
-                  <input type="text" value={applicationArea} onChange={e => setApplicationArea(e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Örn: İŞLETME GENELİ" />
-              </div>
+          </div>
+
+          {/* UYGULAMA KAPSAMI */}
+          <div>
+             <label className="block text-lg font-semibold text-gray-700 mb-2">Uygulama Kapsamı</label>
+             <div className="flex flex-wrap gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                 {SCOPE_AREAS.map(scope => (
+                     <button
+                        key={scope}
+                        onClick={() => toggleScope(scope)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
+                            selectedScopes.includes(scope)
+                            ? 'bg-blue-100 text-blue-700 border-blue-200'
+                            : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+                        }`}
+                     >
+                        {selectedScopes.includes(scope) && <Check size={12}/>}
+                        {scope}
+                     </button>
+                 ))}
+             </div>
           </div>
 
           {/* HEDEF ZARARLILAR */}
