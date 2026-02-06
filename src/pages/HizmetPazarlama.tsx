@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { toast } from 'sonner';
 import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield, FileText, Percent } from 'lucide-react';
 
@@ -309,7 +310,7 @@ const HizmetPazarlama: React.FC = () => {
 
     setIsSending(true);
     try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const createdBy = localAuth.getCurrentOperatorId() || (await supabase.auth.getUser()).data.user?.id;
         const itemsTotal = selectedItems.reduce((sum, item) => sum + (Number(item.visitCount) * Number(item.price)), 0);
         const netTotal = itemsTotal - (Number(discountAmount) || 0);
 
@@ -326,7 +327,7 @@ const HizmetPazarlama: React.FC = () => {
                 total_amount: netTotal, 
                 discount_amount: Number(discountAmount) || 0,
                 application_area: applicationArea,
-                created_by: user?.id,
+                created_by: createdBy,
                 access_password: accessPassword,
                 status: 'pending',
                 included_pests: selectedPests,
