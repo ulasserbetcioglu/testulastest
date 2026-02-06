@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, Search, Eye, FileDown, FileText, Calendar, X, Edit, RefreshCw, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Search, Eye, FileDown, FileText, Calendar, X, Edit, RefreshCw, Plus, Trash2, FileEdit, ListChecks } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -56,8 +56,11 @@ const Sozlesmeler: React.FC = () => {
 
   const [editFormData, setEditFormData] = useState<Contract | null>(null);
   const [editServiceItems, setEditServiceItems] = useState<EditableServiceItem[]>([]);
+  const [editMode, setEditMode] = useState<'form' | 'fulltext'>('form');
+  const [fullTextHtml, setFullTextHtml] = useState('');
 
   const printRef = useRef<HTMLDivElement>(null);
+  const fullTextRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchContracts();
@@ -159,6 +162,8 @@ const Sozlesmeler: React.FC = () => {
       ...contract,
       application_area: contract.application_area || 'İŞLETME GENELİ'
     });
+    setEditMode('form');
+    setFullTextHtml(contract.content || '');
     setShowEditModal(true);
     setEditLoadingItems(true);
 
@@ -238,6 +243,23 @@ const Sozlesmeler: React.FC = () => {
     setIsUpdating(true);
 
     try {
+      if (editMode === 'fulltext') {
+        const currentHtml = fullTextRef.current?.innerHTML || fullTextHtml;
+
+        const { error } = await supabase
+          .from('service_contracts')
+          .update({ content: currentHtml })
+          .eq('id', editFormData.id);
+
+        if (error) throw error;
+
+        const updatedContract = { ...editFormData, content: currentHtml };
+        setContracts(prev => prev.map(c => c.id === editFormData.id ? updatedContract : c));
+        toast.success("Sözleşme metni başarıyla güncellendi.");
+        setShowEditModal(false);
+        return;
+      }
+
       const startFormatted = editFormData.start_date ? format(new Date(editFormData.start_date), 'dd.MM.yyyy') : '';
       const endFormatted = editFormData.end_date ? format(new Date(editFormData.end_date), 'dd.MM.yyyy') : '';
 
@@ -441,7 +463,7 @@ const Sozlesmeler: React.FC = () => {
 
       {showEditModal && editFormData && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh]">
             <div className="flex justify-between items-center p-5 border-b">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                 <Edit className="text-orange-600" /> Sözleşme Düzenle
@@ -449,111 +471,165 @@ const Sozlesmeler: React.FC = () => {
               <button onClick={() => setShowEditModal(false)} className="text-gray-500 hover:bg-gray-100 p-1 rounded-full"><X size={24} /></button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-5">
-
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800 flex gap-2">
-                <RefreshCw className="shrink-0" size={18} />
-                <p>Değişiklikler kaydedildiğinde sözleşme PDF içeriği otomatik olarak yeniden oluşturulacaktır.</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Firma Ünvanı</label>
-                  <input type="text" value={editFormData.company_name} onChange={e => setEditFormData({ ...editFormData, company_name: e.target.value })} className="w-full p-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Yetkili Kişi</label>
-                  <input type="text" value={editFormData.contact_person} onChange={e => setEditFormData({ ...editFormData, contact_person: e.target.value })} className="w-full p-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Uygulama Alanı</label>
-                  <input type="text" value={editFormData.application_area || ''} onChange={e => setEditFormData({ ...editFormData, application_area: e.target.value })} className="w-full p-2 border rounded-lg" placeholder="İŞLETME GENELİ" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Başlangıç Tarihi</label>
-                  <input type="date" value={editFormData.start_date ? format(new Date(editFormData.start_date), 'yyyy-MM-dd') : ''} onChange={e => setEditFormData({ ...editFormData, start_date: e.target.value })} className="w-full p-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bitiş Tarihi</label>
-                  <input type="date" value={editFormData.end_date ? format(new Date(editFormData.end_date), 'yyyy-MM-dd') : ''} onChange={e => setEditFormData({ ...editFormData, end_date: e.target.value })} className="w-full p-2 border rounded-lg" />
-                </div>
-              </div>
-
-              <div className="border-t pt-4 mt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-bold text-gray-700 flex items-center gap-2">Hizmet Kalemleri</h3>
-                  <button onClick={addServiceItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm hover:bg-green-100">
-                    <Plus size={14} /> Satır Ekle
-                  </button>
-                </div>
-
-                {editLoadingItems ? (
-                  <div className="flex justify-center py-6"><Loader2 className="animate-spin text-blue-500" /></div>
-                ) : (
-                  <div className="space-y-3">
-                    {editServiceItems.map((item, index) => (
-                      <div key={index} className="border rounded-lg p-3 bg-gray-50 relative">
-                        {editServiceItems.length > 1 && (
-                          <button onClick={() => removeServiceItem(index)} className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="col-span-2">
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Hizmet Adı</label>
-                            <input type="text" value={item.service_name} onChange={e => updateServiceItem(index, 'service_name', e.target.value)} className="w-full p-2 border rounded text-sm" placeholder="Yürüyen Haşere Mücadelesi" />
-                          </div>
-                          <div className="col-span-2">
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Açıklama</label>
-                            <input type="text" value={item.service_description} onChange={e => updateServiceItem(index, 'service_description', e.target.value)} className="w-full p-2 border rounded text-sm" placeholder="Hamam böceği, karınca vb." />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Birim Fiyat (TL)</label>
-                            <input type="number" value={item.unit_price} onChange={e => updateServiceItem(index, 'unit_price', parseFloat(e.target.value) || 0)} className="w-full p-2 border rounded text-sm font-semibold" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Ziyaret Sayısı / Ay</label>
-                            <input type="number" value={item.visit_count} onChange={e => updateServiceItem(index, 'visit_count', parseInt(e.target.value) || 1)} className="w-full p-2 border rounded text-sm" min={1} />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Birim Tipi</label>
-                            <select value={item.unit_type} onChange={e => updateServiceItem(index, 'unit_type', e.target.value)} className="w-full p-2 border rounded text-sm">
-                              <option value="aylik">Aylık</option>
-                              <option value="seferlik">Tek Sefer</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Tür</label>
-                            <select value={item.item_type} onChange={e => updateServiceItem(index, 'item_type', e.target.value as 'service' | 'product')} className="w-full p-2 border rounded text-sm">
-                              <option value="service">Hizmet</option>
-                              <option value="product">Ürün</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-right">
-                  <span className="text-sm text-gray-600 mr-2">Toplam Hizmet Bedeli:</span>
-                  <span className="text-lg font-bold text-green-800">
-                    {editServiceItems.filter(i => i.item_type === 'service').reduce((s, i) => s + i.unit_price, 0).toLocaleString('tr-TR')} TL+KDV/Sefer
-                  </span>
-                </div>
-              </div>
+            <div className="flex border-b bg-gray-50">
+              <button
+                onClick={() => setEditMode('form')}
+                className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  editMode === 'form'
+                    ? 'border-blue-600 text-blue-700 bg-white'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <ListChecks size={16} /> Form ile Düzenle
+              </button>
+              <button
+                onClick={() => {
+                  if (editMode === 'form') {
+                    setFullTextHtml(editFormData.content || '');
+                  }
+                  setEditMode('fulltext');
+                }}
+                className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  editMode === 'fulltext'
+                    ? 'border-blue-600 text-blue-700 bg-white'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <FileEdit size={16} /> Tam Metin Düzenle
+              </button>
             </div>
 
-            <div className="p-5 border-t bg-gray-50 flex justify-end gap-3">
-              <button onClick={() => setShowEditModal(false)} className="px-4 py-2 border bg-white rounded-lg hover:bg-gray-50 text-gray-700">İptal</button>
-              <button
-                onClick={handleSaveChanges}
-                disabled={isUpdating}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-sm font-medium disabled:opacity-70"
-              >
-                {isUpdating ? <Loader2 className="animate-spin size-4" /> : <RefreshCw size={18} />}
-                Kaydet ve Sözleşmeyi Güncelle
-              </button>
+            {editMode === 'form' ? (
+              <div className="p-6 overflow-y-auto space-y-5">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800 flex gap-2">
+                  <RefreshCw className="shrink-0" size={18} />
+                  <p>Değişiklikler kaydedildiğinde sözleşme PDF içeriği otomatik olarak yeniden oluşturulacaktır.</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Firma Ünvanı</label>
+                    <input type="text" value={editFormData.company_name} onChange={e => setEditFormData({ ...editFormData, company_name: e.target.value })} className="w-full p-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Yetkili Kişi</label>
+                    <input type="text" value={editFormData.contact_person} onChange={e => setEditFormData({ ...editFormData, contact_person: e.target.value })} className="w-full p-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Uygulama Alanı</label>
+                    <input type="text" value={editFormData.application_area || ''} onChange={e => setEditFormData({ ...editFormData, application_area: e.target.value })} className="w-full p-2 border rounded-lg" placeholder="İŞLETME GENELİ" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Başlangıç Tarihi</label>
+                    <input type="date" value={editFormData.start_date ? format(new Date(editFormData.start_date), 'yyyy-MM-dd') : ''} onChange={e => setEditFormData({ ...editFormData, start_date: e.target.value })} className="w-full p-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Bitiş Tarihi</label>
+                    <input type="date" value={editFormData.end_date ? format(new Date(editFormData.end_date), 'yyyy-MM-dd') : ''} onChange={e => setEditFormData({ ...editFormData, end_date: e.target.value })} className="w-full p-2 border rounded-lg" />
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 mt-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-gray-700 flex items-center gap-2">Hizmet Kalemleri</h3>
+                    <button onClick={addServiceItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm hover:bg-green-100">
+                      <Plus size={14} /> Satır Ekle
+                    </button>
+                  </div>
+
+                  {editLoadingItems ? (
+                    <div className="flex justify-center py-6"><Loader2 className="animate-spin text-blue-500" /></div>
+                  ) : (
+                    <div className="space-y-3">
+                      {editServiceItems.map((item, index) => (
+                        <div key={index} className="border rounded-lg p-3 bg-gray-50 relative">
+                          {editServiceItems.length > 1 && (
+                            <button onClick={() => removeServiceItem(index)} className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="col-span-2">
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Hizmet Adı</label>
+                              <input type="text" value={item.service_name} onChange={e => updateServiceItem(index, 'service_name', e.target.value)} className="w-full p-2 border rounded text-sm" placeholder="Yürüyen Haşere Mücadelesi" />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Açıklama</label>
+                              <input type="text" value={item.service_description} onChange={e => updateServiceItem(index, 'service_description', e.target.value)} className="w-full p-2 border rounded text-sm" placeholder="Hamam böceği, karınca vb." />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Birim Fiyat (TL)</label>
+                              <input type="number" value={item.unit_price} onChange={e => updateServiceItem(index, 'unit_price', parseFloat(e.target.value) || 0)} className="w-full p-2 border rounded text-sm font-semibold" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Ziyaret Sayısı / Ay</label>
+                              <input type="number" value={item.visit_count} onChange={e => updateServiceItem(index, 'visit_count', parseInt(e.target.value) || 1)} className="w-full p-2 border rounded text-sm" min={1} />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Birim Tipi</label>
+                              <select value={item.unit_type} onChange={e => updateServiceItem(index, 'unit_type', e.target.value)} className="w-full p-2 border rounded text-sm">
+                                <option value="aylik">Aylik</option>
+                                <option value="seferlik">Tek Sefer</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Tur</label>
+                              <select value={item.item_type} onChange={e => updateServiceItem(index, 'item_type', e.target.value as 'service' | 'product')} className="w-full p-2 border rounded text-sm">
+                                <option value="service">Hizmet</option>
+                                <option value="product">Urun</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-right">
+                    <span className="text-sm text-gray-600 mr-2">Toplam Hizmet Bedeli:</span>
+                    <span className="text-lg font-bold text-green-800">
+                      {editServiceItems.filter(i => i.item_type === 'service').reduce((s, i) => s + i.unit_price, 0).toLocaleString('tr-TR')} TL+KDV/Sefer
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto bg-gray-100 p-4">
+                <div className="p-3 mb-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 flex gap-2">
+                  <FileEdit className="shrink-0 mt-0.5" size={16} />
+                  <p>Sozlesme metnini dogrudan duzenleyebilirsiniz. Tum maddeler, tablolar ve metinler uzerinde degisiklik yapabilirsiniz.</p>
+                </div>
+                <div
+                  className="bg-white shadow-lg mx-auto p-10 min-h-[600px] max-w-[210mm] border border-gray-200 rounded"
+                  style={{ outline: 'none' }}
+                >
+                  <div
+                    ref={fullTextRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    dangerouslySetInnerHTML={{ __html: fullTextHtml }}
+                    className="focus:outline-none"
+                    style={{ minHeight: '500px' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="p-5 border-t bg-gray-50 flex justify-between items-center">
+              <div className="text-xs text-gray-400">
+                {editMode === 'form' ? 'Form modu: Kaydetme sonrasi sozlesme yeniden olusturulur' : 'Metin modu: Degisiklikler dogrudan kaydedilir'}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowEditModal(false)} className="px-4 py-2 border bg-white rounded-lg hover:bg-gray-50 text-gray-700">Iptal</button>
+                <button
+                  onClick={handleSaveChanges}
+                  disabled={isUpdating}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-sm font-medium disabled:opacity-70"
+                >
+                  {isUpdating ? <Loader2 className="animate-spin size-4" /> : <RefreshCw size={18} />}
+                  Kaydet ve Guncelle
+                </button>
+              </div>
             </div>
           </div>
         </div>
