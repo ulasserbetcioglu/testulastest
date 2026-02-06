@@ -1115,9 +1115,8 @@ const VisitDetails: React.FC = () => {
 
       {/* BİYOSİDAL ÜRÜNLER */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
-        <div className="flex justify-between items-center mb-3 sm:mb-4 pb-2 border-b border-gray-100">
+        <div className="mb-3 sm:mb-4 pb-2 border-b border-gray-100">
           <h3 className="font-bold text-gray-800 text-base sm:text-lg">Biyosidal Urunler</h3>
-          <button onClick={addBiocidalProduct} className="text-blue-600 text-sm font-medium flex items-center bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100"><Plus size={16} className="mr-1"/> Ekle</button>
         </div>
         <div className="space-y-3 sm:space-y-4">
           {biocidalUsage.map((item, idx) => (
@@ -1148,46 +1147,61 @@ const VisitDetails: React.FC = () => {
               </div>
             </div>
           ))}
+          <button
+            onClick={addBiocidalProduct}
+            className="w-full border-2 border-dashed border-blue-300 text-blue-600 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-blue-50 hover:border-blue-400 transition-all active:scale-[0.98]"
+          >
+            <Plus size={20} /> Biyosidal Urun Ekle
+          </button>
         </div>
       </div>
 
       {/* ÜCRETLİ ÜRÜNLER */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
-        <div className="flex justify-between items-center mb-3 sm:mb-4 pb-2 border-b border-gray-100">
+        <div className="mb-3 sm:mb-4 pb-2 border-b border-gray-100">
           <h3 className="font-bold text-gray-800 text-base sm:text-lg">Ucretli Malzemeler</h3>
-          {!noPaidProductsUsed && <button onClick={addPaidProduct} className="text-blue-600 text-sm font-medium flex items-center bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100"><Plus size={16} className="mr-1"/> Ekle</button>}
         </div>
-        
+
         <div className="mb-4">
           <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
             <input type="checkbox" className="w-5 h-5 text-gray-600 rounded" checked={noPaidProductsUsed} onChange={(e) => { setNoPaidProductsUsed(e.target.checked); if(e.target.checked) setPaidProductUsage([{productId:'', quantity:''}]); }} />
-            <span className="font-medium text-gray-700">Ücretli ürün kullanılmadı</span>
+            <span className="font-medium text-gray-700">Ucretli urun kullanilmadi</span>
           </label>
         </div>
 
-        {!noPaidProductsUsed && paidProductUsage.map((item, idx) => (
-          <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-3 relative">
-            {idx > 0 && <button onClick={() => removePaidProduct(idx)} className="absolute top-2 right-2 text-red-500 bg-white p-1.5 rounded-full shadow-sm hover:bg-red-50"><Trash size={16}/></button>}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1">
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Malzeme Adı</label>
-                <select className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white" value={item.productId} onChange={(e) => handlePaidProductChange(idx, 'productId', e.target.value)}>
-                  <option value="">Seçiniz</option>
-                  {paidProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div className="w-full sm:w-32">
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Adet</label>
-                <div className="flex">
-                  <input type="text" className="w-full border border-gray-300 rounded-l-lg p-2.5 text-sm" value={item.quantity} onChange={(e) => handlePaidProductChange(idx, 'quantity', e.target.value)} placeholder="0" />
-                  <span className="bg-gray-200 border border-gray-300 border-l-0 rounded-r-lg px-3 flex items-center text-xs font-medium text-gray-600 min-w-[3rem] justify-center">
-                    {paidProducts.find(p => p.id === item.productId)?.unit_type || '-'}
-                  </span>
+        {!noPaidProductsUsed && (
+          <div className="space-y-3">
+            {paidProductUsage.map((item, idx) => (
+              <div key={idx} className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-200 relative">
+                {idx > 0 && <button onClick={() => removePaidProduct(idx)} className="absolute top-2 right-2 text-red-500 bg-white p-1.5 rounded-full shadow-sm hover:bg-red-50 z-10"><Trash size={16}/></button>}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">Malzeme Adi</label>
+                    <select className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white" value={item.productId} onChange={(e) => handlePaidProductChange(idx, 'productId', e.target.value)}>
+                      <option value="">Seciniz</option>
+                      {paidProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-full sm:w-32">
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">Adet</label>
+                    <div className="flex">
+                      <input type="text" className="w-full border border-gray-300 rounded-l-lg p-2.5 text-sm" value={item.quantity} onChange={(e) => handlePaidProductChange(idx, 'quantity', e.target.value)} placeholder="0" />
+                      <span className="bg-gray-200 border border-gray-300 border-l-0 rounded-r-lg px-3 flex items-center text-xs font-medium text-gray-600 min-w-[3rem] justify-center">
+                        {paidProducts.find(p => p.id === item.productId)?.unit_type || '-'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ))}
+            <button
+              onClick={addPaidProduct}
+              className="w-full border-2 border-dashed border-green-300 text-green-600 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-green-50 hover:border-green-400 transition-all active:scale-[0.98]"
+            >
+              <Plus size={20} /> Ucretli Malzeme Ekle
+            </button>
           </div>
-        ))}
+        )}
       </div>
 
       {/* NOTLAR, AÇIKLAMA, RAPOR NO */}
