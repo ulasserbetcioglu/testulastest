@@ -129,6 +129,7 @@ const TeklifGoruntule: React.FC = () => {
         }
     };
 
+    // --- PDF AYARLARI GÜNCELLENDİ (PIXEL PERFECT) ---
     const handleDownloadProposalPdf = () => {
         if (!proposalRef.current || !(window as any).html2pdf) {
             toast.error("PDF oluşturucu hazır değil.");
@@ -136,35 +137,30 @@ const TeklifGoruntule: React.FC = () => {
         }
         
         const element = proposalRef.current;
-        
-        const options = {
-            margin: 0,
+
+        // A4 Boyutları (96 DPI)
+        const opt = {
+            margin: 0, // Margin SIFIR (İçerik padding ile yönetiliyor)
             filename: `Teklif_${proposal?.proposal_number}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { 
-                scale: 2,
-                useCORS: true,
-                letterRendering: true,
-                scrollY: 0,
+                scale: 2, 
+                useCORS: true, 
+                scrollY: 0, 
                 scrollX: 0,
-                windowWidth: element.scrollWidth,
-                windowHeight: element.scrollHeight
+                windowWidth: 794, // HTML render genişliğini A4 pixel genişliğine kilitliyoruz
+                width: 794,
+                x: 0,
+                y: 0
             },
             jsPDF: { 
-                unit: 'mm', 
+                unit: 'pt', // Point (pt) birimi daha hassastır
                 format: 'a4', 
-                orientation: 'portrait',
-                compress: true
+                orientation: 'portrait' 
             },
-            pagebreak: { 
-                mode: ['avoid-all', 'css', 'legacy'],
-                before: '.page-break-before',
-                after: '.page-break-after',
-                avoid: ['tr', '.no-break']
-            }
         };
 
-        (window as any).html2pdf().set(options).from(element).save();
+        (window as any).html2pdf().set(opt).from(element).save();
     };
 
     const handleDownloadContractPdf = async () => {
@@ -180,12 +176,12 @@ const TeklifGoruntule: React.FC = () => {
         let headerImgData: string | null = null;
         try {
             const headerEl = document.createElement('div');
-            headerEl.style.cssText = 'width: 794px; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1a7d37; font-family: Arial, sans-serif; background: white; position: absolute; top: -9999px; left: -9999px;';
+            headerEl.style.cssText = 'width: 680px; padding: 8px 0 6px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1a7d37; font-family: Arial, sans-serif; background: white; position: absolute; top: -9999px; left: -9999px;';
             headerEl.innerHTML = `
-              <div>${logoUrl ? `<img src="${logoUrl}" crossorigin="anonymous" style="height: 32px; object-fit: contain;">` : `<span style="font-size: 16px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
-              <div style="font-size: 10px; color: #555; text-align: right;">
+              <div>${logoUrl ? `<img src="${logoUrl}" crossorigin="anonymous" style="height: 28px; object-fit: contain;">` : `<span style="font-size: 13px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
+              <div style="font-size: 8px; color: #555; text-align: right;">
                 <span style="font-weight: 600;">${compName}</span><br/>
-                <span>Sözleşme No: ${contractNo}</span>
+                <span>S\u00f6zle\u015fme No: ${contractNo}</span>
               </div>
             `;
             document.body.appendChild(headerEl);
@@ -198,30 +194,12 @@ const TeklifGoruntule: React.FC = () => {
 
         const element = contractRef.current;
         const options = {
-            margin: [22, 15, 18, 15],
+            margin: [22, 10, 18, 10],
             filename: `Sozlesme_${proposal?.company_name || 'contract'}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { 
-                scale: 2,
-                useCORS: true,
-                letterRendering: true,
-                scrollY: 0,
-                scrollX: 0,
-                windowWidth: element.scrollWidth,
-                windowHeight: element.scrollHeight
-            },
-            jsPDF: { 
-                unit: 'mm', 
-                format: 'a4', 
-                orientation: 'portrait',
-                compress: true
-            },
-            pagebreak: { 
-                mode: ['avoid-all', 'css', 'legacy'],
-                before: '.page-break-before',
-                after: '.page-break-after',
-                avoid: ['tr', '.no-break']
-            }
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0, letterRendering: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+            pagebreak: { mode: ['css'] }
         };
 
         (window as any).html2pdf()
@@ -234,11 +212,11 @@ const TeklifGoruntule: React.FC = () => {
                 for (let i = 1; i <= totalPages; i++) {
                     pdf.setPage(i);
                     if (i > 1 && headerImgData) {
-                        pdf.addImage(headerImgData, 'PNG', 15, 5, 180, 12);
+                        pdf.addImage(headerImgData, 'PNG', 10, 3, 190, 12);
                     }
                     pdf.setFontSize(7);
                     pdf.setTextColor(150);
-                    pdf.text(`Sayfa ${i} / ${totalPages}`, 105, 290, { align: 'center' });
+                    pdf.text(`Sayfa ${i} / ${totalPages}`, 105, 292, { align: 'center' });
                 }
             })
             .save();
@@ -256,10 +234,10 @@ const TeklifGoruntule: React.FC = () => {
         const compName = companySettings?.company_name || '';
         printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Hizmet Sozlesmesi</title>
 <style>
-  @page { size: A4 portrait; margin: 22mm 15mm 18mm 15mm; }
+  @page { size: A4 portrait; margin: 22mm 10mm 18mm 10mm; }
   @media print {
     body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .print-header { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 2px solid #1a7d37; font-family: Arial, sans-serif; background: white; }
+    .print-header { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px; border-bottom: 2px solid #1a7d37; font-family: Arial, sans-serif; background: white; }
     .print-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 7pt; color: #999; }
     .contract-body p { page-break-inside: avoid; }
     .contract-body h3 { page-break-after: avoid; }
@@ -269,8 +247,8 @@ const TeklifGoruntule: React.FC = () => {
   body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
 </style></head><body>
 <div class="print-header">
-  <div>${logoUrl ? `<img src="${logoUrl}" style="height: 32px;">` : `<span style="font-size: 16px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
-  <div style="font-size: 10pt; color: #555;"><span style="font-weight:600;">${compName}</span> | Sözleşme No: ${contractNo}</div>
+  <div>${logoUrl ? `<img src="${logoUrl}" style="height: 28px;">` : `<span style="font-size: 13px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
+  <div style="font-size: 8pt; color: #555;"><span style="font-weight:600;">${compName}</span> | S\u00f6zle\u015fme No: ${contractNo}</div>
 </div>
 ${contractRef.current.innerHTML}
 </body></html>`);
@@ -440,7 +418,7 @@ ${contractRef.current.innerHTML}
         <div className="bg-gray-100 min-h-screen font-sans pb-10">
             {/* ÜST BAR */}
             <div className="bg-white border-b border-gray-200 sticky top-0 z-10 print:hidden shadow-sm">
-                <div className="max-w-[210mm] mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="max-w-[794px] mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center text-green-700 font-bold">T</div>
                         <div>
@@ -460,14 +438,23 @@ ${contractRef.current.innerHTML}
             </div>
             
             {/* KAĞIT (TEKLİF DETAYI) */}
-            <div className="py-8 px-4 print:p-0 flex justify-center">
+            <div className="py-8 px-4 print:p-0 flex justify-center overflow-x-auto">
+                {/* GÜNCELLEME: PIXEL PERFECT YAKLAŞIMI
+                   - Width: 794px (A4'ün web standardındaki piksel karşılığı)
+                   - Height: auto (İçerik uzayabilir, PDF bunu bölecektir)
+                   - minHeight: 1123px (En az 1 sayfa dolu görünsün)
+                   - Margin: 0 auto (Ortala)
+                   - mm birimi tamamen kaldırıldı, px kullanıldı.
+                */}
                 <div 
                     ref={proposalRef} 
-                    className="bg-white shadow-xl print:shadow-none relative flex flex-col" 
+                    className="bg-white shadow-xl print:shadow-none relative flex flex-col flex-shrink-0" 
                     style={{ 
-                        width: '210mm', 
-                        minHeight: '297mm',
-                        padding: '0'
+                        width: '794px', 
+                        minHeight: '1123px', 
+                        margin: '0 auto', 
+                        backgroundColor: 'white',
+                        boxSizing: 'border-box'
                     }}
                 >
                     
@@ -642,20 +629,24 @@ ${contractRef.current.innerHTML}
                             </div>
                         </div>
 
-                        {/* Hakkımızda ve Footer */}
-                        {companySettings?.about_text && (
-                            <div style={{ marginTop: '40px', padding: '20px', backgroundColor: '#f9fafb', borderRadius: '8px', borderLeft: `4px solid ${primaryColor}` }}>
-                                <h4 style={{ fontSize: '12px', fontWeight: '700', color: primaryColor, marginBottom: '8px' }}>Hakkımızda</h4>
-                                <p style={{ fontSize: '10px', color: '#64748b', lineHeight: '1.6', margin: 0 }}>{companySettings.about_text}</p>
-                            </div>
-                        )}
+                        {/* BOTTOM AREA */}
+                        <div style={{ borderTop: `1px solid ${lightBorder}`, paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                           <div style={{ width: '60%' }}>
+                               <p style={{ fontSize: '10px', color: '#6b7280', lineHeight: '1.5' }}>
+                                   {companySettings?.footer_text || "Bu teklif 15 gün süreyle geçerlidir. Onay için imzalamanız yeterlidir."}
+                               </p>
+                           </div>
+                           <div style={{ textAlign: 'center' }}>
+                               <div style={{ height: '60px', width: '120px', borderBottom: '1px dashed #cbd5e1', marginBottom: '8px' }}></div>
+                               <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569' }}>Kaşe / İmza</p>
+                           </div>
+                        </div>
+
                     </div>
-                    
-                    {/* Footer */}
-                    <div style={{ marginTop: 'auto', padding: '20px 50px', borderTop: `2px solid ${lightBorder}`, backgroundColor: '#fafafa' }}>
-                        <p style={{ fontSize: '9px', color: '#9ca3af', textAlign: 'center', margin: 0 }}>
-                            {companySettings?.footer_text || 'Bu teklif 30 gün geçerlidir. Detaylı bilgi için lütfen bizimle iletişime geçiniz.'}
-                        </p>
+                    {/* FOOTER STRIP */}
+                    <div style={{ backgroundColor: '#f8fafc', padding: '10px 50px', borderTop: `1px solid ${lightBorder}`, fontSize: '8px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{companySettings?.website}</span>
+                        <span>Sayfa 1 / 1</span>
                     </div>
                 </div>
                 
@@ -689,29 +680,20 @@ ${contractRef.current.innerHTML}
                     <div className="bg-white rounded-2xl w-full max-w-5xl p-6 shadow-2xl flex flex-col max-h-[95vh]">
                         <div className="flex justify-between items-center mb-4 border-b pb-4">
                             <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
-                                <FileText className="text-green-700" /> Hizmet Sözleşmesi Oluşturuldu
+                                <FileText className="text-green-700" /> Hizmet Sozlesmesi Olusturuldu
                             </h2>
                             <button onClick={() => setShowContractModal(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
                         </div>
                         <div className="flex-grow overflow-y-auto bg-gray-100 p-4 md:p-8 rounded-lg border mb-4">
-                            <div 
-                                ref={contractRef} 
-                                className="bg-white shadow-xl mx-auto" 
-                                style={{ 
-                                    maxWidth: '210mm',
-                                    minHeight: '297mm',
-                                    padding: '15mm'
-                                }} 
-                                dangerouslySetInnerHTML={{ __html: contractHtml }} 
-                            />
+                            <div ref={contractRef} className="bg-white shadow-xl mx-auto" style={{ maxWidth: '210mm' }} dangerouslySetInnerHTML={{ __html: contractHtml }} />
                         </div>
                         <div className="flex justify-end gap-3 pt-2 border-t">
                             <button onClick={() => setShowContractModal(false)} className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Kapat</button>
                             <button onClick={handlePrintContract} className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 flex items-center gap-2 text-sm">
-                                <Printer size={16} /> Yazdır
+                                <Printer size={16} /> Yazdir
                             </button>
                             <button onClick={handleDownloadContractPdf} className="px-5 py-2.5 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 flex items-center gap-2 text-sm shadow-lg shadow-green-200">
-                                <FileDown size={16} /> PDF İndir
+                                <FileDown size={16} /> PDF Indir
                             </button>
                         </div>
                     </div>
