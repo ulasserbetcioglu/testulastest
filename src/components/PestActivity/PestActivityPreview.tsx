@@ -176,7 +176,7 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
               )}
               <div>
                 <h1 className="text-white font-bold text-lg tracking-wide">
-                  8.6. Zararli Aktivitesi Kritik Limitleri & Aksiyon Plani
+                  Zararli Aktivitesi Kritik Limitleri & Aksiyon Plani
                 </h1>
                 <p className="text-green-100 text-sm italic">
                   Pest Activity Critical Limits & Action Plan
@@ -194,7 +194,7 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
         <div className="px-6 py-3 bg-green-50 border-b border-green-200 text-xs text-green-800 italic leading-relaxed">
           Gozlemlenen zararli sorunlari ve cozumlerine yonelik olarak hazirlanan acil eylem planidir.
           Asagidaki acil eylem planim kapsamli kontrol ve <b>KRITIK</b> sinirlar,
-          Repellent biyologlariniz gorevlilerini tarafindan <b>bu tablo</b> uygulamasina gecer.
+          PestMentor biyologlariniz gorevlilerini tarafindan <b>bu tablo</b> uygulamasina gecer.
         </div>
 
         <div className="p-4 overflow-x-auto">
@@ -236,6 +236,9 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
                         <td className="border border-gray-300 px-3 py-2 text-center text-gray-600 font-medium align-top" rowSpan={limitCount}>
                           <span className="text-[10px] font-bold text-green-700 leading-tight block">
                             {pest.responsible}
+                          </span>
+                          <span className="text-[9px] text-gray-500 leading-tight block mt-0.5">
+                            & {report.customer_name}
                           </span>
                         </td>
                       </>

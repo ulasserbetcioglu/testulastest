@@ -40,7 +40,7 @@ export const LEVEL_COLORS: Record<string, { bg: string; text: string; border: st
 export const DEFAULT_PEST_ROWS: PestRow[] = [
   {
     pest_name: 'Kemirgenler',
-    responsible: 'PestMentor & Musteri/Musteri Subesi',
+    responsible: 'PestMentor',
     limits: [
       { description: 'Dis alanda gozlenen; mevcut yem istasyonu sayisinin %10 dan az - KABUL EDILEBILIR', level: 'kabul' },
       { description: 'Dis alanda gozlenen; mevcut yem istasyonu sayisinin %11 -%30 arasi - AKTIVITE', level: 'aktivite' },
@@ -51,7 +51,7 @@ export const DEFAULT_PEST_ROWS: PestRow[] = [
   },
   {
     pest_name: 'Hamambocekleri',
-    responsible: 'PestMentor & Musteri/Musteri Subesi',
+    responsible: 'PestMentor',
     limits: [
       { description: 'Dis alanda gozlenen; mevcut gozlem noktalarinin sayisinin %10 dan az - KABUL EDILEBILIR', level: 'kabul' },
       { description: 'Dis alanda gozlenen; mevcut gozlem noktalarinin sayisinin %11 -%30 arasi - AKTIVITE', level: 'aktivite' },
@@ -62,7 +62,7 @@ export const DEFAULT_PEST_ROWS: PestRow[] = [
   },
   {
     pest_name: 'Sinekler',
-    responsible: 'PestMentor & Musteri/Musteri Subesi',
+    responsible: 'PestMentor',
     limits: [
       { description: 'Dis alanda gozlenen; 5 adetten az sinek - KABUL EDILEBILIR', level: 'kabul' },
       { description: 'Dis alanda gozlenen; 6 -10 adet sinek - AKTIVITE', level: 'aktivite' },
@@ -77,7 +77,7 @@ export const DEFAULT_PEST_ROWS: PestRow[] = [
   },
   {
     pest_name: 'Depolanmis Urun Zararlisi',
-    responsible: 'PestMentor & Musteri/Musteri Subesi',
+    responsible: 'PestMentor',
     limits: [
       { description: 'Dis alanda gozlenen; mevcut gozlem noktalarinin sayisinin %10 dan az - KABUL EDILEBILIR', level: 'kabul' },
       { description: 'Dis alanda gozlenen; mevcut gozlem noktalarinin sayisinin %11 -%30 arasi - AKTIVITE', level: 'aktivite' },
@@ -88,7 +88,7 @@ export const DEFAULT_PEST_ROWS: PestRow[] = [
   },
   {
     pest_name: 'Kuslar',
-    responsible: 'PestMentor & Musteri/Musteri Subesi',
+    responsible: 'PestMentor',
     limits: [
       { description: 'Dis ve/veya Ic alanda gozlenen 1 adet KUS TUYU ve / veya DISKISI - AKTIVITE', level: 'aktivite' },
       { description: 'Dis alanda gozlenen 1 adet KUS YUVASI ve/veya Ic alanda gozlenen 1 adet KUS ve / veya YUVASI - ISTILA', level: 'istila' },
@@ -97,7 +97,7 @@ export const DEFAULT_PEST_ROWS: PestRow[] = [
   },
   {
     pest_name: 'Kinkanatli ve Diger Yabani Bocek Turleri',
-    responsible: 'PestMentor & Musteri/Musteri Subesi',
+    responsible: 'PestMentor',
     limits: [
       { description: 'Dis alanda gozlenen 5 adetten az KINKANATLI BOCEK - KABUL EDILEBILIR', level: 'kabul' },
       { description: 'Dis alanda gozlenen 5 -10 adet KINKANATLI BOCEK - AKTIVITE', level: 'aktivite' },

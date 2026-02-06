@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import {
   Bug, Plus, Search, Edit3, Eye, Trash2, Loader2, Save, X,
-  RefreshCw, ChevronDown, ChevronUp, AlertTriangle
+  RefreshCw, ChevronDown, ChevronUp, AlertTriangle, CalendarDays, Check
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -26,6 +26,7 @@ const INITIAL_FORM = {
   responsible_company: '',
   document_number: '',
   revision_number: 0,
+  revision_date: format(new Date(), 'yyyy-MM-dd'),
   pest_rows: [...DEFAULT_PEST_ROWS] as PestRow[],
   status: 'active',
 };
@@ -44,6 +45,8 @@ const AdminPestActivityLimits: React.FC = () => {
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [expandedPest, setExpandedPest] = useState<number | null>(null);
+  const [editingDateId, setEditingDateId] = useState<string | null>(null);
+  const [editingDateValue, setEditingDateValue] = useState('');
 
   useEffect(() => { loadData(); }, []);
 
@@ -107,6 +110,7 @@ const AdminPestActivityLimits: React.FC = () => {
         responsible_company: form.responsible_company,
         document_number: form.document_number,
         revision_number: form.revision_number,
+        revision_date: form.revision_date || null,
         pest_rows: form.pest_rows,
         status: form.status,
         updated_at: new Date().toISOString(),
@@ -139,6 +143,7 @@ const AdminPestActivityLimits: React.FC = () => {
       responsible_company: report.responsible_company,
       document_number: report.document_number,
       revision_number: report.revision_number,
+      revision_date: report.revision_date || format(new Date(), 'yyyy-MM-dd'),
       pest_rows: report.pest_rows || [...DEFAULT_PEST_ROWS],
       status: report.status,
     });
@@ -184,6 +189,7 @@ const AdminPestActivityLimits: React.FC = () => {
         responsible_company: companySettings?.company_name || '',
         document_number: '',
         revision_number: 0,
+        revision_date: format(new Date(), 'yyyy-MM-dd'),
         pest_rows: DEFAULT_PEST_ROWS,
         status: 'active',
       }));
@@ -254,6 +260,21 @@ const AdminPestActivityLimits: React.FC = () => {
       pest_rows: prev.pest_rows.filter((_, i) => i !== idx),
     }));
     setExpandedPest(null);
+  };
+
+  const handleDateSave = async (id: string) => {
+    try {
+      const { error } = await supabase.from('pest_activity_limits').update({
+        revision_date: editingDateValue || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+      toast.success('Tarih guncellendi');
+      setEditingDateId(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Hata: ' + err.message);
+    }
   };
 
   const filteredReports = reports.filter(r =>
@@ -337,7 +358,7 @@ const AdminPestActivityLimits: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Dokuman No</label>
               <input type="text" value={form.document_number} onChange={e => setForm(p => ({ ...p, document_number: e.target.value }))} className="w-full p-2 border rounded-lg text-sm" />
@@ -345,6 +366,10 @@ const AdminPestActivityLimits: React.FC = () => {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Revizyon No</label>
               <input type="number" value={form.revision_number} onChange={e => setForm(p => ({ ...p, revision_number: parseInt(e.target.value) || 0 }))} className="w-full p-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Dokuman Tarihi</label>
+              <input type="date" value={form.revision_date} onChange={e => setForm(p => ({ ...p, revision_date: e.target.value }))} className="w-full p-2 border rounded-lg text-sm" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Durum</label>
@@ -467,14 +492,15 @@ const AdminPestActivityLimits: React.FC = () => {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Musteri / Sube</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Sorumlu Firma</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">Zararli Sayisi</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">Tarih</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">Zararli</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">Durum</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Islemler</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredReports.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-12 text-gray-400">Kayit bulunamadi</td></tr>
+                <tr><td colSpan={6} className="text-center py-12 text-gray-400">Kayit bulunamadi</td></tr>
               ) : filteredReports.map(report => (
                 <tr key={report.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-4 py-3">
@@ -482,8 +508,41 @@ const AdminPestActivityLimits: React.FC = () => {
                   </td>
                   <td className="px-4 py-3 text-gray-600">{report.responsible_company || '-'}</td>
                   <td className="px-4 py-3 text-center">
+                    {editingDateId === report.id ? (
+                      <div className="flex items-center gap-1 justify-center">
+                        <input
+                          type="date"
+                          value={editingDateValue}
+                          onChange={e => setEditingDateValue(e.target.value)}
+                          className="p-1 border rounded text-xs w-32"
+                          autoFocus
+                        />
+                        <button onClick={() => handleDateSave(report.id)} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Kaydet">
+                          <Check size={14} />
+                        </button>
+                        <button onClick={() => setEditingDateId(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded" title="Iptal">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingDateId(report.id);
+                          setEditingDateValue(report.revision_date || format(new Date(report.created_at), 'yyyy-MM-dd'));
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Tarihi degistir"
+                      >
+                        <CalendarDays size={13} className="text-gray-400" />
+                        {report.revision_date
+                          ? format(new Date(report.revision_date), 'dd.MM.yyyy')
+                          : format(new Date(report.created_at), 'dd.MM.yyyy')}
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-                      {(report.pest_rows || []).length} zararli
+                      {(report.pest_rows || []).length}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
