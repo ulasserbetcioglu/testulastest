@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Plus, Minus, Trash, MapPin, Navigation, Mail, PenTool as Tool, Edit, Camera, X as CloseIcon, ChevronDown, ChevronUp, Image as ImageIcon } from 'lucide-react';
+import { Plus, Minus, Trash, MapPin, Navigation, Mail, PenTool as Tool, Edit, Camera, X as CloseIcon, ChevronDown, ChevronUp, Image as ImageIcon, Eye, EyeOff } from 'lucide-react';
 import { calculateDistance } from '../lib/utils';
 import { sendEmail, getRecipientEmails } from '../lib/emailClient';
 import { toast } from 'sonner';
@@ -369,173 +369,69 @@ const PhotoCaptureModal: React.FC<{
   onClose: () => void;
   onCapture: (file: File) => void;
 }> = ({ isOpen, onClose, onCapture }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
-
-  const startCamera = async () => {
-    try {
-      setError(null);
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment', // Arka kamera
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
-      }
-      
-      setStream(mediaStream);
-      setIsCameraActive(true);
-    } catch (err: any) {
-      console.error('Kamera erişim hatası:', err);
-      setError('Kameraya erişilemedi. Lütfen izinleri kontrol edin.');
-      toast.error('Kamera erişimi reddedildi');
-    }
-  };
-
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-      setIsCameraActive(false);
-    }
-  };
-
-  const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.drawImage(video, 0, 0);
-    
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const file = new File([blob], `rapor_${Date.now()}.jpg`, {
-          type: 'image/jpeg',
-          lastModified: Date.now()
-        });
-        onCapture(file);
-        stopCamera();
-        onClose();
-      }
-    }, 'image/jpeg', 0.92);
-  };
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       onCapture(e.target.files[0]);
       onClose();
     }
-  };
-
-  const handleClose = () => {
-    stopCamera();
-    onClose();
+    e.target.value = '';
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black/80 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl w-full sm:max-w-md overflow-hidden">
         <div className="flex justify-between items-center p-4 border-b bg-white">
-          <h2 className="text-lg font-bold text-gray-800">Fotoğraf Ekle</h2>
-          <button onClick={handleClose} className="text-gray-500 hover:text-gray-700 p-2">
+          <h2 className="text-lg font-bold text-gray-800">Fotograf Ekle</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-2">
             <CloseIcon size={24} />
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-              {error}
+        <div className="p-4 space-y-3 pb-6">
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            ref={cameraInputRef}
+            onChange={handleFileSelect}
+          />
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+          >
+            <Camera size={24} />
+            Kamera ile Cek
+          </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
             </div>
-          )}
-
-          {!isCameraActive ? (
-            <div className="space-y-3">
-              <button
-                onClick={startCamera}
-                className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
-              >
-                <Camera size={24} />
-                Kamera ile Çek
-              </button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white text-gray-500 font-medium">veya</span>
-                </div>
-              </div>
-
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-green-700 transition-all flex items-center justify-center gap-3"
-              >
-                <ImageIcon size={24} />
-                Galeriden Seç
-              </button>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500 font-medium">veya</span>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="relative bg-black rounded-xl overflow-hidden aspect-video">
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                  autoPlay
-                  playsInline
-                />
-                <canvas ref={canvasRef} className="hidden" />
-              </div>
+          </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={stopCamera}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-all"
-                >
-                  İptal
-                </button>
-                <button
-                  onClick={capturePhoto}
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
-                >
-                  <Camera size={20} />
-                  Fotoğraf Çek
-                </button>
-              </div>
-            </div>
-          )}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            ref={galleryInputRef}
+            onChange={handleFileSelect}
+          />
+          <button
+            onClick={() => galleryInputRef.current?.click()}
+            className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-green-700 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+          >
+            <ImageIcon size={24} />
+            Galeriden Sec
+          </button>
         </div>
       </div>
     </div>
@@ -560,6 +456,7 @@ const VisitDetails: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false);
   const [showPhotoCaptureModal, setShowPhotoCaptureModal] = useState(false);
+  const [collapsedDepartments, setCollapsedDepartments] = useState<Record<string, boolean>>({});
   
   // Form States
   const [equipmentChecks, setEquipmentChecks] = useState<Record<string, any>>({});
@@ -1054,103 +951,120 @@ const VisitDetails: React.FC = () => {
       {/* EKİPMANLAR */}
       {visit.branch && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-3 flex justify-between items-center">
-            <h2 className="font-semibold text-lg">Ekipman Kontrolleri</h2>
+          <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-3 sm:px-4 py-3 flex justify-between items-center">
+            <h2 className="font-semibold text-base sm:text-lg">Ekipman Kontrolleri</h2>
             <button onClick={() => setShowAddEquipmentModal(true)} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 backdrop-blur-sm transition-colors">
               <Tool size={16} /> <span className="hidden sm:inline">Ekipman</span> Ekle
             </button>
           </div>
-          <div className="p-3 sm:p-5 space-y-6">
-            {Object.keys(groupedEquipment).length === 0 && <p className="text-center text-gray-500 py-8">Bu şubede tanımlı ekipman bulunmuyor.</p>}
-            {Object.entries(groupedEquipment).map(([dept, items]) => (
-              <div key={dept} className="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
-                <h3 className="font-bold text-gray-800 mb-3 text-lg flex items-center gap-2">
-                  <span className="w-1 h-6 bg-red-500 rounded-full"></span>
-                  {dept}
-                </h3>
-                <div className="space-y-3">
-                  {items.map((item, idx) => (
-                    <div key={item.id} className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm">
-                      <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
-                        <div>
-                          <span className="font-bold text-gray-900 block">{item.equipment_code}</span>
-                          <span className="text-xs text-gray-500">{item.equipment.name}</span>
-                        </div>
-                        <span className="text-xs font-mono text-gray-400">#{idx + 1}</span>
-                      </div>
-                      
-                      <div className="flex flex-col gap-3">
-                        {item.equipment.properties ? Object.entries(item.equipment.properties).map(([key, prop]) => (
-                          <div key={key} className="flex items-center justify-between gap-4">
-                            <span className="text-sm font-medium text-gray-600">{prop.label}</span>
-                            <div className="flex-shrink-0">
-                              {prop.type === 'boolean' ? (
-                                <div className="flex bg-gray-100 p-1 rounded-lg">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEquipmentCheckChange(item.id, key, 'false')}
-                                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                                      (equipmentChecks[item.id]?.[key] === 'false' || !equipmentChecks[item.id]?.[key]) 
-                                        ? 'bg-white text-green-700 shadow-sm border border-gray-200' 
-                                        : 'text-gray-500 hover:text-gray-700'
-                                    }`}
-                                  >
-                                    Yok
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEquipmentCheckChange(item.id, key, 'true')}
-                                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                                      equipmentChecks[item.id]?.[key] === 'true' 
-                                        ? 'bg-red-500 text-white shadow-sm' 
-                                        : 'text-gray-500 hover:text-gray-700'
-                                    }`}
-                                  >
-                                    Var
-                                  </button>
-                                </div>
-                              ) : prop.type === 'number' ? (
-                                <input 
-                                  type="number" 
-                                  className="border border-gray-300 rounded-lg w-20 text-center py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
-                                  value={equipmentChecks[item.id]?.[key] !== undefined ? equipmentChecks[item.id]?.[key] : 0}
-                                  onChange={(e) => handleEquipmentCheckChange(item.id, key, parseFloat(e.target.value))}
-                                />
-                              ) : (
-                                <input 
-                                  type="text" 
-                                  className="border border-gray-300 rounded-lg w-full min-w-[120px] py-2 px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
-                                  value={equipmentChecks[item.id]?.[key] || 'Normal'}
-                                  onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        )) : <span className="text-xs text-gray-400 italic">Özellik yok</span>}
-                      </div>
+          <div className="p-3 sm:p-5 space-y-4 sm:space-y-6">
+            {Object.keys(groupedEquipment).length === 0 && <p className="text-center text-gray-500 py-8">Bu subede tanimli ekipman bulunmuyor.</p>}
+            {Object.entries(groupedEquipment).map(([dept, items]) => {
+              const isCollapsed = collapsedDepartments[dept] === true;
+              return (
+                <div key={dept} className="bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setCollapsedDepartments(prev => ({ ...prev, [dept]: !prev[dept] }))}
+                    className="w-full flex items-center justify-between p-3 sm:p-4 hover:bg-gray-100 transition-colors"
+                  >
+                    <h3 className="font-bold text-gray-800 text-base sm:text-lg flex items-center gap-2">
+                      <span className="w-1 h-6 bg-red-500 rounded-full shrink-0"></span>
+                      {dept}
+                      <span className="text-xs font-normal text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">{items.length}</span>
+                    </h3>
+                    <div className="flex items-center gap-1 text-gray-500">
+                      {isCollapsed ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
                     </div>
-                  ))}
+                  </button>
+
+                  {!isCollapsed && (
+                    <div className="px-3 pb-3 sm:px-4 sm:pb-4 space-y-3">
+                      {items.map((item, idx) => (
+                        <div key={item.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                          <div className="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
+                            <div className="min-w-0">
+                              <span className="font-bold text-gray-900 block text-sm sm:text-base truncate">{item.equipment_code}</span>
+                              <span className="text-xs text-gray-500">{item.equipment.name}</span>
+                            </div>
+                            <span className="text-xs font-mono text-gray-400 shrink-0 ml-2">#{idx + 1}</span>
+                          </div>
+
+                          <div className="flex flex-col gap-3">
+                            {item.equipment.properties ? Object.entries(item.equipment.properties).map(([key, prop]) => (
+                              <div key={key} className="flex items-center justify-between gap-2 sm:gap-4">
+                                <span className="text-xs sm:text-sm font-medium text-gray-600 min-w-0">{prop.label}</span>
+                                <div className="flex-shrink-0">
+                                  {prop.type === 'boolean' ? (
+                                    <div className="flex bg-gray-100 p-0.5 sm:p-1 rounded-lg">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEquipmentCheckChange(item.id, key, 'false')}
+                                        className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                                          (equipmentChecks[item.id]?.[key] === 'false' || !equipmentChecks[item.id]?.[key])
+                                            ? 'bg-white text-green-700 shadow-sm border border-gray-200'
+                                            : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                      >
+                                        Yok
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEquipmentCheckChange(item.id, key, 'true')}
+                                        className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                                          equipmentChecks[item.id]?.[key] === 'true'
+                                            ? 'bg-red-500 text-white shadow-sm'
+                                            : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                      >
+                                        Var
+                                      </button>
+                                    </div>
+                                  ) : prop.type === 'number' ? (
+                                    <input
+                                      type="number"
+                                      className="border border-gray-300 rounded-lg w-16 sm:w-20 text-center py-1.5 sm:py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+                                      value={equipmentChecks[item.id]?.[key] !== undefined ? equipmentChecks[item.id]?.[key] : 0}
+                                      onChange={(e) => handleEquipmentCheckChange(item.id, key, parseFloat(e.target.value))}
+                                    />
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      className="border border-gray-300 rounded-lg w-full min-w-[100px] sm:min-w-[120px] py-1.5 sm:py-2 px-2 sm:px-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+                                      value={equipmentChecks[item.id]?.[key] || 'Normal'}
+                                      onChange={(e) => handleEquipmentCheckChange(item.id, key, e.target.value)}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            )) : <span className="text-xs text-gray-400 italic">Ozellik yok</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* SEÇENEKLER & ZARARLILAR */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <h3 className="font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100 text-lg">Ziyaret Türü</h3>
-          <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
+          <h3 className="font-bold text-gray-800 mb-3 sm:mb-4 pb-2 border-b border-gray-100 text-base sm:text-lg">Ziyaret Turu</h3>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             {visitTypes.map(t => (
-              <label key={t.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedVisitTypes.includes(t.id) ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}>
-                <input 
-                  type="checkbox" 
-                  className="w-5 h-5 text-red-600 rounded focus:ring-red-500"
-                  checked={selectedVisitTypes.includes(t.id)} 
-                  onChange={() => handleVisitTypeChange(t.id)} 
+              <label key={t.id} className={`flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border cursor-pointer transition-all ${selectedVisitTypes.includes(t.id) ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}>
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 rounded focus:ring-red-500"
+                  checked={selectedVisitTypes.includes(t.id)}
+                  onChange={() => handleVisitTypeChange(t.id)}
                 />
-                <span className={`text-sm font-medium ${selectedVisitTypes.includes(t.id) ? 'text-red-700' : 'text-gray-700'}`}>{t.label}</span>
+                <span className={`text-xs sm:text-sm font-medium ${selectedVisitTypes.includes(t.id) ? 'text-red-700' : 'text-gray-700'}`}>{t.label}</span>
               </label>
             ))}
           </div>
@@ -1168,18 +1082,18 @@ const VisitDetails: React.FC = () => {
           )}
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <h3 className="font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100 text-lg">Hedef Zararlılar</h3>
-          <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
+          <h3 className="font-bold text-gray-800 mb-3 sm:mb-4 pb-2 border-b border-gray-100 text-base sm:text-lg">Hedef Zararlilar</h3>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             {pestTypes.map(t => (
-              <label key={t.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedPestTypes.includes(t.id) ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}>
-                <input 
-                  type="checkbox" 
-                  className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500"
-                  checked={selectedPestTypes.includes(t.id)} 
-                  onChange={() => handlePestTypeChange(t.id)} 
+              <label key={t.id} className={`flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border cursor-pointer transition-all ${selectedPestTypes.includes(t.id) ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}>
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 rounded focus:ring-orange-500"
+                  checked={selectedPestTypes.includes(t.id)}
+                  onChange={() => handlePestTypeChange(t.id)}
                 />
-                <span className={`text-sm font-medium ${selectedPestTypes.includes(t.id) ? 'text-orange-800' : 'text-gray-700'}`}>{t.label}</span>
+                <span className={`text-xs sm:text-sm font-medium ${selectedPestTypes.includes(t.id) ? 'text-orange-800' : 'text-gray-700'}`}>{t.label}</span>
               </label>
             ))}
           </div>
@@ -1187,48 +1101,48 @@ const VisitDetails: React.FC = () => {
       </div>
 
       {/* YOĞUNLUK */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <h3 className="font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100 text-lg">Popülasyon Yoğunluğu</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
+        <h3 className="font-bold text-gray-800 mb-3 sm:mb-4 pb-2 border-b border-gray-100 text-base sm:text-lg">Populasyon Yogunlugu</h3>
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
           {densityOptions.map(o => (
-            <label key={o.id} className={`flex flex-col items-center justify-center p-3 rounded-lg border cursor-pointer transition-all ${density === o.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}>
+            <label key={o.id} className={`flex flex-col items-center justify-center p-2 sm:p-3 rounded-lg border cursor-pointer transition-all ${density === o.id ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}>
               <input type="radio" name="density" className="sr-only" checked={density === o.id} onChange={() => setDensity(o.id)} />
-              <span className={`text-sm font-bold ${density === o.id ? 'text-blue-700' : 'text-gray-600'}`}>{o.label}</span>
+              <span className={`text-xs sm:text-sm font-bold ${density === o.id ? 'text-blue-700' : 'text-gray-600'}`}>{o.label}</span>
             </label>
           ))}
         </div>
       </div>
 
       {/* BİYOSİDAL ÜRÜNLER */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
-          <h3 className="font-bold text-gray-800 text-lg">Biyosidal Ürünler</h3>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div className="flex justify-between items-center mb-3 sm:mb-4 pb-2 border-b border-gray-100">
+          <h3 className="font-bold text-gray-800 text-base sm:text-lg">Biyosidal Urunler</h3>
           <button onClick={addBiocidalProduct} className="text-blue-600 text-sm font-medium flex items-center bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100"><Plus size={16} className="mr-1"/> Ekle</button>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {biocidalUsage.map((item, idx) => (
-            <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-200 relative">
-              {idx > 0 && <button onClick={() => removeBiocidalProduct(idx)} className="absolute top-2 right-2 text-red-500 bg-white p-1.5 rounded-full shadow-sm hover:bg-red-50"><Trash size={16}/></button>}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div className="sm:col-span-5">
-                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Ürün</label>
+            <div key={idx} className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-200 relative">
+              {idx > 0 && <button onClick={() => removeBiocidalProduct(idx)} className="absolute top-2 right-2 text-red-500 bg-white p-1.5 rounded-full shadow-sm hover:bg-red-50 z-10"><Trash size={16}/></button>}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Urun</label>
                   <select className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white" value={item.productId} onChange={(e) => handleBiocidalChange(idx, 'productId', e.target.value)}>
-                    <option value="">Seçiniz</option>
+                    <option value="">Seciniz</option>
                     {biocidalProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
-                <div className="grid grid-cols-3 gap-3 sm:col-span-7">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">Miktar</label>
-                    <input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" value={item.quantity} onChange={(e) => handleBiocidalChange(idx, 'quantity', e.target.value)} placeholder="0" />
+                    <input type="text" className="w-full border border-gray-300 rounded-lg p-2 sm:p-2.5 text-sm" value={item.quantity} onChange={(e) => handleBiocidalChange(idx, 'quantity', e.target.value)} placeholder="0" />
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">Birim</label>
-                    <input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" value={item.unit} onChange={(e) => handleBiocidalChange(idx, 'unit', e.target.value)} placeholder="lt/kg" />
+                    <input type="text" className="w-full border border-gray-300 rounded-lg p-2 sm:p-2.5 text-sm" value={item.unit} onChange={(e) => handleBiocidalChange(idx, 'unit', e.target.value)} placeholder="lt/kg" />
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">Doz</label>
-                    <input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" value={item.dosage} onChange={(e) => handleBiocidalChange(idx, 'dosage', e.target.value)} placeholder="Doz" />
+                    <input type="text" className="w-full border border-gray-300 rounded-lg p-2 sm:p-2.5 text-sm" value={item.dosage} onChange={(e) => handleBiocidalChange(idx, 'dosage', e.target.value)} placeholder="Doz" />
                   </div>
                 </div>
               </div>
@@ -1238,9 +1152,9 @@ const VisitDetails: React.FC = () => {
       </div>
 
       {/* ÜCRETLİ ÜRÜNLER */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
-          <h3 className="font-bold text-gray-800 text-lg">Ücretli Malzemeler</h3>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div className="flex justify-between items-center mb-3 sm:mb-4 pb-2 border-b border-gray-100">
+          <h3 className="font-bold text-gray-800 text-base sm:text-lg">Ucretli Malzemeler</h3>
           {!noPaidProductsUsed && <button onClick={addPaidProduct} className="text-blue-600 text-sm font-medium flex items-center bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100"><Plus size={16} className="mr-1"/> Ekle</button>}
         </div>
         
@@ -1277,48 +1191,48 @@ const VisitDetails: React.FC = () => {
       </div>
 
       {/* NOTLAR, AÇIKLAMA, RAPOR NO */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-5">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 space-y-4 sm:space-y-5">
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
             <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-            Açıklamalar (Müşteriye Gider)
+            Aciklamalar (Musteriye Gider)
           </label>
-          <textarea 
-            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-blue-50/30" 
-            rows={4} 
-            value={explanation} 
+          <textarea
+            className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-blue-50/30"
+            rows={3}
+            value={explanation}
             onChange={(e) => setExplanation(e.target.value)}
-            placeholder="Otomatik oluşturulur, düzenleyebilirsiniz..."
+            placeholder="Otomatik olusturulur, duzenleyebilirsiniz..."
           ></textarea>
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Notlar (Sadece Operatör)</label>
-          <textarea className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-gray-500 outline-none" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Şirket içi notlar..."></textarea>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Notlar (Sadece Operator)</label>
+          <textarea className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm focus:ring-2 focus:ring-gray-500 outline-none" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Sirket ici notlar..."></textarea>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="text-xs font-semibold text-gray-500 mb-1 block">Başlama</label><input type="time" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div>
-          <div><label className="text-xs font-semibold text-gray-500 mb-1 block">Bitiş</label><input type="time" className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div><label className="text-xs font-semibold text-gray-500 mb-1 block">Baslama</label><input type="time" className="w-full border border-gray-300 rounded-lg p-2 sm:p-2.5 text-sm" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div>
+          <div><label className="text-xs font-semibold text-gray-500 mb-1 block">Bitis</label><input type="time" className="w-full border border-gray-300 rounded-lg p-2 sm:p-2.5 text-sm" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div>
         </div>
 
         <div>
           <label className="block text-sm font-bold text-gray-800 mb-1">Faaliyet Rapor No <span className="text-red-500">*</span></label>
-          <input type="text" className="w-full border border-gray-300 rounded-lg p-3 text-lg font-mono tracking-wide focus:ring-2 focus:ring-green-500 outline-none" required value={reportNumber} onChange={(e) => setReportNumber(e.target.value)} placeholder="Rapor numarası..." />
+          <input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-base sm:text-lg font-mono tracking-wide focus:ring-2 focus:ring-green-500 outline-none" required value={reportNumber} onChange={(e) => setReportNumber(e.target.value)} placeholder="Rapor numarasi..." />
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Rapor Fotoğrafı</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Rapor Fotografi</label>
           <div className="flex gap-3 items-start">
-            <button 
-              onClick={() => setShowPhotoCaptureModal(true)} 
-              className="flex-1 border-2 border-dashed border-gray-300 p-6 rounded-xl flex flex-col justify-center items-center gap-2 text-gray-500 hover:bg-gray-50 hover:border-gray-400 transition-all"
+            <button
+              onClick={() => setShowPhotoCaptureModal(true)}
+              className="flex-1 border-2 border-dashed border-gray-300 p-4 sm:p-6 rounded-xl flex flex-col justify-center items-center gap-2 text-gray-500 hover:bg-gray-50 hover:border-gray-400 transition-all active:scale-[0.98]"
             >
-              <Camera size={28} className="text-gray-400" /> 
-              <span className="text-sm font-medium">Fotoğraf Ekle</span>
+              <Camera size={28} className="text-gray-400" />
+              <span className="text-sm font-medium">Fotograf Ekle</span>
             </button>
             {reportPhotoPreview && (
-              <div className="relative w-24 h-24 shrink-0">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0">
                 <img src={reportPhotoPreview} className="w-full h-full object-cover rounded-xl shadow-sm border border-gray-200" alt="Preview" />
                 <button onClick={() => { setReportPhotoFile(null); setReportPhotoPreview(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md"><CloseIcon size={14}/></button>
               </div>
@@ -1329,7 +1243,7 @@ const VisitDetails: React.FC = () => {
         <div className="pt-2 border-t border-gray-100">
           <label className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
             <input type="checkbox" className="w-5 h-5 text-green-600 rounded focus:ring-green-500" checked={sendEmailNotification} onChange={(e) => setSendEmailNotification(e.target.checked)} />
-            <span className="text-sm font-medium text-gray-700 flex items-center gap-2"><Mail size={16}/> Müşteriye bildirim e-postası gönder</span>
+            <span className="text-sm font-medium text-gray-700 flex items-center gap-2"><Mail size={16}/> Musteriye bildirim e-postasi gonder</span>
           </label>
         </div>
       </div>
