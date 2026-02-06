@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, AlertTriangle, CheckCircle, Camera, Trash2, Wand2, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, AlertTriangle, CheckCircle, Camera, Trash2, Wand2, ChevronDown, ImagePlus, Mail } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { sendEmail, getRecipientEmails } from '../../lib/emailClient';
 import { toast } from 'sonner';
@@ -134,8 +134,11 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
   
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [customEmail, setCustomEmail] = useState('');
 
-  // Şablon Seçim State'i
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -308,10 +311,12 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
 
       if (error) throw error;
 
-      // E-posta
       if (sendEmailNotification && data && data.length > 0) {
         try {
           const recipients = await getRecipientEmails(customer_id, branch_id);
+          if (customEmail && customEmail.trim() && !recipients.includes(customEmail.trim())) {
+            recipients.push(customEmail.trim());
+          }
           for (const email of recipients) await sendEmail('dof', data[0].id, email);
           toast.success('DÖF bildirimi e-posta ile gönderildi.');
         } catch (e) { console.error("E-posta hatası", e); }
@@ -336,6 +341,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
       relatedStandard: '', status: 'open'
     });
     setSuccess(false); setError(null); setUseVisit(!!visitId);
+    setCustomEmail('');
     handleRemoveImage();
   };
 
@@ -491,42 +497,61 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
               </select>
             </div>
 
-            {/* Fotoğraf Yükleme */}
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 bg-gray-50/50 hover:bg-gray-50 transition-colors group">
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 bg-gray-50/50 hover:bg-gray-50 transition-colors">
               <label className="block text-sm font-semibold text-gray-700 mb-2">Kanıt Fotoğrafı</label>
-              <div className="flex items-start gap-4">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                  id="dof-photo-upload"
-                />
-                
-                {!imagePreview ? (
-                  <label htmlFor="dof-photo-upload" className="cursor-pointer flex flex-col items-center justify-center w-full h-28 border border-gray-300 rounded-lg bg-white hover:border-blue-500 hover:text-blue-500 transition-all shadow-sm">
-                    <Camera className="w-8 h-8 mb-2 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                    <span className="text-sm font-medium">Fotoğraf Çek / Yükle</span>
-                    <span className="text-xs text-gray-400 mt-1">JPG, PNG (Max 5MB)</span>
-                  </label>
-                ) : (
-                  <div className="relative w-full h-48 bg-black rounded-lg overflow-hidden border border-gray-200 shadow-md group-preview">
-                    <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 shadow-lg transition-transform hover:scale-110"
-                      title="Fotoğrafı Sil"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-2 text-center truncate">
-                      {selectedImage?.name}
-                    </div>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+
+              {!imagePreview ? (
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="flex-1 flex flex-col items-center justify-center h-28 border border-gray-300 rounded-lg bg-white hover:border-green-500 hover:text-green-600 transition-all shadow-sm cursor-pointer"
+                  >
+                    <Camera className="w-7 h-7 mb-1.5 text-gray-400" />
+                    <span className="text-sm font-medium">Kamera</span>
+                    <span className="text-xs text-gray-400 mt-0.5">Fotoğraf Çek</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="flex-1 flex flex-col items-center justify-center h-28 border border-gray-300 rounded-lg bg-white hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm cursor-pointer"
+                  >
+                    <ImagePlus className="w-7 h-7 mb-1.5 text-gray-400" />
+                    <span className="text-sm font-medium">Galeri</span>
+                    <span className="text-xs text-gray-400 mt-0.5">Dosya Seç</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="relative w-full h-48 bg-black rounded-lg overflow-hidden border border-gray-200 shadow-md">
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 shadow-lg transition-transform hover:scale-110"
+                    title="Fotoğrafı Sil"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-2 text-center truncate">
+                    {selectedImage?.name}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Text Area Grupları */}
@@ -624,17 +649,34 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center p-1">
-              <input
-                type="checkbox"
-                id="sendEmail"
-                checked={sendEmailNotification}
-                onChange={(e) => setSendEmailNotification(e.target.checked)}
-                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
-              />
-              <label htmlFor="sendEmail" className="ml-2 text-sm text-gray-700 cursor-pointer select-none">
-                Kaydı müşteriye <b>e-posta</b> ile bildir
-              </label>
+            <div className="space-y-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="sendEmail"
+                  checked={sendEmailNotification}
+                  onChange={(e) => setSendEmailNotification(e.target.checked)}
+                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+                />
+                <label htmlFor="sendEmail" className="ml-2 text-sm text-gray-700 cursor-pointer select-none">
+                  Kaydı müşteriye <b>e-posta</b> ile bildir
+                </label>
+              </div>
+              {sendEmailNotification && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase flex items-center gap-1">
+                    <Mail size={12} /> Ek E-posta Adresi (Opsiyonel)
+                  </label>
+                  <input
+                    type="email"
+                    value={customEmail}
+                    onChange={(e) => setCustomEmail(e.target.value)}
+                    placeholder="ornek@firma.com"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Müşteri e-postasına ek olarak bu adrese de gönderilir</p>
+                </div>
+              )}
             </div>
 
           </form>
