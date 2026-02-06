@@ -984,8 +984,8 @@ const AdminTrendAnalysisReport: React.FC = () => {
                     {companySettings?.logo_url ? <img src={companySettings.logo_url} className="w-full h-full rounded-full object-cover"/> : 'i'}
                 </div>
                 <div>
-                  <p className="font-bold text-gray-700 uppercase">{companySettings?.company_name || 'İlaçlamatik Haşere Kontrol'}</p>
-                  <p>Profesyonel Çözümler, Kalıcı Sonuçlar</p>
+                  <p className="font-bold text-gray-700 uppercase">{companySettings?.company_name || 'PestMentor'}</p>
+                  <p>Leave Pest to us...</p>
                 </div>
               </div>
               <div className="text-center md:text-right space-y-1">
