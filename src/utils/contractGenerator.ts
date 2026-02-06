@@ -162,13 +162,13 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
   </style>
 
   <!-- ==================== KAPAK SAYFASI ==================== -->
-  <div style="min-height: 250mm; display: flex; flex-direction: column; justify-content: space-between; padding: 50px 40px; page-break-after: always;">
+  <div style="height: 247mm; display: flex; flex-direction: column; justify-content: space-between; padding: 30px 40px; page-break-after: always; overflow: hidden;">
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
       <div style="font-size: 10px; color: #888;"></div>
       <div>${logoUrl ? `<img src="${logoUrl}" style="height: 65px; object-fit: contain;" crossorigin="anonymous" />` : `<span style="font-size: 28px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
     </div>
 
-    <div style="text-align: center; padding: 40px 0;">
+    <div style="text-align: center; padding: 20px 0;">
       <div style="display: inline-flex; align-items: center; gap: 16px;">
         <div style="text-align: right;">
           <div style="font-size: 24px; font-weight: 700; color: #222; letter-spacing: 1.5px; line-height: 1.3;">ZARARLI MÜCADELESİ</div>
@@ -178,7 +178,7 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
           <div style="font-size: 52px; font-weight: 300; color: #222;">${currentYear}</div>
         </div>
       </div>
-      <div style="margin-top: 50px; font-size: 13px; color: #444; line-height: 2;">
+      <div style="margin-top: 30px; font-size: 13px; color: #444; line-height: 2;">
         <p style="margin:0;"><strong>${companyName}</strong></p>
         <p style="margin:0; font-size:11px; color:#888;">ve</p>
         <p style="margin:0;"><strong>${proposal.company_name.toUpperCase()}</strong></p>
