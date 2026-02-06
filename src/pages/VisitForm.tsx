@@ -3,23 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { sendEmail, getRecipientEmails } from '../lib/emailClient';
 import { toast } from 'sonner';
-import {
-  Loader2,
-  CalendarPlus,
-  User,
-  Building2,
-  Calendar,
-  Clock,
-  ClipboardList,
-  Bug,
-  FileText,
-  Mail,
-  ArrowLeft,
-  Check,
-  Search,
-  X,
-  ChevronDown
-} from 'lucide-react';
+import { Loader2, Search, Check, ChevronDown, X } from 'lucide-react';
 
 interface Customer {
   id: string;
@@ -33,26 +17,26 @@ interface Branch {
 }
 
 const visitTypes = [
-  { id: 'ilk', label: 'Ilk' },
-  { id: 'ucretli', label: 'Ucretli' },
-  { id: 'acil', label: 'Acil Cagri' },
-  { id: 'teknik', label: 'Teknik Inceleme' },
+  { id: 'ilk', label: 'İlk' },
+  { id: 'ucretli', label: 'Ücretli' },
+  { id: 'acil', label: 'Acil Çağrı' },
+  { id: 'teknik', label: 'Teknik İnceleme' },
   { id: 'periyodik', label: 'Periyodik' },
-  { id: 'isyeri', label: 'Isyeri' },
-  { id: 'gozlem', label: 'Gozlem' },
+  { id: 'isyeri', label: 'İşyeri' },
+  { id: 'gozlem', label: 'Gözlem' },
   { id: 'son', label: 'Son' }
 ];
 
 const pestTypes = [
-  { id: 'kus', label: 'Kus' },
-  { id: 'hasere', label: 'Hasere' },
-  { id: 'ari', label: 'Ari' },
+  { id: 'kus', label: 'Kuş' },
+  { id: 'hasere', label: 'Haşere' },
+  { id: 'ari', label: 'Arı' },
   { id: 'kemirgen', label: 'Kemirgen' },
-  { id: 'yumusakca', label: 'Yumusakca' },
-  { id: 'kedi_kopek', label: 'Kedi/Kopek' },
+  { id: 'yumusakca', label: 'Yumuşakça' },
+  { id: 'kedi_kopek', label: 'Kedi/Köpek' },
   { id: 'sinek', label: 'Sinek' },
-  { id: 'surungen', label: 'Surungen' },
-  { id: 'ambar', label: 'Ambar Zararlisi' }
+  { id: 'surungen', label: 'Sürüngen' },
+  { id: 'ambar', label: 'Ambar Zararlısı' }
 ];
 
 const VisitForm: React.FC = () => {
@@ -105,7 +89,7 @@ const VisitForm: React.FC = () => {
       setLoading(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Kullanici oturumu bulunamadi. Lutfen tekrar giris yapin.');
+        if (!user) throw new Error('Kullanıcı oturumu bulunamadı. Lütfen tekrar giriş yapın.');
 
         const isAdminUser = user.email === 'admin@ilaclamatik.com';
         setIsAdmin(isAdminUser);
@@ -126,7 +110,7 @@ const VisitForm: React.FC = () => {
         } else if (isAdminUser) {
           await fetchCustomers(isAdminUser, null);
         } else {
-          throw new Error("Operator bilgisi bulunamadi.");
+          throw new Error("Operatör bilgisi bulunamadı.");
         }
       } catch (err: any) {
         toast.error(err.message);
@@ -167,7 +151,7 @@ const VisitForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!operatorId) {
-      toast.error('Operator bilgisi yuklenemedi. Sayfayi yenileyip tekrar deneyin.');
+      toast.error('Operatör bilgisi yüklenemedi. Sayfayı yenileyip tekrar deneyin.');
       return;
     }
 
@@ -176,7 +160,7 @@ const VisitForm: React.FC = () => {
 
     if (isOneTimeCustomer) {
       if (!manualCustomerName.trim()) {
-        toast.error('Lutfen tek seferlik musteri adini girin.');
+        toast.error('Lütfen tek seferlik müşteri adını girin.');
         return;
       }
 
@@ -203,13 +187,13 @@ const VisitForm: React.FC = () => {
       }
     } else {
       if (!formData.customerId) {
-        toast.error('Lutfen bir musteri secin.');
+        toast.error('Lütfen bir müşteri seçin.');
         return;
       }
     }
 
     if (!formData.visitDate || !formData.visitTime) {
-      toast.error('Tarih ve saat alanlari zorunludur.');
+      toast.error('Tarih ve saat alanları zorunludur.');
       return;
     }
 
@@ -245,29 +229,29 @@ const VisitForm: React.FC = () => {
             const selectedBranch = branches.find(b => b.id === finalBranchId);
             const branchName = isOneTimeCustomer ? manualBranchName : (selectedBranch?.sube_adi || '');
             const visitDate = formData.visitDate ? new Date(formData.visitDate).toLocaleDateString('tr-TR') : '';
-            const subject = `Ziyaret Planlandi - ${customerName} ${branchName} - ${visitDate}`;
+            const subject = `Ziyaret Planlandı - ${customerName} ${branchName} - ${visitDate}`;
             const html = `
               <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-                <h2 style="color:#2563eb;border-bottom:2px solid #2563eb;padding-bottom:10px;">Ziyaret Planlandi</h2>
-                <p><strong>Musteri:</strong> ${customerName}</p>
-                ${branchName ? `<p><strong>Sube:</strong> ${branchName}</p>` : ''}
+                <h2 style="color:#2563eb;border-bottom:2px solid #2563eb;padding-bottom:10px;">Ziyaret Planlandı</h2>
+                <p><strong>Müşteri:</strong> ${customerName}</p>
+                ${branchName ? `<p><strong>Şube:</strong> ${branchName}</p>` : ''}
                 <p><strong>Tarih:</strong> ${visitDate}</p>
                 <p><strong>Saat:</strong> ${formData.visitTime || ''}</p>
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
-                <p style="color:#6b7280;font-size:12px;">Bu e-posta Ilaclamatik sistemi tarafindan otomatik olarak gonderilmistir.</p>
+                <p style="color:#6b7280;font-size:12px;">Bu e-posta İlaçlamatik sistemi tarafından otomatik olarak gönderilmiştir.</p>
               </div>
             `;
             for (const email of recipientEmails) {
               await sendEmail(email, subject, html);
             }
-            toast.success('Ziyaret planlandi ve bildirim e-postasi gonderildi.');
+            toast.success('Ziyaret planlandı ve bildirim e-postası gönderildi.');
           }
         } catch (emailError) {
           console.error('Email sending failed:', emailError);
-          toast.error('Ziyaret olusturuldu ancak e-posta gonderimi basarisiz oldu.');
+          toast.error('Ziyaret oluşturuldu ancak e-posta gönderimi başarısız oldu.');
         }
       } else {
-        toast.success('Yeni ziyaret basariyla olusturuldu!');
+        toast.success('Yeni ziyaret başarıyla oluşturuldu!');
       }
 
       isSuccess = true;
@@ -288,7 +272,6 @@ const VisitForm: React.FC = () => {
   );
 
   const selectedCustomerName = customers.find(c => c.id === formData.customerId)?.kisa_isim || '';
-  const selectedBranchName = branches.find(b => b.id === formData.branchId)?.sube_adi || '';
 
   const selectCustomer = (id: string) => {
     setFormData(prev => ({ ...prev, customerId: id, branchId: '' }));
@@ -296,356 +279,253 @@ const VisitForm: React.FC = () => {
     setShowCustomerDropdown(false);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-          <span className="text-sm text-gray-500">Yukleniyor...</span>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin inline-block" /> Yükleniyor...</div>;
 
   const canSubmit = operatorId && (isOneTimeCustomer ? manualCustomerName.trim() : formData.customerId);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-safe">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between px-4 py-3 max-w-2xl mx-auto">
-          <button
-            type="button"
-            onClick={() => navigate('/operator/ziyaretler')}
-            className="flex items-center gap-1 text-gray-600 hover:text-gray-900 -ml-1 p-1 rounded-lg active:bg-gray-100 transition-colors"
-          >
-            <ArrowLeft size={20} />
-            <span className="text-sm hidden sm:inline">Geri</span>
-          </button>
-          <div className="flex items-center gap-2">
-            <CalendarPlus size={20} className="text-emerald-600" />
-            <h1 className="text-lg font-semibold text-gray-900">Yeni Ziyaret</h1>
-          </div>
-          <div className="w-10" />
-        </div>
-      </div>
+    <div className="max-w-2xl mx-auto p-4">
+      <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Yeni Ziyaret Planla</h1>
 
-      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-4 sm:p-6 space-y-4">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-start gap-2">
-            <X size={16} className="mt-0.5 flex-shrink-0" />
-            <span>{error}</span>
+          <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm">{error}</div>
+        )}
+
+        {/* Tek Seferlik Musteri */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isOneTimeCustomer}
+            onChange={(e) => {
+              setIsOneTimeCustomer(e.target.checked);
+              setFormData(prev => ({ ...prev, customerId: '', branchId: '' }));
+              setManualCustomerName('');
+              setManualBranchName('');
+            }}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <span className="text-sm text-gray-700">Tek Seferlik Müşteri</span>
+        </label>
+
+        {isOneTimeCustomer ? (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Müşteri Adı</label>
+              <input
+                type="text"
+                value={manualCustomerName}
+                onChange={(e) => setManualCustomerName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="Tek seferlik müşteri adı"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Şube Adı (Opsiyonel)</label>
+              <input
+                type="text"
+                value={manualBranchName}
+                onChange={(e) => setManualBranchName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="Tek seferlik şube adı"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Searchable customer dropdown */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Müşteri</label>
+              <div
+                className={`flex items-center border rounded-lg px-3 py-2 cursor-pointer transition-colors ${
+                  showCustomerDropdown ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300'
+                }`}
+                onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
+              >
+                <span className={`flex-1 text-sm ${formData.customerId ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {formData.customerId ? selectedCustomerName : 'Müşteri Seçiniz'}
+                </span>
+                <ChevronDown size={16} className={`text-gray-400 transition-transform ${showCustomerDropdown ? 'rotate-180' : ''}`} />
+              </div>
+
+              {showCustomerDropdown && (
+                <div className="absolute z-20 mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden">
+                  <div className="sticky top-0 bg-white border-b border-gray-100 p-2">
+                    <div className="relative">
+                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        placeholder="Müşteri ara..."
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                  <div className="overflow-y-auto max-h-48">
+                    {filteredCustomers.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-sm text-gray-400">Sonuç bulunamadı</div>
+                    ) : (
+                      filteredCustomers.map(customer => (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); selectCustomer(customer.id); }}
+                          className={`w-full text-left px-3 py-2.5 text-sm flex items-center justify-between transition-colors ${
+                            formData.customerId === customer.id
+                              ? 'bg-blue-50 text-blue-700 font-medium'
+                              : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <span>{customer.kisa_isim}</span>
+                          {formData.customerId === customer.id && <Check size={14} className="text-blue-600" />}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {formData.customerId && hasBranches && branches.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Şube</label>
+                <select
+                  value={formData.branchId}
+                  onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  required
+                >
+                  <option value="">Şube Seçiniz</option>
+                  {branches.map(branch => <option key={branch.id} value={branch.id}>{branch.sube_adi}</option>)}
+                </select>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Tek Seferlik Toggle */}
-        <div
-          className="flex items-center gap-3 bg-white rounded-xl p-4 border border-gray-200 cursor-pointer active:bg-gray-50 transition-colors"
-          onClick={() => {
-            setIsOneTimeCustomer(!isOneTimeCustomer);
-            setFormData(prev => ({ ...prev, customerId: '', branchId: '' }));
-            setManualCustomerName('');
-            setManualBranchName('');
-          }}
-        >
-          <div className={`w-11 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0 ${isOneTimeCustomer ? 'bg-emerald-500' : 'bg-gray-300'}`}>
-            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${isOneTimeCustomer ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-          </div>
-          <span className="text-sm font-medium text-gray-700">Tek Seferlik Musteri</span>
-        </div>
-
-        {/* Musteri & Sube */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center gap-2 text-gray-500 mb-1">
-              <User size={14} />
-              <span className="text-xs font-semibold uppercase tracking-wide">Musteri Bilgileri</span>
-            </div>
-          </div>
-
-          <div className="p-4 space-y-3">
-            {isOneTimeCustomer ? (
-              <>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Musteri Adi</label>
-                  <input
-                    type="text"
-                    value={manualCustomerName}
-                    onChange={(e) => setManualCustomerName(e.target.value)}
-                    className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                    placeholder="Musteri adini girin..."
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Sube Adi (Opsiyonel)</label>
-                  <input
-                    type="text"
-                    value={manualBranchName}
-                    onChange={(e) => setManualBranchName(e.target.value)}
-                    className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                    placeholder="Sube adini girin..."
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Customer searchable dropdown */}
-                <div className="relative">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Musteri</label>
-                  <div
-                    className={`flex items-center border rounded-xl px-3.5 py-3 cursor-pointer transition-all ${
-                      showCustomerDropdown ? 'border-emerald-500 ring-2 ring-emerald-500 bg-white' : 'border-gray-200 bg-gray-50'
-                    }`}
-                    onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
-                  >
-                    {formData.customerId ? (
-                      <span className="text-sm text-gray-900 flex-1">{selectedCustomerName}</span>
-                    ) : (
-                      <span className="text-sm text-gray-400 flex-1">Musteri secin...</span>
-                    )}
-                    <ChevronDown size={16} className={`text-gray-400 transition-transform ${showCustomerDropdown ? 'rotate-180' : ''}`} />
-                  </div>
-
-                  {showCustomerDropdown && (
-                    <div className="absolute z-20 mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg max-h-72 overflow-hidden">
-                      <div className="sticky top-0 bg-white border-b border-gray-100 p-2">
-                        <div className="relative">
-                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                          <input
-                            type="text"
-                            value={customerSearch}
-                            onChange={(e) => setCustomerSearch(e.target.value)}
-                            className="w-full pl-8 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                            placeholder="Ara..."
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                      </div>
-                      <div className="overflow-y-auto max-h-56">
-                        {filteredCustomers.length === 0 ? (
-                          <div className="px-4 py-6 text-center text-sm text-gray-400">Sonuc bulunamadi</div>
-                        ) : (
-                          filteredCustomers.map(customer => (
-                            <button
-                              key={customer.id}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                selectCustomer(customer.id);
-                              }}
-                              className={`w-full text-left px-4 py-3 text-sm transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between ${
-                                formData.customerId === customer.id
-                                  ? 'bg-emerald-50 text-emerald-700 font-medium'
-                                  : 'hover:bg-gray-50 text-gray-700 active:bg-gray-100'
-                              }`}
-                            >
-                              <span>{customer.kisa_isim}</span>
-                              {formData.customerId === customer.id && <Check size={14} className="text-emerald-600" />}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Branch select */}
-                {formData.customerId && hasBranches && branches.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <Building2 size={12} />
-                        <span>Sube</span>
-                      </div>
-                    </label>
-                    <select
-                      value={formData.branchId}
-                      onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                      className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all appearance-none"
-                      required
-                    >
-                      <option value="">Sube seciniz...</option>
-                      {branches.map(branch => (
-                        <option key={branch.id} value={branch.id}>{branch.sube_adi}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
         {/* Tarih & Saat */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center gap-2 text-gray-500">
-              <Calendar size={14} />
-              <span className="text-xs font-semibold uppercase tracking-wide">Tarih & Saat</span>
-            </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tarih</label>
+            <input
+              type="date"
+              value={formData.visitDate}
+              onChange={(e) => setFormData({ ...formData, visitDate: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              required
+            />
           </div>
-          <div className="p-4 grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Tarih</label>
-              <input
-                type="date"
-                value={formData.visitDate}
-                onChange={(e) => setFormData({ ...formData, visitDate: e.target.value })}
-                className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Saat</label>
-              <input
-                type="time"
-                value={formData.visitTime}
-                onChange={(e) => setFormData({ ...formData, visitTime: e.target.value })}
-                className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                required
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Saat</label>
+            <input
+              type="time"
+              value={formData.visitTime}
+              onChange={(e) => setFormData({ ...formData, visitTime: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              required
+            />
           </div>
         </div>
 
         {/* Ziyaret Turu */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center gap-2 text-gray-500">
-              <ClipboardList size={14} />
-              <span className="text-xs font-semibold uppercase tracking-wide">Ziyaret Turu</span>
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="grid grid-cols-2 gap-2">
-              {visitTypes.map(type => {
-                const isSelected = formData.visitType === type.id;
-                return (
-                  <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, visitType: type.id })}
-                    className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                      isSelected
-                        ? 'bg-emerald-50 border-emerald-300 text-emerald-700 shadow-sm'
-                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 active:bg-gray-200'
-                    }`}
-                  >
-                    {type.label}
-                  </button>
-                );
-              })}
-            </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Ziyaret Türü</label>
+          <div className="grid grid-cols-4 gap-1.5">
+            {visitTypes.map(type => {
+              const selected = formData.visitType === type.id;
+              return (
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, visitType: type.id })}
+                  className={`py-2 px-1 rounded-md text-xs font-medium transition-colors border text-center ${
+                    selected
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50 active:bg-gray-100'
+                  }`}
+                >
+                  {type.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Hedef Zarlilar */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center gap-2 text-gray-500">
-              <Bug size={14} />
-              <span className="text-xs font-semibold uppercase tracking-wide">Hedef Zarlilar</span>
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {pestTypes.map(type => {
-                const isSelected = formData.pestTypes.includes(type.id);
-                return (
-                  <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => {
-                      const newPestTypes = isSelected
-                        ? formData.pestTypes.filter(t => t !== type.id)
-                        : [...formData.pestTypes, type.id];
-                      setFormData({ ...formData, pestTypes: newPestTypes });
-                    }}
-                    className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all border flex items-center gap-2 ${
-                      isSelected
-                        ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-sm'
-                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 active:bg-gray-200'
-                    }`}
-                  >
-                    {isSelected && <Check size={14} />}
-                    <span>{type.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Hedef Zararlılar</label>
+          <div className="flex flex-wrap gap-1.5">
+            {pestTypes.map(type => {
+              const selected = formData.pestTypes.includes(type.id);
+              return (
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => {
+                    const newPestTypes = selected
+                      ? formData.pestTypes.filter(t => t !== type.id)
+                      : [...formData.pestTypes, type.id];
+                    setFormData({ ...formData, pestTypes: newPestTypes });
+                  }}
+                  className={`py-1.5 px-2.5 rounded-md text-xs font-medium transition-colors border ${
+                    selected
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50 active:bg-gray-100'
+                  }`}
+                >
+                  {type.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Notlar */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center gap-2 text-gray-500">
-              <FileText size={14} />
-              <span className="text-xs font-semibold uppercase tracking-wide">Notlar</span>
-            </div>
-          </div>
-          <div className="p-4">
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all resize-none"
-              placeholder="Ziyarete ozel notlarinizi yazin..."
-            />
-            <p className="text-xs text-gray-400 mt-1.5">Sadece operator gorur</p>
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notlar <span className="text-gray-400 font-normal text-xs">(Sadece Operatör Görür)</span></label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            rows={3}
+            className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+            placeholder="Notlar..."
+          />
         </div>
 
-        {/* E-posta Bildirimi */}
-        <div
-          className={`flex items-center gap-3 bg-white rounded-xl p-4 border cursor-pointer active:bg-gray-50 transition-all ${
-            sendEmailNotification ? 'border-emerald-300 bg-emerald-50/50' : 'border-gray-200'
-          }`}
-          onClick={() => setSendEmailNotification(!sendEmailNotification)}
-        >
-          <div className={`w-11 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0 ${sendEmailNotification ? 'bg-emerald-500' : 'bg-gray-300'}`}>
-            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${sendEmailNotification ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-          </div>
-          <div className="flex items-center gap-2 min-w-0">
-            <Mail size={16} className={sendEmailNotification ? 'text-emerald-600' : 'text-gray-400'} />
-            <span className={`text-sm font-medium ${sendEmailNotification ? 'text-emerald-700' : 'text-gray-600'}`}>
-              Musteriye e-posta bildirimi gonder
-            </span>
-          </div>
-        </div>
+        {/* E-posta */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sendEmailNotification}
+            onChange={(e) => setSendEmailNotification(e.target.checked)}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <span className="text-sm text-gray-700">Müşteriye e-posta bildirimi gönder</span>
+        </label>
 
-        {/* Submit Buttons */}
-        <div className="sticky bottom-0 bg-gray-50 pt-2 pb-4 -mx-4 px-4 space-y-2 border-t border-gray-100">
-          <button
-            type="submit"
-            disabled={saving || !canSubmit}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-          >
-            {saving ? (
-              <>
-                <Loader2 size={18} className="animate-spin" />
-                <span>Kaydediliyor...</span>
-              </>
-            ) : (
-              <>
-                <CalendarPlus size={18} />
-                <span>Ziyareti Planla</span>
-              </>
-            )}
-          </button>
+        {/* Buttons */}
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
           <button
             type="button"
             onClick={() => navigate('/operator/ziyaretler')}
-            className="w-full py-3 text-sm font-medium text-gray-500 hover:text-gray-700 active:bg-gray-100 rounded-xl transition-colors"
+            className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors"
           >
-            Iptal
+            İptal
+          </button>
+          <button
+            type="submit"
+            disabled={saving || !canSubmit}
+            className="w-full sm:w-auto px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          >
+            {saving ? <><Loader2 size={16} className="animate-spin" /> Kaydediliyor...</> : 'Ziyareti Planla'}
           </button>
         </div>
       </form>
 
-      {/* Backdrop for dropdown */}
       {showCustomerDropdown && (
         <div className="fixed inset-0 z-10" onClick={() => setShowCustomerDropdown(false)} />
       )}
