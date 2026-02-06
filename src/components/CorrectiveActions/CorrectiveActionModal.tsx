@@ -125,7 +125,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [useVisit, setUseVisit] = useState(!!visitId);
-  const [sendEmailNotification, setSendEmailNotification] = useState(true);
+  const [sendEmailNotification, setSendEmailNotification] = useState(false);
   
   const [isAdmin, setIsAdmin] = useState(false);
   const [operatorId, setOperatorId] = useState<string | null>(null);

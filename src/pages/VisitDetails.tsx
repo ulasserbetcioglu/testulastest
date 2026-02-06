@@ -470,7 +470,7 @@ const VisitDetails: React.FC = () => {
   const [reportNumber, setReportNumber] = useState('');
   const [paidVisitAmount, setPaidVisitAmount] = useState<string>('');
   const [showPaidVisitAmount, setShowPaidVisitAmount] = useState(false);
-  const [sendEmailNotification, setSendEmailNotification] = useState(true);
+  const [sendEmailNotification, setSendEmailNotification] = useState(false);
 
   // Sub-data States
   const [biocidalUsage, setBiocidalUsage] = useState<BiocidalUsageItem[]>([{ productId: '', quantity: '', dosage: '', unit: '' }]);

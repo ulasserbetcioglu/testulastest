@@ -50,7 +50,7 @@ const VisitForm: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasBranches, setHasBranches] = useState(true);
-  const [sendEmailNotification, setSendEmailNotification] = useState(true);
+  const [sendEmailNotification, setSendEmailNotification] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [operatorId, setOperatorId] = useState<string | null>(null);
   const [assignedCustomers, setAssignedCustomers] = useState<string[] | null>(null);
