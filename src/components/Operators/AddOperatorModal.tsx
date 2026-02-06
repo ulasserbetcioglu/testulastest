@@ -34,43 +34,43 @@ const AddOperatorModal: React.FC<AddOperatorModalProps> = ({ isOpen, onClose, on
       toast.error('Ad Soyad, E-posta ve Şifre alanları zorunludur.');
       return;
     }
+    if (password.length < 4) {
+      toast.error('Şifre en az 4 karakter olmalıdır.');
+      return;
+    }
     setIsLoading(true);
 
     try {
-      // ✅ GÜNCELLEME: Artık Edge Function yerine, Supabase'in standart kullanıcı oluşturma
-      // metodunu kullanıyoruz. Ekstra bilgileri 'options.data' içinde gönderiyoruz.
-      // Canvas'ta oluşturduğunuz veritabanı tetikleyicisi bu bilgileri alıp 'operators' tablosuna yazacak.
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-            phone,
-            status,
-            role: 'operator' // Rolü meta veri olarak eklemek iyi bir pratiktir
-          }
-        }
-      });
+      const { data: existing } = await supabase
+        .from('operators')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
 
-      if (error) {
-        throw error;
+      if (existing) {
+        toast.error('Bu e-posta adresi zaten kayıtlı.');
+        setIsLoading(false);
+        return;
       }
+
+      const { error } = await supabase
+        .from('operators')
+        .insert({
+          name,
+          email,
+          phone: phone || null,
+          status,
+          password_hash: password,
+        });
+
+      if (error) throw error;
 
       toast.success('Operatör başarıyla oluşturuldu!');
-      onSave(); // Operatör listesini yenile
-      onClose(); // Modalı kapat
-
+      onSave();
+      onClose();
     } catch (error: any) {
       console.error("Operatör oluşturma hatası:", error);
-      // Supabase'den gelen yaygın hata mesajlarını daha anlaşılır hale getir
-      if (error.message.includes('User already registered')) {
-        toast.error('Bu e-posta adresi zaten kayıtlı.');
-      } else if (error.message.includes('Password should be at least 6 characters')) {
-        toast.error('Şifre en az 6 karakter olmalıdır.');
-      } else {
-        toast.error(`Operatör oluşturulamadı: ${error.message}`);
-      }
+      toast.error(`Operatör oluşturulamadı: ${error.message}`);
     } finally {
       setIsLoading(false);
     }

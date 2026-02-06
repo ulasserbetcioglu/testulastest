@@ -1,6 +1,7 @@
 // src/pages/OperatorQuickNotes.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2, Save, X, Loader2, NotebookPen } from 'lucide-react';
 import { format } from 'date-fns'; // Add this import
@@ -28,18 +29,11 @@ const OperatorQuickNotes: React.FC = () => {
   useEffect(() => {
     const fetchOperatorId = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Kullanıcı bulunamadı');
+        const opData = await localAuth.getOperatorData('id');
+        if (!opData) throw new Error('Operatör bulunamadı');
 
-        setCurrentUserId(user.id); // Kullanıcının auth.uid() değerini kaydet
+        setCurrentUserId(opData.id); // Operatör ID'sini kaydet
 
-        const { data: opData, error: opError } = await supabase
-          .from('operators')
-          .select('id')
-          .eq('auth_id', user.id)
-          .maybeSingle(); // maybeSingle kullanarak kayıt yoksa hata fırlatmasını engelleriz
-
-        if (opError && opError.code !== 'PGRST116') throw opError;
         if (opData) {
           setOperatorId(opData.id);
         } else {

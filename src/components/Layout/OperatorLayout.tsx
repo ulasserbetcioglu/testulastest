@@ -6,6 +6,7 @@ import OperatorSidebar from './OperatorSidebar';
 import MobileNavMenu from './MobileNavMenu';
 import MandatoryWeeklyKmModal from '../Operator/MandatoryWeeklyKmModal';
 import { supabase } from '../../lib/supabase';
+import { localAuth } from '../../lib/localAuth';
 
 const OperatorLayout: React.FC = () => {
   const [operatorId, setOperatorId] = useState<string | null>(null);
@@ -17,18 +18,30 @@ const OperatorLayout: React.FC = () => {
     const fetchOperatorId = async () => {
       setLoadingOperatorId(true);
       try {
+        const localSession = localAuth.getSession();
+        if (localSession && localSession.type === 'operator') {
+          setOperatorId(localSession.id);
+          setOperatorName(localSession.name);
+          checkWeeklyKmEntry(localSession.id);
+          setLoadingOperatorId(false);
+          return;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: opData, error: opError } = await supabase
             .from('operators')
             .select('id, name')
             .eq('auth_id', user.id)
-            .single();
+            .maybeSingle();
           if (opError) throw opError;
-          setOperatorId(opData.id);
-          setOperatorName(opData.name);
-
-          checkWeeklyKmEntry(opData.id);
+          if (opData) {
+            setOperatorId(opData.id);
+            setOperatorName(opData.name);
+            checkWeeklyKmEntry(opData.id);
+          } else {
+            setOperatorId(null);
+          }
         } else {
           setOperatorId(null);
         }

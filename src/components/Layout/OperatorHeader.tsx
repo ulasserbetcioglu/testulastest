@@ -21,9 +21,9 @@ const getPageTitle = (pathname: string): string => {
 const OperatorHeader: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, session } = useAuth();
+  const { signOut, session, localSession } = useAuth();
   const title = getPageTitle(location.pathname);
-  const userEmail = session?.user?.email;
+  const userEmail = localSession?.email || session?.user?.email;
 
   return (
     <header className="bg-white shadow-sm h-16 flex items-center px-4 md:px-6">

@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 export interface LocalSession {
-  type: 'customer' | 'branch';
+  type: 'customer' | 'branch' | 'operator';
   id: string;
   email: string;
   name: string;
@@ -80,6 +80,44 @@ export const localAuth = {
     }
   },
 
+  async signInOperator(email: string, password: string): Promise<{ session: LocalSession | null; error: string | null }> {
+    try {
+      const { data: operator, error } = await supabase
+        .from('operators')
+        .select('id, email, name, password_hash, status')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (error) {
+        return { session: null, error: 'Giriş yapılırken hata oluştu' };
+      }
+
+      if (!operator) {
+        return { session: null, error: 'E-posta veya parola hatalı' };
+      }
+
+      if (!operator.password_hash || operator.password_hash !== password) {
+        return { session: null, error: 'E-posta veya parola hatalı' };
+      }
+
+      if (operator.status === 'Kapalı') {
+        return { session: null, error: 'Bu hesap devre dışı bırakılmıştır' };
+      }
+
+      const session: LocalSession = {
+        type: 'operator',
+        id: operator.id,
+        email: operator.email,
+        name: operator.name,
+      };
+
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      return { session, error: null };
+    } catch (err) {
+      return { session: null, error: 'Beklenmeyen bir hata oluştu' };
+    }
+  },
+
   getSession(): LocalSession | null {
     try {
       const sessionStr = localStorage.getItem(SESSION_KEY);
@@ -97,6 +135,41 @@ export const localAuth = {
   isCustomerOrBranch(): boolean {
     const session = this.getSession();
     return session !== null && (session.type === 'customer' || session.type === 'branch');
+  },
+
+  isOperator(): boolean {
+    const session = this.getSession();
+    return session !== null && session.type === 'operator';
+  },
+
+  getCurrentOperatorId(): string | null {
+    const session = this.getSession();
+    if (session && session.type === 'operator') {
+      return session.id;
+    }
+    return null;
+  },
+
+  async getOperatorData(selectFields: string = 'id, name'): Promise<any | null> {
+    const localSession = this.getSession();
+    if (localSession && localSession.type === 'operator') {
+      const { data } = await supabase
+        .from('operators')
+        .select(selectFields)
+        .eq('id', localSession.id)
+        .maybeSingle();
+      return data;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data } = await supabase
+      .from('operators')
+      .select(selectFields)
+      .eq('auth_id', user.id)
+      .maybeSingle();
+    return data;
   },
 
   async getCurrentCustomerId(): Promise<string | null> {

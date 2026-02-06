@@ -112,19 +112,6 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     }
   };
 
-  // --- SQL FONKSİYONUNU ÇAĞIRAN METOD ---
-  const updateOperatorCredentialsRPC = async (authId: string, newEmail: string, passwordToSet: string | null) => {
-    const { error } = await supabase.rpc('update_operator_credentials', {
-      target_auth_id: authId,
-      new_email: newEmail,
-      new_password: passwordToSet // Boş ise null gidecek
-    });
-
-    if (error) {
-      throw new Error(`Kimlik güncelleme hatası: ${error.message}`);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -132,40 +119,23 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
     setSuccess(false);
 
     try {
-      // 1. E-posta değişmiş mi VEYA Şifre girilmiş mi kontrol et
-      const emailChanged = originalData && formData.email !== originalData.email;
       const passwordChanged = newPassword && newPassword.length > 0;
 
-      if (emailChanged || passwordChanged) {
-        if (!originalData.auth_id) {
-          throw new Error("Operatörün Auth ID'si bulunamadı, kimlik bilgileri değiştirilemez.");
-        }
-        
-        if (passwordChanged && newPassword.length < 6) {
-          throw new Error("Yeni şifre en az 6 karakter olmalıdır.");
-        }
-
-        // RPC fonksiyonunu çağır (Hem email hem şifre için)
-        await updateOperatorCredentialsRPC(
-          originalData.auth_id, 
-          formData.email, 
-          passwordChanged ? newPassword : null
-        );
-        
-        toast.success(passwordChanged 
-          ? "Şifre ve e-posta güncellendi." 
-          : "E-posta adresi güncellendi."
-        );
+      if (passwordChanged && newPassword.length < 4) {
+        throw new Error("Yeni şifre en az 4 karakter olmalıdır.");
       }
 
-      // 2. Diğer verileri hazırla
       const operatorData: any = {
         name: formData.adSoyad,
         phone: formData.telefon,
-        email: formData.email, 
+        email: formData.email,
         status: formData.durum,
         total_leave_days: formData.totalLeaveDays
       };
+
+      if (passwordChanged) {
+        operatorData.password_hash = newPassword;
+      }
 
       if (formData.isSubOperator) {
         operatorData.assigned_customers = formData.assignedCustomers.length > 0 ? formData.assignedCustomers : null;
@@ -175,7 +145,6 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
         operatorData.assigned_branches = null;
       }
 
-      // 3. Tablo güncellemesi
       const { error: updateError } = await supabase
         .from('operators')
         .update(operatorData)
@@ -186,7 +155,7 @@ const EditOperatorModal: React.FC<EditOperatorModalProps> = ({ isOpen, onClose, 
       setSuccess(true);
       toast.success("Operatör başarıyla güncellendi!");
       onSave();
-      
+
       setTimeout(() => {
         onClose();
       }, 1500);

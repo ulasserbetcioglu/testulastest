@@ -83,12 +83,13 @@ const OperatorSidebar: React.FC = () => {
   }, []);
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast.error("Çıkış yapılırken hata oluştu.");
-    } else {
-      navigate('/login');
+    try {
+      localStorage.removeItem('local_session');
+      await supabase.auth.signOut();
+    } catch (e) {
+      // ignore
     }
+    navigate('/login');
   };
 
   const closeMobile = () => {

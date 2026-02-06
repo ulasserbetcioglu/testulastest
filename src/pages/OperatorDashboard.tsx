@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { Bug, Users, FileText, Calendar, DollarSign, TrendingUp, TrendingDown, MapPin, Building, BellRing, BellOff } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, startOfWeek, isSameDay } from 'date-fns';
@@ -100,14 +101,8 @@ const OperatorDashboard: React.FC = () => {
   useEffect(() => {
     const fetchOperatorId = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: opData, error: opError } = await supabase
-            .from('operators')
-            .select('id, name') // name eklendi
-            .eq('auth_id', user.id)
-            .single();
-          if (opError) throw opError;
+        const opData = await localAuth.getOperatorData('id, name');
+        if (opData) {
           setOperatorId(opData.id);
           setOperatorName(opData.name || '');
         }

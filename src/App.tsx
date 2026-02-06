@@ -191,6 +191,7 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           const localSession = JSON.parse(localSessionStr);
           if (localSession.type === 'customer') { setUserRole('customer'); setLoading(false); return; }
           else if (localSession.type === 'branch') { setUserRole('branch'); setLoading(false); return; }
+          else if (localSession.type === 'operator') { setUserRole('operator'); setLoading(false); return; }
         }
 
         const { data: { user } } = await supabase.auth.getUser();
