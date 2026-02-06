@@ -808,6 +808,10 @@ const VisitDetails: React.FC = () => {
   const saveVisit = async () => {
     if (!reportNumber) return alert('Lütfen faaliyet rapor numarası giriniz');
     if (selectedVisitTypes.length === 0) return alert('Lütfen en az bir ziyaret türü seçiniz');
+    const hasValidPaidProduct = paidProductUsage.some(i => i.productId && i.quantity && parseFloat(i.quantity) > 0);
+    if (!noPaidProductsUsed && !hasValidPaidProduct) {
+      return alert('Lütfen ücretli malzeme ekleyin veya "Ücretli ürün kullanılmadı" kutucuğunu işaretleyin.');
+    }
     if (!noPaidProductsUsed && paidProductUsage.some(i => i.productId && (!i.quantity || parseFloat(i.quantity) <= 0))) {
       return alert('Lütfen eklenen ürünlerin miktarını giriniz.');
     }
