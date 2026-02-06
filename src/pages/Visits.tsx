@@ -116,35 +116,35 @@ const EditVisitModal: React.FC<{
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-xl font-bold">Ziyareti Düzenle</h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-200"><X size={20} /></button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg shadow-xl w-full sm:max-w-lg max-h-[90vh] sm:max-h-none flex flex-col">
+        <div className="p-3 sm:p-4 border-b flex justify-between items-center shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold">Ziyareti Düzenle</h2>
+          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200"><X size={20} /></button>
         </div>
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Tarih</label>
-              <input type="date" value={formData.visitDate} onChange={e => setFormData({...formData, visitDate: e.target.value})} className="w-full p-2 border rounded-md" />
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Yeni Tarih</label>
+              <input type="date" value={formData.visitDate} onChange={e => setFormData({...formData, visitDate: e.target.value})} className="w-full p-2 border rounded-md text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Yeni Saat</label>
-              <input type="time" value={formData.visitTime} onChange={e => setFormData({...formData, visitTime: e.target.value})} className="w-full p-2 border rounded-md" />
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Yeni Saat</label>
+              <input type="time" value={formData.visitTime} onChange={e => setFormData({...formData, visitTime: e.target.value})} className="w-full p-2 border rounded-md text-sm" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Ziyaret Türü</label>
-            <select value={formData.visitType} onChange={e => setFormData({...formData, visitType: e.target.value})} className="w-full p-2 border rounded-md">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">Ziyaret Türü</label>
+            <select value={formData.visitType} onChange={e => setFormData({...formData, visitType: e.target.value})} className="w-full p-2 border rounded-md text-sm">
               <option value="">Tür Seçin...</option>
               {visitTypes.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Hedef Zararlılar</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">Hedef Zararlılar</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {pestTypes.map(type => (
-                <label key={type.id} className="flex items-center space-x-2 text-sm">
+                <label key={type.id} className="flex items-center space-x-2 text-xs sm:text-sm">
                   <input type="checkbox" value={type.id} checked={formData.pestTypes.includes(type.id)} onChange={() => handlePestTypeChange(type.id)} className="form-checkbox text-blue-600"/>
                   <span>{type.label}</span>
                 </label>
@@ -152,14 +152,14 @@ const EditVisitModal: React.FC<{
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notlar</label>
-            <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} rows={4} className="w-full p-2 border rounded-md"></textarea>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Notlar</label>
+            <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} rows={3} className="w-full p-2 border rounded-md text-sm"></textarea>
           </div>
         </div>
-        <div className="flex justify-end gap-3 p-4 bg-gray-50 border-t">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">İptal</button>
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 disabled:opacity-50">
-            {saving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>} Kaydet
+        <div className="flex justify-end gap-2 sm:gap-3 p-3 sm:p-4 bg-gray-50 border-t shrink-0">
+          <button onClick={onClose} className="px-3 sm:px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300 text-sm">İptal</button>
+          <button onClick={handleSave} disabled={saving} className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-1.5 disabled:opacity-50 text-sm">
+            {saving ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} Kaydet
           </button>
         </div>
       </div>
@@ -444,48 +444,48 @@ const Visits: React.FC = () => {
   // --- RENDER ---
   const renderVisitCard = (visit: Visit) => (
     <div key={visit.id} className="bg-white rounded-lg shadow-sm transition-shadow hover:shadow-md">
-      <div className="p-4 border-b border-gray-100">
-        <div className="flex justify-between items-center text-xs mb-2">
+      <div className="p-3 sm:p-4 border-b border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 text-xs mb-2">
             <span className="text-gray-500 font-medium">
-              {visit.visit_date && isValid(new Date(visit.visit_date)) 
-                ? format(new Date(visit.visit_date), 'dd MMMM yyyy HH:mm', { locale: tr }) 
+              {visit.visit_date && isValid(new Date(visit.visit_date))
+                ? format(new Date(visit.visit_date), 'dd MMMM yyyy HH:mm', { locale: tr })
                 : 'Tarih Yok'}
             </span>
-            <div className="flex gap-2">
-              <span className={`font-semibold px-2.5 py-0.5 rounded-full text-xs ${getStatusBadge(visit.status)}`}>
+            <div className="flex gap-1.5 flex-wrap">
+              <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${getStatusBadge(visit.status)}`}>
                   {getStatusText(visit.status)}
               </span>
               {visit.visit_type && (
-                <span className="font-semibold px-2.5 py-0.5 bg-indigo-100 text-indigo-800 rounded-full">
+                <span className="font-semibold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
                     {getVisitTypeText(visit.visit_type)}
                 </span>
               )}
             </div>
         </div>
-        <div className="font-bold text-base text-gray-900 mb-1">
+        <div className="font-bold text-sm sm:text-base text-gray-900 mb-1 truncate">
           {visit.customer?.kisa_isim || 'Müşteri Bilgisi Yok'}
         </div>
-        <div className="flex justify-between items-center text-sm text-gray-600">
-          <div>{visit.branch?.sube_adi || 'Şube Belirtilmemiş'}</div>
-          {visit.report_number && <div className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">#{visit.report_number}</div>}
+        <div className="flex justify-between items-center text-xs sm:text-sm text-gray-600">
+          <div className="truncate mr-2">{visit.branch?.sube_adi || 'Şube Belirtilmemiş'}</div>
+          {visit.report_number && <div className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded shrink-0">#{visit.report_number}</div>}
         </div>
       </div>
-      
-      <div className="p-3 flex justify-end gap-3 bg-gray-50 rounded-b-lg">
-        <button onClick={() => handleCreateAction(visit.id)} className="px-3 py-1.5 rounded text-orange-600 hover:bg-orange-50 text-sm font-medium flex items-center transition-colors">
-          <AlertCircle size={16} className="mr-1.5" /> DÖF
+
+      <div className="p-2 sm:p-3 flex justify-end gap-1.5 sm:gap-3 bg-gray-50 rounded-b-lg">
+        <button onClick={() => handleCreateAction(visit.id)} className="px-2 sm:px-3 py-1.5 rounded text-orange-600 hover:bg-orange-50 text-xs sm:text-sm font-medium flex items-center transition-colors">
+          <AlertCircle size={14} className="mr-1 sm:mr-1.5" /> DÖF
         </button>
-        
+
         {visit.status === 'completed' ? (
-          <button onClick={() => handleViewVisit(visit)} className="px-4 py-1.5 rounded bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center shadow-sm transition-colors">
-            <Eye size={16} className="mr-1.5" /> İncele
+          <button onClick={() => handleViewVisit(visit)} className="px-3 sm:px-4 py-1.5 rounded bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-medium flex items-center shadow-sm transition-colors">
+            <Eye size={14} className="mr-1 sm:mr-1.5" /> İncele
           </button>
         ) : (
           <>
-            <button onClick={() => handleEditVisit(visit)} className="px-3 py-1.5 rounded text-blue-600 hover:bg-blue-50 text-sm font-medium flex items-center transition-colors">
-              <Edit size={16} className="mr-1.5" /> Düzenle
+            <button onClick={() => handleEditVisit(visit)} className="px-2 sm:px-3 py-1.5 rounded text-blue-600 hover:bg-blue-50 text-xs sm:text-sm font-medium flex items-center transition-colors">
+              <Edit size={14} className="mr-1 sm:mr-1.5" /> Düzenle
             </button>
-            <button onClick={() => handleStartVisit(visit.id)} className="px-4 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 text-sm font-medium flex items-center shadow-sm transition-colors">
+            <button onClick={() => handleStartVisit(visit.id)} className="px-3 sm:px-4 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 text-xs sm:text-sm font-medium flex items-center shadow-sm transition-colors">
               Başla
             </button>
           </>
@@ -512,31 +512,27 @@ const Visits: React.FC = () => {
   );
 
   return (
-    <div className="max-w-5xl mx-auto p-4 pb-20">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Ziyaret Listesi</h1>
-        <div className="flex gap-3 w-full sm:w-auto">
-          <button onClick={() => navigate('/operator/ziyaretler/yeni')} className="flex-1 sm:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center shadow-sm transition-colors">
-            <Plus size={18} className="mr-2" /> Yeni Ziyaret
-          </button>
-        </div>
+    <div className="max-w-5xl mx-auto px-3 sm:p-4 pb-20">
+      <div className="flex justify-between items-center gap-3 mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Ziyaret Listesi</h1>
+        <button onClick={() => navigate('/operator/ziyaretler/yeni')} className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center shadow-sm transition-colors text-sm sm:text-base shrink-0">
+          <Plus size={16} className="mr-1 sm:mr-2" /> Yeni Ziyaret
+        </button>
       </div>
 
-      {/* Search */}
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+      <div className="bg-white rounded-xl shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
         <div className="relative">
-          <input 
-            type="text" 
-            placeholder="Rapor numarası ile ara..." 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
-            className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+          <input
+            type="text"
+            placeholder="Rapor numarası ile ara..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-9 py-2.5 sm:py-3 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all text-sm sm:text-base"
           />
-          <Search className="absolute left-3 top-3.5 text-gray-400" size={20} />
+          <Search className="absolute left-3 top-3 sm:top-3.5 text-gray-400" size={18} />
           {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600">
-              <X size={20} />
+            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-3 sm:top-3.5 text-gray-400 hover:text-gray-600">
+              <X size={18} />
             </button>
           )}
         </div>
@@ -549,91 +545,85 @@ const Visits: React.FC = () => {
         </div>
       )}
 
-      <div className="space-y-8">
-        
-        {/* GRUP 1: Geçmiş Planlı */}
+      <div className="space-y-5 sm:space-y-8">
+
         {overdueVisits.length > 0 && (
           <section>
-            <h2 className="text-lg font-bold text-red-600 mb-3 flex items-center gap-2 px-1">
-              <CalendarClock size={20} />
-              Geçmiş Planlı Ziyaretler ({overdueVisits.length})
+            <h2 className="text-sm sm:text-lg font-bold text-red-600 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2 px-1">
+              <CalendarClock size={18} className="shrink-0" />
+              Geçmiş Planlı ({overdueVisits.length})
             </h2>
-            <div className="grid gap-4">
+            <div className="grid gap-3 sm:gap-4">
               {overdueVisits.map(renderVisitCard)}
             </div>
           </section>
         )}
 
-        {/* GRUP 2: Bugün */}
         {todayVisits.length > 0 && (
           <section>
-            <h2 className="text-lg font-bold text-blue-600 mb-3 flex items-center gap-2 px-1">
-              <CalendarCheck2 size={20} />
+            <h2 className="text-sm sm:text-lg font-bold text-blue-600 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2 px-1">
+              <CalendarCheck2 size={18} className="shrink-0" />
               Bugünkü Ziyaretler ({todayVisits.length})
             </h2>
-            <div className="grid gap-4">
+            <div className="grid gap-3 sm:gap-4">
               {todayVisits.map(renderVisitCard)}
             </div>
           </section>
         )}
 
-        {/* GRUP 3: Diğer */}
         {futureAndCancelledVisits.length > 0 && (
           <section>
-            <h2 className="text-lg font-bold text-gray-700 mb-3 flex items-center gap-2 px-1">
-              <AlertCircle size={20} />
+            <h2 className="text-sm sm:text-lg font-bold text-gray-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2 px-1">
+              <AlertCircle size={18} className="shrink-0" />
               Diğer / Gelecek / İptal ({futureAndCancelledVisits.length})
             </h2>
-            <div className="grid gap-4">
+            <div className="grid gap-3 sm:gap-4">
               {futureAndCancelledVisits.map(renderVisitCard)}
             </div>
           </section>
         )}
 
-        {/* GRUP 4: Tamamlananlar */}
         {(completedVisits.length > 0 || totalPages > 1) && (
           <section>
-            <h2 className="text-lg font-bold text-green-700 mb-3 flex items-center gap-2 px-1">
-              <CalendarSearch size={20} />
+            <h2 className="text-sm sm:text-lg font-bold text-green-700 mb-2 sm:mb-3 flex items-center gap-1.5 sm:gap-2 px-1">
+              <CalendarSearch size={18} className="shrink-0" />
               Tamamlanan Ziyaretler
             </h2>
-            <div className="grid gap-4">
+            <div className="grid gap-3 sm:gap-4">
               {completedVisits.map(renderVisitCard)}
             </div>
           </section>
         )}
 
-        {/* Empty State */}
         {!loading && overdueVisits.length === 0 && todayVisits.length === 0 && completedVisits.length === 0 && futureAndCancelledVisits.length === 0 && (
-          <div className="text-center py-12">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-              <Search className="text-gray-400" size={32} />
+          <div className="text-center py-10 sm:py-12">
+            <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 mb-4">
+              <Search className="text-gray-400" size={28} />
             </div>
-            <h3 className="text-lg font-medium text-gray-900">Ziyaret Bulunamadı</h3>
-            <p className="mt-1 text-gray-500">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900">Ziyaret Bulunamadı</h3>
+            <p className="mt-1 text-sm text-gray-500">
               {searchTerm ? 'Arama kriterlerinize uygun kayıt yok.' : 'Listenizde gösterilecek ziyaret bulunmuyor.'}
             </p>
           </div>
         )}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-8 pt-4 border-t border-gray-200">
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
-              disabled={currentPage === 1} 
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+        <div className="flex justify-between items-center mt-6 sm:mt-8 pt-4 border-t border-gray-200">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
-              <ChevronLeft size={16} className="mr-1"/> Önceki
+              <ChevronLeft size={14} className="mr-0.5 sm:mr-1"/> Önceki
             </button>
-            <span className="text-sm text-gray-600">Sayfa {currentPage} / {totalPages}</span>
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
-              disabled={currentPage === totalPages} 
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            <span className="text-xs sm:text-sm text-gray-600">{currentPage} / {totalPages}</span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
-              Sonraki <ChevronRight size={16} className="ml-1"/>
+              Sonraki <ChevronRight size={14} className="ml-0.5 sm:ml-1"/>
             </button>
         </div>
       )}
