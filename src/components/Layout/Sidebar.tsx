@@ -8,7 +8,7 @@ import {
   ChevronsLeft, ChevronsRight, ChevronDown,
   Mail, Package, MessageSquare, MailCheck, 
   BarChart3, TrendingUp, PlusCircle, NotebookPen, Wallet, ReceiptText, 
-  Image as ImageIcon, Clock as ClockIcon, Car, Bug, Presentation, Shield
+  Image as ImageIcon, Clock as ClockIcon, Car, Bug, Presentation, Shield, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -30,6 +30,7 @@ const menuCategories = [
       { name: 'Şube Fiyat', path: '/sube-fiyatlandirma', icon: <DollarSign size={18} /> },
       { name: 'Teklifler', path: '/teklifler', icon: <FileText size={18} /> },
       { name: 'IPM Sözleşme', path: '/ipm-sozlesmeleri', icon: <Shield size={18} /> },
+      { name: 'Kritik Limitler', path: '/zararli-kritik-limitler', icon: <AlertTriangle size={18} /> },
     ]
   },
   {

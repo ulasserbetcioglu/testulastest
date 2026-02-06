@@ -104,6 +104,7 @@ import AnnualVisitReport from './pages/AnnualVisitReport';
 import Sozlesmeler from './pages/Sozlesmeler';
 import TrainingPresentationPage from './pages/TrainingPresentationPage';
 import AdminIpmContracts from './pages/AdminIpmContracts';
+import AdminPestActivityLimits from './pages/AdminPestActivityLimits';
 
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
@@ -401,6 +402,7 @@ function App() {
             <Route path="admin/faaliyet-dosyasi-yonetimi" element={<AdminRoute><AdminActivityFileManagement /></AdminRoute>} />
             <Route path="admin/faaliyet-dosyasi-goruntule" element={<AdminRoute><ActivityFileViewer /></AdminRoute>} />
             <Route path="ipm-sozlesmeleri" element={<AdminRoute><AdminIpmContracts /></AdminRoute>} />
+            <Route path="zararli-kritik-limitler" element={<AdminRoute><AdminPestActivityLimits /></AdminRoute>} />
           </Route>
         </Routes>
       </AuthProvider>
