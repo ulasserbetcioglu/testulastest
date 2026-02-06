@@ -136,7 +136,7 @@ const TeklifGoruntule: React.FC = () => {
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, scrollY: 0, letterRendering: true },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-            pagebreak:    isContract ? { mode: ['css', 'legacy'], before: '.contract-page-break' } : undefined
+            pagebreak:    { mode: ['avoid-all'], avoid: ['tr', 'h3'] }
         };
         (window as any).html2pdf().set(options).from(element).save();
     };

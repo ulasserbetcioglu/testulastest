@@ -98,8 +98,6 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
   const amountWords = numberToTurkishWords(Math.floor(perVisitTotal));
 
   const S = {
-    page: 'padding: 30px 40px; position: relative;',
-    pageBreak: 'page-break-after: always;',
     header: `display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 2px solid #1a7d37; margin-bottom: 20px;`,
     h2: 'font-size: 11pt; font-weight: 700; text-decoration: underline; margin: 12px 0 8px 0;',
     p: 'font-size: 10pt; text-align: justify; margin: 3px 0;',
@@ -188,8 +186,8 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     </div>
   </div>
 
-  <!-- ==================== SAYFA 2: MADDE 1-3 ==================== -->
-  <div style="${S.page} ${S.pageBreak}">
+  <!-- ==================== TÜM İÇERİK: MADDE 1-10 (TEK AKIŞ) ==================== -->
+  <div style="padding: 30px 40px;">
     ${pageHeader}
 
     <h2 style="font-size: 14pt; font-weight: 800; margin: 0 0 12px 0; display: flex; justify-content: space-between; align-items: baseline;">
@@ -237,11 +235,6 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
       </tr></thead>
       <tbody>${serviceRows}</tbody>
     </table>
-  </div>
-
-  <!-- ==================== SAYFA 3: MADDE 4 ==================== -->
-  <div style="${S.page} ${S.pageBreak}">
-    ${pageHeader}
 
     <h3 style="${S.h2}">4.&nbsp;&nbsp;&nbsp;&nbsp;YETKİ VE SORUMLULUKLAR</h3>
     <p style="${S.p}">PestMENTOR (Hizmet Sağlayıcı) ve İŞVEREN (Müşteri) taraflarının, sözleşme kapsamındaki entegre zararlı mücadelesi (IPM) hizmetlerine ilişkin yetki ve sorumluluklarını tanımlar.</p>
@@ -288,11 +281,6 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     <p style="${S.sub}"><strong>4.2.5.1.</strong> Bina izolasyonuna yönelik fiziki önlemler (delik, çatlak, boşlukların kapatılması, kapı altı fırçalarının takılması vb.).</p>
     <p style="${S.sub}"><strong>4.2.5.2.</strong> Hijyen ve sanitasyon eksikliklerinin giderilmesi.</p>
     <p style="${S.sub}"><strong>4.2.5.3.</strong> BU MADDE BOŞ BIRAKILMIŞTIR.</p>
-  </div>
-
-  <!-- ==================== SAYFA 4: MADDE 5-8 ==================== -->
-  <div style="${S.page} ${S.pageBreak}">
-    ${pageHeader}
 
     <h3 style="${S.h2}">5.&nbsp;&nbsp;&nbsp;&nbsp;SÖZLEŞME SÜRESİ, YENİLENME VE FESİH ŞARTLARI</h3>
     <p style="${S.p}">İşbu sözleşme, <strong>${startDate}</strong> tarihinde yürürlüğe girer ve <strong>${endDate}</strong> tarihine kadar geçerlidir. Bu, sözleşmenin "İlk Geçerlilik Dönemi" olarak anılacaktır.</p>
@@ -323,11 +311,6 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
 
     <h3 style="${S.h2}">8.&nbsp;&nbsp;&nbsp;&nbsp;MALİ YÜKÜMLÜLÜKLER</h3>
     <p style="${S.p}"><strong>8.1.</strong> İşbu sözleşmenin imzalanmasından kaynaklanan Damga Vergisi'nin tamamı PestMENTOR tarafından beyan edilip ödenecektir.</p>
-  </div>
-
-  <!-- ==================== SAYFA 5: MADDE 9-10, İMZALAR ==================== -->
-  <div style="${S.page}">
-    ${pageHeader}
 
     <h3 style="${S.h2}">9.&nbsp;&nbsp;&nbsp;&nbsp;MALİ HÜKÜMLER (FİYATLANDIRMA VE ÖDEME)</h3>
     <p style="${S.subTitle}"><strong>9.1. Hizmet Bedeli</strong></p>
