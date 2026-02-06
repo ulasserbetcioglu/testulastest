@@ -106,10 +106,10 @@ const HizmetPazarlama: React.FC = () => {
   const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
 
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
-    name: 'İlaçlamatik Ekibi',
-    title: 'Profesyonel Çözümler',
-    website: 'www.ilaclamatik.com',
-    phone: '+90 555 000 0000',
+    name: 'Sistem İlaçlama Sanayi ve Ticaret Limited Şirketi - PestMentor',
+    title: 'Leave Pest to us...',
+    website: 'www.ilaclamatik.com - www.sistemilaclama.com',
+    phone: '0224 233 83 87',
     logo_url: 'https://i.imgur.com/PajSpus.png'
   });
 
