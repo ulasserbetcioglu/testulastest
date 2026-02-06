@@ -72,8 +72,12 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
+      const margin = { top: 6, bottom: 6, left: 5, right: 5 };
+      const footerH = 8;
+      const contentWidth = pdfWidth - margin.left - margin.right;
+
       const headerEl = document.createElement('div');
-      headerEl.style.cssText = 'position:absolute;left:-9999px;top:0;width:1122px;background:#fff;';
+      headerEl.style.cssText = `position:absolute;left:-9999px;top:0;width:1122px;background:#fff;`;
       headerEl.innerHTML = `
         <div style="border-top:4px solid #15803d;padding:10px 24px 8px;border-bottom:1.5px solid #e5e7eb;">
           <div style="display:flex;align-items:center;gap:12px;">
@@ -96,50 +100,67 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
       }
 
       const [headerCanvas, contentCanvas] = await Promise.all([
-        html2canvas(headerEl, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }),
-        html2canvas(reportRef.current, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }),
+        html2canvas(headerEl, { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff' }),
+        html2canvas(reportRef.current, { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff' }),
       ]);
       document.body.removeChild(headerEl);
 
-      const headerImgData = headerCanvas.toDataURL('image/jpeg', 0.9);
-      const headerH = (headerCanvas.height * pdfWidth) / headerCanvas.width;
+      const headerImgData = headerCanvas.toDataURL('image/png');
+      const headerImgH = (headerCanvas.height * contentWidth) / headerCanvas.width;
 
-      const imgData = contentCanvas.toDataURL('image/jpeg', 0.72);
-      const imgScaledHeight = (contentCanvas.height * pdfWidth) / contentCanvas.width;
+      const imgData = contentCanvas.toDataURL('image/png');
+      const imgScaledH = (contentCanvas.height * contentWidth) / contentCanvas.width;
 
-      const footerH = 8;
-      const page1Content = pageHeight - footerH;
-      const pageNContent = pageHeight - headerH - footerH;
-      const totalPages = 1 + Math.max(0, Math.ceil((imgScaledHeight - page1Content) / pageNContent));
+      const page1Avail = pageHeight - margin.top - margin.bottom - footerH;
+      const pageNAvail = pageHeight - margin.top - headerImgH - 2 - margin.bottom - footerH;
+
+      let totalPages = 1;
+      if (imgScaledH > page1Avail) {
+        totalPages += Math.ceil((imgScaledH - page1Avail) / pageNAvail);
+      }
 
       const drawFooter = (pg: number) => {
+        const y = pageHeight - margin.bottom - footerH;
         pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, pageHeight - footerH, pdfWidth, footerH, 'F');
+        pdf.rect(0, y, pdfWidth, footerH + margin.bottom, 'F');
+        pdf.setDrawColor(230, 230, 230);
+        pdf.line(margin.left + 5, y + 1, pdfWidth - margin.right - 5, y + 1);
         pdf.setFontSize(7);
         pdf.setTextColor(180, 180, 180);
-        pdf.text(`Sayfa ${pg} / ${totalPages}`, pdfWidth / 2, pageHeight - 3, { align: 'center' });
-        pdf.setDrawColor(230, 230, 230);
-        pdf.line(10, pageHeight - footerH, pdfWidth - 10, pageHeight - footerH);
+        pdf.text(`Sayfa ${pg} / ${totalPages}`, pdfWidth / 2, y + 5, { align: 'center' });
       };
 
       const drawHeader = () => {
         pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, pdfWidth, headerH + 1, 'F');
-        pdf.addImage(headerImgData, 'JPEG', 0, 0, pdfWidth, headerH);
+        pdf.rect(0, 0, pdfWidth, margin.top + headerImgH + 2, 'F');
+        pdf.addImage(headerImgData, 'PNG', margin.left, margin.top, contentWidth, headerImgH);
       };
 
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgScaledHeight);
+      pdf.addImage(imgData, 'PNG', margin.left, margin.top, contentWidth, imgScaledH);
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, pageHeight - margin.bottom - footerH, pdfWidth, margin.bottom + footerH, 'F');
       drawFooter(1);
 
-      let consumed = page1Content;
+      let consumed = page1Avail;
       let pageNum = 2;
 
-      while (consumed < imgScaledHeight) {
+      while (consumed < imgScaledH) {
         pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, headerH - consumed, pdfWidth, imgScaledHeight);
+        const contentStartY = margin.top + headerImgH + 2;
+        const imgY = contentStartY - consumed;
+
+        pdf.addImage(imgData, 'PNG', margin.left, imgY, contentWidth, imgScaledH);
+
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, pdfWidth, contentStartY, 'F');
+
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, pageHeight - margin.bottom - footerH, pdfWidth, margin.bottom + footerH, 'F');
+
         drawHeader();
         drawFooter(pageNum);
-        consumed += pageNContent;
+
+        consumed += pageNAvail;
         pageNum++;
       }
 
