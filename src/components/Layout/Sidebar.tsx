@@ -32,7 +32,7 @@ const menuCategories = [
       { name: 'IPM Sözleşme', path: '/ipm-sozlesmeleri', icon: <Shield size={18} /> },
       { name: 'Kritik Limitler', path: '/zararli-kritik-limitler', icon: <AlertTriangle size={18} /> },
       { name: 'Risk Değerlendirme', path: '/zararli-risk-degerlendirme', icon: <Bug size={18} /> },
-      { name: 'Çevre Risk Değerlendirme', path: '/environmental-risk-assessmente', icon: <Bug size={18} /> },
+      { name: 'Çevre Risk Değerlendirme', path: '/environmental-risk-assessment', icon: <Bug size={18} /> },
     ]
   },
   {
