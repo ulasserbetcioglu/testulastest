@@ -74,7 +74,7 @@ const OperatorLayout: React.FC = () => {
   return (
     <div className="flex h-screen bg-gray-50">
       <OperatorSidebar />
-      <div className="flex-1 flex flex-col md:ml-64">
+      <div className="flex-1 flex flex-col md:ml-56">
         <OperatorHeader />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-4">
           <Outlet context={{ operatorId, loadingOperatorId }} />
