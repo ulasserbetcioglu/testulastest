@@ -76,9 +76,10 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
       const footerH = 7;
       const contentWidth = pdfWidth - margin.left - margin.right;
       const RENDER_W = 1200;
+      const SCALE = 2;
 
       const cloneWrap = document.createElement('div');
-      cloneWrap.style.cssText = `position:fixed;left:-10000px;top:0;width:${RENDER_W}px;background:#fff;z-index:-1;`;
+      cloneWrap.style.cssText = `position:fixed;left:-10000px;top:0;width:${RENDER_W}px;background:#fff;z-index:-1;overflow:visible;`;
       const clone = reportRef.current.cloneNode(true) as HTMLElement;
       clone.style.width = `${RENDER_W}px`;
       clone.style.maxWidth = `${RENDER_W}px`;
@@ -108,10 +109,27 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
           else { logoImg.onload = () => resolve(); logoImg.onerror = () => resolve(); }
         });
       }
-
       await new Promise((r) => setTimeout(r, 100));
 
-      const canvasOpts = { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', width: RENDER_W };
+      const wrapRect = cloneWrap.getBoundingClientRect();
+      const breakSet = new Set<number>();
+      breakSet.add(0);
+
+      Array.from(clone.children).forEach((child) => {
+        const r = (child as HTMLElement).getBoundingClientRect();
+        breakSet.add(Math.round(r.bottom - wrapRect.top));
+      });
+
+      clone.querySelectorAll('tr').forEach((row) => {
+        const r = row.getBoundingClientRect();
+        breakSet.add(Math.round(r.bottom - wrapRect.top));
+      });
+
+      const totalDomH = cloneWrap.scrollHeight;
+      breakSet.add(totalDomH);
+      const breaks = [...breakSet].sort((a, b) => a - b);
+
+      const canvasOpts = { scale: SCALE, useCORS: true, logging: false, backgroundColor: '#ffffff', width: RENDER_W };
       const [headerCanvas, contentCanvas] = await Promise.all([
         html2canvas(headerEl, canvasOpts),
         html2canvas(cloneWrap, { ...canvasOpts, windowWidth: RENDER_W }),
@@ -122,17 +140,40 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
       const headerImgData = headerCanvas.toDataURL('image/jpeg', 0.95);
       const headerImgH = (headerCanvas.height * contentWidth) / headerCanvas.width;
 
-      const imgData = contentCanvas.toDataURL('image/jpeg', 0.92);
-      const imgScaledH = (contentCanvas.height * contentWidth) / contentCanvas.width;
-
-      const page1Avail = pageHeight - margin.top - margin.bottom - footerH;
+      const domToPdf = contentWidth / RENDER_W;
       const contentTopN = margin.top + headerImgH + 2;
+      const page1Avail = pageHeight - margin.top - margin.bottom - footerH;
       const pageNAvail = pageHeight - contentTopN - margin.bottom - footerH;
 
-      let totalPages = 1;
-      if (imgScaledH > page1Avail) {
-        totalPages += Math.ceil((imgScaledH - page1Avail) / pageNAvail);
+      const pages: Array<{ startPx: number; endPx: number }> = [];
+      let curStart = 0;
+      let pgIdx = 0;
+
+      while (curStart < totalDomH) {
+        const availMm = pgIdx === 0 ? page1Avail : pageNAvail;
+        const availPx = availMm / domToPdf;
+        const maxEnd = curStart + availPx;
+
+        let bestBreak = curStart;
+        for (const bp of breaks) {
+          if (bp <= curStart) continue;
+          if (bp <= maxEnd + 0.5) {
+            bestBreak = bp;
+          } else {
+            break;
+          }
+        }
+
+        if (bestBreak <= curStart) {
+          bestBreak = Math.min(Math.ceil(curStart + availPx), totalDomH);
+        }
+
+        pages.push({ startPx: curStart, endPx: Math.min(bestBreak, totalDomH) });
+        curStart = bestBreak;
+        pgIdx++;
       }
+
+      const totalPages = pages.length;
 
       const drawFooter = (pg: number) => {
         const y = pageHeight - margin.bottom - footerH;
@@ -146,35 +187,32 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
       };
 
       const drawHeader = () => {
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, pdfWidth, contentTopN, 'F');
         pdf.addImage(headerImgData, 'JPEG', margin.left, margin.top, contentWidth, headerImgH);
       };
 
-      pdf.addImage(imgData, 'JPEG', margin.left, margin.top, contentWidth, imgScaledH);
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, pageHeight - margin.bottom - footerH, pdfWidth, footerH + margin.bottom, 'F');
-      drawFooter(1);
+      for (let i = 0; i < pages.length; i++) {
+        if (i > 0) pdf.addPage();
 
-      let consumed = page1Avail;
-      let pageNum = 2;
+        const { startPx, endPx } = pages[i];
+        const srcY = Math.round(startPx * SCALE);
+        const srcH = Math.round((endPx - startPx) * SCALE);
+        if (srcH <= 0) continue;
 
-      while (consumed < imgScaledH) {
-        pdf.addPage();
-        const imgY = contentTopN - consumed;
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = contentCanvas.width;
+        sliceCanvas.height = srcH;
+        const ctx = sliceCanvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, sliceCanvas.width, srcH);
+        ctx.drawImage(contentCanvas, 0, srcY, contentCanvas.width, srcH, 0, 0, contentCanvas.width, srcH);
 
-        pdf.addImage(imgData, 'JPEG', margin.left, imgY, contentWidth, imgScaledH);
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
+        const sliceHMm = (endPx - startPx) * domToPdf;
+        const yStart = i === 0 ? margin.top : contentTopN;
 
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, pdfWidth, contentTopN, 'F');
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, pageHeight - margin.bottom - footerH, pdfWidth, footerH + margin.bottom, 'F');
-
-        drawHeader();
-        drawFooter(pageNum);
-
-        consumed += pageNAvail;
-        pageNum++;
+        if (i > 0) drawHeader();
+        pdf.addImage(sliceData, 'JPEG', margin.left, yStart, contentWidth, sliceHMm);
+        drawFooter(i + 1);
       }
 
       const safeName = report.customer_name.replace(/[^a-zA-Z0-9_\-]/g, '_');
