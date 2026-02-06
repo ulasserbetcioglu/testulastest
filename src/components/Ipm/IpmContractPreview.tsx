@@ -12,6 +12,7 @@ interface IpmContractPreviewProps {
   companySettings?: {
     company_name: string;
     logo_url: string;
+    stamp_url?: string;
     address: string;
     email: string;
     phone: string;
@@ -114,17 +115,15 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
 
   return (
     <div>
-      {!compact && (
-        <div className="flex gap-2 mb-4 print:hidden">
-          <button onClick={handlePrint} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-xs font-medium text-gray-700">
-            <Printer size={14} /> Yazdir
-          </button>
-          <button onClick={handleExportPdf} disabled={exporting} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-xs font-medium text-red-700 disabled:opacity-50">
-            {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
-            PDF Indir
-          </button>
-        </div>
-      )}
+      <div className="flex gap-2 mb-4 print:hidden">
+        <button onClick={handlePrint} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-xs font-medium text-gray-700">
+          <Printer size={14} /> Yazdir
+        </button>
+        <button onClick={handleExportPdf} disabled={exporting} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-xs font-medium text-red-700 disabled:opacity-50">
+          {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+          PDF Indir
+        </button>
+      </div>
 
       <div ref={reportRef} className={compact ? '' : 'bg-white shadow-lg rounded-xl overflow-hidden'}>
         <div style={{ backgroundColor: primaryColor, height: 6 }} />
@@ -296,6 +295,16 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
             <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <p className="text-[10px] font-bold text-amber-800 mb-1">Ek Notlar:</p>
               <p className="text-[10px] text-amber-700 whitespace-pre-wrap">{contract.custom_notes}</p>
+            </div>
+          )}
+
+          {companySettings?.stamp_url && (
+            <div className="mt-6 flex justify-end">
+              <div className="text-center">
+                <p className="text-[9px] text-gray-500 font-bold mb-1">SOZLESMELI FIRMA KASE / IMZA</p>
+                <img src={companySettings.stamp_url} alt="Kase" className="h-24 object-contain" />
+                <p className="text-[9px] text-gray-400 mt-1">{contract.contract_firm_name}</p>
+              </div>
             </div>
           )}
 

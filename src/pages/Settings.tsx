@@ -15,6 +15,7 @@ interface CompanySettings {
   header_text: string;
   footer_text: string;
   logo_url: string;
+  stamp_url: string;
 }
 
 const Settings: React.FC = () => {
@@ -29,13 +30,16 @@ const Settings: React.FC = () => {
     website: '',
     header_text: '',
     footer_text: '',
-    logo_url: ''
+    logo_url: '',
+    stamp_url: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [stampFile, setStampFile] = useState<File | null>(null);
+  const [stampPreview, setStampPreview] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -70,6 +74,9 @@ const Settings: React.FC = () => {
       setSettings(data);
       if (data.logo_url) {
         setLogoPreview(data.logo_url);
+      }
+      if (data.stamp_url) {
+        setStampPreview(data.stamp_url);
       }
     } catch (err: any) {
       setError(err.message);
@@ -128,6 +135,21 @@ const Settings: React.FC = () => {
     setSettings({ ...settings, logo_url: '' });
   };
 
+  const handleStampChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setStampFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setStampPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveStamp = () => {
+    setStampFile(null);
+    setStampPreview(null);
+    setSettings({ ...settings, stamp_url: '' });
+  };
+
   const handleSave = async () => {
     if (!isAdmin) {
       toast.error('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız');
@@ -169,12 +191,40 @@ const Settings: React.FC = () => {
         }
       }
 
-      // Update settings
+      let stampUrl = settings.stamp_url;
+      if (stampFile) {
+        const fileExt = stampFile.name.split('.').pop();
+        const fileName = `company-stamp-${Date.now()}.${fileExt}`;
+        const filePath = `stamps/${fileName}`;
+
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from('company-assets')
+            .upload(filePath, stampFile);
+
+          if (uploadError) {
+            if (uploadError.message?.includes('bucket') || uploadError.statusCode === 403) {
+              toast.error('Kaşe yüklenemedi. Yetki hatası.');
+              return;
+            }
+            throw uploadError;
+          }
+
+          const { data } = supabase.storage.from('company-assets').getPublicUrl(filePath);
+          stampUrl = data.publicUrl;
+        } catch (err: any) {
+          console.error('Stamp upload error:', err);
+          toast.error('Kaşe yüklenirken bir hata oluştu');
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('company_settings')
         .update({
           ...settings,
-          logo_url: logoUrl
+          logo_url: logoUrl,
+          stamp_url: stampUrl
         })
         .eq('id', 1);
 
@@ -256,7 +306,50 @@ const Settings: React.FC = () => {
             </div>
           </div>
 
-          {/* Company Information */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Şirket Kaşesi / İmza Görseli
+            </label>
+            <p className="text-xs text-gray-400 mb-3">
+              Sözleşmelerin (IPM, Hizmet vb.) alt kısmında opsiyonel olarak görüntülenir.
+            </p>
+            <div className="flex flex-col sm:flex-row items-start gap-4 sm:space-x-6 sm:gap-0">
+              <div className="w-32 h-32 sm:w-40 sm:h-40 border rounded-lg flex items-center justify-center overflow-hidden bg-gray-50 shrink-0">
+                {stampPreview ? (
+                  <img src={stampPreview} alt="Kaşe" className="max-w-full max-h-full object-contain" />
+                ) : (
+                  <div className="text-gray-400 text-center p-4 text-sm">Kaşe Yok</div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer disabled:opacity-50">
+                  <Upload size={16} className="mr-2" />
+                  Kaşe Yükle
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleStampChange}
+                    className="hidden"
+                    disabled={!isAdmin}
+                  />
+                </label>
+                {stampPreview && (
+                  <button
+                    onClick={handleRemoveStamp}
+                    className="flex items-center px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                    disabled={!isAdmin}
+                  >
+                    <Trash size={16} className="mr-2" />
+                    Kaşeyi Kaldır
+                  </button>
+                )}
+                <p className="text-sm text-gray-500">
+                  Önerilen: PNG formatı, şeffaf arka plan
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="md:col-span-2">
             <h2 className="text-lg font-semibold mb-4 pb-2 border-b">Şirket Bilgileri</h2>
           </div>
