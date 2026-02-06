@@ -72,19 +72,29 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
-      const margin = { top: 6, bottom: 6, left: 5, right: 5 };
-      const footerH = 8;
+      const margin = { top: 8, bottom: 8, left: 8, right: 8 };
+      const footerH = 7;
       const contentWidth = pdfWidth - margin.left - margin.right;
+      const RENDER_W = 1200;
+
+      const cloneWrap = document.createElement('div');
+      cloneWrap.style.cssText = `position:fixed;left:-10000px;top:0;width:${RENDER_W}px;background:#fff;z-index:-1;`;
+      const clone = reportRef.current.cloneNode(true) as HTMLElement;
+      clone.style.width = `${RENDER_W}px`;
+      clone.style.maxWidth = `${RENDER_W}px`;
+      clone.style.overflow = 'visible';
+      cloneWrap.appendChild(clone);
+      document.body.appendChild(cloneWrap);
 
       const headerEl = document.createElement('div');
-      headerEl.style.cssText = `position:absolute;left:-9999px;top:0;width:1122px;background:#fff;`;
+      headerEl.style.cssText = `position:fixed;left:-10000px;top:0;width:${RENDER_W}px;background:#fff;z-index:-1;`;
       headerEl.innerHTML = `
-        <div style="border-top:4px solid #15803d;padding:10px 24px 8px;border-bottom:1.5px solid #e5e7eb;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" style="height:28px;object-fit:contain;" crossorigin="anonymous" />` : ''}
+        <div style="border-top:3px solid #15803d;padding:8px 20px 6px;border-bottom:1px solid #e5e7eb;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" style="height:24px;object-fit:contain;" crossorigin="anonymous" />` : ''}
             <div style="flex:1;">
-              <div style="font-size:10px;font-weight:bold;color:#15803d;font-family:Arial,sans-serif;">ZARARLI AKT\u0130V\u0130TES\u0130 KR\u0130T\u0130K L\u0130M\u0130TLER\u0130 & AKS\u0130YON PLANI</div>
-              <div style="font-size:8px;color:#666;font-family:Arial,sans-serif;">${report.customer_name}</div>
+              <div style="font-size:9px;font-weight:bold;color:#15803d;font-family:Arial,sans-serif;">ZARARLI AKT\u0130V\u0130TES\u0130 KR\u0130T\u0130K L\u0130M\u0130TLER\u0130 & AKS\u0130YON PLANI</div>
+              <div style="font-size:7px;color:#666;font-family:Arial,sans-serif;">${report.customer_name}</div>
             </div>
           </div>
         </div>
@@ -99,20 +109,25 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
         });
       }
 
+      await new Promise((r) => setTimeout(r, 100));
+
+      const canvasOpts = { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', width: RENDER_W };
       const [headerCanvas, contentCanvas] = await Promise.all([
-        html2canvas(headerEl, { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff' }),
-        html2canvas(reportRef.current, { scale: 3, useCORS: true, logging: false, backgroundColor: '#ffffff' }),
+        html2canvas(headerEl, canvasOpts),
+        html2canvas(cloneWrap, { ...canvasOpts, windowWidth: RENDER_W }),
       ]);
+      document.body.removeChild(cloneWrap);
       document.body.removeChild(headerEl);
 
-      const headerImgData = headerCanvas.toDataURL('image/png');
+      const headerImgData = headerCanvas.toDataURL('image/jpeg', 0.95);
       const headerImgH = (headerCanvas.height * contentWidth) / headerCanvas.width;
 
-      const imgData = contentCanvas.toDataURL('image/png');
+      const imgData = contentCanvas.toDataURL('image/jpeg', 0.92);
       const imgScaledH = (contentCanvas.height * contentWidth) / contentCanvas.width;
 
       const page1Avail = pageHeight - margin.top - margin.bottom - footerH;
-      const pageNAvail = pageHeight - margin.top - headerImgH - 2 - margin.bottom - footerH;
+      const contentTopN = margin.top + headerImgH + 2;
+      const pageNAvail = pageHeight - contentTopN - margin.bottom - footerH;
 
       let totalPages = 1;
       if (imgScaledH > page1Avail) {
@@ -123,22 +138,22 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
         const y = pageHeight - margin.bottom - footerH;
         pdf.setFillColor(255, 255, 255);
         pdf.rect(0, y, pdfWidth, footerH + margin.bottom, 'F');
-        pdf.setDrawColor(230, 230, 230);
-        pdf.line(margin.left + 5, y + 1, pdfWidth - margin.right - 5, y + 1);
+        pdf.setDrawColor(220, 220, 220);
+        pdf.line(margin.left, y + 1, pdfWidth - margin.right, y + 1);
         pdf.setFontSize(7);
-        pdf.setTextColor(180, 180, 180);
-        pdf.text(`Sayfa ${pg} / ${totalPages}`, pdfWidth / 2, y + 5, { align: 'center' });
+        pdf.setTextColor(170, 170, 170);
+        pdf.text(`Sayfa ${pg} / ${totalPages}`, pdfWidth / 2, y + 4.5, { align: 'center' });
       };
 
       const drawHeader = () => {
         pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, pdfWidth, margin.top + headerImgH + 2, 'F');
-        pdf.addImage(headerImgData, 'PNG', margin.left, margin.top, contentWidth, headerImgH);
+        pdf.rect(0, 0, pdfWidth, contentTopN, 'F');
+        pdf.addImage(headerImgData, 'JPEG', margin.left, margin.top, contentWidth, headerImgH);
       };
 
-      pdf.addImage(imgData, 'PNG', margin.left, margin.top, contentWidth, imgScaledH);
+      pdf.addImage(imgData, 'JPEG', margin.left, margin.top, contentWidth, imgScaledH);
       pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, pageHeight - margin.bottom - footerH, pdfWidth, margin.bottom + footerH, 'F');
+      pdf.rect(0, pageHeight - margin.bottom - footerH, pdfWidth, footerH + margin.bottom, 'F');
       drawFooter(1);
 
       let consumed = page1Avail;
@@ -146,16 +161,14 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
 
       while (consumed < imgScaledH) {
         pdf.addPage();
-        const contentStartY = margin.top + headerImgH + 2;
-        const imgY = contentStartY - consumed;
+        const imgY = contentTopN - consumed;
 
-        pdf.addImage(imgData, 'PNG', margin.left, imgY, contentWidth, imgScaledH);
-
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, pdfWidth, contentStartY, 'F');
+        pdf.addImage(imgData, 'JPEG', margin.left, imgY, contentWidth, imgScaledH);
 
         pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, pageHeight - margin.bottom - footerH, pdfWidth, margin.bottom + footerH, 'F');
+        pdf.rect(0, 0, pdfWidth, contentTopN, 'F');
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, pageHeight - margin.bottom - footerH, pdfWidth, footerH + margin.bottom, 'F');
 
         drawHeader();
         drawFooter(pageNum);
