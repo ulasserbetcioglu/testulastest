@@ -31,10 +31,10 @@ const menuCategories = [
       { name: 'Şube Fiyat', path: '/sube-fiyatlandirma', icon: <DollarSign size={18} /> },
       { name: 'Teklifler', path: '/teklifler', icon: <FileText size={18} /> },
       { name: 'IPM Sözleşme', path: '/ipm-sozlesmeleri', icon: <Shield size={18} /> },
-      { name: 'Kritik Limitler', path: '/admin/pest-activity-limits', icon: <AlertTriangle size={18} /> },
+      { name: 'Kritik Limitler', path: '/pest-activity-limits', icon: <AlertTriangle size={18} /> },
       // YENİ EKLENENLER:
-      { name: 'Zararlı Risk Değ.', path: '/admin/pest-risk-assessment', icon: <Bug size={18} /> },
-      { name: 'Çevre Risk Değ.', path: '/admin/environmental-risk-assessment', icon: <Leaf size={18} /> },
+      { name: 'Zararlı Risk Değ.', path: '/pest-risk-assessment', icon: <Bug size={18} /> },
+      { name: 'Çevre Risk Değ.', path: '/environmental-risk-assessment', icon: <Leaf size={18} /> },
     ]
   },
   {
