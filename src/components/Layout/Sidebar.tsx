@@ -8,8 +8,7 @@ import {
   ChevronsLeft, ChevronsRight, ChevronDown,
   Mail, Package, MessageSquare, MailCheck, 
   BarChart3, TrendingUp, PlusCircle, NotebookPen, Wallet, ReceiptText, 
-  Image as ImageIcon, Clock as ClockIcon, Car, Bug, Presentation, Shield, AlertTriangle,
-  Leaf // Yeni eklenen ikon
+  Image as ImageIcon, Clock as ClockIcon, Car, Bug, Presentation, Shield, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -31,10 +30,9 @@ const menuCategories = [
       { name: 'Şube Fiyat', path: '/sube-fiyatlandirma', icon: <DollarSign size={18} /> },
       { name: 'Teklifler', path: '/teklifler', icon: <FileText size={18} /> },
       { name: 'IPM Sözleşme', path: '/ipm-sozlesmeleri', icon: <Shield size={18} /> },
-      { name: 'Kritik Limitler', path: '/pest-activity-limits', icon: <AlertTriangle size={18} /> },
-      // YENİ EKLENENLER:
-      { name: 'Zararlı Risk Değ.', path: '/pest-risk-assessment', icon: <Bug size={18} /> },
-      { name: 'Çevre Risk Değ.', path: '/environmental-risk-assessment', icon: <Leaf size={18} /> },
+      { name: 'Kritik Limitler', path: '/zararli-kritik-limitler', icon: <AlertTriangle size={18} /> },
+      { name: 'Risk Değerlendirme', path: '/zararli-risk-degerlendirme', icon: <Bug size={18} /> },
+      { name: 'Çevre Risk Değerlendirme', path: '/environmental-risk-assessmente', icon: <Bug size={18} /> },
     ]
   },
   {
@@ -66,7 +64,7 @@ const menuCategories = [
       { name: 'Gelirler', path: '/gelir-yonetimi', icon: <DollarSign size={18} /> },
       { name: 'Ücretli Malz.', path: '/ucretli-malzemeler', icon: <DollarSign size={18} /> },
       { name: 'Faturasızlar', path: '/faturasiz-musteriler', icon: <Wallet size={18} /> },
-      { name: 'Tahsilatlar', path: '/admin/tahsilat-makbuzlari', icon: <ReceiptText size={18} /> }, 
+      { name: 'Tahsilatlar', path: '/admin/tahsilat-makbuzlari', icon: <ReceiptText size={18} /> }, // YENİ
     ]
   },
   {
@@ -87,8 +85,8 @@ const menuCategories = [
     items: [
       { name: 'Takvim Gönder', path: '/aylik-takvim-eposta', icon: <Mail size={18} /> },
       { name: 'Ekipman Paz.', path: '/ekipman-pazarlama', icon: <Package size={18} /> },
-      { name: 'Hizmet Paz.', path: '/hizmet-pazarlama', icon: <MessageSquare size={18} /> }, 
-      { name: 'Eğitim Sunum.', path: '/egitim-sunumlari', icon: <Presentation size={18} /> }, 
+      { name: 'Hizmet Paz.', path: '/hizmet-pazarlama', icon: <MessageSquare size={18} /> }, // YENİ
+      { name: 'Eğitim Sunum.', path: '/egitim-sunumlari', icon: <Presentation size={18} /> }, // YENİ
       { name: 'E-postalar', path: '/gonderilen-epostalar', icon: <MailCheck size={18} /> },
     ]
   },
