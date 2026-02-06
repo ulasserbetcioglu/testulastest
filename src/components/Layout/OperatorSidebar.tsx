@@ -113,11 +113,11 @@ const OperatorSidebar: React.FC = () => {
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-20 h-screen bg-gray-900 text-white shadow-xl transition-transform duration-300 ${
+        className={`fixed top-0 left-0 z-20 h-screen bg-white border-r border-gray-200 shadow-sm transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0 w-56 flex flex-col`}
       >
-        <div className="h-14 flex items-center justify-center border-b border-gray-800 shrink-0">
+        <div className="h-14 flex items-center justify-center border-b border-gray-100 shrink-0">
           <img
             src="https://i.imgur.com/PajSpus.png"
             alt="Logo"
@@ -129,7 +129,7 @@ const OperatorSidebar: React.FC = () => {
         <nav className="flex-1 overflow-y-auto h-0 py-2">
           {menuCategories.map((cat) => (
             <div key={cat.title} className="mb-1">
-              <h3 className="px-3 pt-3 pb-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider">{cat.title}</h3>
+              <h3 className="px-3 pt-3 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">{cat.title}</h3>
               {cat.items.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -140,8 +140,8 @@ const OperatorSidebar: React.FC = () => {
                     className={({ isActive }) =>
                       `flex items-center gap-2.5 mx-2 px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors ${
                         isActive
-                          ? 'bg-green-600 text-white'
-                          : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                          ? 'bg-green-50 text-green-700 border-l-2 border-green-600'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`
                     }
                     onClick={closeMobile}
@@ -165,8 +165,8 @@ const OperatorSidebar: React.FC = () => {
                     className={({ isActive }) =>
                       `flex items-center gap-2.5 mx-2 px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors ${
                         isActive
-                          ? 'bg-red-600 text-white'
-                          : 'text-red-300 hover:bg-red-900/40 hover:text-white'
+                          ? 'bg-red-50 text-red-700 border-l-2 border-red-500'
+                          : 'text-red-500 hover:bg-red-50 hover:text-red-700'
                       }`
                     }
                     onClick={closeMobile}
@@ -180,10 +180,10 @@ const OperatorSidebar: React.FC = () => {
           )}
         </nav>
 
-        <div className="p-2 border-t border-gray-800 shrink-0">
+        <div className="p-2 border-t border-gray-100 shrink-0">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors"
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
           >
             <LogOut size={16} />
             <span>Çıkış Yap</span>

@@ -247,90 +247,128 @@ const DocumentList: React.FC<DocumentListProps> = ({
           Henüz döküman bulunmuyor
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Döküman
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tür
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Boyut
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Yükleyen
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tarih
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    İşlemler
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredDocuments.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {getFileIcon(doc.file_type)}
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{doc.title}</div>
-                          <div className="text-sm text-gray-500 line-clamp-1">{doc.description}</div>
+        <>
+          <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Döküman
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tür
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Boyut
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Yükleyen
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tarih
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      İşlemler
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredDocuments.map((doc) => (
+                    <tr key={doc.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          {getFileIcon(doc.file_type)}
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">{doc.title}</div>
+                            <div className="text-sm text-gray-500 line-clamp-1">{doc.description}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          {getDocumentTypeText(doc.document_type)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatFileSize(doc.file_size)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {doc.creator?.email || 'Bilinmiyor'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(doc.created_at).toLocaleDateString('tr-TR')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end space-x-2">
+                          <button
+                            onClick={() => handlePreview(doc)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Önizle"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDownload(doc)}
+                            className="text-green-600 hover:text-green-900"
+                            title="İndir"
+                          >
+                            <Download size={16} />
+                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleDelete(doc.id, doc.file_path)}
+                              className="text-red-600 hover:text-red-900"
+                              title="Sil"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="md:hidden space-y-3">
+            {filteredDocuments.map((doc) => (
+              <div key={doc.id} className="bg-white rounded-lg shadow p-3 border border-gray-100">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 shrink-0">{getFileIcon(doc.file_type)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{doc.title}</p>
+                    {doc.description && (
+                      <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{doc.description}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-green-100 text-green-800">
                         {getDocumentTypeText(doc.document_type)}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatFileSize(doc.file_size)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {doc.creator?.email || 'Bilinmiyor'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(doc.created_at).toLocaleDateString('tr-TR')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <button
-                          onClick={() => handlePreview(doc)}
-                          className="text-blue-600 hover:text-blue-900"
-                          title="Önizle"
-                        >
-                          <Eye size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDownload(doc)}
-                          className="text-green-600 hover:text-green-900"
-                          title="İndir"
-                        >
-                          <Download size={16} />
-                        </button>
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleDelete(doc.id, doc.file_path)}
-                            className="text-red-600 hover:text-red-900"
-                            title="Sil"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <span className="text-[11px] text-gray-400">{formatFileSize(doc.file_size)}</span>
+                      <span className="text-[11px] text-gray-400">{new Date(doc.created_at).toLocaleDateString('tr-TR')}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button onClick={() => handlePreview(doc)} className="text-blue-600 active:text-blue-800 p-1">
+                      <Eye size={18} />
+                    </button>
+                    <button onClick={() => handleDownload(doc)} className="text-green-600 active:text-green-800 p-1">
+                      <Download size={18} />
+                    </button>
+                    {isAdmin && (
+                      <button onClick={() => handleDelete(doc.id, doc.file_path)} className="text-red-600 active:text-red-800 p-1">
+                        <Trash2 size={18} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </>
       )}
 
       {/* Document Preview Modal */}

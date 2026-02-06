@@ -577,23 +577,25 @@ const Certificates: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">SERTİFİKALAR</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-lg md:text-2xl font-bold text-gray-800">SERTİFİKALAR</h1>
         {isAdmin && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <button
               onClick={() => setShowBulkModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="flex-1 sm:flex-none px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5 text-sm"
             >
-              <Plus size={20} />
-              Toplu Sertifika
+              <Plus size={16} />
+              <span className="hidden sm:inline">Toplu Sertifika</span>
+              <span className="sm:hidden">Toplu</span>
             </button>
             <button
               onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+              className="flex-1 sm:flex-none px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 text-sm"
             >
-              <Plus size={20} />
-              Yeni Sertifika
+              <Plus size={16} />
+              <span className="hidden sm:inline">Yeni Sertifika</span>
+              <span className="sm:hidden">Yeni</span>
             </button>
           </div>
         )}
@@ -690,117 +692,74 @@ const Certificates: React.FC = () => {
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sertifika No
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Katılımcı
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Müşteri/Şube
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Eğitim
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tarih
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  İşlemler
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                    Yükleniyor...
-                  </td>
-                </tr>
-              ) : error ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-red-500">
-                    Hata: {error}
-                  </td>
-                </tr>
-              ) : filteredCertificates.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                    Sertifika bulunamadı
-                  </td>
-                </tr>
-              ) : (
-                filteredCertificates.map((certificate) => (
-                  <tr key={certificate.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {certificate.certificate_number}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {certificate.participant_name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {certificate.customer.kisa_isim}
-                      </div>
-                      {certificate.branch && (
-                        <div className="text-sm text-gray-500">
-                          {certificate.branch.sube_adi}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900 line-clamp-2">
-                        {certificate.training_title}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(certificate.training_date).toLocaleDateString('tr-TR')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <button
-                          onClick={() => {
-                            setSelectedCertificate(certificate);
-                            setShowViewModal(true);
-                          }}
-                          className="text-blue-600 hover:text-blue-900"
-                          title="Görüntüle"
-                
-                        >
-                          <Eye size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleExportPDF(certificate)}
-                          className="text-green-600 hover:text-green-900"
-                          title="İndir"
-                        >
-                          <Download size={16} />
-                        </button>
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleDelete(certificate.id)}
-                            className="text-red-600 hover:text-red-900"
-                            title="Sil"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {filteredCertificates.length === 0 ? (
+        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+          Sertifika bulunamadı
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sertifika No</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Katılımcı</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Müşteri/Şube</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Eğitim</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarih</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredCertificates.map((certificate) => (
+                    <tr key={certificate.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{certificate.certificate_number}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{certificate.participant_name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{certificate.customer.kisa_isim}</div>
+                        {certificate.branch && <div className="text-sm text-gray-500">{certificate.branch.sube_adi}</div>}
+                      </td>
+                      <td className="px-6 py-4"><div className="text-sm text-gray-900 line-clamp-2">{certificate.training_title}</div></td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(certificate.training_date).toLocaleDateString('tr-TR')}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end space-x-2">
+                          <button onClick={() => { setSelectedCertificate(certificate); setShowViewModal(true); }} className="text-blue-600 hover:text-blue-900" title="Görüntüle"><Eye size={16} /></button>
+                          <button onClick={() => handleExportPDF(certificate)} className="text-green-600 hover:text-green-900" title="İndir"><Download size={16} /></button>
+                          {isAdmin && <button onClick={() => handleDelete(certificate.id)} className="text-red-600 hover:text-red-900" title="Sil"><Trash2 size={16} /></button>}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="md:hidden space-y-3">
+            {filteredCertificates.map((certificate) => (
+              <div key={certificate.id} className="bg-white rounded-lg shadow p-3 border border-gray-100">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{certificate.participant_name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{certificate.customer.kisa_isim}{certificate.branch ? ` - ${certificate.branch.sube_adi}` : ''}</p>
+                    <p className="text-xs text-gray-700 mt-1 line-clamp-1">{certificate.training_title}</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-[10px] text-gray-400 font-mono">{certificate.certificate_number}</span>
+                      <span className="text-[11px] text-gray-400">{new Date(certificate.training_date).toLocaleDateString('tr-TR')}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 pt-1">
+                    <button onClick={() => { setSelectedCertificate(certificate); setShowViewModal(true); }} className="text-blue-600 active:text-blue-800 p-1"><Eye size={18} /></button>
+                    <button onClick={() => handleExportPDF(certificate)} className="text-green-600 active:text-green-800 p-1"><Download size={18} /></button>
+                    {isAdmin && <button onClick={() => handleDelete(certificate.id)} className="text-red-600 active:text-red-800 p-1"><Trash2 size={18} /></button>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Add Certificate Modal - Only for Admin */}
       {isAdmin && showAddModal && (
