@@ -85,7 +85,7 @@ const HizmetPazarlama: React.FC = () => {
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   
-  const [emailSubject, setEmailSubject] = useState('Hizmet ve Ürün Teklifimiz - Fiyat Teklifi Sunulur');
+  const [emailSubject, setEmailSubject] = useState('Hizmet ve Ürün Teklifimiz - Hizmet Teklifi');
   const [emailPreview, setEmailPreview] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
