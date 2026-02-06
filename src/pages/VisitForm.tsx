@@ -1,13 +1,26 @@
-// src/pages/VisitForm.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { sendEmail, getRecipientEmails } from '../lib/emailClient';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import {
+  Loader2,
+  CalendarPlus,
+  User,
+  Building2,
+  Calendar,
+  Clock,
+  ClipboardList,
+  Bug,
+  FileText,
+  Mail,
+  ArrowLeft,
+  Check,
+  Search,
+  X,
+  ChevronDown
+} from 'lucide-react';
 
-// --- ARAYÜZLER (INTERFACES) ---
 interface Customer {
   id: string;
   kisa_isim: string;
@@ -20,26 +33,26 @@ interface Branch {
 }
 
 const visitTypes = [
-  { id: 'ilk', label: 'İlk' },
-  { id: 'ucretli', label: 'Ücretli' },
-  { id: 'acil', label: 'Acil Çağrı' },
-  { id: 'teknik', label: 'Teknik İnceleme' },
+  { id: 'ilk', label: 'Ilk' },
+  { id: 'ucretli', label: 'Ucretli' },
+  { id: 'acil', label: 'Acil Cagri' },
+  { id: 'teknik', label: 'Teknik Inceleme' },
   { id: 'periyodik', label: 'Periyodik' },
-  { id: 'isyeri', label: 'İşyeri' },
-  { id: 'gozlem', label: 'Gözlem' },
+  { id: 'isyeri', label: 'Isyeri' },
+  { id: 'gozlem', label: 'Gozlem' },
   { id: 'son', label: 'Son' }
 ];
 
 const pestTypes = [
-  { id: 'kus', label: 'Kuş' },
-  { id: 'hasere', label: 'Haşere' },
-  { id: 'ari', label: 'Arı' },
+  { id: 'kus', label: 'Kus' },
+  { id: 'hasere', label: 'Hasere' },
+  { id: 'ari', label: 'Ari' },
   { id: 'kemirgen', label: 'Kemirgen' },
-  { id: 'yumusakca', label: 'Yumuşakça' },
-  { id: 'kedi_kopek', label: 'Kedi/Köpek' },
+  { id: 'yumusakca', label: 'Yumusakca' },
+  { id: 'kedi_kopek', label: 'Kedi/Kopek' },
   { id: 'sinek', label: 'Sinek' },
-  { id: 'surungen', label: 'Sürüngen' },
-  { id: 'ambar', label: 'Ambar Zararlısı' }
+  { id: 'surungen', label: 'Surungen' },
+  { id: 'ambar', label: 'Ambar Zararlisi' }
 ];
 
 const VisitForm: React.FC = () => {
@@ -55,15 +68,13 @@ const VisitForm: React.FC = () => {
   const [operatorId, setOperatorId] = useState<string | null>(null);
   const [assignedCustomers, setAssignedCustomers] = useState<string[] | null>(null);
   const [assignedBranches, setAssignedBranches] = useState<string[] | null>(null);
-  
-  // YENİ EKLENEN STATE'LER
+
   const [isOneTimeCustomer, setIsOneTimeCustomer] = useState(false);
   const [manualCustomerName, setManualCustomerName] = useState('');
   const [manualBranchName, setManualBranchName] = useState('');
 
-  // YENİ: Alfabetik navigasyon ve arama için state'ler
   const [customerSearch, setCustomerSearch] = useState('');
-  const [showAlphabetNav, setShowAlphabetNav] = useState(false);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   const [formData, setFormData] = useState({
     customerId: '',
@@ -94,7 +105,7 @@ const VisitForm: React.FC = () => {
       setLoading(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Kullanıcı oturumu bulunamadı. Lütfen tekrar giriş yapın.');
+        if (!user) throw new Error('Kullanici oturumu bulunamadi. Lutfen tekrar giris yapin.');
 
         const isAdminUser = user.email === 'admin@ilaclamatik.com';
         setIsAdmin(isAdminUser);
@@ -106,7 +117,7 @@ const VisitForm: React.FC = () => {
           .single();
 
         if (operatorError && operatorError.code !== 'PGRST116') throw operatorError;
-        
+
         if (operatorData) {
           setOperatorId(operatorData.id);
           setAssignedCustomers(operatorData.assigned_customers);
@@ -115,7 +126,7 @@ const VisitForm: React.FC = () => {
         } else if (isAdminUser) {
           await fetchCustomers(isAdminUser, null);
         } else {
-          throw new Error("Operatör bilgisi bulunamadı.");
+          throw new Error("Operator bilgisi bulunamadi.");
         }
       } catch (err: any) {
         toast.error(err.message);
@@ -156,20 +167,19 @@ const VisitForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!operatorId) {
-      toast.error('Operatör bilgisi yüklenemedi. Sayfayı yenileyip tekrar deneyin.');
+      toast.error('Operator bilgisi yuklenemedi. Sayfayi yenileyip tekrar deneyin.');
       return;
     }
-    
+
     let finalCustomerId = formData.customerId;
     let finalBranchId = formData.branchId;
 
     if (isOneTimeCustomer) {
       if (!manualCustomerName.trim()) {
-        toast.error('Lütfen tek seferlik müşteri adını girin.');
+        toast.error('Lutfen tek seferlik musteri adini girin.');
         return;
       }
-      
-      // Yeni tek seferlik müşteri oluştur
+
       const { data: newCustomerData, error: newCustomerError } = await supabase
         .from('customers')
         .insert({ kisa_isim: manualCustomerName.trim(), is_one_time: true })
@@ -180,28 +190,26 @@ const VisitForm: React.FC = () => {
       finalCustomerId = newCustomerData.id;
 
       if (manualBranchName.trim()) {
-        // Yeni tek seferlik şube oluştur
         const { data: newBranchData, error: newBranchError } = await supabase
           .from('branches')
           .insert({ sube_adi: manualBranchName.trim(), customer_id: finalCustomerId, is_one_time: true })
           .select('id')
           .single();
-        
+
         if (newBranchError) throw newBranchError;
         finalBranchId = newBranchData.id;
       } else {
-        finalBranchId = ''; // Manuel şube adı girilmediyse boş bırak
+        finalBranchId = '';
       }
     } else {
       if (!formData.customerId) {
-        toast.error('Lütfen bir müşteri seçin.');
+        toast.error('Lutfen bir musteri secin.');
         return;
       }
     }
 
-    // DÜZELTME: visitDate ve visitTime yerine formData.visitDate ve formData.visitTime kullanıldı
     if (!formData.visitDate || !formData.visitTime) {
-      toast.error('Tarih ve saat alanları zorunludur.');
+      toast.error('Tarih ve saat alanlari zorunludur.');
       return;
     }
 
@@ -261,9 +269,8 @@ const VisitForm: React.FC = () => {
       } else {
         toast.success('Yeni ziyaret basariyla olusturuldu!');
       }
-      
-      isSuccess = true;
 
+      isSuccess = true;
     } catch (err: any) {
       setError(err.message);
       toast.error(`Hata: ${err.message}`);
@@ -276,196 +283,372 @@ const VisitForm: React.FC = () => {
     }
   };
 
-  const filteredCustomers = customers.filter(customer => 
+  const filteredCustomers = customers.filter(customer =>
     customer.kisa_isim.toLowerCase().includes(customerSearch.toLowerCase())
   );
 
-  const alphabet = 'ABCÇDEFGHIİJKLMNOÖPRSŞTUÜVYZ'.split('');
+  const selectedCustomerName = customers.find(c => c.id === formData.customerId)?.kisa_isim || '';
+  const selectedBranchName = branches.find(b => b.id === formData.branchId)?.sube_adi || '';
 
-  const jumpToLetter = (letter: string) => {
-    const customerWithLetter = customers.find(customer => 
-      customer.kisa_isim.toUpperCase().startsWith(letter)
-    );
-    if (customerWithLetter) {
-      setFormData(prev => ({ ...prev, customerId: customerWithLetter.id, branchId: '' }));
-    } else {
-        toast.info(`'${letter}' harfi ile başlayan müşteri bulunamadı.`);
-    }
+  const selectCustomer = (id: string) => {
+    setFormData(prev => ({ ...prev, customerId: id, branchId: '' }));
+    setCustomerSearch('');
+    setShowCustomerDropdown(false);
   };
 
-  if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin" /> Yükleniyor...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+          <span className="text-sm text-gray-500">Yukleniyor...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const canSubmit = operatorId && (isOneTimeCustomer ? manualCustomerName.trim() : formData.customerId);
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Yeni Ziyaret Planla</h1>
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-6">
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{error}</div>}
-        
-        <div className="space-y-4">
-          {/* YENİ: Tek Seferlik Müşteri Seçeneği */}
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="isOneTimeCustomer"
-              checked={isOneTimeCustomer}
-              onChange={(e) => {
-                setIsOneTimeCustomer(e.target.checked);
-                setFormData(prev => ({ ...prev, customerId: '', branchId: '' })); // Seçimi sıfırla
-                setManualCustomerName('');
-                setManualBranchName('');
-              }}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="isOneTimeCustomer" className="ml-2 block text-sm text-gray-700">
-              Tek Seferlik Müşteri
-            </label>
+    <div className="min-h-screen bg-gray-50 pb-safe">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
+        <div className="flex items-center justify-between px-4 py-3 max-w-2xl mx-auto">
+          <button
+            type="button"
+            onClick={() => navigate('/operator/ziyaretler')}
+            className="flex items-center gap-1 text-gray-600 hover:text-gray-900 -ml-1 p-1 rounded-lg active:bg-gray-100 transition-colors"
+          >
+            <ArrowLeft size={20} />
+            <span className="text-sm hidden sm:inline">Geri</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <CalendarPlus size={20} className="text-emerald-600" />
+            <h1 className="text-lg font-semibold text-gray-900">Yeni Ziyaret</h1>
+          </div>
+          <div className="w-10" />
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-start gap-2">
+            <X size={16} className="mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Tek Seferlik Toggle */}
+        <div
+          className="flex items-center gap-3 bg-white rounded-xl p-4 border border-gray-200 cursor-pointer active:bg-gray-50 transition-colors"
+          onClick={() => {
+            setIsOneTimeCustomer(!isOneTimeCustomer);
+            setFormData(prev => ({ ...prev, customerId: '', branchId: '' }));
+            setManualCustomerName('');
+            setManualBranchName('');
+          }}
+        >
+          <div className={`w-11 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0 ${isOneTimeCustomer ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${isOneTimeCustomer ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+          </div>
+          <span className="text-sm font-medium text-gray-700">Tek Seferlik Musteri</span>
+        </div>
+
+        {/* Musteri & Sube */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="flex items-center gap-2 text-gray-500 mb-1">
+              <User size={14} />
+              <span className="text-xs font-semibold uppercase tracking-wide">Musteri Bilgileri</span>
+            </div>
           </div>
 
-          {isOneTimeCustomer ? (
-            // YENİ: Manuel Müşteri ve Şube Girişi
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Müşteri Adı</label>
-                <input
-                  type="text"
-                  value={manualCustomerName}
-                  onChange={(e) => setManualCustomerName(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                  placeholder="Tek seferlik müşteri adı"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Şube Adı (Opsiyonel)</label>
-                <input
-                  type="text"
-                  value={manualBranchName}
-                  onChange={(e) => setManualBranchName(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                  placeholder="Tek seferlik şube adı"
-                />
-              </div>
-            </>
-          ) : (
-            // Mevcut Müşteri ve Şube Seçimi
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Müşteri</label>
-                <div className="relative">
+          <div className="p-4 space-y-3">
+            {isOneTimeCustomer ? (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Musteri Adi</label>
                   <input
                     type="text"
-                    placeholder="Müşteri ara..."
-                    value={customerSearch}
-                    onChange={(e) => setCustomerSearch(e.target.value)}
-                    onFocus={() => setShowAlphabetNav(true)}
-                    className="w-full p-2 border border-gray-300 rounded-lg mb-1"
-                  />
-                  <select
-                    id="customer-select"
-                    value={formData.customerId}
-                    onChange={(e) => setFormData({ ...formData, customerId: e.target.value, branchId: '' })}
-                    className="w-full p-2 border border-gray-300 rounded-lg"
+                    value={manualCustomerName}
+                    onChange={(e) => setManualCustomerName(e.target.value)}
+                    className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                    placeholder="Musteri adini girin..."
                     required
-                    onClick={() => setShowAlphabetNav(true)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Sube Adi (Opsiyonel)</label>
+                  <input
+                    type="text"
+                    value={manualBranchName}
+                    onChange={(e) => setManualBranchName(e.target.value)}
+                    className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                    placeholder="Sube adini girin..."
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Customer searchable dropdown */}
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Musteri</label>
+                  <div
+                    className={`flex items-center border rounded-xl px-3.5 py-3 cursor-pointer transition-all ${
+                      showCustomerDropdown ? 'border-emerald-500 ring-2 ring-emerald-500 bg-white' : 'border-gray-200 bg-gray-50'
+                    }`}
+                    onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
                   >
-                    <option value="">Müşteri Seçiniz</option>
-                    {filteredCustomers.map(customer => (
-                      <option key={customer.id} value={customer.id}>{customer.kisa_isim}</option>
-                    ))}
-                  </select>
-                  
-                  {showAlphabetNav && (
-                    <div className="mt-2 flex flex-wrap gap-1 bg-gray-100 p-2 rounded-lg">
-                      {alphabet.map(letter => (
-                        <button
-                          key={letter}
-                          type="button"
-                          onClick={() => jumpToLetter(letter)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-300 text-sm font-medium transition-colors"
-                        >
-                          {letter}
-                        </button>
-                      ))}
-                      <button 
-                        type="button" 
-                        onClick={() => setShowAlphabetNav(false)}
-                        className="ml-auto text-xs text-gray-500 hover:text-gray-700 p-1"
-                      >
-                        Kapat
-                      </button>
+                    {formData.customerId ? (
+                      <span className="text-sm text-gray-900 flex-1">{selectedCustomerName}</span>
+                    ) : (
+                      <span className="text-sm text-gray-400 flex-1">Musteri secin...</span>
+                    )}
+                    <ChevronDown size={16} className={`text-gray-400 transition-transform ${showCustomerDropdown ? 'rotate-180' : ''}`} />
+                  </div>
+
+                  {showCustomerDropdown && (
+                    <div className="absolute z-20 mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg max-h-72 overflow-hidden">
+                      <div className="sticky top-0 bg-white border-b border-gray-100 p-2">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="text"
+                            value={customerSearch}
+                            onChange={(e) => setCustomerSearch(e.target.value)}
+                            className="w-full pl-8 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                            placeholder="Ara..."
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      <div className="overflow-y-auto max-h-56">
+                        {filteredCustomers.length === 0 ? (
+                          <div className="px-4 py-6 text-center text-sm text-gray-400">Sonuc bulunamadi</div>
+                        ) : (
+                          filteredCustomers.map(customer => (
+                            <button
+                              key={customer.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selectCustomer(customer.id);
+                              }}
+                              className={`w-full text-left px-4 py-3 text-sm transition-colors border-b border-gray-50 last:border-0 flex items-center justify-between ${
+                                formData.customerId === customer.id
+                                  ? 'bg-emerald-50 text-emerald-700 font-medium'
+                                  : 'hover:bg-gray-50 text-gray-700 active:bg-gray-100'
+                              }`}
+                            >
+                              <span>{customer.kisa_isim}</span>
+                              {formData.customerId === customer.id && <Check size={14} className="text-emerald-600" />}
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
 
-              {formData.customerId && hasBranches && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Şube</label>
-                  <select value={formData.branchId} onChange={(e) => setFormData({ ...formData, branchId: e.target.value })} className="w-full p-2 border rounded-md" required>
-                    <option value="">Şube Seçiniz</option>
-                    {branches.map(branch => <option key={branch.id} value={branch.id}>{branch.sube_adi}</option>)}
-                  </select>
-                </div>
-              )}
-            </>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tarih</label>
-              <input type="date" value={formData.visitDate} onChange={(e) => setFormData({ ...formData, visitDate: e.target.value })} className="w-full p-2 border rounded-md" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Saat</label>
-              <input type="time" value={formData.visitTime} onChange={(e) => setFormData({ ...formData, visitTime: e.target.value })} className="w-full p-2 border rounded-md" required />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Ziyaret Türü</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {visitTypes.map(type => (
-                <label key={type.id} className="flex items-center space-x-2">
-                  <input type="radio" name="visitType" value={type.id} checked={formData.visitType === type.id} onChange={(e) => setFormData({ ...formData, visitType: e.target.value })} className="form-radio text-blue-600"/>
-                  <span>{type.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Hedef Zararlılar</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {pestTypes.map(type => (
-                <label key={type.id} className="flex items-center space-x-2">
-                  <input type="checkbox" value={type.id} checked={formData.pestTypes.includes(type.id)} onChange={(e) => {
-                      const newPestTypes = e.target.checked ? [...formData.pestTypes, type.id] : formData.pestTypes.filter(t => t !== type.id);
-                      setFormData({ ...formData, pestTypes: newPestTypes });
-                    }} className="form-checkbox text-blue-600" />
-                  <span>{type.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notlar (Sadece Operatör Görür)</label>
-            <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={4} className="w-full p-2 border rounded-md" placeholder="Notlar..."></textarea>
-          </div>
-
-          <div className="flex items-center">
-            <input type="checkbox" id="sendEmail" checked={sendEmailNotification} onChange={(e) => setSendEmailNotification(e.target.checked)} className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded" />
-            <label htmlFor="sendEmail" className="ml-2 block text-sm text-gray-700">Müşteriye e-posta bildirimi gönder</label>
+                {/* Branch select */}
+                {formData.customerId && hasBranches && branches.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Building2 size={12} />
+                        <span>Sube</span>
+                      </div>
+                    </label>
+                    <select
+                      value={formData.branchId}
+                      onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                      className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all appearance-none"
+                      required
+                    >
+                      <option value="">Sube seciniz...</option>
+                      {branches.map(branch => (
+                        <option key={branch.id} value={branch.id}>{branch.sube_adi}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
-        <div className="flex justify-end space-x-3 mt-8">
-          <button type="button" onClick={() => navigate('/operator/ziyaretler')} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">İptal</button>
-          <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50" disabled={saving || !operatorId || (isOneTimeCustomer ? !manualCustomerName.trim() : !formData.customerId)}>
-            {saving ? <><Loader2 className="animate-spin" />Kaydediliyor...</> : 'Ziyareti Planla'}
+        {/* Tarih & Saat */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="flex items-center gap-2 text-gray-500">
+              <Calendar size={14} />
+              <span className="text-xs font-semibold uppercase tracking-wide">Tarih & Saat</span>
+            </div>
+          </div>
+          <div className="p-4 grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Tarih</label>
+              <input
+                type="date"
+                value={formData.visitDate}
+                onChange={(e) => setFormData({ ...formData, visitDate: e.target.value })}
+                className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Saat</label>
+              <input
+                type="time"
+                value={formData.visitTime}
+                onChange={(e) => setFormData({ ...formData, visitTime: e.target.value })}
+                className="w-full px-3 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Ziyaret Turu */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="flex items-center gap-2 text-gray-500">
+              <ClipboardList size={14} />
+              <span className="text-xs font-semibold uppercase tracking-wide">Ziyaret Turu</span>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-2 gap-2">
+              {visitTypes.map(type => {
+                const isSelected = formData.visitType === type.id;
+                return (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, visitType: type.id })}
+                    className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                      isSelected
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-700 shadow-sm'
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 active:bg-gray-200'
+                    }`}
+                  >
+                    {type.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Hedef Zarlilar */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="flex items-center gap-2 text-gray-500">
+              <Bug size={14} />
+              <span className="text-xs font-semibold uppercase tracking-wide">Hedef Zarlilar</span>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {pestTypes.map(type => {
+                const isSelected = formData.pestTypes.includes(type.id);
+                return (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => {
+                      const newPestTypes = isSelected
+                        ? formData.pestTypes.filter(t => t !== type.id)
+                        : [...formData.pestTypes, type.id];
+                      setFormData({ ...formData, pestTypes: newPestTypes });
+                    }}
+                    className={`px-3 py-2.5 rounded-xl text-sm font-medium transition-all border flex items-center gap-2 ${
+                      isSelected
+                        ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-sm'
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 active:bg-gray-200'
+                    }`}
+                  >
+                    {isSelected && <Check size={14} />}
+                    <span>{type.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Notlar */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="flex items-center gap-2 text-gray-500">
+              <FileText size={14} />
+              <span className="text-xs font-semibold uppercase tracking-wide">Notlar</span>
+            </div>
+          </div>
+          <div className="p-4">
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+              className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all resize-none"
+              placeholder="Ziyarete ozel notlarinizi yazin..."
+            />
+            <p className="text-xs text-gray-400 mt-1.5">Sadece operator gorur</p>
+          </div>
+        </div>
+
+        {/* E-posta Bildirimi */}
+        <div
+          className={`flex items-center gap-3 bg-white rounded-xl p-4 border cursor-pointer active:bg-gray-50 transition-all ${
+            sendEmailNotification ? 'border-emerald-300 bg-emerald-50/50' : 'border-gray-200'
+          }`}
+          onClick={() => setSendEmailNotification(!sendEmailNotification)}
+        >
+          <div className={`w-11 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0 ${sendEmailNotification ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${sendEmailNotification ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Mail size={16} className={sendEmailNotification ? 'text-emerald-600' : 'text-gray-400'} />
+            <span className={`text-sm font-medium ${sendEmailNotification ? 'text-emerald-700' : 'text-gray-600'}`}>
+              Musteriye e-posta bildirimi gonder
+            </span>
+          </div>
+        </div>
+
+        {/* Submit Buttons */}
+        <div className="sticky bottom-0 bg-gray-50 pt-2 pb-4 -mx-4 px-4 space-y-2 border-t border-gray-100">
+          <button
+            type="submit"
+            disabled={saving || !canSubmit}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            {saving ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                <span>Kaydediliyor...</span>
+              </>
+            ) : (
+              <>
+                <CalendarPlus size={18} />
+                <span>Ziyareti Planla</span>
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/operator/ziyaretler')}
+            className="w-full py-3 text-sm font-medium text-gray-500 hover:text-gray-700 active:bg-gray-100 rounded-xl transition-colors"
+          >
+            Iptal
           </button>
         </div>
       </form>
+
+      {/* Backdrop for dropdown */}
+      {showCustomerDropdown && (
+        <div className="fixed inset-0 z-10" onClick={() => setShowCustomerDropdown(false)} />
+      )}
     </div>
   );
 };
