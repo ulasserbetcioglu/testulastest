@@ -1,46 +1,23 @@
 import { supabase } from './supabase';
 
-// Function to send email via Supabase Edge Function
-export const sendEmail = async (type: 'visit' | 'dof', id: string, recipientEmail: string) => {
-  try {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    
-    const response = await fetch(`${supabaseUrl}/functions/v1/send-schedule-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-      },
-      body: JSON.stringify({
-        type,
-        id,
-        recipientEmail
-      })
-    });
+export const sendEmail = async (to: string, subject: string, html: string) => {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to send email');
-    }
+  const response = await fetch(`${supabaseUrl}/functions/v1/send-schedule-email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+    },
+    body: JSON.stringify({ to, subject, html })
+  });
 
-    return await response.json();
-  } catch (error) {
-    console.error('Error sending email:', error);
-    
-    // Log the error in the database
-    await supabase
-      .from('email_logs')
-      .insert({
-        email_type: type,
-        record_id: id,
-        recipient: recipientEmail,
-        status: 'failed',
-        error_message: error.message,
-        sent_at: new Date().toISOString()
-      });
-      
-    throw error;
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'E-posta gonderilemedi');
   }
+
+  return await response.json();
 };
 
 // Function to get customer and branch emails

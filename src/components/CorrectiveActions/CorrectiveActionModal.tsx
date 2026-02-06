@@ -317,9 +317,21 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
           if (customEmail && customEmail.trim() && !recipients.includes(customEmail.trim())) {
             recipients.push(customEmail.trim());
           }
-          for (const email of recipients) await sendEmail('dof', data[0].id, email);
-          toast.success('DÖF bildirimi e-posta ile gönderildi.');
-        } catch (e) { console.error("E-posta hatası", e); }
+          const subject = `DOF Bildirimi - ${formData.nonComplianceType}`;
+          const html = `
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+              <h2 style="color:#dc2626;border-bottom:2px solid #dc2626;padding-bottom:10px;">Duzeltici Onleyici Faaliyet Bildirimi</h2>
+              <p><strong>Uygunsuzluk Tipi:</strong> ${formData.nonComplianceType}</p>
+              <p><strong>Aciklama:</strong> ${formData.nonComplianceDescription}</p>
+              ${formData.correctiveAction ? `<p><strong>Duzeltici Faaliyet:</strong> ${formData.correctiveAction}</p>` : ''}
+              ${formData.dueDate ? `<p><strong>Termin Tarihi:</strong> ${new Date(formData.dueDate).toLocaleDateString('tr-TR')}</p>` : ''}
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
+              <p style="color:#6b7280;font-size:12px;">Bu e-posta Ilaclamatik sistemi tarafindan otomatik olarak gonderilmistir.</p>
+            </div>
+          `;
+          for (const email of recipients) await sendEmail(email, subject, html);
+          toast.success('DOF bildirimi e-posta ile gonderildi.');
+        } catch (e) { console.error("E-posta hatasi", e); }
       }
 
       setSuccess(true);

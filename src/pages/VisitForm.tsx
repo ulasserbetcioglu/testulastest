@@ -232,17 +232,34 @@ const VisitForm: React.FC = () => {
         try {
           const recipientEmails = await getRecipientEmails(finalCustomerId, finalBranchId);
           if (recipientEmails.length > 0) {
+            const selectedCustomer = customers.find(c => c.id === finalCustomerId);
+            const customerName = isOneTimeCustomer ? manualCustomerName : (selectedCustomer?.kisa_isim || '');
+            const selectedBranch = branches.find(b => b.id === finalBranchId);
+            const branchName = isOneTimeCustomer ? manualBranchName : (selectedBranch?.sube_adi || '');
+            const visitDate = formData.visitDate ? new Date(formData.visitDate).toLocaleDateString('tr-TR') : '';
+            const subject = `Ziyaret Planlandi - ${customerName} ${branchName} - ${visitDate}`;
+            const html = `
+              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+                <h2 style="color:#2563eb;border-bottom:2px solid #2563eb;padding-bottom:10px;">Ziyaret Planlandi</h2>
+                <p><strong>Musteri:</strong> ${customerName}</p>
+                ${branchName ? `<p><strong>Sube:</strong> ${branchName}</p>` : ''}
+                <p><strong>Tarih:</strong> ${visitDate}</p>
+                <p><strong>Saat:</strong> ${formData.visitTime || ''}</p>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
+                <p style="color:#6b7280;font-size:12px;">Bu e-posta Ilaclamatik sistemi tarafindan otomatik olarak gonderilmistir.</p>
+              </div>
+            `;
             for (const email of recipientEmails) {
-              await sendEmail('visit', data[0].id, email);
+              await sendEmail(email, subject, html);
             }
-            toast.success('Ziyaret planlandı ve bildirim e-postası gönderildi.');
+            toast.success('Ziyaret planlandi ve bildirim e-postasi gonderildi.');
           }
         } catch (emailError) {
           console.error('Email sending failed:', emailError);
-          toast.error('Ziyaret oluşturuldu ancak e-posta gönderimi başarısız oldu.');
+          toast.error('Ziyaret olusturuldu ancak e-posta gonderimi basarisiz oldu.');
         }
       } else {
-        toast.success('Yeni ziyaret başarıyla oluşturuldu!');
+        toast.success('Yeni ziyaret basariyla olusturuldu!');
       }
       
       isSuccess = true;

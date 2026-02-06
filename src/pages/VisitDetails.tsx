@@ -897,8 +897,24 @@ const VisitDetails: React.FC = () => {
 
       if (sendEmailNotification && visit) {
         const recipients = await getRecipientEmails(visit.customer.id, visit.branch?.id || null);
-        for (const email of recipients) await sendEmail('visit', id || '', email);
-        toast.success('Bildirim e-postası gönderildi.');
+        const visitDate = new Date(visit.visit_date).toLocaleDateString('tr-TR');
+        const customerName = visit.customer.kisa_isim || visit.customer.cari_isim || '';
+        const branchName = visit.branch?.sube_adi || '';
+        const subject = `Ziyaret Bildirimi - ${customerName} ${branchName} - ${visitDate}`;
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+            <h2 style="color:#16a34a;border-bottom:2px solid #16a34a;padding-bottom:10px;">Ziyaret Bildirimi</h2>
+            <p><strong>Musteri:</strong> ${customerName}</p>
+            ${branchName ? `<p><strong>Sube:</strong> ${branchName}</p>` : ''}
+            <p><strong>Tarih:</strong> ${visitDate}</p>
+            ${reportNumber ? `<p><strong>Rapor No:</strong> ${reportNumber}</p>` : ''}
+            ${explanation ? `<p><strong>Aciklama:</strong> ${explanation}</p>` : ''}
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"/>
+            <p style="color:#6b7280;font-size:12px;">Bu e-posta Ilaclamatik sistemi tarafindan otomatik olarak gonderilmistir.</p>
+          </div>
+        `;
+        for (const email of recipients) await sendEmail(email, subject, html);
+        toast.success('Bildirim e-postasi gonderildi.');
       }
 
       toast.success(isEditMode ? 'Ziyaret güncellendi' : 'Ziyaret tamamlandı');
