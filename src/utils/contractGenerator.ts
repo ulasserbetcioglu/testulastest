@@ -355,12 +355,12 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
       </tbody>
     </table>
 
+    <div style="page-break-inside: avoid; break-inside: avoid;">
     <h3 style="${S.h2}">10.&nbsp;&nbsp;&nbsp;&nbsp;HÜKÜMLER VE TEBLİGAT</h3>
     <p style="${S.p}"><strong>10.1.</strong> İşbu sözleşme, 10 (ON) madde ve 5 (BEŞ) sayfadan ibaret olup, 2 (iki) nüsha olarak (Sözleşme İmza Tarihi) tarihinde imzalanmış ve bir nüshası İŞVEREN'e, bir nüshası PestMENTOR'a teslim edilmiştir.</p>
     <p style="${S.p}"><strong>10.2.</strong> Tarafların kanuni tebligat adresleri, sözleşmenin giriş bölümünde belirtilen adreslerdir.</p>
     <p style="${S.p}"><strong>10.3.</strong> Taraflar, adres değişikliklerini diğer tarafa yedi (7) gün içinde iadeli taahhütlü mektup, noter veya KEP (Kayıtlı Elektronik Posta) yoluyla bildirmekle yükümlüdür. Bu bildirimin yapılmaması halinde, sözleşmede belirtilen mevcut adreslere yapılan her türlü tebligat, yasal olarak geçerli bir tebligatın tüm hüküm ve sonuçlarını doğurur.</p>
 
-    <div class="contract-no-break">
     <table style="width:100%; margin-top:30px; border-collapse:collapse;">
       <tr>
         <td style="width:50%; text-align:center; vertical-align:top; padding:12px 15px; border:1px solid #333;">
