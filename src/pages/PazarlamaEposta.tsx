@@ -25,10 +25,10 @@ const signatureHtml = `
         <img src="https://i.imgur.com/PajSpus.png" alt="İlaçlamatik Logo" style="width: 70px; height: auto;">
       </td>
       <td style="vertical-align: top; padding-left: 15px; font-family: Arial, sans-serif;">
-        <p style="margin: 0; font-weight: bold; color: #059669; font-size: 14px;">İlaçlamatik Ekibi</p>
-        <p style="margin: 4px 0; font-size: 12px; color: #555555;">Profesyonel Zararlı Kontrol Çözümləri</p>
+        <p style="margin: 0; font-weight: bold; color: #059669; font-size: 14px;">Sistem İlaçlama Sanayi ve Ticaret Limited Şirketi - PestMentor</p>
+        <p style="margin: 4px 0; font-size: 12px; color: #555555;">Leave Pest to us...</p>
         <p style="margin: 4px 0; font-size: 12px; color: #555555;">
-          <a href="http://www.ilaclamatik.com.tr" style="color: #059669; text-decoration: none;">www.ilaclamatik.com.tr</a> | 
+          <a href="http://www.ilaclamatik.com.tr" style="color: #059669; text-decoration: none;">www.ilaclamatik.com - www.pestmentor.com.tr</a> | 
           <span style="color: #333333;">+90 555 123 4567</span>
         </p>
       </td>
