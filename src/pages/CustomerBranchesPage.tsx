@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import {
   MapPin, Phone, Mail, Building, ChevronDown, ChevronUp,
   Package, Calendar, Layout, TrendingUp, Loader2,
-  AlertCircle, Bug, FileText, Filter, Eye, X, XCircle, CheckCircle, Clock, CreditCard, ChevronRight, Shield
+  AlertCircle, Bug, FileText, Filter, Eye, X, XCircle, CheckCircle, Clock, CreditCard, ChevronRight, Shield, FileDown
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
 import type { Branch } from '../types';
 import { format, subMonths, parseISO, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import FloorPlanViewer from '../components/Branches/FloorPlanViewer';
 import BranchTrendAnalysis from './BranchTrendAnalysis';
 import BranchIpmView from '../components/Ipm/BranchIpmView';
@@ -457,6 +459,58 @@ const CustomerBranchesPage: React.FC = () => {
     }));
   };
 
+  const handleExportPdf = () => {
+    if (branches.length === 0) return;
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfW = pdf.internal.pageSize.getWidth();
+
+    pdf.setFillColor(21, 128, 61);
+    pdf.rect(0, 0, pdfW, 18, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('Sube Listesi', 14, 12);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`${format(new Date(), 'dd.MM.yyyy')} - Toplam ${branches.length} sube`, pdfW - 14, 12, { align: 'right' });
+
+    autoTable(pdf, {
+      startY: 24,
+      head: [['#', 'Sube Adi', 'Sehir', 'Adres', 'Telefon', 'E-posta']],
+      body: branches.map((b, i) => [
+        i + 1,
+        b.sube_adi || '-',
+        b.sehir || '-',
+        b.adres || '-',
+        b.telefon || '-',
+        b.email || '-',
+      ]),
+      styles: { fontSize: 8, cellPadding: 3, lineColor: [220, 220, 220], lineWidth: 0.3 },
+      headStyles: { fillColor: [240, 253, 244], textColor: [22, 101, 52], fontStyle: 'bold', lineColor: [200, 230, 200] },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 50, fontStyle: 'bold' },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 'auto' },
+        4: { cellWidth: 35 },
+        5: { cellWidth: 50 },
+      },
+      margin: { left: 8, right: 8 },
+      didDrawPage: (data: any) => {
+        const pageH = pdf.internal.pageSize.getHeight();
+        pdf.setDrawColor(220, 220, 220);
+        pdf.line(8, pageH - 10, pdfW - 8, pageH - 10);
+        pdf.setFontSize(7);
+        pdf.setTextColor(170, 170, 170);
+        const pageCount = (pdf as any).internal.getNumberOfPages();
+        pdf.text(`Sayfa ${data.pageNumber} / ${pageCount}`, pdfW / 2, pageH - 6, { align: 'center' });
+      },
+    });
+
+    pdf.save(`Sube_Listesi_${format(new Date(), 'yyyyMMdd')}.pdf`);
+  };
+
   if (loading) return <div className="p-8 text-center">Yükleniyor...</div>;
   if (error) return <div className="p-8 text-center text-red-500">Hata: {error}</div>;
 
@@ -464,7 +518,14 @@ const CustomerBranchesPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Şubelerim</h1>
-        <div className="text-sm text-gray-500">Toplam {branches.length} şube listeleniyor</div>
+        <div className="flex items-center gap-3">
+          {branches.length > 0 && (
+            <button onClick={handleExportPdf} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors shadow-sm">
+              <FileDown size={16} /> PDF Indir
+            </button>
+          )}
+          <div className="text-sm text-gray-500">Toplam {branches.length} şube listeleniyor</div>
+        </div>
       </div>
 
       {branches.length === 0 ? (
