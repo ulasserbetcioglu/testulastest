@@ -317,7 +317,7 @@ const AdminCalendarPlanning = () => {
       const end = endOfMonth(currentDate);
 
       const [custData, branchData, opData, visitData] = await Promise.all([
-        supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+        supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim'),
         supabase.from('branches').select('id, customer_id, sube_adi, customers(kisa_isim)').order('sube_adi'),
         supabase.from('operators').select('id, name').eq('status', 'Açık').order('name'),
         supabase.from('visits')

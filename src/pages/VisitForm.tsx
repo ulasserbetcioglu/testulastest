@@ -72,7 +72,7 @@ const VisitForm: React.FC = () => {
 
   const fetchCustomers = useCallback(async (isAdminFlag: boolean, assignedCustomerIds: string[] | null) => {
     try {
-      let query = supabase.from('customers').select('id, kisa_isim').order('kisa_isim');
+      let query = supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim');
       if (!isAdminFlag && assignedCustomerIds && assignedCustomerIds.length > 0) {
         query = query.in('id', assignedCustomerIds);
       }

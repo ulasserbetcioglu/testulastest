@@ -140,7 +140,7 @@ const AdminMonthlyVisitSchedule = () => {
 
       // Diğer verileri çek
       const [customersRes, branchesRes, operatorsRes] = await Promise.all([
-        supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+        supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim'),
         supabase.from('branches').select(`
             id, sube_adi, customer_id,
             customers!branches_customer_id_fkey(kisa_isim)

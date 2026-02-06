@@ -227,7 +227,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
 
   const fetchCustomers = async () => {
     try {
-      let query = supabase.from('customers').select('id, kisa_isim').order('kisa_isim');
+      let query = supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim');
       if (!isAdmin && assignedCustomers?.length) query = query.in('id', assignedCustomers);
       
       const { data } = await query;

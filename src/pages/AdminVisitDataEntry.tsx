@@ -102,7 +102,7 @@ const AdminVisitDataEntry: React.FC = () => {
 
   // --- Data Fetching ---
   const fetchCustomers = async () => {
-    const { data } = await supabase.from('customers').select('id, kisa_isim').order('kisa_isim');
+    const { data } = await supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim');
     setCustomers(data || []);
   };
 

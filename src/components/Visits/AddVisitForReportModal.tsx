@@ -54,7 +54,7 @@ const AddVisitForReportModal: React.FC<AddVisitForReportModalProps> = ({ isOpen,
       setIsDataLoading(true);
       try {
         const [customersRes, branchesRes, operatorRes] = await Promise.all([
-          supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+          supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim'),
           supabase.from('branches').select('id, sube_adi, customer_id'),
           supabase.from('operators').select('id, name').eq('id', initialData.operatorId).single()
         ]);

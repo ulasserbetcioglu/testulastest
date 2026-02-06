@@ -71,7 +71,7 @@ const BulkVisitImport: React.FC = () => {
       setLoading(true);
       try {
         const [customersRes, branchesRes, operatorsRes, paidProductsRes] = await Promise.all([
-          supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+          supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim'),
           supabase.from('branches').select('id, sube_adi, customer_id').order('sube_adi'),
           supabase.from('operators').select('id, name').order('name'),
           supabase.from('paid_products').select('id, name, unit_type, price').eq('is_active', true).order('name'),

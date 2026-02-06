@@ -199,7 +199,7 @@ const OperatorCollectionReceipt: React.FC = () => {
       const operatorAssignedBranches = operatorData.assigned_branches;
 
       // 3. Atanmış müşteri ID'lerine sahip tüm müşterileri çek (veya atanmamışsa tümünü)
-      let customerQuery = supabase.from('customers').select('id, kisa_isim').eq('is_one_time', false).order('kisa_isim');
+      let customerQuery = supabase.from('customers').select('id, kisa_isim').eq('is_one_time', false).eq('is_active', true).order('kisa_isim');
       if (operatorAssignedCustomers && operatorAssignedCustomers.length > 0) {
           customerQuery = customerQuery.in('id', operatorAssignedCustomers);
       }

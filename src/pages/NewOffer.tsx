@@ -220,7 +220,7 @@ const NewOfferPage: React.FC = () => {
     const fetchInitialData = async () => {
       try {
         const settingsPromise = supabase.from('company_settings').select('*').single();
-        const customersPromise = supabase.from('customers').select('id, kisa_isim, cari_isim, musteri_no, adres, sehir, email').order('kisa_isim');
+        const customersPromise = supabase.from('customers').select('id, kisa_isim, cari_isim, musteri_no, adres, sehir, email').eq('is_active', true).order('kisa_isim');
         
         const [{ data: settingsData, error: settingsError }, { data: customersData, error: customersError }] = await Promise.all([settingsPromise, customersPromise]);
 

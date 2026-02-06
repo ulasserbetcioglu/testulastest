@@ -17,6 +17,7 @@ export type Customer = {
   tax_number?: string;
   tax_office?: string;
   is_one_time?: boolean;
+  is_active?: boolean;
   assigned_operator_id?: string | null;
   assigned_operator?: { name: string } | null;
 };

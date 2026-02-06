@@ -274,7 +274,7 @@ const AdminCollectionReceipts: React.FC = () => {
   }, [formData.customer_id]);
 
   const fetchCustomers = async () => {
-    const { data } = await supabase.from('customers').select('id, kisa_isim').order('kisa_isim');
+    const { data } = await supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim');
     if (data) {
       setCustomerList(data.map(c => ({ id: c.id, name: c.kisa_isim })));
     }

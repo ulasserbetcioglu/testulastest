@@ -162,7 +162,7 @@ const UvLampReport: React.FC = () => {
 
     const fetchCustomers = async () => {
         setLoading(prev => ({ ...prev, customers: true }));
-        const { data, error } = await supabase.from('customers').select('id, kisa_isim').order('kisa_isim');
+        const { data, error } = await supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim');
         if (error) showToast('Müşteriler çekilirken hata oluştu.', 'error');
         else if (data) setCustomers(data);
         setLoading(prev => ({ ...prev, customers: false }));

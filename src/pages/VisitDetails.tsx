@@ -449,7 +449,8 @@ const VisitDetails: React.FC = () => {
   const [branchEquipment, setBranchEquipment] = useState<BranchEquipment[]>([]);
   const [biocidalProducts, setBiocidalProducts] = useState<BiocidalProduct[]>([]);
   const [paidProducts, setPaidProducts] = useState<PaidProduct[]>([]);
-  
+  const [customerProductPrices, setCustomerProductPrices] = useState<Map<string, number>>(new Map());
+
   // UI/Loading States
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -498,6 +499,10 @@ const VisitDetails: React.FC = () => {
       fetchBranchEquipment(visit.branch.id);
     } else {
       setBranchEquipment([]);
+    }
+    if (visit?.customer?.id) {
+      fetchPaidProducts();
+      fetchCustomerProductPrices(visit.customer.id);
     }
   }, [visit]);
 
@@ -588,6 +593,25 @@ const VisitDetails: React.FC = () => {
       const { data } = await supabase.from('paid_products').select('id, name, unit_type, price').eq('is_active', true).order('name');
       setPaidProducts(data || []);
     } catch (err) { console.error(err); }
+  };
+
+  const fetchCustomerProductPrices = async (customerId: string) => {
+    try {
+      const { data } = await supabase
+        .from('customer_product_prices')
+        .select('product_id, custom_price')
+        .eq('customer_id', customerId);
+      const priceMap = new Map<string, number>();
+      (data || []).forEach(p => priceMap.set(p.product_id, p.custom_price));
+      setCustomerProductPrices(priceMap);
+    } catch (err) { console.error(err); }
+  };
+
+  const getProductPrice = (productId: string): number => {
+    const customPrice = customerProductPrices.get(productId);
+    if (customPrice !== undefined) return customPrice;
+    const product = paidProducts.find(p => p.id === productId);
+    return product?.price || 0;
   };
 
   const fetchVisitDetails = async () => {
@@ -867,10 +891,10 @@ const VisitDetails: React.FC = () => {
         if (validPaidItems.length > 0) {
           let totalAmount = 0;
           const saleItems = validPaidItems.map(item => {
-            const p = paidProducts.find(prod => prod.id === item.productId);
-            const price = (parseFloat(item.quantity) * (p?.price || 0));
+            const unitPrice = getProductPrice(item.productId);
+            const price = parseFloat(item.quantity) * unitPrice;
             totalAmount += price;
-            return { product_id: item.productId, quantity: parseFloat(item.quantity), unit_price: p?.price || 0, total_price: price };
+            return { product_id: item.productId, quantity: parseFloat(item.quantity), unit_price: unitPrice, total_price: price };
           });
 
           if (isEditMode && existingSaleId) {
@@ -1199,7 +1223,10 @@ const VisitDetails: React.FC = () => {
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">Malzeme Adi</label>
                     <select className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white" value={item.productId} onChange={(e) => handlePaidProductChange(idx, 'productId', e.target.value)}>
                       <option value="">Seciniz</option>
-                      {paidProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {paidProducts.map(p => {
+                        const customPrice = customerProductPrices.get(p.id);
+                        return <option key={p.id} value={p.id}>{p.name} - {(customPrice ?? p.price).toLocaleString('tr-TR')} TL{customPrice !== undefined ? ' (Ozel)' : ''}</option>;
+                      })}
                     </select>
                   </div>
                   <div className="w-full sm:w-32">

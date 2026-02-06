@@ -65,7 +65,7 @@ const ProposalReportModule: React.FC = () => {
       try {
         setLoading(true);
         const [customersRes, branchesRes, productsRes] = await Promise.all([
-          supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+          supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim'),
           supabase.from('branches').select('id, sube_adi, musteri_id').order('sube_adi'),
           supabase.from('products').select('id, name, description').order('name')
         ]);

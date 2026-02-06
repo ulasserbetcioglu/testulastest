@@ -212,7 +212,7 @@ const AdminTrendAnalysisReport: React.FC = () => {
 
   const fetchCustomers = async () => {
     try {
-      const { data, error } = await supabase.from('customers').select('id, kisa_isim').order('kisa_isim');
+      const { data, error } = await supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim');
       if (error) throw error;
       setCustomers(data || []);
     } catch (error) {

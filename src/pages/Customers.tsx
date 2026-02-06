@@ -1,6 +1,5 @@
-// src/pages/Customers.tsx
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Upload, Edit2, Trash2, Plus, DollarSign } from 'lucide-react';
+import { Search, Download, Upload, Edit2, Trash2, Plus, DollarSign, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Customer } from '../types';
 import AddCustomerModal from '../components/Customers/AddCustomerModal';
@@ -8,6 +7,7 @@ import EditCustomerModal from '../components/Customers/EditCustomerModal';
 import BulkPricingModal from '../components/Customers/BulkPricingModal';
 import { supabase } from '../lib/supabase';
 import { exportCustomersToExcel, importCustomersFromExcel, downloadExcelTemplate } from '../utils/excel';
+import { toast } from 'sonner';
 
 const Customers: React.FC = () => {
   const navigate = useNavigate();
@@ -20,9 +20,8 @@ const Customers: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  // YENİ: Tek seferlik müşterileri gösterme/gizleme state'i
   const [showOneTimeCustomers, setShowOneTimeCustomers] = useState(false);
-
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
 
   useEffect(() => {
     checkAdminAccess();
@@ -30,9 +29,8 @@ const Customers: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // YENİ: showOneTimeCustomers değiştiğinde müşterileri yeniden çek
     fetchCustomers();
-  }, [showOneTimeCustomers]);
+  }, [showOneTimeCustomers, statusFilter]);
 
   const checkAdminAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -42,21 +40,25 @@ const Customers: React.FC = () => {
   const fetchCustomers = async () => {
     try {
       const { data: session } = await supabase.auth.getSession();
-      
+
       if (!session?.session) {
         setError('Lütfen önce giriş yapın');
         return;
       }
 
-      // auth_id'yi sorguya ekleyerek şifre güncelleme için gerekli veriyi çekiyoruz.
       let query = supabase
         .from('customers')
         .select('*, auth_id, pricing:customer_pricing(*)')
         .order('created_at', { ascending: false });
 
-      // YENİ: is_one_time filtresi
       if (!showOneTimeCustomers) {
         query = query.eq('is_one_time', false);
+      }
+
+      if (statusFilter === 'active') {
+        query = query.eq('is_active', true);
+      } else if (statusFilter === 'inactive') {
+        query = query.eq('is_active', false);
       }
 
       const { data, error } = await query;
@@ -69,6 +71,20 @@ const Customers: React.FC = () => {
       }
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const handleToggleActive = async (customerId: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({ is_active: !currentStatus })
+        .eq('id', customerId);
+      if (error) throw error;
+      toast.success(currentStatus ? 'Müşteri pasif yapıldı' : 'Müşteri aktif yapıldı');
+      fetchCustomers();
+    } catch (err: any) {
+      toast.error('Durum güncellenirken hata: ' + err.message);
     }
   };
 
@@ -220,17 +236,35 @@ const Customers: React.FC = () => {
         </button>
       </div>
 
-      {/* YENİ: Tek seferlik müşterileri gösterme/gizleme seçeneği */}
       {isAdmin && (
-        <div className="flex items-center mt-4">
-          <input
-            type="checkbox"
-            id="showOneTimeCustomers"
-            checked={showOneTimeCustomers}
-            onChange={(e) => setShowOneTimeCustomers(e.target.checked)}
-            className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-          />
-          <label htmlFor="showOneTimeCustomers" className="ml-2 block text-sm text-gray-700">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-1.5 bg-white rounded-lg border border-gray-200 p-1">
+            <button
+              onClick={() => setStatusFilter('active')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${statusFilter === 'active' ? 'bg-green-100 text-green-800' : 'text-gray-500 hover:bg-gray-50'}`}
+            >
+              Aktif
+            </button>
+            <button
+              onClick={() => setStatusFilter('inactive')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${statusFilter === 'inactive' ? 'bg-red-100 text-red-800' : 'text-gray-500 hover:bg-gray-50'}`}
+            >
+              Pasif
+            </button>
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${statusFilter === 'all' ? 'bg-gray-200 text-gray-800' : 'text-gray-500 hover:bg-gray-50'}`}
+            >
+              Tümü
+            </button>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showOneTimeCustomers}
+              onChange={(e) => setShowOneTimeCustomers(e.target.checked)}
+              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+            />
             Tek Seferlik Müşterileri Göster
           </label>
         </div>
@@ -258,10 +292,9 @@ const Customers: React.FC = () => {
                     Fiyatlandırma
                   </th>
                 )}
-                {/* YENİ: Tek seferlik sütunu */}
                 {isAdmin && (
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                    Tek Seferlik
+                  <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">
+                    Durum
                   </th>
                 )}
                 <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">
@@ -305,10 +338,23 @@ const Customers: React.FC = () => {
                       )}
                     </td>
                   )}
-                  {/* YENİ: Tek seferlik sütunu */}
                   {isAdmin && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {customer.is_one_time ? 'Evet' : 'Hayır'}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleActive(customer.id, customer.is_active !== false); }}
+                        className="inline-flex items-center gap-1"
+                        title={customer.is_active !== false ? 'Pasif yap' : 'Aktif yap'}
+                      >
+                        {customer.is_active !== false ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                            <ToggleRight size={14} /> Aktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                            <ToggleLeft size={14} /> Pasif
+                          </span>
+                        )}
+                      </button>
                     </td>
                   )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">

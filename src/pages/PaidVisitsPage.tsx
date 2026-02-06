@@ -126,7 +126,7 @@ const PaidVisitsPage: React.FC = () => {
     const fetchInitialStaticData = async () => {
         try {
             const [customersRes, branchesRes, operatorsRes] = await Promise.all([
-                supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+                supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim'),
                 supabase.from('branches').select('id, sube_adi, customer_id').order('sube_adi'),
                 supabase.from('operators').select('id, name').order('name'),
             ]);

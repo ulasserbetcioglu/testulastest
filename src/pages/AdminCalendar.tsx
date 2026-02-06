@@ -517,7 +517,7 @@ const AdminCalendar: React.FC = () => {
 
         const [operatorData, customerData, branchData, customerPricingData, branchPricingData, schedulesData] = await Promise.all([
           supabase.from('operators').select('id, name').order('name'),
-          supabase.from('customers').select('id, kisa_isim').order('kisa_isim'),
+          supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim'),
           supabase.from('branches').select('id, sube_adi, customer_id, latitude, longitude, customer:customer_id(kisa_isim)').order('sube_adi'),
           supabase.from('customer_pricing').select('id, customer_id, monthly_price, per_visit_price'),
           supabase.from('branch_pricing').select('id, branch_id, monthly_price, per_visit_price'),

@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, ToggleLeft, ToggleRight, Search, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { toast } from 'sonner';
 import type { Customer, Branch } from '../../types';
+
+interface PaidProduct {
+  id: string;
+  name: string;
+  price: number;
+  unit_type: string;
+  is_active: boolean;
+}
+
+interface CustomerProductPrice {
+  product_id: string;
+  custom_price: number;
+}
 
 interface EditCustomerModalProps {
   isOpen: boolean;
@@ -46,8 +60,13 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pricingType, setPricingType] = useState<'monthly' | 'per_visit' | 'none'>('none');
-  const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'account'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'pricing' | 'product_pricing' | 'account'>('basic');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [customerIsActive, setCustomerIsActive] = useState(customer.is_active !== false);
+  const [paidProducts, setPaidProducts] = useState<PaidProduct[]>([]);
+  const [customerProductPrices, setCustomerProductPrices] = useState<Map<string, number>>(new Map());
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [savingProductPrices, setSavingProductPrices] = useState(false);
 
   useEffect(() => {
     const initialize = async () => {
@@ -55,6 +74,8 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
         if (isOpen) {
             fetchPricingData();
             fetchBranches();
+            fetchPaidProducts();
+            fetchCustomerProductPrices();
             const { data: customerData } = await supabase
               .from('customers')
               .select('password_hash')
@@ -63,6 +84,7 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
             if (customerData?.password_hash) {
               setCurrentPassword(customerData.password_hash);
             }
+            setCustomerIsActive(customer.is_active !== false);
             setFormData({
                 kisaIsim: customer.kisa_isim,
                 cariIsim: customer.cari_isim || '',
@@ -79,6 +101,7 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
             });
             setError(null);
             setActiveTab('basic');
+            setProductSearchTerm('');
         }
     };
     initialize();
@@ -153,6 +176,69 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
     }
   };
 
+  const fetchPaidProducts = async () => {
+    try {
+      const { data } = await supabase
+        .from('paid_products')
+        .select('id, name, price, unit_type, is_active')
+        .eq('is_active', true)
+        .order('name');
+      setPaidProducts(data || []);
+    } catch (err: any) {
+      console.error('Error fetching paid products:', err);
+    }
+  };
+
+  const fetchCustomerProductPrices = async () => {
+    try {
+      const { data } = await supabase
+        .from('customer_product_prices')
+        .select('product_id, custom_price')
+        .eq('customer_id', customer.id);
+      const priceMap = new Map<string, number>();
+      (data || []).forEach(p => priceMap.set(p.product_id, p.custom_price));
+      setCustomerProductPrices(priceMap);
+    } catch (err: any) {
+      console.error('Error fetching customer product prices:', err);
+    }
+  };
+
+  const handleSaveProductPrices = async () => {
+    setSavingProductPrices(true);
+    try {
+      await supabase.from('customer_product_prices').delete().eq('customer_id', customer.id);
+
+      const pricesToInsert = Array.from(customerProductPrices.entries())
+        .filter(([_, price]) => price > 0)
+        .map(([product_id, custom_price]) => ({
+          customer_id: customer.id,
+          product_id,
+          custom_price,
+        }));
+
+      if (pricesToInsert.length > 0) {
+        const { error } = await supabase.from('customer_product_prices').insert(pricesToInsert);
+        if (error) throw error;
+      }
+      toast.success('Müşteriye özel ürün fiyatları kaydedildi');
+    } catch (err: any) {
+      toast.error('Fiyatlar kaydedilirken hata: ' + err.message);
+    } finally {
+      setSavingProductPrices(false);
+    }
+  };
+
+  const handleProductPriceChange = (productId: string, value: string) => {
+    const newPrices = new Map(customerProductPrices);
+    const num = parseFloat(value);
+    if (!isNaN(num) && value.trim() !== '') {
+      newPrices.set(productId, num);
+    } else {
+      newPrices.delete(productId);
+    }
+    setCustomerProductPrices(newPrices);
+  };
+
   const handleBranchChange = (branchId: string) => {
     setSelectedBranch(branchId);
     if (branchId) {
@@ -178,6 +264,7 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
         email: formData.email,
         tax_number: formData.taxNumber,
         tax_office: formData.taxOffice,
+        is_active: customerIsActive,
       };
 
       if (formData.newPassword) {
@@ -257,19 +344,140 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
         </div>
 
         <div className="border-b">
-          <div className="flex">
-            <button onClick={() => setActiveTab('basic')} className={`px-4 py-2 font-medium ${activeTab === 'basic' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Temel Bilgiler</button>
-            {isAdmin && (<button onClick={() => setActiveTab('pricing')} className={`px-4 py-2 font-medium ${activeTab === 'pricing' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Fiyatlandırma</button>)}
-            {isAdmin && (<button onClick={() => setActiveTab('account')} className={`px-4 py-2 font-medium ${activeTab === 'account' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Giriş Bilgileri</button>)}
+          <div className="flex overflow-x-auto">
+            <button onClick={() => setActiveTab('basic')} className={`px-4 py-2 font-medium whitespace-nowrap text-sm ${activeTab === 'basic' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Temel Bilgiler</button>
+            {isAdmin && (<button onClick={() => setActiveTab('pricing')} className={`px-4 py-2 font-medium whitespace-nowrap text-sm ${activeTab === 'pricing' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Fiyatlandırma</button>)}
+            {isAdmin && (<button onClick={() => setActiveTab('product_pricing')} className={`px-4 py-2 font-medium whitespace-nowrap text-sm ${activeTab === 'product_pricing' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Malzeme Fiyatları</button>)}
+            {isAdmin && (<button onClick={() => setActiveTab('account')} className={`px-4 py-2 font-medium whitespace-nowrap text-sm ${activeTab === 'account' ? 'border-b-2 border-green-500 text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Giriş Bilgileri</button>)}
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6">
           {error && (<div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{error}</div>)}
 
-          {activeTab === 'basic' && ( <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Müşteri No </label> <input type="text" value={customer.musteri_no} className="w-full p-2 border rounded bg-gray-100" disabled /> </div> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Kısa İsim </label> <input type="text" value={formData.kisaIsim} onChange={(e) => setFormData({ ...formData, kisaIsim: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" required /> </div> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Cari İsim </label> <input type="text" value={formData.cariIsim} onChange={(e) => setFormData({ ...formData, cariIsim: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" /> <p className="mt-1 text-xs text-gray-500">Muhasebe sisteminde kullanılacak isim</p> </div> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Telefon </label> <input type="tel" value={formData.telefon} onChange={(e) => setFormData({ ...formData, telefon: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" /> </div> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> E-Posta </label> <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" /> </div> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Vergi Dairesi </label> <input type="text" value={formData.taxOffice} onChange={(e) => setFormData({ ...formData, taxOffice: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" /> </div> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Vergi Numarası </label> <input type="text" value={formData.taxNumber} onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" /> </div> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Şehir </label> <select value={formData.sehir} onChange={(e) => setFormData({ ...formData, sehir: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" > <option value="">Seçiniz</option> {cities.map((city) => ( <option key={city} value={city}>{city}</option> ))} </select> </div> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-700 mb-1"> Adres </label> <textarea value={formData.adres} onChange={(e) => setFormData({ ...formData, adres: e.target.value })} rows={2} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" /> </div> </div> )}
+          {activeTab === 'basic' && (
+            <div className="space-y-4">
+              {isAdmin && (
+                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Müşteri Durumu</p>
+                    <p className="text-xs text-gray-500">Pasif müşteriler takvim, ziyaret ve raporlama alanlarında görünmez</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerIsActive(!customerIsActive)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${customerIsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'}`}
+                  >
+                    {customerIsActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                    {customerIsActive ? 'Aktif' : 'Pasif'}
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Müşteri No</label>
+                  <input type="text" value={customer.musteri_no} className="w-full p-2 border rounded bg-gray-100" disabled />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kısa İsim</label>
+                  <input type="text" value={formData.kisaIsim} onChange={(e) => setFormData({ ...formData, kisaIsim: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cari İsim</label>
+                  <input type="text" value={formData.cariIsim} onChange={(e) => setFormData({ ...formData, cariIsim: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  <p className="mt-1 text-xs text-gray-500">Muhasebe sisteminde kullanılacak isim</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+                  <input type="tel" value={formData.telefon} onChange={(e) => setFormData({ ...formData, telefon: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">E-Posta</label>
+                  <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vergi Dairesi</label>
+                  <input type="text" value={formData.taxOffice} onChange={(e) => setFormData({ ...formData, taxOffice: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vergi Numarası</label>
+                  <input type="text" value={formData.taxNumber} onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Şehir</label>
+                  <select value={formData.sehir} onChange={(e) => setFormData({ ...formData, sehir: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <option value="">Seçiniz</option>
+                    {cities.map((city) => (<option key={city} value={city}>{city}</option>))}
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Adres</label>
+                  <textarea value={formData.adres} onChange={(e) => setFormData({ ...formData, adres: e.target.value })} rows={2} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+              </div>
+            </div>
+          )}
           
           {activeTab === 'pricing' && isAdmin && ( <div className="space-y-6"> {/* Customer Pricing */} <div className="border-t pt-4"> <h3 className="text-lg font-medium mb-3">Müşteri Fiyatlandırma</h3> <div className="space-y-4"> <div className="flex items-center space-x-4"> <label className="flex items-center"> <input type="radio" name="pricingType" checked={pricingType === 'none'} onChange={() => setPricingType('none')} className="mr-2" /> <span>Fiyatlandırma Yok</span> </label> <label className="flex items-center"> <input type="radio" name="pricingType" checked={pricingType === 'monthly'} onChange={() => setPricingType('monthly')} className="mr-2" /> <span>Aylık Fiyat</span> </label> <label className="flex items-center"> <input type="radio" name="pricingType" checked={pricingType === 'per_visit'} onChange={() => setPricingType('per_visit')} className="mr-2" /> <span>Ziyaret Başı Fiyat</span> </label> </div> {pricingType === 'monthly' && ( <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Aylık Fiyat (₺) </label> <input type="number" step="0.01" min="0" value={formData.monthlyPrice} onChange={(e) => setFormData({ ...formData, monthlyPrice: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" required /> </div> )} {pricingType === 'per_visit' && ( <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Ziyaret Başı Fiyat (₺) </label> <input type="number" step="0.01" min="0" value={formData.perVisitPrice} onChange={(e) => setFormData({ ...formData, perVisitPrice: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" required /> </div> )} </div> </div> {/* Branch Pricing */} <div className="border-t pt-4"> <h3 className="text-lg font-medium mb-3">Şube Fiyatlandırma</h3> <div className="space-y-4"> <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Şube Seçin </label> <select value={selectedBranch} onChange={(e) => handleBranchChange(e.target.value)} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" > <option value="">Şube Seçiniz</option> {branches.map(branch => ( <option key={branch.id} value={branch.id}>{branch.sube_adi}</option> ))} </select> </div> {selectedBranch && ( <> <div className="flex items-center space-x-4"> <label className="flex items-center"> <input type="radio" name="branchPricingType" checked={branchPricingType === 'none'} onChange={() => setBranchPricingType('none')} className="mr-2" /> <span>Fiyatlandırma Yok</span> </label> <label className="flex items-center"> <input type="radio" name="branchPricingType" checked={branchPricingType === 'monthly'} onChange={() => setBranchPricingType('monthly')} className="mr-2" /> <span>Aylık Fiyat</span> </label> <label className="flex items-center"> <input type="radio" name="branchPricingType" checked={branchPricingType === 'per_visit'} onChange={() => setBranchPricingType('per_visit')} className="mr-2" /> <span>Ziyaret Başı Fiyat</span> </label> </div> {branchPricingType === 'monthly' && ( <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Aylık Fiyat (₺) </label> <input type="number" step="0.01" min="0" value={branchPricing.monthlyPrice} onChange={(e) => setBranchPricing({ ...branchPricing, monthlyPrice: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" required /> </div> )} {branchPricingType === 'per_visit' && ( <div> <label className="block text-sm font-medium text-gray-700 mb-1"> Ziyaret Başı Fiyat (₺) </label> <input type="number" step="0.01" min="0" value={branchPricing.perVisitPrice} onChange={(e) => setBranchPricing({ ...branchPricing, perVisitPrice: e.target.value })} className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500" required /> </div> )} </> )} </div> </div> </div> )}
+
+          {activeTab === 'product_pricing' && isAdmin && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-medium">Müşteriye Özel Ücretli Malzeme Fiyatları</h3>
+                <p className="text-sm text-gray-500 mt-1">Boş bırakılan ürünlerde genel liste fiyatı uygulanır. Fiyat girilen ürünlerde bu müşteriye özel fiyat kullanılır.</p>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Ürün ara..."
+                  value={productSearchTerm}
+                  onChange={(e) => setProductSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                />
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+              </div>
+              <div className="max-h-[40vh] overflow-y-auto border rounded-lg divide-y divide-gray-100">
+                {paidProducts
+                  .filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()))
+                  .map(product => {
+                    const hasCustomPrice = customerProductPrices.has(product.id);
+                    return (
+                      <div key={product.id} className={`flex items-center gap-3 px-3 py-2.5 ${hasCustomPrice ? 'bg-green-50' : ''}`}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
+                          <p className="text-xs text-gray-400">Liste: {product.price.toLocaleString('tr-TR')} TL / {product.unit_type}</p>
+                        </div>
+                        <div className="w-36 shrink-0">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder={product.price.toLocaleString('tr-TR')}
+                            value={customerProductPrices.get(product.id) ?? ''}
+                            onChange={(e) => handleProductPriceChange(product.id, e.target.value)}
+                            className="w-full p-1.5 border rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-green-500"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+              <div className="flex justify-between items-center pt-2">
+                <p className="text-xs text-gray-500">
+                  {customerProductPrices.size} ürün için özel fiyat tanımlı
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSaveProductPrices}
+                  disabled={savingProductPrices}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 text-sm flex items-center gap-2"
+                >
+                  {savingProductPrices && <Loader2 size={14} className="animate-spin" />}
+                  Malzeme Fiyatlarını Kaydet
+                </button>
+              </div>
+            </div>
+          )}
 
           {activeTab === 'account' && isAdmin && (
             <div className="space-y-6">
