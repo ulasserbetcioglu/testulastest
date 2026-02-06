@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   MapPin, Phone, Mail, Building, ChevronDown, ChevronUp,
   Package, Calendar, Layout, TrendingUp, Loader2,
-  AlertCircle, Bug, FileText, Filter, Eye, X, XCircle, CheckCircle, Clock, CreditCard, ChevronRight
+  AlertCircle, Bug, FileText, Filter, Eye, X, XCircle, CheckCircle, Clock, CreditCard, ChevronRight, Shield
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
@@ -11,6 +11,7 @@ import { format, subMonths, parseISO, formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import FloorPlanViewer from '../components/Branches/FloorPlanViewer';
 import BranchTrendAnalysis from './BranchTrendAnalysis';
+import BranchIpmView from '../components/Ipm/BranchIpmView';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, AreaChart, Area, ComposedChart
@@ -492,6 +493,7 @@ const CustomerBranchesPage: React.FC = () => {
                   <button onClick={() => toggleTab(branch.id, 'pesticides')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'pesticides' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Bug size={16} /> Pestisit {activeTab === 'pesticides' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
                   <button onClick={() => toggleTab(branch.id, 'floorplan')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'floorplan' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Layout size={16} /> Kroki {activeTab === 'floorplan' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
                   <button onClick={() => toggleTab(branch.id, 'trends')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'trends' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><TrendingUp size={16} /> Trend Analiz {activeTab === 'trends' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
+                  <button onClick={() => toggleTab(branch.id, 'ipm')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'ipm' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Shield size={16} /> IPM Sozlesmesi {activeTab === 'ipm' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
                 </div>
                 {activeTab && (
                   <div className="border-t border-gray-200 p-4 bg-gray-50/30 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -502,6 +504,7 @@ const CustomerBranchesPage: React.FC = () => {
                     {activeTab === 'pesticides' && <BranchPesticideUsageView branchId={branch.id} />}
                     {activeTab === 'floorplan' && <FloorPlanViewer branchId={branch.id} />}
                     {activeTab === 'trends' && <BranchTrendAnalysis branchId={branch.id} branchName={branch.sube_adi} />}
+                    {activeTab === 'ipm' && <BranchIpmView branchId={branch.id} />}
                   </div>
                 )}
               </div>

@@ -103,6 +103,7 @@ import AdminWeeklyKmTracking from './pages/AdminWeeklyKmTracking';
 import AnnualVisitReport from './pages/AnnualVisitReport';
 import Sozlesmeler from './pages/Sozlesmeler';
 import TrainingPresentationPage from './pages/TrainingPresentationPage';
+import AdminIpmContracts from './pages/AdminIpmContracts';
 
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
@@ -399,6 +400,7 @@ function App() {
             <Route path="satis-gorusme-formu" element={<AdminRoute><SatisGorusmeFormu /></AdminRoute>} />
             <Route path="admin/faaliyet-dosyasi-yonetimi" element={<AdminRoute><AdminActivityFileManagement /></AdminRoute>} />
             <Route path="admin/faaliyet-dosyasi-goruntule" element={<AdminRoute><ActivityFileViewer /></AdminRoute>} />
+            <Route path="ipm-sozlesmeleri" element={<AdminRoute><AdminIpmContracts /></AdminRoute>} />
           </Route>
         </Routes>
       </AuthProvider>
