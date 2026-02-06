@@ -64,12 +64,18 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
       table { width: 100%; border-collapse: collapse; page-break-inside: avoid; }
       td, th { padding: 4px 8px; border: 1px solid #e5e7eb; font-size: 10px; }
       th { background: #f0fdf4; color: #166534; font-weight: 600; }
-      .print-header { display: none; position: fixed; top: 0; left: 0; right: 0; height: 20mm; background: #fff; border-bottom: 2px solid #15803d; padding: 4mm 15mm; font-size: 9px; color: #15803d; font-weight: bold; z-index: 100; }
+      .print-header { display: none; position: fixed; top: 0; left: 0; right: 0; height: 20mm; background: #fff; border-top: 3px solid #15803d; border-bottom: 1px solid #e5e7eb; padding: 3mm 15mm; font-size: 9px; color: #15803d; font-weight: bold; z-index: 100; }
       @media print { .print-header { display: flex; justify-content: space-between; align-items: center; } }
     </style></head><body>
     <div class="print-header">
-      <span>IPM PROGRAMI - ${contract.customer_name}</span>
-      <span style="color:#999">${startDateFormatted}</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" style="height:20px;object-fit:contain;" />` : ''}
+        <div>
+          <div style="font-size:9px;color:#15803d;">ENTEGRE ZARARLI Y\u00D6NET\u0130M\u0130 (IPM) PROGRAMI</div>
+          <div style="font-size:7px;color:#666;font-weight:normal;">${contract.customer_name}</div>
+        </div>
+      </div>
+      <span style="color:#999;font-weight:normal;">${startDateFormatted}</span>
     </div>
     ${reportRef.current.innerHTML}</body></html>`);
     printWindow.document.close();
@@ -80,20 +86,45 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
     if (!reportRef.current) return;
     setExporting(true);
     try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.72);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgScaledHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      const headerH = 14;
+      const headerEl = document.createElement('div');
+      headerEl.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:#fff;';
+      headerEl.innerHTML = `
+        <div style="border-top:4px solid #15803d;padding:10px 24px 8px;border-bottom:1.5px solid #e5e7eb;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" style="height:28px;object-fit:contain;" crossorigin="anonymous" />` : ''}
+            <div style="flex:1;">
+              <div style="font-size:10px;font-weight:bold;color:#15803d;font-family:Arial,sans-serif;">ENTEGRE ZARARLI Y\u00D6NET\u0130M\u0130 (IPM) PROGRAMI</div>
+              <div style="font-size:8px;color:#666;font-family:Arial,sans-serif;">${contract.customer_name}</div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(headerEl);
+
+      const logoImg = headerEl.querySelector('img');
+      if (logoImg) {
+        await new Promise<void>((resolve) => {
+          if (logoImg.complete) resolve();
+          else { logoImg.onload = () => resolve(); logoImg.onerror = () => resolve(); }
+        });
+      }
+
+      const [headerCanvas, contentCanvas] = await Promise.all([
+        html2canvas(headerEl, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }),
+        html2canvas(reportRef.current, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }),
+      ]);
+      document.body.removeChild(headerEl);
+
+      const headerImgData = headerCanvas.toDataURL('image/jpeg', 0.9);
+      const headerH = (headerCanvas.height * pdfWidth) / headerCanvas.width;
+
+      const imgData = contentCanvas.toDataURL('image/jpeg', 0.72);
+      const imgScaledHeight = (contentCanvas.height * pdfWidth) / contentCanvas.width;
+
       const footerH = 8;
       const page1Content = pageHeight - footerH;
       const pageNContent = pageHeight - headerH - footerH;
@@ -101,6 +132,8 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
       const totalPages = 1 + Math.max(0, Math.ceil((imgScaledHeight - page1Content) / pageNContent));
 
       const drawFooter = (pg: number) => {
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, pageHeight - footerH, pdfWidth, footerH, 'F');
         pdf.setFontSize(7);
         pdf.setTextColor(180, 180, 180);
         pdf.text(
@@ -113,21 +146,10 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
         pdf.line(10, pageHeight - footerH, pdfWidth - 10, pageHeight - footerH);
       };
 
-      const drawHeader = (pg: number) => {
+      const drawHeader = () => {
         pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, pdfWidth, headerH, 'F');
-        pdf.setFillColor(21, 128, 61);
-        pdf.rect(0, 0, pdfWidth, 1.5, 'F');
-        pdf.setFontSize(8);
-        pdf.setTextColor(21, 128, 61);
-        pdf.text('IPM PROGRAMI', 10, 7);
-        pdf.setFontSize(7);
-        pdf.setTextColor(100, 100, 100);
-        pdf.text(contract.customer_name, 10, 11);
-        pdf.setTextColor(180, 180, 180);
-        pdf.text(`Sayfa ${pg} / ${totalPages}`, pdfWidth - 10, 7, { align: 'right' });
-        pdf.setDrawColor(220, 220, 220);
-        pdf.line(10, headerH - 1, pdfWidth - 10, headerH - 1);
+        pdf.rect(0, 0, pdfWidth, headerH + 1, 'F');
+        pdf.addImage(headerImgData, 'JPEG', 0, 0, pdfWidth, headerH);
       };
 
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgScaledHeight);
@@ -139,10 +161,7 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
       while (consumed < imgScaledHeight) {
         pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, headerH - consumed, pdfWidth, imgScaledHeight);
-        drawHeader(pageNum);
-
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, pageHeight - footerH, pdfWidth, footerH, 'F');
+        drawHeader();
         drawFooter(pageNum);
 
         consumed += pageNContent;
