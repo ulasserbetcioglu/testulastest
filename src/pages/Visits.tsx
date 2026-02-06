@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, ChevronLeft, ChevronRight, AlertCircle, Eye, X, Search, Edit, Save, Loader2, CalendarClock, CalendarCheck2, CalendarSearch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
 import VisitDetailsModal from '../components/VisitDetailsModal';
 import { toast } from 'sonner';
@@ -367,9 +368,17 @@ const Visits: React.FC = () => {
   useEffect(() => {
     const checkUserRole = async () => {
       try {
+        const localSession = localAuth.getSession();
+        if (localSession && localSession.type === 'operator') {
+          setOperatorId(localSession.id);
+          return;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          navigate('/login');
+          if (!localSession) {
+            navigate('/login');
+          }
           return;
         }
 
@@ -379,7 +388,7 @@ const Visits: React.FC = () => {
         }
 
         const { data: operatorData, error } = await supabase.from('operators').select('id').eq('auth_id', user.id).single();
-        
+
         if (error) {
           if (error.code === 'PGRST116') {
              toast.error("Operatör profili bulunamadı.");

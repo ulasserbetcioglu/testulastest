@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, ArrowRight, Check, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import AddTransferModal from '../components/Warehouses/AddTransferModal';
 
 interface Transfer {
@@ -39,14 +40,17 @@ const WarehouseTransfers: React.FC = () => {
   }, []);
 
   const checkAdminAccess = async () => {
+    const localSession = localAuth.getSession();
+    if (localSession) {
+      setIsAdmin(false);
+      return;
+    }
     const { data: { user } } = await supabase.auth.getUser();
     setIsAdmin(user?.email === 'admin@ilaclamatik.com');
   };
 
   const fetchTransfers = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
       let query = supabase
         .from('warehouse_transfers')
         .select(`
@@ -56,24 +60,37 @@ const WarehouseTransfers: React.FC = () => {
           product:product_id (id, name, unit_type)
         `)
         .order('created_at', { ascending: false });
-      
-      // If not admin, only show transfers relevant to the operator
-      if (user?.email !== 'admin@ilaclamatik.com') {
-        const { data: operatorData } = await supabase
-          .from('operators')
+
+      const localSession = localAuth.getSession();
+      if (localSession && localSession.type === 'operator') {
+        const { data: warehouseData } = await supabase
+          .from('warehouses')
           .select('id')
-          .eq('auth_id', user?.id)
-          .single();
-          
-        if (operatorData) {
-          const { data: warehouseData } = await supabase
-            .from('warehouses')
+          .eq('operator_id', localSession.id);
+
+        if (warehouseData && warehouseData.length > 0) {
+          const warehouseIds = warehouseData.map(w => w.id);
+          query = query.or(`source_warehouse_id.in.(${warehouseIds.join(',')}),target_warehouse_id.in.(${warehouseIds.join(',')})`);
+        }
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.email !== 'admin@ilaclamatik.com') {
+          const { data: operatorData } = await supabase
+            .from('operators')
             .select('id')
-            .eq('operator_id', operatorData.id);
-            
-          if (warehouseData && warehouseData.length > 0) {
-            const warehouseIds = warehouseData.map(w => w.id);
-            query = query.or(`source_warehouse_id.in.(${warehouseIds.join(',')}),target_warehouse_id.in.(${warehouseIds.join(',')})`);
+            .eq('auth_id', user?.id)
+            .maybeSingle();
+
+          if (operatorData) {
+            const { data: warehouseData } = await supabase
+              .from('warehouses')
+              .select('id')
+              .eq('operator_id', operatorData.id);
+
+            if (warehouseData && warehouseData.length > 0) {
+              const warehouseIds = warehouseData.map(w => w.id);
+              query = query.or(`source_warehouse_id.in.(${warehouseIds.join(',')}),target_warehouse_id.in.(${warehouseIds.join(',')})`);
+            }
           }
         }
       }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { Download, Plus, Trash2, Eye, X, Save, Search, Filter } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -217,46 +218,67 @@ const Certificates: React.FC = () => {
 
   const checkUserRole = async () => {
     try {
+      const localSession = localAuth.getSession();
+      if (localSession) {
+        if (localSession.type === 'operator') {
+          const { data: opData } = await supabase
+            .from('operators')
+            .select('id, assigned_customers, assigned_branches')
+            .eq('id', localSession.id)
+            .maybeSingle();
+          if (opData) {
+            setUserRole('operator');
+            setAssignedCustomers(opData.assigned_customers);
+            setAssignedBranches(opData.assigned_branches);
+          }
+        } else if (localSession.type === 'customer') {
+          setUserRole('customer');
+          setEntityId(localSession.id);
+        } else if (localSession.type === 'branch') {
+          setUserRole('branch');
+          setEntityId(localSession.id);
+        }
+        fetchCertificates();
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      
+
       setIsAdmin(user.email === 'admin@ilaclamatik.com');
-      
-      // Check if user is a customer
+
       const { data: customerData } = await supabase
         .from('customers')
         .select('id')
         .eq('auth_id', user.id)
         .maybeSingle();
-        
+
       if (customerData) {
         setUserRole('customer');
         setEntityId(customerData.id);
         fetchCertificates();
         return;
       }
-      
-      // Check if user is a branch
+
       const { data: branchData } = await supabase
         .from('branches')
         .select('id')
         .eq('auth_id', user.id)
         .maybeSingle();
-        
+
       if (branchData) {
         setUserRole('branch');
         setEntityId(branchData.id);
         fetchCertificates();
         return;
       }
-      
-      // Check if user is an operator
+
       const { data: operatorData } = await supabase
         .from('operators')
         .select('id, assigned_customers, assigned_branches')
         .eq('auth_id', user.id)
         .maybeSingle();
-        
+
       if (operatorData) {
         setUserRole('operator');
         setAssignedCustomers(operatorData.assigned_customers);
@@ -264,8 +286,7 @@ const Certificates: React.FC = () => {
         fetchCertificates();
         return;
       }
-      
-      // If admin or other role
+
       fetchCertificates();
     } catch (err: any) {
       console.error('Error checking user role:', err);
@@ -393,7 +414,7 @@ const Certificates: React.FC = () => {
           instructor_title: formData.instructorTitle,
           customer_id: formData.customerId,
           branch_id: formData.branchId || null,
-          created_by: (await supabase.auth.getUser()).data.user?.id
+          created_by: localAuth.getCurrentOperatorId() || (await supabase.auth.getUser()).data.user?.id
         })
         .select()
         .single();
@@ -430,10 +451,8 @@ const Certificates: React.FC = () => {
         throw new Error('Lütfen en az bir katılımcı adı girin');
       }
       
-      // Get user ID
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // Create certificates for each participant
+      const createdBy = localAuth.getCurrentOperatorId() || (await supabase.auth.getUser()).data.user?.id;
+
       const certificatesToInsert = participantNames.map(name => ({
         certificate_number: 'CERT-' + Date.now().toString().slice(-6) + '-' + Math.random().toString(36).substring(2, 5),
         participant_name: name,
@@ -443,7 +462,7 @@ const Certificates: React.FC = () => {
         instructor_title: bulkFormData.instructorTitle,
         customer_id: bulkFormData.customerId,
         branch_id: bulkFormData.branchId || null,
-        created_by: user?.id
+        created_by: createdBy
       }));
       
       // Insert all certificates

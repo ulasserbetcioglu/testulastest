@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { Plus, Minus, Trash, MapPin, Navigation, Mail, PenTool as Tool, Edit, Camera, X as CloseIcon, ChevronDown, ChevronUp, Image as ImageIcon, Eye, EyeOff } from 'lucide-react';
 import { calculateDistance } from '../lib/utils';
 import { sendEmail, getRecipientEmails } from '../lib/emailClient';
@@ -571,6 +572,11 @@ const VisitDetails: React.FC = () => {
 
   const fetchOperatorId = async () => {
     try {
+      const localSession = localAuth.getSession();
+      if (localSession && localSession.type === 'operator') {
+        setOperatorId(localSession.id);
+        return;
+      }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Kullanıcı bulunamadı');
       const { data, error } = await supabase.from('operators').select('id').eq('auth_id', user.id).single();
@@ -629,13 +635,20 @@ const VisitDetails: React.FC = () => {
       if (error) throw error;
 
       if (data) {
-        const { data: user } = await supabase.auth.getUser();
-        const { data: operatorData } = await supabase.from('operators').select('id').eq('auth_id', user.user?.id).single();
-        if (operatorData) {
+        let currentOpId: string | null = null;
+        const localSession = localAuth.getSession();
+        if (localSession && localSession.type === 'operator') {
+          currentOpId = localSession.id;
+        } else {
+          const { data: user } = await supabase.auth.getUser();
+          const { data: operatorData } = await supabase.from('operators').select('id').eq('auth_id', user.user?.id).maybeSingle();
+          currentOpId = operatorData?.id || null;
+        }
+        if (currentOpId) {
           const { data: prevVisit } = await supabase
             .from('visits')
             .select('id, branch:branch_id(latitude, longitude)')
-            .eq('operator_id', operatorData.id)
+            .eq('operator_id', currentOpId)
             .eq('status', 'completed')
             .lt('visit_date', data.visit_date)
             .order('visit_date', { ascending: false })
@@ -903,7 +916,7 @@ const VisitDetails: React.FC = () => {
             await supabase.from('paid_material_sale_items').insert(saleItems.map(i => ({ ...i, sale_id: existingSaleId })));
           } else {
             const { data: sale } = await supabase.from('paid_material_sales').insert([{
-              customer_id: visit?.customer.id, branch_id: visit?.branch?.id, visit_id: id, sale_date: new Date().toISOString(), total_amount: totalAmount, status: 'pending', created_by: (await supabase.auth.getUser()).data.user?.id
+              customer_id: visit?.customer.id, branch_id: visit?.branch?.id, visit_id: id, sale_date: new Date().toISOString(), total_amount: totalAmount, status: 'pending', created_by: localAuth.getCurrentOperatorId() || (await supabase.auth.getUser()).data.user?.id
             }]).select().single();
             if (sale) {
               await supabase.from('paid_material_sale_items').insert(saleItems.map(i => ({ ...i, sale_id: sale.id })));

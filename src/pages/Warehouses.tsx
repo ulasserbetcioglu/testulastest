@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Search, MapPin, Package, ArrowRight, Edit2 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import AddWarehouseModal from '../components/Warehouses/AddWarehouseModal';
 import EditWarehouseModal from '../components/Warehouses/EditWarehouseModal';
 import StockUpdateModal from '../components/Warehouses/StockUpdateModal';
@@ -48,14 +49,17 @@ const Warehouses: React.FC = () => {
   }, []);
 
   const checkAdminAccess = async () => {
+    const localSession = localAuth.getSession();
+    if (localSession) {
+      setIsAdmin(false);
+      return;
+    }
     const { data: { user } } = await supabase.auth.getUser();
     setIsAdmin(user?.email === 'admin@ilaclamatik.com');
   };
 
   const fetchWarehouses = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
       let query = supabase
         .from('warehouses')
         .select(`
@@ -75,17 +79,22 @@ const Warehouses: React.FC = () => {
           )
         `)
         .order('created_at', { ascending: false });
-      
-      // If not admin, only show warehouses relevant to the operator
-      if (user?.email !== 'admin@ilaclamatik.com') {
-        const { data: operatorData } = await supabase
-          .from('operators')
-          .select('id')
-          .eq('auth_id', user?.id)
-          .single();
-          
-        if (operatorData) {
-          query = query.eq('operator_id', operatorData.id);
+
+      const localSession = localAuth.getSession();
+      if (localSession && localSession.type === 'operator') {
+        query = query.eq('operator_id', localSession.id);
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.email !== 'admin@ilaclamatik.com') {
+          const { data: operatorData } = await supabase
+            .from('operators')
+            .select('id')
+            .eq('auth_id', user?.id)
+            .maybeSingle();
+
+          if (operatorData) {
+            query = query.eq('operator_id', operatorData.id);
+          }
         }
       }
 

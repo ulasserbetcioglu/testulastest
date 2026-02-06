@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { sendEmail, getRecipientEmails } from '../lib/emailClient';
 import { toast } from 'sonner';
 import { Loader2, Search, Check, ChevronDown, X } from 'lucide-react';
@@ -88,6 +89,25 @@ const VisitForm: React.FC = () => {
     const checkUserRoleAndFetchData = async () => {
       setLoading(true);
       try {
+        const localSession = localAuth.getSession();
+        if (localSession && localSession.type === 'operator') {
+          const { data: opData } = await supabase
+            .from('operators')
+            .select('id, assigned_customers, assigned_branches')
+            .eq('id', localSession.id)
+            .maybeSingle();
+
+          if (opData) {
+            setOperatorId(opData.id);
+            setAssignedCustomers(opData.assigned_customers);
+            setAssignedBranches(opData.assigned_branches);
+            await fetchCustomers(false, opData.assigned_customers);
+          } else {
+            throw new Error("Operatör bilgisi bulunamadı.");
+          }
+          return;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Kullanıcı oturumu bulunamadı. Lütfen tekrar giriş yapın.');
 

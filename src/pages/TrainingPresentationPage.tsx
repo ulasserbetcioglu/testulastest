@@ -6,6 +6,7 @@ import {
   Settings
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { fetchTemplates, Template } from '../services/presentationService';
 import { toast } from 'sonner';
 
@@ -252,17 +253,17 @@ const TrainingPresentationPage = () => {
     const names = participants.split('\n').filter(n => n.trim() !== '');
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const createdBy = localAuth.getCurrentOperatorId() || (await supabase.auth.getUser()).data.user?.id;
 
       const records = names.map((name) => ({
         customer_id: currentPresentation.customer_id,
-        certificate_number: `CERT-${Math.floor(Date.now() / 1000)}-${Math.floor(Math.random() * 1000)}`, 
+        certificate_number: `CERT-${Math.floor(Date.now() / 1000)}-${Math.floor(Math.random() * 1000)}`,
         participant_name: name.trim(),
         training_date: trainingDate,
-        training_title: currentPresentation.name, 
+        training_title: currentPresentation.name,
         instructor_name: trainerName,
         instructor_title: trainerTitle,
-        created_by: user?.id
+        created_by: createdBy
       }));
 
       const { error } = await supabase.from('certificates').insert(records);

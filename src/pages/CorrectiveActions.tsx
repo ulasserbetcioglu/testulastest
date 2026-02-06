@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { AlertCircle, Search, Filter, Download, CheckCircle, Clock, X, Image as ImageIcon, ExternalLink } from 'lucide-react';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
 import * as XLSX from 'xlsx';
@@ -48,16 +49,26 @@ const CorrectiveActions: React.FC = () => {
     try {
       setLoading(true);
       
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Kullanıcı bulunamadı');
+      let operatorId: string | null = null;
+      let userId: string | null = null;
 
-      const { data: operatorData } = await supabase
-        .from('operators')
-        .select('id')
-        .eq('auth_id', user.id)
-        .maybeSingle(); // maybeSingle hata fırlatmaz, null döner
+      const localSession = localAuth.getSession();
+      if (localSession && localSession.type === 'operator') {
+        operatorId = localSession.id;
+        userId = localSession.id;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Kullanıcı bulunamadı');
+        userId = user.id;
 
-      // Eğer operatör değilse (Admin ise) tüm kayıtları görebilsin diye logic'i esnetiyoruz
+        const { data: opData } = await supabase
+          .from('operators')
+          .select('id')
+          .eq('auth_id', user.id)
+          .maybeSingle();
+        operatorId = opData?.id || null;
+      }
+
       let query = supabase
         .from('corrective_actions')
         .select(`
@@ -80,17 +91,15 @@ const CorrectiveActions: React.FC = () => {
         `)
         .order('created_at', { ascending: false });
 
-      // Sadece operatör ise filtrele
-      if (operatorData) {
+      if (operatorId) {
         const { data: visitsData } = await supabase
           .from('visits')
           .select('id')
-          .eq('operator_id', operatorData.id);
-        
+          .eq('operator_id', operatorId);
+
         const visitIds = visitsData?.map(v => v.id) || [];
-        
-        // Operatörün oluşturdukları VEYA operatörün ziyaretlerine bağlı olanlar
-        query = query.or(`created_by.eq.${user.id},visit_id.in.(${visitIds.length > 0 ? visitIds.join(',') : 'null'})`);
+
+        query = query.or(`created_by.eq.${userId},visit_id.in.(${visitIds.length > 0 ? visitIds.join(',') : 'null'})`);
       }
 
       const { data, error } = await query;

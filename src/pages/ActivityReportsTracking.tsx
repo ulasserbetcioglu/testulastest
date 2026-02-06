@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase'; // Gerçek import
-import { toast } from 'sonner'; // Gerçek import
+import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
+import { toast } from 'sonner';
 import { Search, Download, RefreshCw, FileText, CheckCircle, X, AlertTriangle, User, ChevronLeft, ChevronRight, Loader2, BookOpen, PlusCircle, AlertCircle } from 'lucide-react';
 // ✅ HATA DÜZELTME: 'xlsx' modülü CDN üzerinden import edildi
 import * as XLSX from 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -46,6 +47,13 @@ const ActivityReportsTracking = () => {
   useEffect(() => {
     const checkUserRoleAndFetchData = async () => {
       try {
+        const localSession = localAuth.getSession();
+        if (localSession && localSession.type === 'operator') {
+          setUserOperatorId(localSession.id);
+          setLoading(false);
+          return;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Kullanıcı bulunamadı');
 
@@ -59,7 +67,7 @@ const ActivityReportsTracking = () => {
           if (operatorError) throw operatorError;
           setUserOperatorId(operatorData.id);
         }
-      } catch (err) {
+      } catch (err: any) {
         toast.error(`Yetki kontrolü başarısız: ${err.message}`);
       } finally {
         setLoading(false);
