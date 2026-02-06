@@ -3,18 +3,16 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import {
   Bug, Shield, Plus, Search, Edit3, Eye, Trash2, Loader2, Building,
-  CheckCircle2, XCircle, Save, X, ChevronDown, ChevronUp, RefreshCw,
-  FileText, Calendar, User, Phone, Mail, MapPin, Hash
+  CheckCircle2, XCircle, Save, X, RefreshCw, FileDown
 } from 'lucide-react';
 import IpmContractPreview from '../components/Ipm/IpmContractPreview';
+import IpmContentEditor from '../components/Ipm/IpmContentEditor';
 import {
   DEFAULT_TARGET_PESTS,
   PEST_CATEGORY_LABELS,
-  DEFAULT_SCOPE_AREAS,
   type IpmContract,
 } from '../components/Ipm/IpmContractData';
 import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
 
 interface CustomerOption {
   id: string;
@@ -36,44 +34,42 @@ const ALL_SCOPE_AREAS = [
   'Dis Alan', 'Ic Alan', 'Mutfak & Yemekhane', 'Sosyal Alanlar', 'Otopark', 'Bahce & Peyzaj'
 ];
 
+const INITIAL_FORM = {
+  customer_id: '',
+  branch_id: '' as string | null,
+  customer_name: '',
+  customer_address: '',
+  customer_city: '',
+  responsible_person: '',
+  contract_firm_name: 'SISTEM ILACLAMA SAN. VE TIC. LTD. STI.',
+  contract_firm_phone: '444 7 320',
+  contract_firm_email: 'info@sistemilaclama.com',
+  contract_firm_contact: '',
+  start_date: format(new Date(), 'yyyy-MM-dd'),
+  revision_number: 0,
+  routine_frequency: 'ayda 4 kez',
+  target_pests: { ...DEFAULT_TARGET_PESTS },
+  scope_areas: ['Isletme Geneli'] as string[],
+  content_sections: {} as Record<string, string>,
+  custom_notes: '',
+  status: 'active',
+};
+
 const AdminIpmContracts: React.FC = () => {
   const [contracts, setContracts] = useState<IpmContract[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [previewContract, setPreviewContract] = useState<IpmContract | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-
-  const [form, setForm] = useState({
-    customer_id: '',
-    branch_id: '' as string | null,
-    customer_name: '',
-    customer_address: '',
-    customer_city: '',
-    responsible_person: '',
-    contract_firm_name: 'SISTEM ILACLAMA SAN. VE TIC. LTD. STI.',
-    contract_firm_phone: '444 7 320',
-    contract_firm_email: 'info@sistemilaclama.com',
-    contract_firm_contact: '',
-    start_date: format(new Date(), 'yyyy-MM-dd'),
-    revision_number: 0,
-    routine_frequency: 'ayda 4 kez',
-    target_pests: { ...DEFAULT_TARGET_PESTS },
-    scope_areas: ['Isletme Geneli'] as string[],
-    custom_notes: '',
-    status: 'active',
-  });
-
+  const [form, setForm] = useState({ ...INITIAL_FORM });
   const [companySettings, setCompanySettings] = useState<any>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -88,7 +84,7 @@ const AdminIpmContracts: React.FC = () => {
       setCustomers(customersRes.data || []);
       setBranches(branchesRes.data || []);
       setCompanySettings(settingsRes.data);
-    } catch (err) {
+    } catch {
       toast.error('Veri yuklenemedi');
     } finally {
       setLoading(false);
@@ -147,25 +143,7 @@ const AdminIpmContracts: React.FC = () => {
   };
 
   const resetForm = () => {
-    setForm({
-      customer_id: '',
-      branch_id: null,
-      customer_name: '',
-      customer_address: '',
-      customer_city: '',
-      responsible_person: '',
-      contract_firm_name: 'SISTEM ILACLAMA SAN. VE TIC. LTD. STI.',
-      contract_firm_phone: '444 7 320',
-      contract_firm_email: 'info@sistemilaclama.com',
-      contract_firm_contact: '',
-      start_date: format(new Date(), 'yyyy-MM-dd'),
-      revision_number: 0,
-      routine_frequency: 'ayda 4 kez',
-      target_pests: { ...DEFAULT_TARGET_PESTS },
-      scope_areas: ['Isletme Geneli'],
-      custom_notes: '',
-      status: 'active',
-    });
+    setForm({ ...INITIAL_FORM, target_pests: { ...DEFAULT_TARGET_PESTS } });
     setEditingId(null);
     setShowForm(false);
   };
@@ -187,6 +165,7 @@ const AdminIpmContracts: React.FC = () => {
       routine_frequency: contract.routine_frequency,
       target_pests: contract.target_pests || { ...DEFAULT_TARGET_PESTS },
       scope_areas: contract.scope_areas || ['Isletme Geneli'],
+      content_sections: contract.content_sections || {},
       custom_notes: contract.custom_notes,
       status: contract.status,
     });
@@ -214,6 +193,7 @@ const AdminIpmContracts: React.FC = () => {
         routine_frequency: form.routine_frequency,
         target_pests: form.target_pests,
         scope_areas: form.scope_areas,
+        content_sections: form.content_sections,
         custom_notes: form.custom_notes,
         status: form.status,
         updated_at: new Date().toISOString(),
@@ -275,6 +255,7 @@ const AdminIpmContracts: React.FC = () => {
         routine_frequency: 'ayda 4 kez',
         target_pests: { ...DEFAULT_TARGET_PESTS },
         scope_areas: ['Isletme Geneli'],
+        content_sections: {},
         status: 'active',
       }));
 
@@ -441,6 +422,13 @@ const AdminIpmContracts: React.FC = () => {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="mb-4">
+            <IpmContentEditor
+              contentSections={form.content_sections}
+              onChange={(sections) => setForm(p => ({ ...p, content_sections: sections }))}
+            />
           </div>
 
           <div className="mb-4">

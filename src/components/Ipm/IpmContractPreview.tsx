@@ -1,9 +1,11 @@
-import React, { useRef } from 'react';
-import { FileDown, Printer, Bug, Shield, CheckCircle2, XCircle, MapPin, Phone, Mail, User, Calendar, Hash } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { FileDown, Printer, Bug, Shield, CheckCircle2, XCircle, MapPin, Phone, Mail, User, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import type { IpmContract } from './IpmContractData';
-import { PEST_CATEGORY_LABELS, PEST_SUBCATEGORIES } from './IpmContractData';
+import { PEST_CATEGORY_LABELS, PEST_SUBCATEGORIES, DEFAULT_CONTENT_SECTIONS } from './IpmContractData';
 
 interface IpmContractPreviewProps {
   contract: IpmContract;
@@ -19,7 +21,27 @@ interface IpmContractPreviewProps {
 
 const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, companySettings, compact }) => {
   const reportRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
   const primaryColor = '#15803d';
+
+  const startDateFormatted = contract.start_date ? format(new Date(contract.start_date), 'dd MMMM yyyy', { locale: tr }) : '-';
+
+  const replaceVars = (text: string) => {
+    return text
+      .replace(/\{customer_name\}/g, contract.customer_name)
+      .replace(/\{customer_address\}/g, contract.customer_address)
+      .replace(/\{customer_city\}/g, contract.customer_city)
+      .replace(/\{contract_firm_name\}/g, contract.contract_firm_name)
+      .replace(/\{responsible_person\}/g, contract.responsible_person || '(Belirtilmedi)')
+      .replace(/\{routine_frequency\}/g, contract.routine_frequency)
+      .replace(/\{start_date\}/g, startDateFormatted);
+  };
+
+  const getSection = (key: string) => {
+    const sections = contract.content_sections || {};
+    const raw = sections[key] ?? DEFAULT_CONTENT_SECTIONS[key] ?? '';
+    return replaceVars(raw);
+  };
 
   const handlePrint = () => {
     if (!reportRef.current) return;
@@ -45,9 +67,50 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
     setTimeout(() => printWindow.print(), 300);
   };
 
+  const handleExportPdf = async () => {
+    if (!reportRef.current) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      let heightLeft = pdfHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const safeName = contract.customer_name.replace(/[^a-zA-Z0-9_\-]/g, '_');
+      pdf.save(`IPM_Sozlesmesi_${safeName}.pdf`);
+    } catch (err) {
+      console.error('PDF export error:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const activePests = contract.target_pests || {};
   const scopeAreas = contract.scope_areas || [];
-  const startDateFormatted = contract.start_date ? format(new Date(contract.start_date), 'dd MMMM yyyy', { locale: tr }) : '-';
+
+  const abbreviationLines = getSection('kisaltmalar').split('\n').filter(Boolean);
+  const documentLines = getSection('ilgili_dokumanlar').split('\n').filter(Boolean);
 
   return (
     <div>
@@ -55,6 +118,10 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
         <div className="flex gap-2 mb-4 print:hidden">
           <button onClick={handlePrint} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-xs font-medium text-gray-700">
             <Printer size={14} /> Yazdir
+          </button>
+          <button onClick={handleExportPdf} disabled={exporting} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-xs font-medium text-red-700 disabled:opacity-50">
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+            PDF Indir
           </button>
         </div>
       )}
@@ -97,42 +164,36 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
             </div>
           </div>
 
-          {/* 1 - AMAC */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>1 - AMAC</h2>
-            <p className="text-[11px]">
-              Bu program, <strong>{contract.customer_address}, {contract.customer_city}</strong> adresinde kurulu <strong>{contract.customer_name}</strong> insan sagligini, hammadde ve urun kalitesini bozacak, olumsuz yonde etkileyecek zararlilara karsi yurutulecek entegre zararli yonetimi (Integrated Pest Management - IPM) calismalarini kapsar.
-            </p>
+            <p className="text-[11px]">{getSection('amac')}</p>
           </div>
 
-          {/* 2 - KISALTMALAR */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>2 - KISALTMALAR VE KAVRAMLAR</h2>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
               <p><strong>ISLETME:</strong> {contract.customer_name}</p>
               <p><strong>SOZLESMELI FIRMA:</strong> {contract.contract_firm_name}</p>
-              <p><strong>PEST KONTROL:</strong> Zararlilara karsi yapilan tum faaliyetler</p>
-              <p><strong>ZARARLI:</strong> Hasere, pest</p>
-              <p><strong>RUTIN:</strong> Sozlesme kapsamindaki aylik ziyaret periyodu</p>
-              <p><strong>IPM:</strong> Integrated Pest Management</p>
-              <p><strong>PESTISIT:</strong> Zararli kontrol kimyasallari</p>
-              <p><strong>BIYOSIT:</strong> Saglik Bakanligi onayli kontrol kimyasallari</p>
-              <p><strong>LFT:</strong> Isikli Sinek Tutucu - Yapiskanli levhali</p>
-              <p><strong>SORUMLU:</strong> IPM'den sorumlu urun guvenligi yetkilisi</p>
+              {abbreviationLines.map((line, i) => {
+                const colonIdx = line.indexOf(':');
+                if (colonIdx === -1) return <p key={i}>{line}</p>;
+                return (
+                  <p key={i}>
+                    <strong>{line.substring(0, colonIdx).trim()}:</strong> {line.substring(colonIdx + 1).trim()}
+                  </p>
+                );
+              })}
             </div>
             <p className="text-[10px] mt-2">
               <strong>SORUMLU:</strong> {contract.responsible_person || '(Belirtilmedi)'}
             </p>
           </div>
 
-          {/* 3 - HEDEF ZARARLILAR */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2 flex items-center gap-1" style={{ color: primaryColor }}>
               <Bug size={12}/> 3 - HEDEF ZARARLILAR
             </h2>
-            <p className="text-[10px] text-gray-600 mb-3">
-              Gida ve urun guvenligi acisindan rutin kontrol, acil mudahale, takip, teshis veya denetleme faaliyetlerinde asagida yer alan zararlilarla ilgili faaliyetler IPM perspektifinde gerceklestirilir.
-            </p>
+            <p className="text-[10px] text-gray-600 mb-3">{getSection('hedef_zararlilar_giris')}</p>
 
             {Object.entries(PEST_CATEGORY_LABELS).map(([key, label], idx) => {
               const isActive = activePests[key] === true;
@@ -159,7 +220,6 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
             })}
           </div>
 
-          {/* UYGULAMA KAPSAMI */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2 flex items-center gap-1" style={{ color: '#2563eb' }}>
               <Shield size={12}/> UYGULAMA KAPSAMI
@@ -173,92 +233,62 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
             </div>
           </div>
 
-          {/* 4 - ILGILI DOKUMANLAR */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>4 - ILGILI DOKUMANLAR</h2>
             <div className="grid grid-cols-2 gap-1 text-[10px]">
-              {[
-                'Entegre Zararli Yonetimi - IPM Sozlesmesi',
-                'Yazili IPM Programi',
-                'Acil Durum Bilgileri',
-                'Sozlesmeli Firma Iletisim Bilgileri',
-                'Yillik Rutin Ziyaret Programi',
-                'Saglik Bakanligi Uygulama Izin Belgesi',
-                'Mesul Mudurluk Belgesi',
-                'Mesul Mudur Sertifikasi',
-                'TSE-8358 Hizmet Yeterlilik Belgesi',
-                'Mali Mesuliyet Sigortasi',
-                'Zararli Risk Analizi',
-                'Izleme Aparatlari Yerlesim Planlari',
-                'Servis Raporlari',
-                'Aylik/Sezonluk Degerlendirme Raporlari',
-                'Onayli Pestisit Listesi',
-                'Pestisit Kullanim Karti',
-                'Kullanilan Pestisitlere Ait MSDS ve Etiketler',
-                'Isletmenin Egitim Belgeleri',
-              ].map((doc, i) => (
+              {documentLines.map((doc, i) => (
                 <p key={i} className="flex items-start gap-1"><span className="text-green-600 mt-0.5">&#8226;</span> {doc}</p>
               ))}
             </div>
           </div>
 
-          {/* 5 - IPM UYGULAMALARI */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>5 - IPM UYGULAMALARI</h2>
-            <p className="text-[10px] mb-2">Uygun kontrol, zararlilarin varliginin isaretinin cok cabuk gorulmesi ve zararli cogalip yayilmadan once yok edilmesi seklinde yapilir.</p>
+            <p className="text-[10px] mb-2">{getSection('ipm_uygulamalari_giris')}</p>
 
             <h3 className="text-[11px] font-bold text-gray-700 mt-3 mb-1">5.1 - Gozlem Uygulamalari</h3>
-            <p className="text-[10px]">Kontrol calismalarindan once zararli populasyonunun turu ve yogunlugu saptanarak hayata gecirilecek mucadelenin yontemi ve zamani belirlenir. Gozlem uygulamalari, isletmelerin dis cevreleri ve ic alanlarinin tamamini icerir.</p>
+            <p className="text-[10px]">{getSection('gozlem_uygulamalari')}</p>
 
             <h3 className="text-[11px] font-bold text-gray-700 mt-3 mb-1">5.2 - Onleyici Uygulamalar</h3>
-            <p className="text-[10px]">Zararli kontrolu oncelikle korunma yoluladir. Zararlilarin yasayamayacagi sartlari barindiran iyi bina dizayni, zararlilarin isletme icerisine girisini engelleyecek duzende yalitim, zamaninda gerektigi sekilde yapilan tamiratlar/bakimlar, zararli yonetimi konusunda egitimli personel.</p>
+            <p className="text-[10px]">{getSection('onleyici_uygulamalar')}</p>
 
             <h3 className="text-[11px] font-bold text-gray-700 mt-3 mb-1">5.3 - Rutin Kontroller</h3>
-            <p className="text-[10px]">Sozlesmeli firma gida/urun guvenligi acisindan gozlemlerini asagida belirtilen zararlilarla ilgili olarak IPM perspektifinde gerceklestirecektir.</p>
+            <p className="text-[10px]">{getSection('rutin_kontroller')}</p>
           </div>
 
-          {/* 6 - YURUTULME */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>6 - IPM UYGULAMALARININ YURUTULMESI</h2>
             <div className="space-y-2 text-[10px]">
-              <p><strong>6.1 - IPM:</strong> Sozlesmeli firma zararli kontrolunu entegre bir sekilde ele almyi; cevre, urun ve insan sagligi acisindan en az kimyasal kullanarak kontrolu saglamayi benimser.</p>
-              <p><strong>6.2 - Zararli Takip Sistemi:</strong> Isletmenin ic ve dis alaninda zararlilari izlemek ve kontrol etmek icin uygun aparatlar kullanilarak bir izleme sistemi olusturulur.</p>
-              <p><strong>6.3 - Ic Alan Aparatlari:</strong> Canli yakalama kapanlari, yapiskan tuzaklar, bocek izleme tuzaklari, feromon traplari, EFK/ILT kullanilir.</p>
-              <p><strong>6.4 - Dis Alan Aparatlari:</strong> Kilitli, iklim degisikliklerine karsi dayanikli, numaralandirilmis kemirgen yem istasyonlari kullanilir.</p>
-              <p><strong>6.10 - Rutin Periyotlar:</strong> Rutin ziyaretler, <strong>{contract.routine_frequency}</strong> olacak sekilde yapilacaktir.</p>
-              <p><strong>6.11 - Acil Carilar:</strong> Sozlesmeli firma acil carilarda 24 saat icerisinde isletme alaninda gozlem, mudahale, tespit veya degerlendirme icin bulunacaktir.</p>
-              <p><strong>6.13 - Egitim:</strong> Sozlesmeli firma sozlesme konusuyla ilgili yilda 1 kez egitim verecektir.</p>
+              <p><strong>6.1 - IPM:</strong> {getSection('ipm_yurutulme_1')}</p>
+              <p><strong>6.2 - Zararli Takip Sistemi:</strong> {getSection('zararli_takip')}</p>
+              <p><strong>6.3 - Ic Alan Aparatlari:</strong> {getSection('ic_alan_aparatlari')}</p>
+              <p><strong>6.4 - Dis Alan Aparatlari:</strong> {getSection('dis_alan_aparatlari')}</p>
+              <p><strong>6.10 - Rutin Periyotlar:</strong> {getSection('rutin_periyotlar')}</p>
+              <p><strong>6.11 - Acil Carilar:</strong> {getSection('acil_carilar')}</p>
+              <p><strong>6.13 - Egitim:</strong> {getSection('egitim')}</p>
             </div>
           </div>
 
-          {/* 7 - KIMYASAL */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>7 - KIMYASAL UYGULAMASI</h2>
-            <p className="text-[10px]">Pestisit/biyosit adi verilen yemler/zehirler/ilaclarla zararlilarin kontrol altina alinmasidir. Gida uretim alanlarinin icinde toksik rodentisitler ve yemler kullanilmaz, canli yakalama kapanlari kullanilir.</p>
+            <p className="text-[10px]">{getSection('kimyasal')}</p>
           </div>
 
-          {/* 8 - PERSONEL */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>8 - UYGULAMA PERSONELI</h2>
-            <p className="text-[10px]">Zararli kontrol calismalarinda gorevli personel sozlesmeli firma tarafindan temin edilir. Sozlesmeli firma personelinin uygulama esansinda verecegi zararlar tazmin edilecektir. Sozlesmeli firma Mali Mesuliyet Sigortasi'na sahip olacaktir.</p>
+            <p className="text-[10px]">{getSection('personel')}</p>
           </div>
 
-          {/* 9 - ARAC GERECLER */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>9 - UYGULAMA ARAC GERECLERI, KIMYASALLAR</h2>
-            <p className="text-[10px]">Sozlesme konusu zararlilarla mucadelede kullanilacak kimyasallarin temini sozlesmeli firmaya aittir. Kullanilacak insektisit ve rodentisitler Dunya Saglik Orgutu'nun onerilerine uygun olacak ve Saglik Bakanligi tarafindan ruhsatlandirilmis olacaktir.</p>
+            <p className="text-[10px]">{getSection('arac_gerecler')}</p>
           </div>
 
-          {/* 10 - GECERLILIK */}
           <div className="mb-4">
             <h2 className="text-xs font-bold border-b border-gray-200 pb-1 mb-2" style={{ color: primaryColor }}>10 - GECERLILIK</h2>
-            <p className="text-[10px]">
-              Bu program hizmet alim sekline bagli olarak <strong>{contract.contract_firm_name}</strong> ile yapilan sozlesmeye gore duzenlenmistir.
-            </p>
+            <p className="text-[10px]">{getSection('gecerlilik')}</p>
             <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-[11px] font-bold text-green-800">
-                Isbu IPM Programi {startDateFormatted} tarihinden itibaren gecerli olup degisiklikler revizyon numarasi ve tarih verilerek gerekleri ile birlikte isletme IPM sorumlusu <strong>{contract.responsible_person || '(Belirtilmedi)'}</strong> tarafindan onaylanir.
-              </p>
+              <p className="text-[11px] font-bold text-green-800">{getSection('gecerlilik_detay')}</p>
             </div>
           </div>
 
