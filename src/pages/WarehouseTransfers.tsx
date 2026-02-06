@@ -218,32 +218,70 @@ const WarehouseTransfers: React.FC = () => {
   if (error) return <div>Hata: {error}</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">DEPOLAR ARASI TRANSFER</h1>
+    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">DEPOLAR ARASI TRANSFER</h1>
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+          className="w-full sm:w-auto px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 font-medium"
         >
           <Plus size={20} />
           Yeni Transfer
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="bg-white rounded-lg shadow p-3 sm:p-4">
         <div className="relative">
           <input
             type="text"
             placeholder="Ara..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded"
+            className="w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm"
           />
-          <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+          <Search className="absolute left-3 top-3 text-gray-400" size={18} />
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* Mobile card view */}
+      <div className="block md:hidden space-y-3">
+        {filteredTransfers.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500 text-sm">
+            Henuz transfer kaydi bulunmuyor
+          </div>
+        ) : (
+          filteredTransfers.map((transfer) => (
+            <div key={transfer.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-500 font-medium">
+                  {new Date(transfer.transfer_date).toLocaleDateString('tr-TR')}
+                </span>
+                {getStatusBadge(transfer.status, transfer.id)}
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500">Kaynak</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{transfer.source_warehouse.name}</p>
+                </div>
+                <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500">Hedef</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{transfer.target_warehouse.name}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <span className="text-sm text-gray-700">{transfer.product.name}</span>
+                <span className="text-sm font-bold text-gray-900">
+                  {transfer.quantity} {transfer.product.unit_type}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop table view */}
+      <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -258,7 +296,7 @@ const WarehouseTransfers: React.FC = () => {
                   Hedef Depo
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ürün
+                  Urun
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Miktar
@@ -272,7 +310,7 @@ const WarehouseTransfers: React.FC = () => {
               {filteredTransfers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                    Henüz transfer kaydı bulunmuyor
+                    Henuz transfer kaydi bulunmuyor
                   </td>
                 </tr>
               ) : (
