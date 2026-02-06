@@ -293,24 +293,24 @@ const AdminProducts: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      <header className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-            <Package className="h-6 w-6 text-blue-600" />
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+            <Package className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800">Ürün Listesi Yönetimi</h1>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">Ürün Listesi Yönetimi</h1>
         </div>
-        <div className="flex gap-2">
-            <button onClick={() => setShowCategoryModal(true)} className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2">
-                <Tags size={18} /> Kategorileri Yönet
+        <div className="flex flex-wrap gap-2">
+            <button onClick={() => setShowCategoryModal(true)} className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-1.5 text-sm">
+                <Tags size={16} /> <span className="hidden sm:inline">Kategorileri Yönet</span><span className="sm:hidden">Kategoriler</span>
             </button>
-            <button onClick={() => handleOpenProductModal(null)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
-                <Plus size={18} /> Yeni Ürün Ekle
+            <button onClick={() => handleOpenProductModal(null)} className="px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1.5 text-sm">
+                <Plus size={16} /> <span className="hidden sm:inline">Yeni Ürün Ekle</span><span className="sm:hidden">Ekle</span>
             </button>
         </div>
       </header>
 
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+      <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6 border border-gray-200">
         <div className="relative mb-4">
           <input type="text" placeholder="Ürün adıyla ara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 pl-10 border border-gray-300 rounded-lg" />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -323,28 +323,28 @@ const AdminProducts: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün Adı</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Liste Fiyatı</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">KDV</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Birim</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ürün Adı</th>
+                  <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Fiyat</th>
+                  <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">KDV</th>
+                  <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Birim</th>
+                  <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Durum</th>
+                  <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredProducts.map(product => (
                   <tr key={product.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{product.price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">% {product.vat_rate}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{product.unit_type}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500 text-right">{product.price.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500 text-center hidden sm:table-cell">% {product.vat_rate}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500 text-center hidden md:table-cell">{product.unit_type}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-center hidden sm:table-cell">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${product.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {product.is_active ? 'Aktif' : 'Pasif'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end gap-4">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end gap-3">
                         <button onClick={() => handleOpenProductModal(product)} className="text-blue-600 hover:text-blue-900"><Edit size={18}/></button>
                         <button onClick={() => handleDeleteProduct(product.id)} className="text-red-600 hover:text-red-900"><Trash2 size={18}/></button>
                       </div>

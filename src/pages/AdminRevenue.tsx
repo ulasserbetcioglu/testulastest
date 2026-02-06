@@ -51,12 +51,12 @@ const allMonths = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temm
 
 // --- YARDIMCI BİLEŞENLER ---
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; bgColor?: string; textColor?: string; }> = ({ title, value, icon, bgColor = 'bg-green-100', textColor = 'text-green-600' }) => (
-  <div className="bg-white p-5 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 flex flex-col justify-between">
+  <div className="bg-white p-4 sm:p-5 rounded-xl shadow-lg hover:shadow-2xl transition-shadow duration-300 flex flex-col justify-between">
     <div className="flex items-center justify-between">
-      <p className="text-sm font-medium text-gray-500">{title}</p>
+      <p className="text-xs sm:text-sm font-medium text-gray-500">{title}</p>
       <div className={`p-2 ${bgColor} ${textColor} rounded-full`}>{icon}</div>
     </div>
-    <p className="text-3xl font-bold text-gray-800 mt-2">{value}</p>
+    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 mt-2">{value}</p>
   </div>
 );
 
@@ -252,12 +252,12 @@ const AdminRevenue: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen font-sans">
-      <header className="flex flex-wrap justify-between items-center gap-4 mb-6">
-        <h1 className="text-4xl font-bold text-gray-800">Gelir & Gider Paneli</h1>
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">Gelir & Gider Paneli</h1>
         <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm">
-            <button onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))} className="p-2 rounded-md hover:bg-gray-100"><ChevronLeft /></button>
-            <span className="text-lg font-semibold text-gray-700 w-48 text-center">{format(selectedMonth, 'MMMM yyyy', { locale: tr })}</span>
-            <button onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))} className="p-2 rounded-md hover:bg-gray-100"><ChevronRight /></button>
+            <button onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))} className="p-2 rounded-md hover:bg-gray-100"><ChevronLeft size={18} /></button>
+            <span className="text-sm sm:text-lg font-semibold text-gray-700 w-36 sm:w-48 text-center">{format(selectedMonth, 'MMMM yyyy', { locale: tr })}</span>
+            <button onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))} className="p-2 rounded-md hover:bg-gray-100"><ChevronRight size={18} /></button>
         </div>
       </header>
 

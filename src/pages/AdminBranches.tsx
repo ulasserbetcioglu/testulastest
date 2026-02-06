@@ -128,17 +128,16 @@ const AdminBranches: React.FC = () => {
   if (error) return <div className="p-12 text-center text-red-500">Hata: {error}</div>;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto min-h-screen">
-      
-      {/* BAŞLIK & EKLEME */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto min-h-screen">
+
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-800 tracking-tight">Şubeler</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 tracking-tight">Şubeler</h1>
           <p className="text-gray-500 text-sm mt-1">Toplam {branches.length} kayıt</p>
         </div>
         <button
           onClick={() => handleAddBranch('')}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
         >
           <Plus size={16} /> Şube Ekle
         </button>
@@ -180,10 +179,10 @@ const AdminBranches: React.FC = () => {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-gray-200">
-              <th className="py-3 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider w-1/4">Şube Adı</th>
-              <th className="py-3 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider w-1/4">Müşteri</th>
-              <th className="py-3 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider w-1/4">Konum & İletişim</th>
-              <th className="py-3 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider w-1/4 text-right">İşlemler</th>
+              <th className="py-3 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Şube Adı</th>
+              <th className="py-3 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Müşteri</th>
+              <th className="py-3 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Konum & İletişim</th>
+              <th className="py-3 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider text-right">İşlemler</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -208,7 +207,7 @@ const AdminBranches: React.FC = () => {
                     </span>
                   </td>
 
-                  <td className="py-3 px-2 align-top">
+                  <td className="py-3 px-2 align-top hidden md:table-cell">
                     <div className="space-y-1">
                       <div className="flex items-center gap-1.5 text-xs text-gray-500">
                         <MapPin size={12} className={branch.latitude ? "text-green-500" : "text-gray-300"} />

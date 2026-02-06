@@ -160,20 +160,22 @@ const Customers: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">MÜŞTERİLER</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">MÜŞTERİLER</h1>
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => downloadExcelTemplate()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1.5 text-sm"
           >
-            <Download size={20} />
-            Şablon İndir
+            <Download size={16} />
+            <span className="hidden sm:inline">Şablon İndir</span>
+            <span className="sm:hidden">Şablon</span>
           </button>
-          
-          <label className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors cursor-pointer flex items-center gap-2">
-            <Upload size={20} />
-            Excel İçe Aktar
+
+          <label className="px-3 py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors cursor-pointer flex items-center gap-1.5 text-sm">
+            <Upload size={16} />
+            <span className="hidden sm:inline">Excel İçe Aktar</span>
+            <span className="sm:hidden">İçe Aktar</span>
             <input
               type="file"
               accept=".xlsx,.xls"
@@ -184,28 +186,31 @@ const Customers: React.FC = () => {
 
           <button
             onClick={handleExportExcel}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+            className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1.5 text-sm"
           >
-            <Download size={20} />
-            Excel Dışa Aktar
+            <Download size={16} />
+            <span className="hidden sm:inline">Dışa Aktar</span>
+            <span className="sm:hidden">Aktar</span>
           </button>
 
           {isAdmin && (
             <button
               onClick={() => setIsBulkPricingModalOpen(true)}
-              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors flex items-center gap-1.5 text-sm"
             >
-              <DollarSign size={20} />
-              Toplu Fiyatlandırma
+              <DollarSign size={16} />
+              <span className="hidden sm:inline">Toplu Fiyatlandırma</span>
+              <span className="sm:hidden">Fiyat</span>
             </button>
           )}
 
-          <button 
+          <button
             onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+            className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1.5 text-sm"
           >
-            <Plus size={20} />
-            Müşteri Ekle
+            <Plus size={16} />
+            <span className="hidden sm:inline">Müşteri Ekle</span>
+            <span className="sm:hidden">Ekle</span>
           </button>
         </div>
       </div>
@@ -275,29 +280,29 @@ const Customers: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-800 text-white">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
                   Müşteri No
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
                   İsim
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wider hidden md:table-cell">
                   Cari İsim
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wider hidden lg:table-cell">
                   Telefon
                 </th>
                 {isAdmin && (
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium uppercase tracking-wider hidden lg:table-cell">
                     Fiyatlandırma
                   </th>
                 )}
                 {isAdmin && (
-                  <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">
+                  <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium uppercase tracking-wider hidden sm:table-cell">
                     Durum
                   </th>
                 )}
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">
+                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">
                   İşlemler
                 </th>
               </tr>
@@ -305,20 +310,20 @@ const Customers: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredCustomers.map((customer) => (
                 <tr key={customer.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500">
                     {customer.musteri_no}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900">
                     {customer.kisa_isim}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900 hidden md:table-cell">
                     {customer.cari_isim || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
                     {customer.telefon || '-'}
                   </td>
                   {isAdmin && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
                       {customer.pricing ? (
                         <div>
                           {customer.pricing.monthly_price ? (
@@ -339,7 +344,7 @@ const Customers: React.FC = () => {
                     </td>
                   )}
                   {isAdmin && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-center hidden sm:table-cell">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleToggleActive(customer.id, customer.is_active !== false); }}
                         className="inline-flex items-center gap-1"
@@ -357,7 +362,7 @@ const Customers: React.FC = () => {
                       </button>
                     </td>
                   )}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right space-x-2">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-right space-x-2">
                     <button 
                       onClick={() => navigate(`/musteriler/${customer.id}`)}
                       className="text-gray-600 hover:text-gray-900"

@@ -193,14 +193,14 @@ const Settings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">ŞİRKET AYARLARI</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">ŞİRKET AYARLARI</h1>
         <button
           onClick={handleSave}
           disabled={saving || !isAdmin}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 text-sm"
         >
-          <Save size={20} />
+          <Save size={16} />
           {saving ? 'Kaydediliyor...' : 'Kaydet'}
         </button>
       </div>
@@ -213,15 +213,14 @@ const Settings: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Logo Upload */}
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Şirket Logosu
             </label>
-            <div className="flex items-start space-x-6">
-              <div className="w-40 h-40 border rounded-lg flex items-center justify-center overflow-hidden bg-gray-50">
+            <div className="flex flex-col sm:flex-row items-start gap-4 sm:space-x-6 sm:gap-0">
+              <div className="w-32 h-32 sm:w-40 sm:h-40 border rounded-lg flex items-center justify-center overflow-hidden bg-gray-50 shrink-0">
                 {logoPreview ? (
                   <img src={logoPreview} alt="Logo" className="max-w-full max-h-full object-contain" />
                 ) : (

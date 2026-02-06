@@ -984,12 +984,12 @@ const AdminCalendar: React.FC = () => {
     <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen font-inter">
       <VisitDetailModal visit={selectedVisit} onClose={() => setSelectedVisit(null)} paidMaterialDetailsMap={paidMaterialDetailsMap} monthlyMaterialUsageSummary={monthlyMaterialUsageSummary} />
       
-      <header className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 bg-white p-4 rounded-xl shadow-md">
-        <div className="flex items-center gap-4">
-          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ChevronLeft /></button>
-          <h1 className="text-3xl font-bold text-gray-800 w-48 text-center">{format(currentDate, 'MMMM yyyy', { locale: tr })}</h1>
-          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 rounded-full hover:bg-gray-200 transition-colors"><ChevronRight /></button>
-          <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors">Bugün</button>
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 bg-white p-3 sm:p-4 rounded-xl shadow-md">
+        <div className="flex items-center gap-2 sm:gap-4 w-full md:w-auto justify-center md:justify-start">
+          <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-200 transition-colors"><ChevronLeft size={20} /></button>
+          <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-800 w-36 sm:w-48 text-center">{format(currentDate, 'MMMM yyyy', { locale: tr })}</h1>
+          <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-200 transition-colors"><ChevronRight size={20} /></button>
+          <button onClick={() => setCurrentDate(new Date())} className="px-2 py-1 sm:px-3 sm:py-1.5 border border-gray-300 rounded-lg text-xs sm:text-sm font-semibold hover:bg-gray-200 transition-colors">Bugün</button>
         </div>
         <div className="flex flex-col gap-3 w-full md:w-auto">
           <div className="flex flex-col sm:flex-row gap-2">
@@ -1119,12 +1119,12 @@ const AdminCalendar: React.FC = () => {
         </div>
       </div>
       
-      <div className="mt-4 p-4 bg-white rounded-xl shadow-lg border border-gray-200 flex justify-between items-center">
-        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <DollarSign className="text-green-600" />
-          {format(currentDate, 'MMMM yyyy', { locale: tr })} Ayı Toplam Cirosu:
+      <div className="mt-4 p-3 sm:p-4 bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <h3 className="text-sm sm:text-xl font-bold text-gray-800 flex items-center gap-2">
+          <DollarSign className="text-green-600 shrink-0" size={20} />
+          {format(currentDate, 'MMMM yyyy', { locale: tr })} Toplam Cirosu:
         </h3>
-        <span className="text-2xl font-extrabold text-green-700">
+        <span className="text-lg sm:text-2xl font-extrabold text-green-700">
           {totalMonthlyRevenue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
         </span>
       </div>

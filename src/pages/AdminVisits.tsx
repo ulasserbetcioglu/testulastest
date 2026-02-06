@@ -666,9 +666,9 @@ const AdminVisits: React.FC = () => {
 
   return (
     <div className="container mx-auto px-2 py-4">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold">Ziyaret Yönetimi</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+        <h1 className="text-lg sm:text-xl font-bold">Ziyaret Yönetimi</h1>
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={downloadTemplate}
             className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
@@ -688,14 +688,14 @@ const AdminVisits: React.FC = () => {
           </label>
           <button
             onClick={exportToExcel}
-            className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs"
+            className="flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white rounded hover:bg-teal-700 text-xs"
           >
             <FileText className="w-3 h-3" />
             Dışa Aktar
           </button>
           <button
             onClick={() => navigate('/visits/new')}
-            className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-xs"
+            className="flex items-center gap-1 px-3 py-1.5 bg-blue-700 text-white rounded hover:bg-blue-800 text-xs"
           >
             <Plus className="w-3 h-3" />
             Yeni
@@ -950,8 +950,8 @@ const AdminVisits: React.FC = () => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full">
             <h3 className="text-lg font-semibold mb-4">Ziyareti Sil</h3>
             <p className="mb-6">Bu ziyareti silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.</p>
             <div className="flex justify-end gap-3">
@@ -977,8 +977,8 @@ const AdminVisits: React.FC = () => {
 
       {/* Edit Visit Modal */}
       {showEditModal && editingVisit && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">Ziyaret Düzenle</h3>
             
             <div className="space-y-4">

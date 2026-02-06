@@ -250,23 +250,23 @@ const AdminOperators: React.FC = () => {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Operatör Yönetimi</h1>
-        <div className="flex gap-2">
-          <button onClick={downloadTemplate} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm">
-            <Download size={18} /> Şablon İndir
+    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">Operatör Yönetimi</h1>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={downloadTemplate} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 text-sm">
+            <Download size={16} /> <span className="hidden sm:inline">Şablon İndir</span><span className="sm:hidden">Şablon</span>
           </button>
-          <label className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors cursor-pointer flex items-center gap-2 text-sm">
-            {isUploading ? <Loader size={18} className="animate-spin" /> : <Upload size={18} />}
-            {isUploading ? 'Yükleniyor...' : 'Excel İçe Aktar'}
+          <label className="px-3 py-1.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors cursor-pointer flex items-center gap-1.5 text-sm">
+            {isUploading ? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}
+            {isUploading ? 'Yükleniyor...' : <><span className="hidden sm:inline">Excel İçe Aktar</span><span className="sm:hidden">İçe Aktar</span></>}
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={importFromExcel} disabled={isUploading} />
           </label>
-          <button onClick={exportToExcel} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm">
-            <Download size={18} /> Dışa Aktar
+          <button onClick={exportToExcel} className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5 text-sm">
+            <Download size={16} /> <span className="hidden sm:inline">Dışa Aktar</span><span className="sm:hidden">Aktar</span>
           </button>
-          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm">
-            <Plus size={18} /> Yeni Operatör
+          <button onClick={() => setShowAddModal(true)} className="px-3 py-1.5 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors flex items-center gap-1.5 text-sm">
+            <Plus size={16} /> <span className="hidden sm:inline">Yeni Operatör</span><span className="sm:hidden">Ekle</span>
           </button>
         </div>
       </div>
@@ -285,35 +285,38 @@ const AdminOperators: React.FC = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operatör Bilgileri</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İletişim</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Erişim İzinleri</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Toplam İzin Günü</th> {/* ✅ MODIFIED: New column header */}
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operatör</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">İletişim</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Erişim İzinleri</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
+                <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">İzin Günü</th>
+                <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredOperators.map((operator) => (
                 <tr key={operator.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900">{operator.name}</div></td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{operator.name}</div>
+                    <div className="text-xs text-gray-500 md:hidden">{operator.email}</div>
+                  </td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap hidden md:table-cell">
                     <div className="flex items-center text-sm text-gray-700"><Mail size={16} className="text-gray-400 mr-2" />{operator.email}</div>
                     {operator.phone && <div className="flex items-center text-sm text-gray-500 mt-1"><Phone size={16} className="text-gray-400 mr-2" />{operator.phone}</div>}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell">
                     <div className="text-sm text-gray-700 max-w-xs truncate" title={getAssignedCustomersText(operator)}><Users size={16} className="text-gray-400 mr-2 inline-block" />{getAssignedCustomersText(operator)}</div>
                     <div className="text-sm text-gray-500 mt-1 max-w-xs truncate" title={getAssignedBranchesText(operator)}><Building size={16} className="text-gray-400 mr-2 inline-block" />{getAssignedBranchesText(operator)}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${operator.status === 'Açık' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                       {operator.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {operator.total_leave_days !== undefined ? operator.total_leave_days : '-'} gün {/* ✅ MODIFIED: Display total_leave_days */}
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-900 hidden lg:table-cell">
+                    {operator.total_leave_days !== undefined ? operator.total_leave_days : '-'} gün
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button onClick={() => handleEdit(operator.id)} className="text-blue-600 hover:text-blue-900 p-1"><Edit2 size={18} /></button>
                     <button onClick={() => handleDelete(operator.id)} className="text-red-600 hover:text-red-900 p-1 ml-2"><Trash2 size={18} /></button>
                   </td>
