@@ -129,19 +129,30 @@ const TeklifGoruntule: React.FC = () => {
         }
     };
 
+    // --- PDF DÜZELTMESİ YAPILAN FONKSİYON ---
     const handleDownloadProposalPdf = () => {
         if (!proposalRef.current || !(window as any).html2pdf) {
             toast.error("PDF oluşturucu hazır değil.");
             return;
         }
+        
+        const element = proposalRef.current;
+
         const options = {
-            margin: 10,
+            margin: 0, // Margin 0 yapıldı (içerik padding ile yönetiliyor)
             filename: `Teklif_${proposal?.proposal_number}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, scrollY: 0, letterRendering: true },
+            html2canvas: { 
+                scale: 2, 
+                useCORS: true, 
+                scrollY: 0, 
+                letterRendering: true,
+                windowWidth: 794, // A4 genişliği simüle edildi
+                width: 794        // Genişlik sabitlendi
+            },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
         };
-        (window as any).html2pdf().set(options).from(proposalRef.current).save();
+        (window as any).html2pdf().set(options).from(element).save();
     };
 
     const handleDownloadContractPdf = async () => {
@@ -316,7 +327,6 @@ ${contractRef.current.innerHTML}
             
             if (updateError) throw updateError;
 
-            // HATA DÜZELTME: Güvenli string alma
             const pestsString = getPestsString(proposal.included_pests);
 
             const content = buildContractContent(proposal, companySettings, contractNumber);
@@ -421,7 +431,18 @@ ${contractRef.current.innerHTML}
             
             {/* KAĞIT (TEKLİF DETAYI) */}
             <div className="py-8 px-4 print:p-0 flex justify-center">
-                <div ref={proposalRef} className="bg-white shadow-xl print:shadow-none relative flex flex-col" style={{ width: '210mm', minHeight: '297mm' }}>
+                {/* DÜZELTME: width ve maxWidth eklendi, margin auto yapıldı */}
+                <div 
+                    ref={proposalRef} 
+                    className="bg-white shadow-xl print:shadow-none relative flex flex-col" 
+                    style={{ 
+                        width: '210mm', 
+                        maxWidth: '210mm', 
+                        minHeight: '297mm', 
+                        margin: '0 auto', 
+                        backgroundColor: 'white' 
+                    }}
+                >
                     
                     {/* HEADER */}
                     <div style={{ height: '8px', width: '100%', backgroundColor: primaryColor }}></div>
@@ -594,12 +615,28 @@ ${contractRef.current.innerHTML}
                             </div>
                         </div>
 
-                        {/* ... (Hakkımızda vb. kısımlar aynı) ... */}
+                        {/* BOTTOM AREA */}
+                        <div style={{ borderTop: `1px solid ${lightBorder}`, paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                           <div style={{ width: '60%' }}>
+                               <p style={{ fontSize: '10px', color: '#6b7280', lineHeight: '1.5' }}>
+                                   {companySettings?.footer_text || "Bu teklif 15 gün süreyle geçerlidir. Onay için imzalamanız yeterlidir."}
+                               </p>
+                           </div>
+                           <div style={{ textAlign: 'center' }}>
+                               <div style={{ height: '60px', width: '120px', borderBottom: '1px dashed #cbd5e1', marginBottom: '8px' }}></div>
+                               <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#475569' }}>Kaşe / İmza</p>
+                           </div>
+                        </div>
+
                     </div>
-                    {/* Footer aynı */}
+                    {/* FOOTER STRIP */}
+                    <div style={{ backgroundColor: '#f8fafc', padding: '10px 50px', borderTop: `1px solid ${lightBorder}`, fontSize: '8px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{companySettings?.website}</span>
+                        <span>Sayfa 1 / 1</span>
+                    </div>
                 </div>
                 
-                {/* ONAY BUTONLARI (Aynı) */}
+                {/* ONAY BUTONLARI */}
                 {proposal.status === 'pending' && (
                     <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-2xl flex justify-center gap-4 print:hidden z-50">
                         <div className="flex flex-col md:flex-row items-center gap-4 max-w-2xl w-full">
@@ -623,7 +660,7 @@ ${contractRef.current.innerHTML}
                 )}
             </div>
 
-            {/* SÖZLEŞME MODALI AYNI */}
+            {/* SÖZLEŞME MODALI */}
             {showContractModal && (
                 <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl w-full max-w-5xl p-6 shadow-2xl flex flex-col max-h-[95vh]">
