@@ -5,6 +5,7 @@ import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Bug, 
 import { format, addYears } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import html2canvas from 'html2canvas';
 import { generateContractHtml } from '../utils/contractGenerator';
 
 interface ProposalItem {
@@ -68,6 +69,7 @@ const TeklifGoruntule: React.FC = () => {
 
     const [showContractModal, setShowContractModal] = useState(false);
     const [contractHtml, setContractHtml] = useState('');
+    const [savedContractNumber, setSavedContractNumber] = useState('');
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -123,22 +125,78 @@ const TeklifGoruntule: React.FC = () => {
         }
     };
 
-    const handleDownloadPdf = (elementRef: React.RefObject<HTMLDivElement>, fileName: string, isContract = false) => {
-        if (!elementRef.current || !(window as any).html2pdf) {
+    const handleDownloadProposalPdf = () => {
+        if (!proposalRef.current || !(window as any).html2pdf) {
+            toast.error("PDF oluşturucu hazır değil.");
+            return;
+        }
+        const options = {
+            margin: 10,
+            filename: `Teklif_${proposal?.proposal_number}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0, letterRendering: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+        };
+        (window as any).html2pdf().set(options).from(proposalRef.current).save();
+    };
+
+    const handleDownloadContractPdf = async () => {
+        if (!contractRef.current || !(window as any).html2pdf) {
             toast.error("PDF oluşturucu hazır değil.");
             return;
         }
 
-        const element = elementRef.current;
+        const logoUrl = companySettings?.logo_url || '';
+        const contractNo = savedContractNumber;
+        const compName = companySettings?.company_name || '';
+
+        let headerImgData: string | null = null;
+        try {
+            const headerEl = document.createElement('div');
+            headerEl.style.cssText = 'width: 680px; padding: 8px 0 6px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1a7d37; font-family: Arial, sans-serif; background: white; position: absolute; top: -9999px; left: -9999px;';
+            headerEl.innerHTML = `
+              <div>${logoUrl ? `<img src="${logoUrl}" crossorigin="anonymous" style="height: 28px; object-fit: contain;">` : `<span style="font-size: 13px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
+              <div style="font-size: 8px; color: #555; text-align: right;">
+                <span style="font-weight: 600;">${compName}</span><br/>
+                <span>S\u00f6zle\u015fme No: ${contractNo}</span>
+              </div>
+            `;
+            document.body.appendChild(headerEl);
+            const headerCanvas = await html2canvas(headerEl, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+            headerImgData = headerCanvas.toDataURL('image/png');
+            document.body.removeChild(headerEl);
+        } catch (e) {
+            console.warn('Header render failed:', e);
+        }
+
+        const element = contractRef.current;
         const options = {
-            margin:       isContract ? [10, 10, 10, 10] : 10,
-            filename:     `${fileName}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, scrollY: 0, letterRendering: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-            pagebreak:    { mode: ['avoid-all'], avoid: ['tr', 'h3'] }
+            margin: [22, 10, 18, 10],
+            filename: `Sozlesme_${proposal?.company_name || 'contract'}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0, letterRendering: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+            pagebreak: { mode: ['css'] }
         };
-        (window as any).html2pdf().set(options).from(element).save();
+
+        (window as any).html2pdf()
+            .set(options)
+            .from(element)
+            .toPdf()
+            .get('pdf')
+            .then((pdf: any) => {
+                const totalPages = pdf.internal.getNumberOfPages();
+                for (let i = 1; i <= totalPages; i++) {
+                    pdf.setPage(i);
+                    if (i > 1 && headerImgData) {
+                        pdf.addImage(headerImgData, 'PNG', 10, 3, 190, 12);
+                    }
+                    pdf.setFontSize(7);
+                    pdf.setTextColor(150);
+                    pdf.text(`Sayfa ${i} / ${totalPages}`, 105, 292, { align: 'center' });
+                }
+            })
+            .save();
     };
 
     const handlePrintContract = () => {
@@ -148,15 +206,29 @@ const TeklifGoruntule: React.FC = () => {
             toast.error("Popup engellendi. Lütfen izin verin.");
             return;
         }
+        const logoUrl = companySettings?.logo_url || '';
+        const contractNo = savedContractNumber;
+        const compName = companySettings?.company_name || '';
         printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Hizmet Sozlesmesi</title>
 <style>
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A4 portrait; margin: 22mm 10mm 18mm 10mm; }
   @media print {
     body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    div[style*="page-break-after: always"] { page-break-after: always; }
+    .print-header { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px; border-bottom: 2px solid #1a7d37; font-family: Arial, sans-serif; background: white; }
+    .print-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 7pt; color: #999; }
+    .contract-body p { page-break-inside: avoid; }
+    .contract-body h3 { page-break-after: avoid; }
+    .contract-body tr { page-break-inside: avoid; }
+    .contract-no-break { page-break-inside: avoid; }
   }
-  body { margin: 0; padding: 0; }
-</style></head><body>${contractRef.current.innerHTML}</body></html>`);
+  body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+</style></head><body>
+<div class="print-header">
+  <div>${logoUrl ? `<img src="${logoUrl}" style="height: 28px;">` : `<span style="font-size: 13px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
+  <div style="font-size: 8pt; color: #555;"><span style="font-weight:600;">${compName}</span> | S\u00f6zle\u015fme No: ${contractNo}</div>
+</div>
+${contractRef.current.innerHTML}
+</body></html>`);
         printWindow.document.close();
         setTimeout(() => { printWindow.print(); }, 500);
     };
@@ -265,7 +337,8 @@ const TeklifGoruntule: React.FC = () => {
 
             setProposal(prev => prev ? { ...prev, status: 'approved', customer_notes: notes } : null);
             setContractHtml(content);
-            setShowContractModal(true); 
+            setSavedContractNumber(contractNumber);
+            setShowContractModal(true);
             toast.success(`Hizmet Sözleşmesi (${contractNumber}) oluşturuldu.`);
 
         } catch (err: any) {
@@ -335,7 +408,7 @@ const TeklifGoruntule: React.FC = () => {
                         <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-xs font-medium text-gray-700">
                             <Printer size={16} /> Yazdır
                         </button>
-                        <button onClick={() => handleDownloadPdf(proposalRef, `Teklif_${proposal.proposal_number}`)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-medium">
+                        <button onClick={handleDownloadProposalPdf} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-medium">
                             <FileDown size={16} /> İndir
                         </button>
                     </div>
@@ -534,7 +607,7 @@ const TeklifGoruntule: React.FC = () => {
                             <button onClick={handlePrintContract} className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 flex items-center gap-2 text-sm">
                                 <Printer size={16} /> Yazdir
                             </button>
-                            <button onClick={() => handleDownloadPdf(contractRef, `Sozlesme_${proposal.company_name}`, true)} className="px-5 py-2.5 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 flex items-center gap-2 text-sm shadow-lg shadow-green-200">
+                            <button onClick={handleDownloadContractPdf} className="px-5 py-2.5 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 flex items-center gap-2 text-sm shadow-lg shadow-green-200">
                                 <FileDown size={16} /> PDF Indir
                             </button>
                         </div>

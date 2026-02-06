@@ -154,9 +154,15 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     </table>` : '';
 
   return `<div style="font-family: Arial, 'Segoe UI', Helvetica, sans-serif; color: #1a1a1a; line-height: 1.45; font-size: 10pt;">
+  <style>
+    .contract-body p { page-break-inside: avoid; break-inside: avoid; }
+    .contract-body h3 { page-break-after: avoid; break-after: avoid; page-break-inside: avoid; break-inside: avoid; }
+    .contract-body tr { page-break-inside: avoid; break-inside: avoid; }
+    .contract-no-break { page-break-inside: avoid; break-inside: avoid; }
+  </style>
 
   <!-- ==================== KAPAK SAYFASI ==================== -->
-  <div style="min-height: 275mm; display: flex; flex-direction: column; justify-content: space-between; padding: 50px 40px; page-break-after: always;">
+  <div style="min-height: 250mm; display: flex; flex-direction: column; justify-content: space-between; padding: 50px 40px; page-break-after: always;">
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
       <div style="font-size: 10px; color: #888;"></div>
       <div>${logoUrl ? `<img src="${logoUrl}" style="height: 65px; object-fit: contain;" crossorigin="anonymous" />` : `<span style="font-size: 28px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
@@ -187,8 +193,7 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
   </div>
 
   <!-- ==================== TÜM İÇERİK: MADDE 1-10 (TEK AKIŞ) ==================== -->
-  <div style="padding: 30px 40px;">
-    ${pageHeader}
+  <div class="contract-body" style="padding: 10px 40px 30px 40px;">
 
     <h2 style="font-size: 14pt; font-weight: 800; margin: 0 0 12px 0; display: flex; justify-content: space-between; align-items: baseline;">
       <span>HİZMET SÖZLEŞMESİ</span>
@@ -355,6 +360,7 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     <p style="${S.p}"><strong>10.2.</strong> Tarafların kanuni tebligat adresleri, sözleşmenin giriş bölümünde belirtilen adreslerdir.</p>
     <p style="${S.p}"><strong>10.3.</strong> Taraflar, adres değişikliklerini diğer tarafa yedi (7) gün içinde iadeli taahhütlü mektup, noter veya KEP (Kayıtlı Elektronik Posta) yoluyla bildirmekle yükümlüdür. Bu bildirimin yapılmaması halinde, sözleşmede belirtilen mevcut adreslere yapılan her türlü tebligat, yasal olarak geçerli bir tebligatın tüm hüküm ve sonuçlarını doğurur.</p>
 
+    <div class="contract-no-break">
     <table style="width:100%; margin-top:30px; border-collapse:collapse;">
       <tr>
         <td style="width:50%; text-align:center; vertical-align:top; padding:12px 15px; border:1px solid #333;">
@@ -371,6 +377,7 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
         </td>
       </tr>
     </table>
+    </div>
   </div>
 
 </div>`;
