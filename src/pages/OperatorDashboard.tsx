@@ -41,18 +41,18 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, change, changeT
   }[changeType || 'neutral'];
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 flex flex-col justify-between">
+    <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col justify-between">
       <div className="flex justify-between items-start">
-        <span className="text-sm font-semibold text-gray-500">{title}</span>
-        <div className="p-3 bg-green-100 text-green-600 rounded-full">{icon}</div>
+        <span className="text-xs sm:text-sm font-semibold text-gray-500 leading-tight">{title}</span>
+        <div className="p-2 sm:p-3 bg-green-100 text-green-600 rounded-full shrink-0 ml-2">{icon}</div>
       </div>
       <div>
-        <p className="text-4xl font-bold text-gray-800 mt-2">{value}</p>
+        <p className="text-2xl sm:text-4xl font-bold text-gray-800 mt-1 sm:mt-2 truncate">{value}</p>
         {change && (
           <div className="flex items-center text-xs mt-1">
             {changeType === 'positive' && <TrendingUp size={14} className={changeColor} />}
             {changeType === 'negative' && <TrendingDown size={14} className={changeColor} />}
-            <span className={`ml-1 ${changeColor}`}>{change}</span>
+            <span className={`ml-1 ${changeColor} truncate`}>{change}</span>
           </div>
         )}
       </div>
@@ -61,12 +61,12 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, change, changeT
 };
 
 const StatCardSkeleton: React.FC = () => (
-  <div className="bg-white p-6 rounded-2xl shadow-lg animate-pulse">
+  <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg animate-pulse">
     <div className="flex justify-between items-start">
-      <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-      <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
+      <div className="h-3 sm:h-4 bg-gray-200 rounded w-1/2"></div>
+      <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gray-200 rounded-full"></div>
     </div>
-    <div className="mt-4 h-10 bg-gray-200 rounded w-1/3"></div>
+    <div className="mt-3 sm:mt-4 h-7 sm:h-10 bg-gray-200 rounded w-1/3"></div>
     <div className="mt-2 h-3 bg-gray-200 rounded w-3/4"></div>
   </div>
 );
@@ -340,97 +340,97 @@ const OperatorDashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      <header className="mb-8">
-        <p className="text-lg text-gray-500">{welcomeMessage},</p>
-        <h1 className="text-4xl font-bold text-gray-800">Operatör Paneline Hoş Geldiniz</h1>
+    <div className="p-3 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
+      <header className="mb-4 sm:mb-8">
+        <p className="text-sm sm:text-lg text-gray-500">{welcomeMessage},</p>
+        <h1 className="text-2xl sm:text-4xl font-bold text-gray-800">Operatör Paneli</h1>
       </header>
-      
-      <div className="flex items-center gap-2 mb-6">
-        <button onClick={() => setTimePeriod('thisMonth')} className={`px-4 py-2 rounded-lg font-semibold ${timePeriod === 'thisMonth' ? 'bg-green-600 text-white shadow-md' : 'bg-white text-gray-700'}`}>Bu Ay</button>
-        <button onClick={() => setTimePeriod('lastMonth')} className={`px-4 py-2 rounded-lg font-semibold ${timePeriod === 'lastMonth' ? 'bg-green-600 text-white shadow-md' : 'bg-white text-gray-700'}`}>Geçen Ay</button>
-        <button onClick={() => setTimePeriod('thisYear')} className={`px-4 py-2 rounded-lg font-semibold ${timePeriod === 'thisYear' ? 'bg-green-600 text-white shadow-md' : 'bg-white text-gray-700'}`}>Bu Yıl</button>
+
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto pb-1">
+        <button onClick={() => setTimePeriod('thisMonth')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-semibold whitespace-nowrap ${timePeriod === 'thisMonth' ? 'bg-green-600 text-white shadow-md' : 'bg-white text-gray-700'}`}>Bu Ay</button>
+        <button onClick={() => setTimePeriod('lastMonth')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-semibold whitespace-nowrap ${timePeriod === 'lastMonth' ? 'bg-green-600 text-white shadow-md' : 'bg-white text-gray-700'}`}>Geçen Ay</button>
+        <button onClick={() => setTimePeriod('thisYear')} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-semibold whitespace-nowrap ${timePeriod === 'thisYear' ? 'bg-green-600 text-white shadow-md' : 'bg-white text-gray-700'}`}>Bu Yıl</button>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {[...Array(8)].map((_, i) => <StatCardSkeleton key={i} />)}
         </div>
       ) : stats ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard title="Dönemlik Ziyaret" value={stats.periodVisits} icon={<Bug size={24} />} change={`${timePeriod === 'thisMonth' ? 'Bu ay' : timePeriod === 'lastMonth' ? 'Geçen ay' : 'Bu yıl'} yapılan`} />
-            <StatCard title="Dönemlik Ciro" value={stats.periodRevenue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })} icon={<DollarSign size={24} />} change="Kabul edilen teklifler" changeType="positive" />
-            <StatCard title="Yıllık Ciro" value={stats.yearlyRevenue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })} icon={<TrendingUp size={24} />} change={`${new Date().getFullYear()} toplamı`} changeType="positive" />
-            <StatCard title="Bekleyen Teklifler" value={stats.pendingOffers} icon={<FileText size={24} />} change="Onay bekliyor" />
-            <StatCard title="Planlanan Ziyaretler" value={stats.plannedVisits} icon={<Calendar size={24} />} change="Önümüzdeki 7 gün" />
-            <StatCard title="Toplam Müşteri" value={stats.totalCustomers} icon={<Users size={24} />} />
-            <StatCard title="Toplam Şube" value={stats.totalBranches} icon={<Building size={24} />} />
-            <StatCard title="Aktif Konum" value={stats.activeLocations} icon={<MapPin size={24} />} change="Farklı şehir sayısı" />
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+            <StatCard title="Dönemlik Ziyaret" value={stats.periodVisits} icon={<Bug size={20} />} change={`${timePeriod === 'thisMonth' ? 'Bu ay' : timePeriod === 'lastMonth' ? 'Geçen ay' : 'Bu yıl'} yapılan`} />
+            <StatCard title="Dönemlik Ciro" value={stats.periodRevenue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })} icon={<DollarSign size={20} />} change="Kabul edilen teklifler" changeType="positive" />
+            <StatCard title="Yıllık Ciro" value={stats.yearlyRevenue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })} icon={<TrendingUp size={20} />} change={`${new Date().getFullYear()} toplamı`} changeType="positive" />
+            <StatCard title="Bekleyen Teklifler" value={stats.pendingOffers} icon={<FileText size={20} />} change="Onay bekliyor" />
+            <StatCard title="Planlanan Ziyaretler" value={stats.plannedVisits} icon={<Calendar size={20} />} change="Önümüzdeki 7 gün" />
+            <StatCard title="Toplam Müşteri" value={stats.totalCustomers} icon={<Users size={20} />} />
+            <StatCard title="Toplam Şube" value={stats.totalBranches} icon={<Building size={20} />} />
+            <StatCard title="Aktif Konum" value={stats.activeLocations} icon={<MapPin size={20} />} change="Farklı şehir sayısı" />
           </div>
 
-          {/* Bildirim ve Google Yorum Bölümü */}
-          <div className="mb-8 bg-white p-4 sm:p-6 rounded-2xl shadow-lg flex items-center justify-between mt-6">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-700 mb-2">Ayarlar & İşlemler</h2>
-              <p className="text-gray-500 font-medium flex items-center">
-                {isPushEnabled ? (
-                  <>
-                    <BellRing size={20} className="mr-2 text-green-500" /> Bildirimler Açık
-                  </>
-                ) : (
-                  <>
-                    <BellOff size={20} className="mr-2 text-red-500" /> Bildirimler Kapalı
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={togglePushNotifications}
-                disabled={loading}
-                className={`px-6 py-3 rounded-lg font-bold text-white transition-colors ${
-                  isPushEnabled ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                {loading ? 'Ayarlanıyor...' : (isPushEnabled ? 'Bildirimleri Kapat' : 'Bildirimleri Aç')}
-              </button>
-              
-              <button
-                onClick={() => setShowReviewPopup(true)}
-                className="px-6 py-3 rounded-lg font-bold text-white transition-colors bg-yellow-500 hover:bg-yellow-600"
-              >
-                Müşteriden Yorum Al
-              </button>
+          <div className="mt-4 sm:mt-6 bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+              <div>
+                <h2 className="text-base sm:text-xl font-semibold text-gray-700 mb-1 sm:mb-2">Ayarlar & İşlemler</h2>
+                <p className="text-gray-500 font-medium flex items-center text-sm">
+                  {isPushEnabled ? (
+                    <>
+                      <BellRing size={18} className="mr-1.5 text-green-500" /> Bildirimler Açık
+                    </>
+                  ) : (
+                    <>
+                      <BellOff size={18} className="mr-1.5 text-red-500" /> Bildirimler Kapalı
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={togglePushNotifications}
+                  disabled={loading}
+                  className={`flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-bold text-white transition-colors ${
+                    isPushEnabled ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {loading ? 'Ayarlanıyor...' : (isPushEnabled ? 'Bildirimleri Kapat' : 'Bildirimleri Aç')}
+                </button>
+                <button
+                  onClick={() => setShowReviewPopup(true)}
+                  className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-base font-bold text-white transition-colors bg-yellow-500 hover:bg-yellow-600"
+                >
+                  Yorum Al
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-            <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Ziyaret Grafiği ({timePeriod === 'thisMonth' ? 'Bu Ay' : timePeriod === 'lastMonth' ? 'Geçen Ay' : 'Bu Yıl'})</h2>
-              <ResponsiveContainer width="100%" height={300}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mt-4 sm:mt-6">
+            <div className="lg:col-span-2 bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg">
+              <h2 className="text-base sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4">Ziyaret Grafiği ({timePeriod === 'thisMonth' ? 'Bu Ay' : timePeriod === 'lastMonth' ? 'Geçen Ay' : 'Bu Yıl'})</h2>
+              <ResponsiveContainer width="100%" height={220} className="sm:!h-[300px]">
                 <BarChart data={stats.graphData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" fontSize={12} />
-                  <YAxis />
-                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '0.5rem' }}/>
-                  <Legend />
+                  <XAxis dataKey="name" fontSize={11} tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={30} />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '0.5rem', fontSize: '12px' }}/>
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Bar dataKey="ziyaret" fill="#10b981" name="Ziyaret Sayısı" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            
-            <div className="bg-white p-6 rounded-2xl shadow-lg">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Son Aktiviteler</h2>
-              <div className="space-y-4">
+
+            <div className="bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg">
+              <h2 className="text-base sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4">Son Aktiviteler</h2>
+              <div className="space-y-3 sm:space-y-4">
                 {stats.recentTreatments.length > 0 ? stats.recentTreatments.map(treatment => (
-                  <div key={treatment.id} className="flex items-center gap-4">
-                    <div className={`p-2 rounded-full ${ { completed: 'bg-green-100 text-green-600', planned: 'bg-yellow-100 text-yellow-600', cancelled: 'bg-orange-100 text-orange-600' }[treatment.status] || 'bg-gray-100 text-gray-600' }`}>
-                      <Bug size={20} />
+                  <div key={treatment.id} className="flex items-center gap-3">
+                    <div className={`p-1.5 sm:p-2 rounded-full shrink-0 ${ { completed: 'bg-green-100 text-green-600', planned: 'bg-yellow-100 text-yellow-600', cancelled: 'bg-orange-100 text-orange-600' }[treatment.status] || 'bg-gray-100 text-gray-600' }`}>
+                      <Bug size={16} />
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm">{treatment.customer?.kisa_isim || 'Bilinmeyen Müşteri'}</p>
-                      <p className="text-xs text-gray-500">{treatment.operator?.name || 'Atanmamış'} - {format(new Date(treatment.visit_date), 'dd MMM', { locale: tr })}</p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-xs sm:text-sm truncate">{treatment.customer?.kisa_isim || 'Bilinmeyen Müşteri'}</p>
+                      <p className="text-xs text-gray-500 truncate">{treatment.operator?.name || 'Atanmamış'} - {format(new Date(treatment.visit_date), 'dd MMM', { locale: tr })}</p>
                     </div>
                   </div>
                 )) : <p className="text-sm text-gray-500">Yakın zamanda aktivite bulunamadı.</p>}
@@ -439,9 +439,9 @@ const OperatorDashboard: React.FC = () => {
           </div>
         </>
       ) : (
-        <div className="text-center p-10 bg-white rounded-lg shadow">
-            <h3 className="text-xl font-semibold text-gray-700">Veri Bulunamadı</h3>
-            <p className="text-gray-500 mt-2">Seçilen dönem için istatistik bulunamadı.</p>
+        <div className="text-center p-6 sm:p-10 bg-white rounded-lg shadow">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-700">Veri Bulunamadı</h3>
+            <p className="text-gray-500 mt-2 text-sm sm:text-base">Seçilen dönem için istatistik bulunamadı.</p>
         </div>
       )}
 
