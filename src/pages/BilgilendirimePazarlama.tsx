@@ -79,10 +79,10 @@ const BilgilendirimePazarlama: React.FC = () => {
 
   // Footer bilgileri
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
-    name: 'İlaçlamatik Ekibi',
-    title: 'Profesyonel Zararlı Kontrol Çözümleri',
-    website: 'www.ilaclamatik.com.tr',
-    phone: '+90 555 123 4567',
+    name: 'Sistem İlaçlama Sanayi ve Ticaret Limited Şirketi - PestMentor',
+    title: 'Leave pest to us...',
+    website: 'www.ilaclamatik.com - www.pestmentor.com.tr',
+    phone: '0224 233 83 87',
     logo_url: 'https://i.imgur.com/PajSpus.png'
   });
 
