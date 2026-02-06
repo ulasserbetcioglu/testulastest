@@ -15,6 +15,7 @@ import FloorPlanViewer from '../components/Branches/FloorPlanViewer';
 import BranchTrendAnalysis from './BranchTrendAnalysis';
 import BranchIpmView from '../components/Ipm/BranchIpmView';
 import BranchPestActivityView from '../components/PestActivity/BranchPestActivityView';
+import BranchPestRiskView from '../components/PestRisk/BranchPestRiskView';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, AreaChart, Area, ComposedChart
@@ -557,6 +558,7 @@ const CustomerBranchesPage: React.FC = () => {
                   <button onClick={() => toggleTab(branch.id, 'trends')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'trends' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><TrendingUp size={16} /> Trend Analiz {activeTab === 'trends' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
                   <button onClick={() => toggleTab(branch.id, 'ipm')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'ipm' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Shield size={16} /> IPM Sozlesmesi {activeTab === 'ipm' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
                   <button onClick={() => toggleTab(branch.id, 'pest-limits')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'pest-limits' ? 'bg-white text-amber-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><AlertCircle size={16} /> Kritik Limitler {activeTab === 'pest-limits' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
+                  <button onClick={() => toggleTab(branch.id, 'risk-assessment')} className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'risk-assessment' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-600 hover:bg-white'}`}><Bug size={16} /> Risk Degerlendirme {activeTab === 'risk-assessment' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>
                 </div>
                 {activeTab && (
                   <div className="border-t border-gray-200 p-4 bg-gray-50/30 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -569,6 +571,7 @@ const CustomerBranchesPage: React.FC = () => {
                     {activeTab === 'trends' && <BranchTrendAnalysis branchId={branch.id} branchName={branch.sube_adi} />}
                     {activeTab === 'ipm' && <BranchIpmView branchId={branch.id} />}
                     {activeTab === 'pest-limits' && <BranchPestActivityView branchId={branch.id} />}
+                    {activeTab === 'risk-assessment' && <BranchPestRiskView branchId={branch.id} />}
                   </div>
                 )}
               </div>

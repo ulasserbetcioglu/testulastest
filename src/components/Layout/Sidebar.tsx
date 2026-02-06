@@ -31,6 +31,7 @@ const menuCategories = [
       { name: 'Teklifler', path: '/teklifler', icon: <FileText size={18} /> },
       { name: 'IPM Sözleşme', path: '/ipm-sozlesmeleri', icon: <Shield size={18} /> },
       { name: 'Kritik Limitler', path: '/zararli-kritik-limitler', icon: <AlertTriangle size={18} /> },
+      { name: 'Risk Değerlendirme', path: '/zararli-risk-degerlendirme', icon: <Bug size={18} /> },
     ]
   },
   {
