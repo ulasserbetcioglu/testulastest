@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase'; // Supabase yapılandırmanızın doğru olduğu varsayılmıştır
 import { toast } from 'sonner'; // Toast bildirimleri için sonner kütüphanesi
-import { Loader2, DollarSign, Calendar as CalendarIcon, User, Building, ReceiptText, Eye, Download, Plus, Search, Filter } from 'lucide-react';
+import { Loader2, DollarSign, Calendar as CalendarIcon, User, Building, ReceiptText, Eye, Download, Plus, Search, Filter, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
@@ -52,7 +52,7 @@ const ReceiptPreview: React.FC<{ receipt: CollectionReceipt | null; onClose: () 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+      <div className="mx-auto p-4 sm:p-5 border w-full max-w-md shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium">Makbuz Önizleme</h3>
           <button

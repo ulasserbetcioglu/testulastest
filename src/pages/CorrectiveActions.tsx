@@ -311,7 +311,8 @@ const CorrectiveActions: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -373,7 +374,6 @@ const CorrectiveActions: React.FC = () => {
                         >
                           Detay
                         </button>
-                        {/* Hızlı Aksiyon Butonları */}
                         {action.status === 'open' && (
                           <button onClick={() => handleUpdateStatus(action.id, 'in_progress')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs">Başlat</button>
                         )}
@@ -387,6 +387,53 @@ const CorrectiveActions: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {filteredActions.length === 0 ? (
+            <div className="px-4 py-8 text-center text-gray-500">
+              <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+              <p>Kayıt bulunamadı</p>
+            </div>
+          ) : (
+            filteredActions.map((action) => (
+              <div key={`mobile-${action.id}`} className="p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="font-medium text-gray-900">{action.customer.kisa_isim}</div>
+                    {action.branch && <div className="text-xs text-gray-500">{action.branch.sube_adi}</div>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {action.photo_url && <ImageIcon size={16} className="text-blue-500" />}
+                    {getStatusBadge(action.status)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  {getNonComplianceTypeBadge(action.non_compliance_type)}
+                </div>
+                <p className="text-sm text-gray-600 line-clamp-2 mb-2">{action.non_compliance_description}</p>
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                  <span>Sorumlu: {action.responsible}</span>
+                  <span>Termin: {new Date(action.due_date).toLocaleDateString('tr-TR')}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedAction(action)}
+                    className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm text-center"
+                  >
+                    Detay
+                  </button>
+                  {action.status === 'open' && (
+                    <button onClick={() => handleUpdateStatus(action.id, 'in_progress')} className="flex-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm text-center">Başlat</button>
+                  )}
+                  {action.status === 'in_progress' && (
+                    <button onClick={() => handleUpdateStatus(action.id, 'completed')} className="flex-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm text-center">Tamamla</button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

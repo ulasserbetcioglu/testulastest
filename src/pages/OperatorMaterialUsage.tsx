@@ -239,22 +239,23 @@ const OperatorMaterialUsage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold">MALZEME KULLANIM ANALİZİ</h2>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <h2 className="text-lg sm:text-2xl font-semibold">MALZEME KULLANIM ANALİZİ</h2>
         <div className="flex gap-2">
           <button
             onClick={() => setViewMode(viewMode === 'product' ? 'monthly' : 'product')}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base"
           >
-            <BarChart2 size={20} />
-            {viewMode === 'product' ? 'Aylık Görünüm' : 'Ürün Görünümü'}
+            <BarChart2 size={18} className="shrink-0" />
+            <span className="hidden sm:inline">{viewMode === 'product' ? 'Aylık Görünüm' : 'Ürün Görünümü'}</span>
+            <span className="sm:hidden">{viewMode === 'product' ? 'Aylık' : 'Ürün'}</span>
           </button>
           <button
             onClick={exportToExcel}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+            className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base"
           >
-            <Download size={20} />
-            Excel
+            <Download size={18} className="shrink-0" />
+            <span className="hidden sm:inline">Excel</span>
           </button>
         </div>
       </div>

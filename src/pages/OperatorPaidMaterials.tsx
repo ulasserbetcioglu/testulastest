@@ -307,15 +307,16 @@ const OperatorPaidMaterials: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold">ÜCRETLİ MALZEME SATIŞLARIM</h2>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <h2 className="text-lg sm:text-2xl font-semibold">ÜCRETLİ MALZEME SATIŞLARIM</h2>
         <div className="flex gap-2">
           <button
             onClick={() => setViewMode(viewMode === 'sales' ? 'monthly' : 'sales')}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center"
+            className="bg-blue-500 text-white px-3 sm:px-4 py-2 rounded hover:bg-blue-600 flex items-center text-sm sm:text-base"
           >
-            <Calendar className="w-4 h-4 mr-2" />
-            {viewMode === 'sales' ? 'Aylık Rapor Görünümü' : 'Satış Görünümü'}
+            <Calendar className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            <span className="hidden sm:inline">{viewMode === 'sales' ? 'Aylık Rapor Görünümü' : 'Satış Görünümü'}</span>
+            <span className="sm:hidden">{viewMode === 'sales' ? 'Aylık' : 'Satış'}</span>
           </button>
         </div>
       </div>
@@ -375,7 +376,8 @@ const OperatorPaidMaterials: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="min-w-full">
             <thead className="bg-gray-800 text-white">
               <tr>
@@ -414,6 +416,31 @@ const OperatorPaidMaterials: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="sm:hidden divide-y divide-gray-100">
+          {filteredMonthlyReports.length === 0 ? (
+            <div className="px-4 py-6 text-center text-gray-500">Aylık rapor bulunamadı</div>
+          ) : (
+            filteredMonthlyReports.map((report, index) => (
+              <div key={`mobile-${report.branch_id}-${report.month}-${report.year}-${index}`} className="p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-semibold text-gray-900">{report.month} {report.year}</div>
+                    <div className="text-sm text-gray-500 mt-1">{report.visit_count} ziyaret - {report.items.length} malzeme çeşidi</div>
+                  </div>
+                  <button
+                    onClick={() => exportMonthlyReportToExcel(report)}
+                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                    title="Excel'e Aktar"
+                  >
+                    <Download className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
