@@ -17,16 +17,16 @@ interface ReportRow {
       visitCount: number;
       hasVisit: boolean;
       visitDetails: string[];
-      visitIds: string[]; // O aydaki ziyaretlerin ID'leri (Toplu güncelleme için)
-      visitInvoicedCount: number; // Kaç tanesi faturalanmış?
+      visitIds: string[]; 
+      visitCheckedCount: number; // is_checked (Takvimdeki onay) sayısı
       
       // Malzeme Verileri
       hasMaterial: boolean;
       materialDetails: string[];
       materialBreakdown: Record<string, number>;
       totalMaterialCount: number;
-      materialSaleIds: string[]; // O aydaki satış ID'leri
-      materialInvoicedCount: number;
+      materialSaleIds: string[]; 
+      materialInvoicedCount: number; // is_invoiced (Fatura) sayısı
     };
   };
 }
@@ -36,7 +36,7 @@ interface VisitData {
   branch_id: string;
   visit_date: string;
   status: string;
-  is_invoiced: boolean; // YENİ: Ziyaret tablosundan geliyor
+  is_checked: boolean; // ARTIK TAKVİMDEKİ CHECKBOX VERİSİ
   operator?: {
     name: string;
   };
@@ -84,8 +84,8 @@ const AnnualVisitReport = () => {
 
       if (branchError) throw new Error(`Şubeler çekilemedi: ${branchError.message}`);
 
-      // 2. Ziyaretleri Çek (is_invoiced dahil)
-      setProgress('Ziyaretler ve fatura durumları çekiliyor...');
+      // 2. Ziyaretleri Çek (is_checked KULLANILIYOR)
+      setProgress('Ziyaretler ve onay durumları çekiliyor...');
       const startDate = `${year}-01-01T00:00:00`;
       const endDate = `${year}-12-31T23:59:59`;
       
@@ -102,7 +102,7 @@ const AnnualVisitReport = () => {
             branch_id, 
             visit_date, 
             status,
-            is_invoiced,
+            is_checked, 
             operator:operator_id ( name )
           `)
           .gte('visit_date', startDate)
@@ -125,7 +125,7 @@ const AnnualVisitReport = () => {
         }
       }
 
-      // 3. Malzeme Satışlarını Çek (is_invoiced dahil)
+      // 3. Malzeme Satışlarını Çek (is_invoiced devam ediyor)
       setProgress('Malzeme satışları kontrol ediliyor...');
       let salesDataMap: Record<string, {items: SoldItem[], ids: string[], invoicedCount: number}> = {}; 
 
@@ -162,7 +162,6 @@ const AnnualVisitReport = () => {
                         });
                     }
                     if (items.length > 0) {
-                        // Eğer bu ziyaret için daha önce kayıt yoksa oluştur
                         if(!salesDataMap[sale.visit_id]) {
                             salesDataMap[sale.visit_id] = { items: [], ids: [], invoicedCount: 0 };
                         }
@@ -198,7 +197,7 @@ const AnnualVisitReport = () => {
             hasVisit: false, 
             visitDetails: [],
             visitIds: [],
-            visitInvoicedCount: 0,
+            visitCheckedCount: 0, // is_checked sayacı
             
             hasMaterial: false,
             materialDetails: [],
@@ -221,14 +220,14 @@ const AnnualVisitReport = () => {
               mData.visitCount += 1;
               mData.hasVisit = true;
               mData.visitIds.push(visit.id);
-              if (visit.is_invoiced) mData.visitInvoicedCount += 1;
+              if (visit.is_checked) mData.visitCheckedCount += 1; // Takvimdeki onay durumu
               
               const dateStr = visitDate.toLocaleDateString('tr-TR');
               const operatorName = visit.operator?.name ? ` - ${visit.operator.name}` : '';
               const statusStr = visit.status === 'completed' ? 'Tamamlandı' : 'Planlandı';
-              const invStr = visit.is_invoiced ? ' [FATURALI]' : '';
+              const checkStr = visit.is_checked ? ' [ONAYLI]' : '';
               
-              mData.visitDetails.push(`${dateStr} (${statusStr})${operatorName}${invStr}`);
+              mData.visitDetails.push(`${dateStr} (${statusStr})${operatorName}${checkStr}`);
               
               // --- Malzeme ---
               if (salesDataMap[visit.id]) {
@@ -269,8 +268,8 @@ const AnnualVisitReport = () => {
     fetchReportData();
   }, [year]);
 
-  // --- FATURA DURUMU GÜNCELLEME (TOPLU) ---
-  const toggleInvoiceStatus = async (
+  // --- DURUM GÜNCELLEME (TOPLU) ---
+  const toggleStatus = async (
       rowIdx: number, 
       monthIdx: number, 
       type: 'visit' | 'material', 
@@ -282,12 +281,21 @@ const AnnualVisitReport = () => {
     setUpdating(true);
 
     try {
-        const table = type === 'visit' ? 'visits' : 'paid_material_sales';
+        let table = '';
+        let field = '';
+
+        if (type === 'visit') {
+            table = 'visits';
+            field = 'is_checked'; // Ziyaret için is_checked güncelleniyor
+        } else {
+            table = 'paid_material_sales';
+            field = 'is_invoiced'; // Malzeme için is_invoiced güncelleniyor
+        }
         
-        // 1. Veritabanını Güncelle (O aydaki tüm kayıtları güncelle)
+        // 1. Veritabanını Güncelle
         const { error } = await supabase
             .from(table)
-            .update({ is_invoiced: targetStatus })
+            .update({ [field]: targetStatus })
             .in('id', ids);
 
         if (error) throw error;
@@ -297,17 +305,14 @@ const AnnualVisitReport = () => {
         const mData = newData[rowIdx].months[monthIdx];
         
         if (type === 'visit') {
-            mData.visitInvoicedCount = targetStatus ? mData.visitCount : 0;
+            mData.visitCheckedCount = targetStatus ? mData.visitCount : 0;
         } else {
             mData.materialInvoicedCount = targetStatus ? mData.materialSaleIds.length : 0; 
-            // Not: Tam sayı tutmuyor olabiliriz çünkü bir satışta birden çok id olabilir ama basit mantıkla hepsi güncellendi.
-            // Daha doğru görüntüleme için tekrar fetch etmek en garantisi ama performans için basit güncelleme yapıyoruz.
-            // Satış ID sayısı kadar faturalı sayısını güncelliyoruz.
-             mData.materialInvoicedCount = targetStatus ? mData.materialSaleIds.length : 0; 
         }
         
         setData(newData);
-        toast.success(`${ids.length} kayıt ${targetStatus ? 'faturalandı' : 'iptal edildi'}.`);
+        const actionText = type === 'visit' ? (targetStatus ? 'onaylandı' : 'onayı kaldırıldı') : (targetStatus ? 'faturalandı' : 'iptal edildi');
+        toast.success(`${ids.length} kayıt ${actionText}.`);
 
     } catch (err: any) {
         toast.error("Güncelleme başarısız: " + err.message);
@@ -338,11 +343,11 @@ const AnnualVisitReport = () => {
 
       months.forEach((month, index) => {
         const mData = row.months[index];
-        const isVisitFullyInvoiced = mData.visitCount > 0 && mData.visitCount === mData.visitInvoicedCount;
+        const isVisitFullyChecked = mData.visitCount > 0 && mData.visitCount === mData.visitCheckedCount;
         const isMatFullyInvoiced = mData.hasMaterial && mData.materialSaleIds.length === mData.materialInvoicedCount;
 
         flatRow[`${month} (Ziyaret Sayısı)`] = mData.visitCount;
-        flatRow[`${month} (Ziyaret Fatura)`] = isVisitFullyInvoiced ? 'EVET' : (mData.visitInvoicedCount > 0 ? 'KISMEN' : 'HAYIR');
+        flatRow[`${month} (Ziyaret Onay)`] = isVisitFullyChecked ? 'EVET' : (mData.visitCheckedCount > 0 ? 'KISMEN' : 'HAYIR');
         
         flatRow[`${month} (Malzeme)`] = mData.hasMaterial ? `Var (${mData.totalMaterialCount})` : '-';
         flatRow[`${month} (Malzeme Fatura)`] = isMatFullyInvoiced ? 'EVET' : (mData.materialInvoicedCount > 0 ? 'KISMEN' : 'HAYIR');
@@ -369,7 +374,7 @@ const AnnualVisitReport = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Yıllık Ziyaret ve Fatura Takibi</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {year} yılı ziyaret ve malzeme fatura durumları. Kutucuklara tıklayarak o ayın faturalarını toplu işleyebilirsiniz.
+            {year} yılı analiz tablosu. <strong>Ziyaret kutucuğu, takvimdeki onay kutusu ile senkronizedir.</strong>
           </p>
         </div>
         
@@ -477,28 +482,28 @@ const AnnualVisitReport = () => {
                     {months.map((_, mIdx) => {
                       const mData = row.months[mIdx];
                       
-                      // Ziyaret Fatura Durumu: Hepsi faturalı mı?
-                      const isVisitFullyInvoiced = mData.visitCount > 0 && mData.visitCount === mData.visitInvoicedCount;
+                      // Ziyaret Onay Durumu: Hepsi onaylı mı?
+                      const isVisitFullyChecked = mData.visitCount > 0 && mData.visitCount === mData.visitCheckedCount;
+                      
                       // Malzeme Fatura Durumu
-                      // Satış kayıtlarına bakıyoruz. materialSaleIds.length kadar satış var.
                       const isMatFullyInvoiced = mData.hasMaterial && mData.materialSaleIds.length > 0 && mData.materialSaleIds.length === mData.materialInvoicedCount;
 
                       return (
                         <React.Fragment key={mIdx}>
-                          {/* Ziyaret Sütunu */}
+                          {/* Ziyaret Sütunu (is_checked) */}
                           <td 
-                            className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${mData.hasVisit ? (isVisitFullyInvoiced ? 'bg-green-100' : 'bg-green-50') : ''}`}
+                            className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${mData.hasVisit ? (isVisitFullyChecked ? 'bg-green-100' : 'bg-green-50') : ''}`}
                           >
                             {mData.hasVisit ? (
                               <div className="flex flex-col items-center justify-center gap-1">
                                 <span className="text-xs font-bold text-green-700 cursor-help" title={mData.visitDetails.join('\n')}>{mData.visitCount}</span>
                                 <button 
-                                    onClick={() => toggleInvoiceStatus(rowIdx, mIdx, 'visit', mData.visitIds, !isVisitFullyInvoiced)}
+                                    onClick={() => toggleStatus(rowIdx, mIdx, 'visit', mData.visitIds, !isVisitFullyChecked)}
                                     disabled={updating}
                                     className="text-gray-400 hover:text-green-600 focus:outline-none disabled:opacity-50"
-                                    title={isVisitFullyInvoiced ? "Faturayı İptal Et" : "Fatura Kesildi Olarak İşaretle"}
+                                    title={isVisitFullyChecked ? "Onayı Kaldır" : "Tümünü Onayla (Takvimle Eşleşir)"}
                                 >
-                                    {isVisitFullyInvoiced ? <CheckSquare size={14} className="text-green-600"/> : <Square size={14} />}
+                                    {isVisitFullyChecked ? <CheckSquare size={14} className="text-green-600"/> : <Square size={14} />}
                                 </button>
                               </div>
                             ) : (
@@ -506,7 +511,7 @@ const AnnualVisitReport = () => {
                             )}
                           </td>
                           
-                          {/* Malzeme Sütunu */}
+                          {/* Malzeme Sütunu (is_invoiced) */}
                           <td 
                             className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${mData.hasMaterial ? (isMatFullyInvoiced ? 'bg-orange-100' : 'bg-orange-50') : ''}`}
                           >
@@ -516,7 +521,7 @@ const AnnualVisitReport = () => {
                                    {mData.totalMaterialCount}
                                  </span>
                                  <button 
-                                    onClick={() => toggleInvoiceStatus(rowIdx, mIdx, 'material', mData.materialSaleIds, !isMatFullyInvoiced)}
+                                    onClick={() => toggleStatus(rowIdx, mIdx, 'material', mData.materialSaleIds, !isMatFullyInvoiced)}
                                     disabled={updating}
                                     className="text-gray-400 hover:text-orange-600 focus:outline-none disabled:opacity-50"
                                     title={isMatFullyInvoiced ? "Faturayı İptal Et" : "Fatura Kesildi Olarak İşaretle"}
@@ -540,11 +545,11 @@ const AnnualVisitReport = () => {
         
         <div className="p-3 bg-gray-50 border-t text-xs text-gray-500 flex justify-between items-center">
           <div className="flex gap-4">
-             <div className="flex items-center gap-1"><Info size={14}/> <span>Kutucuğa tıklayarak o ayın tüm işlemlerini faturalandı olarak işaretleyebilirsiniz.</span></div>
+             <div className="flex items-center gap-1"><Info size={14}/> <span>Sol kutucuk (Ziyaret) takvimdeki onay kutusunu kontrol eder. Sağ kutucuk (Malzeme) fatura durumunu kontrol eder.</span></div>
           </div>
           <div className="flex gap-4">
             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-50 border border-green-200 rounded-sm"></div> Ziyaret Bekliyor</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div> Ziyaret Faturalandı</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div> Ziyaret Onaylı</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-50 border border-orange-200 rounded-sm"></div> Malzeme Bekliyor</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-100 border border-orange-300 rounded-sm"></div> Malzeme Faturalandı</span>
           </div>
