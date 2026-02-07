@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Download, Search, AlertCircle, RefreshCw, Package, CheckSquare, Square, Info } from 'lucide-react';
+import { Download, Search, AlertCircle, RefreshCw, Package, CheckSquare, Square, Info, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 
@@ -40,7 +40,7 @@ interface VisitData {
   operator?: {
     name: string;
   };
-  // İlişkisel veri (Tek seferde çekilecek)
+  // İlişkisel veri
   paid_material_sales?: {
     id: string;
     is_invoiced: boolean;
@@ -51,6 +51,11 @@ interface VisitData {
   }[];
 }
 
+interface SoldItem {
+  name: string;
+  qty: number;
+}
+
 const AnnualVisitReport = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReportRow[]>([]);
@@ -59,6 +64,9 @@ const AnnualVisitReport = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
   const [updating, setUpdating] = useState(false);
+  
+  // YENİ: Sıralama State'i
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
   const months = [
     'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
@@ -88,7 +96,7 @@ const AnnualVisitReport = () => {
 
       if (branchError) throw new Error(`Şubeler çekilemedi: ${branchError.message}`);
 
-      // 2. Ziyaretleri ve Malzemeleri TEK SORGUDA Çek (Performans ve Veri Bütünlüğü İçin)
+      // 2. Ziyaretleri ve Malzemeleri TEK SORGUDA Çek
       setProgress('Ziyaretler ve malzeme verileri çekiliyor...');
       const startDate = `${year}-01-01T00:00:00`;
       const endDate = `${year}-12-31T23:59:59`;
@@ -99,7 +107,6 @@ const AnnualVisitReport = () => {
       let hasMore = true;
 
       while (hasMore) {
-        // visits tablosundan is_checked, paid_material_sales tablosundan is_invoiced çekiyoruz
         const { data: visitsChunk, error: visitError } = await supabase
           .from('visits')
           .select(`
@@ -126,7 +133,6 @@ const AnnualVisitReport = () => {
         if (visitError) throw new Error(`Veri çekilemedi: ${visitError.message}`);
 
         if (visitsChunk && visitsChunk.length > 0) {
-          // Tip dönüşümü (Supabase dönüşü ile VisitData arayüzü eşleşmesi)
           const typedChunk = visitsChunk as unknown as VisitData[];
           allVisits = [...allVisits, ...typedChunk];
           
@@ -189,7 +195,6 @@ const AnnualVisitReport = () => {
               mData.hasVisit = true;
               mData.visitIds.push(visit.id);
               
-              // Takvimdeki "Kontrol Edildi" (is_checked) durumu
               if (visit.is_checked) mData.visitCheckedCount += 1; 
               
               const dateStr = visitDate.toLocaleDateString('tr-TR');
@@ -205,16 +210,13 @@ const AnnualVisitReport = () => {
                 
                 visit.paid_material_sales.forEach(sale => {
                     mData.materialSaleIds.push(sale.id);
-                    // Fatura kesildi durumu (is_invoiced)
                     if (sale.is_invoiced) mData.materialInvoicedCount += 1;
 
-                    // Malzeme detayları (Tooltip için)
                     const itemStrs: string[] = [];
                     sale.paid_material_sale_items.forEach(item => {
                         const pName = item.product?.name || 'Ürün';
                         itemStrs.push(`${pName} (${item.quantity})`);
                         
-                        // Toplamlar
                         const currentQty = mData.materialBreakdown[pName] || 0;
                         mData.materialBreakdown[pName] = currentQty + item.quantity;
                         mData.totalMaterialCount += item.quantity;
@@ -232,7 +234,8 @@ const AnnualVisitReport = () => {
         return row;
       });
 
-      processedData.sort((a, b) => a.cari_isim.localeCompare(b.cari_isim));
+      // Varsayılan sıralama (Alfabetik)
+      processedData.sort((a, b) => a.cari_isim.localeCompare(b.cari_isim, 'tr'));
       setData(processedData);
 
     } catch (error: any) {
@@ -248,7 +251,7 @@ const AnnualVisitReport = () => {
     fetchReportData();
   }, [year]);
 
-  // --- DURUM GÜNCELLEME (TOPLU) ---
+  // --- TOPLU GÜNCELLEME ---
   const toggleStatus = async (
       rowIdx: number, 
       monthIdx: number, 
@@ -266,13 +269,12 @@ const AnnualVisitReport = () => {
 
         if (type === 'visit') {
             table = 'visits';
-            field = 'is_checked'; // Ziyaret tablosundaki 'is_checked' alanını güncelle
+            field = 'is_checked';
         } else {
             table = 'paid_material_sales';
-            field = 'is_invoiced'; // Satış tablosundaki 'is_invoiced' alanını güncelle
+            field = 'is_invoiced';
         }
         
-        // 1. Veritabanını Güncelle
         const { error } = await supabase
             .from(table)
             .update({ [field]: targetStatus })
@@ -280,17 +282,49 @@ const AnnualVisitReport = () => {
 
         if (error) throw error;
 
-        // 2. Arayüzü Güncelle (Optimistic Update - Hızlı tepki için)
-        const newData = [...data];
-        const mData = newData[rowIdx].months[monthIdx];
+        // Optimistic Update
+        // Not: Burada data state'i sıralı olabilir, filteredData üzerinden değil orijinal data üzerinden güncelleme yapmalıyız.
+        // Ancak sıralama yapıldığı için indexler karışabilir. En doğrusu veriyi id ile bulup güncellemektir ama
+        // performans için basitlik adına sayfayı yeniletmeden ilgili state'i güncelliyoruz.
+        // Şimdilik filteredData kullanmadığımız için doğrudan data'yı güncelleyebiliriz ama
+        // sıralama değişirse rowIdx yanlış olabilir. Bu yüzden rowIdx'i filteredData'dan almamalıyız.
+        // Bu örnekte UI'da gösterilen veri 'sortedAndFilteredData' olduğu için, tıklanan satırın verisini
+        // bulmak için branch_uuid kullanmak daha güvenli olurdu ama kod karmaşıklığını artırmamak için
+        // basit yoldan fetchReportData() çağırabiliriz veya risk alıp güncelleyebiliriz.
+        // En temiz çözüm yeniden fetch etmektir ama yavaş olur.
+        // Aşağıdaki yöntem, render edilen veri ile state verisi aynı sırada olduğu sürece çalışır.
         
-        if (type === 'visit') {
-            mData.visitCheckedCount = targetStatus ? mData.visitCount : 0;
-        } else {
-            mData.materialInvoicedCount = targetStatus ? mData.materialSaleIds.length : 0; 
-        }
+        // Güvenli Yöntem: UI güncellemesi yerine veriyi yeniden çekmek (Data integrity için)
+        // VEYA: Aşağıdaki gibi manuel state update (Hızlı tepki için)
+        
+        // Hangi satır olduğunu bulmak için rowIdx kullanmak yerine branch_uuid ile bulalım.
+        // Ancak fonksiyon şu an rowIdx alıyor. Render kısmında doğru index gönderdiğimizden emin olmalıyız.
+        // sortedAndFilteredData içinde dönüyoruz, dolayısıyla rowIdx sortedData'nın indexi.
+        
+        // Bu karmaşıklığı çözmek için: Sadece toggle işlemi bitince bir toast mesajı gösterip veriyi arkada yenileyelim mi?
+        // Hayır, kullanıcı anlık tepki ister.
+        
+        // Çözüm: branch_uuid kullanarak orijinal data içinde bulup güncelle.
+        const targetBranchId = sortedAndFilteredData[rowIdx].branch_uuid;
+        
+        const newData = data.map(row => {
+            if (row.branch_uuid === targetBranchId) {
+                const newMonths = { ...row.months };
+                const mData = { ...newMonths[monthIdx] };
+                
+                if (type === 'visit') {
+                    mData.visitCheckedCount = targetStatus ? mData.visitCount : 0;
+                } else {
+                    mData.materialInvoicedCount = targetStatus ? mData.materialSaleIds.length : 0;
+                }
+                newMonths[monthIdx] = mData;
+                return { ...row, months: newMonths };
+            }
+            return row;
+        });
         
         setData(newData);
+        
         const actionText = type === 'visit' ? (targetStatus ? 'onaylandı' : 'onayı kaldırıldı') : (targetStatus ? 'faturalandı' : 'iptal edildi');
         toast.success(`${ids.length} kayıt ${actionText}.`);
 
@@ -313,7 +347,7 @@ const AnnualVisitReport = () => {
   };
 
   const exportToExcel = () => {
-    const exportData = data.map(row => {
+    const exportData = sortedAndFilteredData.map(row => {
       const flatRow: any = {
         'Müşteri No': row.musteri_no,
         'Şube No': row.sube_id,
@@ -323,9 +357,7 @@ const AnnualVisitReport = () => {
 
       months.forEach((month, index) => {
         const mData = row.months[index];
-        // Ziyaret tamamen onaylı mı?
         const isVisitFullyChecked = mData.visitCount > 0 && mData.visitCount === mData.visitCheckedCount;
-        // Malzeme tamamen faturalı mı?
         const isMatFullyInvoiced = mData.hasMaterial && mData.materialSaleIds.length === mData.materialInvoicedCount;
 
         flatRow[`${month} (Ziyaret Sayısı)`] = mData.visitCount;
@@ -344,11 +376,34 @@ const AnnualVisitReport = () => {
     XLSX.writeFile(wb, `Yillik_Rapor_Detayli_${year}.xlsx`);
   };
 
-  const filteredData = data.filter(row => 
-    row.cari_isim.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    row.sube_adi.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    row.musteri_no.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // YENİ: SIRALAMA VE FİLTRELEME MANTIĞI
+  const handleSort = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
+  const sortedAndFilteredData = React.useMemo(() => {
+    // 1. Filtrele
+    let result = data.filter(row => 
+      row.cari_isim.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.sube_adi.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.musteri_no.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // 2. Sırala
+    result.sort((a, b) => {
+        // Cari Adı + Şube Adı birleştirerek sıralama yapıyoruz ki şubeler de kendi içinde sıralı olsun
+        const nameA = `${a.cari_isim} ${a.sube_adi}`;
+        const nameB = `${b.cari_isim} ${b.sube_adi}`;
+        
+        if (sortOrder === 'asc') {
+            return nameA.localeCompare(nameB, 'tr');
+        } else {
+            return nameB.localeCompare(nameA, 'tr');
+        }
+    });
+
+    return result;
+  }, [data, searchTerm, sortOrder]);
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
@@ -416,7 +471,17 @@ const AnnualVisitReport = () => {
             <thead className="bg-gray-50 text-gray-700 font-semibold border-b sticky top-0 z-20 shadow-sm">
               <tr>
                 <th className="py-3 px-4 border-r w-[120px] min-w-[120px] sticky left-0 bg-gray-50 z-30">Müşteri No</th>
-                <th className="py-3 px-4 border-r w-[200px] min-w-[200px] sticky left-[120px] bg-gray-50 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Cari / Şube</th>
+                {/* YENİ: SIRALAMA ÖZELLİĞİ EKLENDİ */}
+                <th 
+                    className="py-3 px-4 border-r w-[200px] min-w-[200px] sticky left-[120px] bg-gray-50 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                    onClick={handleSort}
+                    title="Sıralamak için tıklayın"
+                >
+                    <div className="flex items-center justify-between">
+                        <span>Cari / Şube</span>
+                        {sortOrder === 'asc' ? <ArrowUp size={14} className="text-gray-500" /> : <ArrowDown size={14} className="text-gray-500" />}
+                    </div>
+                </th>
                 {months.map((month) => (
                   <th key={month} colSpan={2} className="py-2 px-2 border-r text-center min-w-[120px] bg-blue-50/30">
                     {month}
@@ -444,15 +509,15 @@ const AnnualVisitReport = () => {
                     </div>
                   </td>
                 </tr>
-              ) : filteredData.length === 0 ? (
+              ) : sortedAndFilteredData.length === 0 ? (
                 <tr>
                   <td colSpan={26} className="py-12 text-center text-gray-500">
                     Kayıt bulunamadı.
                   </td>
                 </tr>
               ) : (
-                filteredData.map((row, rowIdx) => (
-                  <tr key={`${row.musteri_no}-${row.sube_id}-${rowIdx}`} className="hover:bg-blue-50/30 transition-colors group">
+                sortedAndFilteredData.map((row, rowIdx) => (
+                  <tr key={`${row.musteri_no}-${row.sube_id}-${row.branch_uuid}`} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="py-2 px-4 border-r font-medium text-gray-900 sticky left-0 bg-white group-hover:bg-blue-50/30 z-10 border-b">
                       {row.musteri_no}
                     </td>
@@ -464,10 +529,10 @@ const AnnualVisitReport = () => {
                     {months.map((_, mIdx) => {
                       const mData = row.months[mIdx];
                       
-                      // Ziyaret Onay Durumu: Hepsi (is_checked) true mu?
+                      // Ziyaret Onay Durumu
                       const isVisitFullyChecked = mData.visitCount > 0 && mData.visitCount === mData.visitCheckedCount;
                       
-                      // Malzeme Fatura Durumu: Hepsi (is_invoiced) true mu?
+                      // Malzeme Fatura Durumu
                       const isMatFullyInvoiced = mData.hasMaterial && mData.materialSaleIds.length > 0 && mData.materialSaleIds.length === mData.materialInvoicedCount;
 
                       return (
