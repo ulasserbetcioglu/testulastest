@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Download, Search, AlertCircle, RefreshCw, Package, CheckSquare, Square } from 'lucide-react';
+import { Download, Search, AlertCircle, RefreshCw, Package, CheckSquare, Square, Info } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 
@@ -10,19 +10,23 @@ interface ReportRow {
   sube_id: string;
   cari_isim: string;
   sube_adi: string;
-  branch_uuid: string; // Fatura takibi için gerçek UUID lazım
+  branch_uuid: string;
   months: {
     [key: number]: {
+      // Ziyaret Verileri
       visitCount: number;
       hasVisit: boolean;
       visitDetails: string[];
+      visitIds: string[]; // O aydaki ziyaretlerin ID'leri (Toplu güncelleme için)
+      visitInvoicedCount: number; // Kaç tanesi faturalanmış?
+      
+      // Malzeme Verileri
       hasMaterial: boolean;
       materialDetails: string[];
       materialBreakdown: Record<string, number>;
       totalMaterialCount: number;
-      // Fatura Durumları
-      visitInvoiced: boolean;
-      materialInvoiced: boolean;
+      materialSaleIds: string[]; // O aydaki satış ID'leri
+      materialInvoicedCount: number;
     };
   };
 }
@@ -32,16 +36,10 @@ interface VisitData {
   branch_id: string;
   visit_date: string;
   status: string;
+  is_invoiced: boolean; // YENİ: Ziyaret tablosundan geliyor
   operator?: {
     name: string;
   };
-}
-
-interface InvoiceStatus {
-  branch_id: string;
-  month: number;
-  type: 'visit' | 'material';
-  is_invoiced: boolean;
 }
 
 interface SoldItem {
@@ -56,6 +54,7 @@ const AnnualVisitReport = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
+  const [updating, setUpdating] = useState(false);
   
   const months = [
     'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
@@ -65,7 +64,7 @@ const AnnualVisitReport = () => {
   const fetchReportData = async () => {
     setLoading(true);
     setErrorMsg(null);
-    setProgress('Şubeler ve fatura bilgileri yükleniyor...');
+    setProgress('Veriler hazırlanıyor...');
     
     try {
       // 1. Şubeleri Çek
@@ -85,16 +84,8 @@ const AnnualVisitReport = () => {
 
       if (branchError) throw new Error(`Şubeler çekilemedi: ${branchError.message}`);
 
-      // 2. Fatura Durumlarını Çek (YENİ)
-      const { data: invoices, error: invoiceError } = await supabase
-        .from('invoice_tracking')
-        .select('*')
-        .eq('year', year);
-
-      if (invoiceError) throw new Error(`Fatura bilgileri çekilemedi: ${invoiceError.message}`);
-
-      // 3. Seçilen Yıl İçin Ziyaretleri Çek
-      setProgress('Ziyaretler çekiliyor...');
+      // 2. Ziyaretleri Çek (is_invoiced dahil)
+      setProgress('Ziyaretler ve fatura durumları çekiliyor...');
       const startDate = `${year}-01-01T00:00:00`;
       const endDate = `${year}-12-31T23:59:59`;
       
@@ -111,6 +102,7 @@ const AnnualVisitReport = () => {
             branch_id, 
             visit_date, 
             status,
+            is_invoiced,
             operator:operator_id ( name )
           `)
           .gte('visit_date', startDate)
@@ -126,16 +118,16 @@ const AnnualVisitReport = () => {
             hasMore = false;
           } else {
             page++;
-            setProgress(`${allVisits.length} ziyaret çekildi...`);
+            setProgress(`${allVisits.length} ziyaret işlendi...`);
           }
         } else {
           hasMore = false;
         }
       }
 
-      // 4. Malzeme Satışlarını Kontrol Et
-      setProgress('Malzeme satışları detaylarıyla kontrol ediliyor...');
-      let salesDataMap: Record<string, SoldItem[]> = {}; 
+      // 3. Malzeme Satışlarını Çek (is_invoiced dahil)
+      setProgress('Malzeme satışları kontrol ediliyor...');
+      let salesDataMap: Record<string, {items: SoldItem[], ids: string[], invoicedCount: number}> = {}; 
 
       if (allVisits.length > 0) {
         const visitIds = allVisits.map(v => v.id);
@@ -147,7 +139,9 @@ const AnnualVisitReport = () => {
             const { data: sales, error: salesError } = await supabase
               .from('paid_material_sales')
               .select(`
+                id,
                 visit_id,
+                is_invoiced,
                 items:paid_material_sale_items (
                   quantity,
                   product:product_id ( name )
@@ -156,28 +150,34 @@ const AnnualVisitReport = () => {
               .in('visit_id', chunk);
 
             if (salesError) {
-                console.error('Malzeme satış hatası:', salesError);
+                console.error('Malzeme hata:', salesError);
             } else if (sales) {
                 sales.forEach((sale: any) => {
                     const items: SoldItem[] = [];
                     if (sale.items && Array.isArray(sale.items)) {
                         sale.items.forEach((item: any) => {
-                            const productName = item.product?.name || 'Bilinmeyen Ürün';
+                            const productName = item.product?.name || 'Bilinmeyen';
                             const qty = item.quantity || 0;
                             items.push({ name: productName, qty });
                         });
                     }
                     if (items.length > 0) {
-                        salesDataMap[sale.visit_id] = items;
+                        // Eğer bu ziyaret için daha önce kayıt yoksa oluştur
+                        if(!salesDataMap[sale.visit_id]) {
+                            salesDataMap[sale.visit_id] = { items: [], ids: [], invoicedCount: 0 };
+                        }
+                        salesDataMap[sale.visit_id].items.push(...items);
+                        salesDataMap[sale.visit_id].ids.push(sale.id);
+                        if(sale.is_invoiced) salesDataMap[sale.visit_id].invoicedCount++;
                     }
                 });
             }
-            setProgress(`Malzeme kontrolü: %${Math.round((i / visitIds.length) * 100)}`);
+            setProgress(`Malzeme analizi: %${Math.round((i / visitIds.length) * 100)}`);
         }
       }
 
-      // 5. Veriyi İşle ve Fatura Durumlarını Eşleştir
-      setProgress('Tablo oluşturuluyor...');
+      // 4. Veriyi İşle
+      setProgress('Rapor tablosu oluşturuluyor...');
       const processedData: ReportRow[] = (branches || []).map((branch: any) => {
         const customer = branch.customer;
         const subeIdShort = branch.id && branch.id.includes('-') ? branch.id.split('-')[0] : branch.id?.substring(0, 8);
@@ -187,26 +187,25 @@ const AnnualVisitReport = () => {
           sube_id: subeIdShort || '-', 
           cari_isim: customer?.kisa_isim || customer?.cari_isim || 'İsimsiz Cari',
           sube_adi: branch.sube_adi || 'İsimsiz Şube',
-          branch_uuid: branch.id, // UUID önemli
+          branch_uuid: branch.id,
           months: {}
         };
 
         // Ayları başlat
         for (let i = 0; i < 12; i++) {
-          // Fatura durumunu bul
-          const visitInv = invoices?.find((inv: InvoiceStatus) => inv.branch_id === branch.id && inv.month === i && inv.type === 'visit');
-          const matInv = invoices?.find((inv: InvoiceStatus) => inv.branch_id === branch.id && inv.month === i && inv.type === 'material');
-
           row.months[i] = { 
             visitCount: 0, 
             hasVisit: false, 
             visitDetails: [],
+            visitIds: [],
+            visitInvoicedCount: 0,
+            
             hasMaterial: false,
             materialDetails: [],
             materialBreakdown: {},
             totalMaterialCount: 0,
-            visitInvoiced: visitInv ? visitInv.is_invoiced : false,
-            materialInvoiced: matInv ? matInv.is_invoiced : false
+            materialSaleIds: [],
+            materialInvoicedCount: 0
           };
         }
 
@@ -216,28 +215,35 @@ const AnnualVisitReport = () => {
             const monthIndex = visitDate.getMonth();
             
             if (row.months[monthIndex]) {
-              // --- Ziyaret İşlemleri ---
-              row.months[monthIndex].visitCount += 1;
-              row.months[monthIndex].hasVisit = true;
+              const mData = row.months[monthIndex];
+              
+              // --- Ziyaret ---
+              mData.visitCount += 1;
+              mData.hasVisit = true;
+              mData.visitIds.push(visit.id);
+              if (visit.is_invoiced) mData.visitInvoicedCount += 1;
               
               const dateStr = visitDate.toLocaleDateString('tr-TR');
               const operatorName = visit.operator?.name ? ` - ${visit.operator.name}` : '';
               const statusStr = visit.status === 'completed' ? 'Tamamlandı' : 'Planlandı';
+              const invStr = visit.is_invoiced ? ' [FATURALI]' : '';
               
-              row.months[monthIndex].visitDetails.push(`${dateStr} (${statusStr})${operatorName}`);
+              mData.visitDetails.push(`${dateStr} (${statusStr})${operatorName}${invStr}`);
               
-              // --- Malzeme İşlemleri ---
+              // --- Malzeme ---
               if (salesDataMap[visit.id]) {
-                const items = salesDataMap[visit.id];
-                row.months[monthIndex].hasMaterial = true;
+                const saleData = salesDataMap[visit.id];
+                mData.hasMaterial = true;
+                mData.materialSaleIds.push(...saleData.ids);
+                mData.materialInvoicedCount += saleData.invoicedCount;
                 
-                const itemStrs = items.map(it => `${it.name} (${it.qty})`).join(', ');
-                row.months[monthIndex].materialDetails.push(`${dateStr}: ${itemStrs}`);
+                const itemStrs = saleData.items.map(it => `${it.name} (${it.qty})`).join(', ');
+                mData.materialDetails.push(`${dateStr}: ${itemStrs}`);
                 
-                items.forEach(it => {
-                   const currentQty = row.months[monthIndex].materialBreakdown[it.name] || 0;
-                   row.months[monthIndex].materialBreakdown[it.name] = currentQty + it.qty;
-                   row.months[monthIndex].totalMaterialCount += it.qty;
+                saleData.items.forEach(it => {
+                   const currentQty = mData.materialBreakdown[it.name] || 0;
+                   mData.materialBreakdown[it.name] = currentQty + it.qty;
+                   mData.totalMaterialCount += it.qty;
                 });
               }
             }
@@ -263,60 +269,50 @@ const AnnualVisitReport = () => {
     fetchReportData();
   }, [year]);
 
-  // --- FATURA DURUMU GÜNCELLEME ---
-  const toggleInvoiceStatus = async (branchUuid: string, monthIndex: number, type: 'visit' | 'material', currentStatus: boolean) => {
+  // --- FATURA DURUMU GÜNCELLEME (TOPLU) ---
+  const toggleInvoiceStatus = async (
+      rowIdx: number, 
+      monthIdx: number, 
+      type: 'visit' | 'material', 
+      ids: string[], 
+      targetStatus: boolean
+    ) => {
+    
+    if (ids.length === 0) return;
+    setUpdating(true);
+
     try {
-        const newStatus = !currentStatus;
-
-        // 1. Optimistic Update (Arayüzü hemen güncelle)
-        setData(prevData => prevData.map(row => {
-            if (row.branch_uuid === branchUuid) {
-                return {
-                    ...row,
-                    months: {
-                        ...row.months,
-                        [monthIndex]: {
-                            ...row.months[monthIndex],
-                            [type === 'visit' ? 'visitInvoiced' : 'materialInvoiced']: newStatus
-                        }
-                    }
-                };
-            }
-            return row;
-        }));
-
-        // 2. Veritabanı Güncellemesi (Upsert)
+        const table = type === 'visit' ? 'visits' : 'paid_material_sales';
+        
+        // 1. Veritabanını Güncelle (O aydaki tüm kayıtları güncelle)
         const { error } = await supabase
-            .from('invoice_tracking')
-            .upsert({
-                branch_id: branchUuid,
-                year: year,
-                month: monthIndex,
-                type: type,
-                is_invoiced: newStatus
-            }, { onConflict: 'branch_id, year, month, type' });
+            .from(table)
+            .update({ is_invoiced: targetStatus })
+            .in('id', ids);
 
         if (error) throw error;
-        toast.success(`${type === 'visit' ? 'Ziyaret' : 'Malzeme'} faturası ${newStatus ? 'kesildi' : 'iptal edildi'} olarak işaretlendi.`);
+
+        // 2. Arayüzü Güncelle (Optimistic Update)
+        const newData = [...data];
+        const mData = newData[rowIdx].months[monthIdx];
+        
+        if (type === 'visit') {
+            mData.visitInvoicedCount = targetStatus ? mData.visitCount : 0;
+        } else {
+            mData.materialInvoicedCount = targetStatus ? mData.materialSaleIds.length : 0; 
+            // Not: Tam sayı tutmuyor olabiliriz çünkü bir satışta birden çok id olabilir ama basit mantıkla hepsi güncellendi.
+            // Daha doğru görüntüleme için tekrar fetch etmek en garantisi ama performans için basit güncelleme yapıyoruz.
+            // Satış ID sayısı kadar faturalı sayısını güncelliyoruz.
+             mData.materialInvoicedCount = targetStatus ? mData.materialSaleIds.length : 0; 
+        }
+        
+        setData(newData);
+        toast.success(`${ids.length} kayıt ${targetStatus ? 'faturalandı' : 'iptal edildi'}.`);
 
     } catch (err: any) {
-        toast.error("Fatura durumu güncellenemedi.");
-        // Hata olursa geri al (Revert)
-        setData(prevData => prevData.map(row => {
-            if (row.branch_uuid === branchUuid) {
-                return {
-                    ...row,
-                    months: {
-                        ...row.months,
-                        [monthIndex]: {
-                            ...row.months[monthIndex],
-                            [type === 'visit' ? 'visitInvoiced' : 'materialInvoiced']: currentStatus
-                        }
-                    }
-                };
-            }
-            return row;
-        }));
+        toast.error("Güncelleme başarısız: " + err.message);
+    } finally {
+        setUpdating(false);
     }
   };
 
@@ -342,11 +338,14 @@ const AnnualVisitReport = () => {
 
       months.forEach((month, index) => {
         const mData = row.months[index];
+        const isVisitFullyInvoiced = mData.visitCount > 0 && mData.visitCount === mData.visitInvoicedCount;
+        const isMatFullyInvoiced = mData.hasMaterial && mData.materialSaleIds.length === mData.materialInvoicedCount;
+
         flatRow[`${month} (Ziyaret Sayısı)`] = mData.visitCount;
-        flatRow[`${month} (Ziyaret Fatura)`] = mData.visitInvoiced ? 'EVET' : 'HAYIR';
+        flatRow[`${month} (Ziyaret Fatura)`] = isVisitFullyInvoiced ? 'EVET' : (mData.visitInvoicedCount > 0 ? 'KISMEN' : 'HAYIR');
         
         flatRow[`${month} (Malzeme)`] = mData.hasMaterial ? `Var (${mData.totalMaterialCount})` : '-';
-        flatRow[`${month} (Malzeme Fatura)`] = mData.materialInvoiced ? 'EVET' : 'HAYIR';
+        flatRow[`${month} (Malzeme Fatura)`] = isMatFullyInvoiced ? 'EVET' : (mData.materialInvoicedCount > 0 ? 'KISMEN' : 'HAYIR');
       });
 
       return flatRow;
@@ -368,9 +367,9 @@ const AnnualVisitReport = () => {
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Yıllık Ziyaret ve Malzeme Raporu</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Yıllık Ziyaret ve Fatura Takibi</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {year} yılı analiz ve fatura takip tablosu.
+            {year} yılı ziyaret ve malzeme fatura durumları. Kutucuklara tıklayarak o ayın faturalarını toplu işleyebilirsiniz.
           </p>
         </div>
         
@@ -465,8 +464,8 @@ const AnnualVisitReport = () => {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((row, idx) => (
-                  <tr key={`${row.musteri_no}-${row.sube_id}-${idx}`} className="hover:bg-blue-50/30 transition-colors group">
+                filteredData.map((row, rowIdx) => (
+                  <tr key={`${row.musteri_no}-${row.sube_id}-${rowIdx}`} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="py-2 px-4 border-r font-medium text-gray-900 sticky left-0 bg-white group-hover:bg-blue-50/30 z-10 border-b">
                       {row.musteri_no}
                     </td>
@@ -476,23 +475,30 @@ const AnnualVisitReport = () => {
                     </td>
 
                     {months.map((_, mIdx) => {
-                      const monthData = row.months[mIdx];
+                      const mData = row.months[mIdx];
                       
+                      // Ziyaret Fatura Durumu: Hepsi faturalı mı?
+                      const isVisitFullyInvoiced = mData.visitCount > 0 && mData.visitCount === mData.visitInvoicedCount;
+                      // Malzeme Fatura Durumu
+                      // Satış kayıtlarına bakıyoruz. materialSaleIds.length kadar satış var.
+                      const isMatFullyInvoiced = mData.hasMaterial && mData.materialSaleIds.length > 0 && mData.materialSaleIds.length === mData.materialInvoicedCount;
+
                       return (
                         <React.Fragment key={mIdx}>
                           {/* Ziyaret Sütunu */}
                           <td 
-                            className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${monthData.hasVisit ? (monthData.visitInvoiced ? 'bg-green-100' : 'bg-green-50') : ''}`}
+                            className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${mData.hasVisit ? (isVisitFullyInvoiced ? 'bg-green-100' : 'bg-green-50') : ''}`}
                           >
-                            {monthData.hasVisit ? (
+                            {mData.hasVisit ? (
                               <div className="flex flex-col items-center justify-center gap-1">
-                                <span className="text-xs font-bold text-green-700" title={monthData.visitDetails.join('\n')}>{monthData.visitCount}</span>
+                                <span className="text-xs font-bold text-green-700 cursor-help" title={mData.visitDetails.join('\n')}>{mData.visitCount}</span>
                                 <button 
-                                    onClick={() => toggleInvoiceStatus(row.branch_uuid, mIdx, 'visit', monthData.visitInvoiced)}
-                                    className="text-gray-400 hover:text-green-600 focus:outline-none"
-                                    title={monthData.visitInvoiced ? "Fatura Kesildi (İptal Et)" : "Fatura Kes"}
+                                    onClick={() => toggleInvoiceStatus(rowIdx, mIdx, 'visit', mData.visitIds, !isVisitFullyInvoiced)}
+                                    disabled={updating}
+                                    className="text-gray-400 hover:text-green-600 focus:outline-none disabled:opacity-50"
+                                    title={isVisitFullyInvoiced ? "Faturayı İptal Et" : "Fatura Kesildi Olarak İşaretle"}
                                 >
-                                    {monthData.visitInvoiced ? <CheckSquare size={14} className="text-green-600"/> : <Square size={14} />}
+                                    {isVisitFullyInvoiced ? <CheckSquare size={14} className="text-green-600"/> : <Square size={14} />}
                                 </button>
                               </div>
                             ) : (
@@ -502,19 +508,20 @@ const AnnualVisitReport = () => {
                           
                           {/* Malzeme Sütunu */}
                           <td 
-                            className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${monthData.hasMaterial ? (monthData.materialInvoiced ? 'bg-orange-100' : 'bg-orange-50') : ''}`}
+                            className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${mData.hasMaterial ? (isMatFullyInvoiced ? 'bg-orange-100' : 'bg-orange-50') : ''}`}
                           >
-                             {monthData.hasMaterial ? (
+                             {mData.hasMaterial ? (
                                <div className="flex flex-col items-center justify-center gap-1">
-                                 <span className="text-[10px] font-bold text-orange-700 cursor-help" title={generateMaterialSummary(monthData)}>
-                                   {monthData.totalMaterialCount}
+                                 <span className="text-[10px] font-bold text-orange-700 cursor-help" title={generateMaterialSummary(mData)}>
+                                   {mData.totalMaterialCount}
                                  </span>
                                  <button 
-                                    onClick={() => toggleInvoiceStatus(row.branch_uuid, mIdx, 'material', monthData.materialInvoiced)}
-                                    className="text-gray-400 hover:text-orange-600 focus:outline-none"
-                                    title={monthData.materialInvoiced ? "Fatura Kesildi (İptal Et)" : "Fatura Kes"}
+                                    onClick={() => toggleInvoiceStatus(rowIdx, mIdx, 'material', mData.materialSaleIds, !isMatFullyInvoiced)}
+                                    disabled={updating}
+                                    className="text-gray-400 hover:text-orange-600 focus:outline-none disabled:opacity-50"
+                                    title={isMatFullyInvoiced ? "Faturayı İptal Et" : "Fatura Kesildi Olarak İşaretle"}
                                 >
-                                    {monthData.materialInvoiced ? <CheckSquare size={14} className="text-orange-600"/> : <Square size={14} />}
+                                    {isMatFullyInvoiced ? <CheckSquare size={14} className="text-orange-600"/> : <Square size={14} />}
                                 </button>
                                </div>
                              ) : (
@@ -532,7 +539,9 @@ const AnnualVisitReport = () => {
         </div>
         
         <div className="p-3 bg-gray-50 border-t text-xs text-gray-500 flex justify-between items-center">
-          <span>Toplam <strong>{filteredData.length}</strong> şube listeleniyor.</span>
+          <div className="flex gap-4">
+             <div className="flex items-center gap-1"><Info size={14}/> <span>Kutucuğa tıklayarak o ayın tüm işlemlerini faturalandı olarak işaretleyebilirsiniz.</span></div>
+          </div>
           <div className="flex gap-4">
             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-50 border border-green-200 rounded-sm"></div> Ziyaret Bekliyor</span>
             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div> Ziyaret Faturalandı</span>
