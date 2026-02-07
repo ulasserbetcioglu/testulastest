@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Download, Search, AlertCircle, RefreshCw, Package, CheckSquare, Square, Info } from 'lucide-react';
+import { Download, Search, AlertCircle, RefreshCw, Package } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { toast } from 'sonner';
 
 // --- TİP TANIMLARI ---
 interface ReportRow {
@@ -10,23 +9,15 @@ interface ReportRow {
   sube_id: string;
   cari_isim: string;
   sube_adi: string;
-  branch_uuid: string;
   months: {
     [key: number]: {
-      // Ziyaret Verileri
       visitCount: number;
       hasVisit: boolean;
-      visitDetails: string[];
-      visitIds: string[]; 
-      visitCheckedCount: number; // is_checked (Takvimdeki onay) sayısı
-      
-      // Malzeme Verileri
+      visitDetails: string[]; // Ziyaret detayları (Tarih - Durum - Personel)
       hasMaterial: boolean;
-      materialDetails: string[];
-      materialBreakdown: Record<string, number>;
-      totalMaterialCount: number;
-      materialSaleIds: string[]; 
-      materialInvoicedCount: number; // is_invoiced (Fatura) sayısı
+      materialDetails: string[]; // Ziyaret bazlı malzeme detayları (Tarih: Ürün A(1), Ürün B(2))
+      materialBreakdown: Record<string, number>; // O ayın toplam ürün kırılımı { "Ürün A": 5, "Ürün B": 2 }
+      totalMaterialCount: number; // O ayki genel toplam adet
     };
   };
 }
@@ -36,12 +27,12 @@ interface VisitData {
   branch_id: string;
   visit_date: string;
   status: string;
-  is_checked: boolean; // ARTIK TAKVİMDEKİ CHECKBOX VERİSİ
   operator?: {
     name: string;
   };
 }
 
+// Malzeme verilerini yapısal tutmak için
 interface SoldItem {
   name: string;
   qty: number;
@@ -54,7 +45,6 @@ const AnnualVisitReport = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [progress, setProgress] = useState<string>('');
-  const [updating, setUpdating] = useState(false);
   
   const months = [
     'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
@@ -64,7 +54,7 @@ const AnnualVisitReport = () => {
   const fetchReportData = async () => {
     setLoading(true);
     setErrorMsg(null);
-    setProgress('Veriler hazırlanıyor...');
+    setProgress('Şubeler yükleniyor...');
     
     try {
       // 1. Şubeleri Çek
@@ -84,8 +74,8 @@ const AnnualVisitReport = () => {
 
       if (branchError) throw new Error(`Şubeler çekilemedi: ${branchError.message}`);
 
-      // 2. Ziyaretleri Çek (is_checked KULLANILIYOR)
-      setProgress('Ziyaretler ve onay durumları çekiliyor...');
+      // 2. Seçilen Yıl İçin Ziyaretleri Çek
+      setProgress('Ziyaretler çekiliyor...');
       const startDate = `${year}-01-01T00:00:00`;
       const endDate = `${year}-12-31T23:59:59`;
       
@@ -102,7 +92,6 @@ const AnnualVisitReport = () => {
             branch_id, 
             visit_date, 
             status,
-            is_checked, 
             operator:operator_id ( name )
           `)
           .gte('visit_date', startDate)
@@ -118,16 +107,20 @@ const AnnualVisitReport = () => {
             hasMore = false;
           } else {
             page++;
-            setProgress(`${allVisits.length} ziyaret işlendi...`);
+            setProgress(`${allVisits.length} ziyaret çekildi...`);
           }
         } else {
           hasMore = false;
         }
       }
 
-      // 3. Malzeme Satışlarını Çek (is_invoiced devam ediyor)
-      setProgress('Malzeme satışları kontrol ediliyor...');
-      let salesDataMap: Record<string, {items: SoldItem[], ids: string[], invoicedCount: number}> = {}; 
+      console.log(`Toplam ${allVisits.length} ziyaret çekildi.`);
+
+      // 3. Malzeme Satışlarını Kontrol Et
+      setProgress('Malzeme satışları detaylarıyla kontrol ediliyor...');
+      
+      // visit_id -> [ {name: 'Ürün A', qty: 2}, ... ]
+      let salesDataMap: Record<string, SoldItem[]> = {}; 
 
       if (allVisits.length > 0) {
         const visitIds = allVisits.map(v => v.id);
@@ -139,9 +132,7 @@ const AnnualVisitReport = () => {
             const { data: sales, error: salesError } = await supabase
               .from('paid_material_sales')
               .select(`
-                id,
                 visit_id,
-                is_invoiced,
                 items:paid_material_sale_items (
                   quantity,
                   product:product_id ( name )
@@ -150,33 +141,31 @@ const AnnualVisitReport = () => {
               .in('visit_id', chunk);
 
             if (salesError) {
-                console.error('Malzeme hata:', salesError);
+                console.error('Malzeme satış hatası:', salesError);
             } else if (sales) {
                 sales.forEach((sale: any) => {
                     const items: SoldItem[] = [];
+                    
                     if (sale.items && Array.isArray(sale.items)) {
                         sale.items.forEach((item: any) => {
-                            const productName = item.product?.name || 'Bilinmeyen';
+                            const productName = item.product?.name || 'Bilinmeyen Ürün';
                             const qty = item.quantity || 0;
                             items.push({ name: productName, qty });
                         });
                     }
+                    
                     if (items.length > 0) {
-                        if(!salesDataMap[sale.visit_id]) {
-                            salesDataMap[sale.visit_id] = { items: [], ids: [], invoicedCount: 0 };
-                        }
-                        salesDataMap[sale.visit_id].items.push(...items);
-                        salesDataMap[sale.visit_id].ids.push(sale.id);
-                        if(sale.is_invoiced) salesDataMap[sale.visit_id].invoicedCount++;
+                        salesDataMap[sale.visit_id] = items;
                     }
                 });
             }
-            setProgress(`Malzeme analizi: %${Math.round((i / visitIds.length) * 100)}`);
+            
+            setProgress(`Malzeme kontrolü: %${Math.round((i / visitIds.length) * 100)}`);
         }
       }
 
       // 4. Veriyi İşle
-      setProgress('Rapor tablosu oluşturuluyor...');
+      setProgress('Tablo oluşturuluyor...');
       const processedData: ReportRow[] = (branches || []).map((branch: any) => {
         const customer = branch.customer;
         const subeIdShort = branch.id && branch.id.includes('-') ? branch.id.split('-')[0] : branch.id?.substring(0, 8);
@@ -186,7 +175,6 @@ const AnnualVisitReport = () => {
           sube_id: subeIdShort || '-', 
           cari_isim: customer?.kisa_isim || customer?.cari_isim || 'İsimsiz Cari',
           sube_adi: branch.sube_adi || 'İsimsiz Şube',
-          branch_uuid: branch.id,
           months: {}
         };
 
@@ -196,15 +184,10 @@ const AnnualVisitReport = () => {
             visitCount: 0, 
             hasVisit: false, 
             visitDetails: [],
-            visitIds: [],
-            visitCheckedCount: 0, // is_checked sayacı
-            
             hasMaterial: false,
             materialDetails: [],
             materialBreakdown: {},
-            totalMaterialCount: 0,
-            materialSaleIds: [],
-            materialInvoicedCount: 0
+            totalMaterialCount: 0
           };
         }
 
@@ -214,35 +197,31 @@ const AnnualVisitReport = () => {
             const monthIndex = visitDate.getMonth();
             
             if (row.months[monthIndex]) {
-              const mData = row.months[monthIndex];
-              
-              // --- Ziyaret ---
-              mData.visitCount += 1;
-              mData.hasVisit = true;
-              mData.visitIds.push(visit.id);
-              if (visit.is_checked) mData.visitCheckedCount += 1; // Takvimdeki onay durumu
+              // --- Ziyaret İşlemleri ---
+              row.months[monthIndex].visitCount += 1;
+              row.months[monthIndex].hasVisit = true;
               
               const dateStr = visitDate.toLocaleDateString('tr-TR');
               const operatorName = visit.operator?.name ? ` - ${visit.operator.name}` : '';
               const statusStr = visit.status === 'completed' ? 'Tamamlandı' : 'Planlandı';
-              const checkStr = visit.is_checked ? ' [ONAYLI]' : '';
               
-              mData.visitDetails.push(`${dateStr} (${statusStr})${operatorName}${checkStr}`);
+              row.months[monthIndex].visitDetails.push(`${dateStr} (${statusStr})${operatorName}`);
               
-              // --- Malzeme ---
+              // --- Malzeme İşlemleri ---
               if (salesDataMap[visit.id]) {
-                const saleData = salesDataMap[visit.id];
-                mData.hasMaterial = true;
-                mData.materialSaleIds.push(...saleData.ids);
-                mData.materialInvoicedCount += saleData.invoicedCount;
+                const items = salesDataMap[visit.id];
+                row.months[monthIndex].hasMaterial = true;
                 
-                const itemStrs = saleData.items.map(it => `${it.name} (${it.qty})`).join(', ');
-                mData.materialDetails.push(`${dateStr}: ${itemStrs}`);
+                // 1. Ziyaret detayına ekle (Tooltip'in üst kısmı için)
+                // "15.05.2025: Ürün A(1), Ürün B(2)"
+                const itemStrs = items.map(it => `${it.name} (${it.qty})`).join(', ');
+                row.months[monthIndex].materialDetails.push(`${dateStr}: ${itemStrs}`);
                 
-                saleData.items.forEach(it => {
-                   const currentQty = mData.materialBreakdown[it.name] || 0;
-                   mData.materialBreakdown[it.name] = currentQty + it.qty;
-                   mData.totalMaterialCount += it.qty;
+                // 2. Ay toplamlarına ekle (Breakdown için)
+                items.forEach(it => {
+                   const currentQty = row.months[monthIndex].materialBreakdown[it.name] || 0;
+                   row.months[monthIndex].materialBreakdown[it.name] = currentQty + it.qty;
+                   row.months[monthIndex].totalMaterialCount += it.qty;
                 });
               }
             }
@@ -253,6 +232,7 @@ const AnnualVisitReport = () => {
       });
 
       processedData.sort((a, b) => a.cari_isim.localeCompare(b.cari_isim));
+
       setData(processedData);
 
     } catch (error: any) {
@@ -268,67 +248,22 @@ const AnnualVisitReport = () => {
     fetchReportData();
   }, [year]);
 
-  // --- DURUM GÜNCELLEME (TOPLU) ---
-  const toggleStatus = async (
-      rowIdx: number, 
-      monthIdx: number, 
-      type: 'visit' | 'material', 
-      ids: string[], 
-      targetStatus: boolean
-    ) => {
-    
-    if (ids.length === 0) return;
-    setUpdating(true);
-
-    try {
-        let table = '';
-        let field = '';
-
-        if (type === 'visit') {
-            table = 'visits';
-            field = 'is_checked'; // Ziyaret için is_checked güncelleniyor
-        } else {
-            table = 'paid_material_sales';
-            field = 'is_invoiced'; // Malzeme için is_invoiced güncelleniyor
-        }
-        
-        // 1. Veritabanını Güncelle
-        const { error } = await supabase
-            .from(table)
-            .update({ [field]: targetStatus })
-            .in('id', ids);
-
-        if (error) throw error;
-
-        // 2. Arayüzü Güncelle (Optimistic Update)
-        const newData = [...data];
-        const mData = newData[rowIdx].months[monthIdx];
-        
-        if (type === 'visit') {
-            mData.visitCheckedCount = targetStatus ? mData.visitCount : 0;
-        } else {
-            mData.materialInvoicedCount = targetStatus ? mData.materialSaleIds.length : 0; 
-        }
-        
-        setData(newData);
-        const actionText = type === 'visit' ? (targetStatus ? 'onaylandı' : 'onayı kaldırıldı') : (targetStatus ? 'faturalandı' : 'iptal edildi');
-        toast.success(`${ids.length} kayıt ${actionText}.`);
-
-    } catch (err: any) {
-        toast.error("Güncelleme başarısız: " + err.message);
-    } finally {
-        setUpdating(false);
-    }
-  };
-
+  // --- Yardımcı Fonksiyon: Tooltip ve Excel metni oluşturucu ---
   const generateMaterialSummary = (mData: ReportRow['months'][0]) => {
      if (!mData.hasMaterial) return '';
+
+     // 1. Ziyaret Bazlı Liste
      let text = 'ZİYARET DETAYLARI:\n' + mData.materialDetails.join('\n');
+     
+     // 2. Toplam Kırılım
      text += '\n\n----------------\nÜRÜN BAZLI TOPLAM:\n';
      Object.entries(mData.materialBreakdown).forEach(([name, qty]) => {
-       text += `${name}: ${qty}\n`;
+        text += `${name}: ${qty}\n`;
      });
+     
+     // 3. Genel Toplam
      text += `----------------\nGENEL TOPLAM: ${mData.totalMaterialCount} Adet`;
+     
      return text;
   };
 
@@ -343,14 +278,11 @@ const AnnualVisitReport = () => {
 
       months.forEach((month, index) => {
         const mData = row.months[index];
-        const isVisitFullyChecked = mData.visitCount > 0 && mData.visitCount === mData.visitCheckedCount;
-        const isMatFullyInvoiced = mData.hasMaterial && mData.materialSaleIds.length === mData.materialInvoicedCount;
-
         flatRow[`${month} (Ziyaret Sayısı)`] = mData.visitCount;
-        flatRow[`${month} (Ziyaret Onay)`] = isVisitFullyChecked ? 'EVET' : (mData.visitCheckedCount > 0 ? 'KISMEN' : 'HAYIR');
+        flatRow[`${month} (Ziyaret Detay)`] = mData.visitDetails.join('\n');
         
         flatRow[`${month} (Malzeme)`] = mData.hasMaterial ? `Var (${mData.totalMaterialCount})` : '-';
-        flatRow[`${month} (Malzeme Fatura)`] = isMatFullyInvoiced ? 'EVET' : (mData.materialInvoicedCount > 0 ? 'KISMEN' : 'HAYIR');
+        flatRow[`${month} (Malzeme Detay)`] = generateMaterialSummary(mData);
       });
 
       return flatRow;
@@ -372,9 +304,9 @@ const AnnualVisitReport = () => {
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Yıllık Ziyaret ve Fatura Takibi</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Yıllık Ziyaret ve Malzeme Raporu</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {year} yılı analiz tablosu. <strong>Ziyaret kutucuğu, takvimdeki onay kutusu ile senkronizedir.</strong>
+            {year} yılı detaylı analiz tablosu. Hücrelerin üzerine gelerek detayları görebilirsiniz.
           </p>
         </div>
         
@@ -436,7 +368,7 @@ const AnnualVisitReport = () => {
                 <th className="py-3 px-4 border-r w-[120px] min-w-[120px] sticky left-0 bg-gray-50 z-30">Müşteri No</th>
                 <th className="py-3 px-4 border-r w-[200px] min-w-[200px] sticky left-[120px] bg-gray-50 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Cari / Şube</th>
                 {months.map((month) => (
-                  <th key={month} colSpan={2} className="py-2 px-2 border-r text-center min-w-[120px] bg-blue-50/30">
+                  <th key={month} colSpan={2} className="py-2 px-2 border-r text-center min-w-[100px] bg-blue-50/30">
                     {month}
                   </th>
                 ))}
@@ -469,8 +401,8 @@ const AnnualVisitReport = () => {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((row, rowIdx) => (
-                  <tr key={`${row.musteri_no}-${row.sube_id}-${rowIdx}`} className="hover:bg-blue-50/30 transition-colors group">
+                filteredData.map((row, idx) => (
+                  <tr key={`${row.musteri_no}-${row.sube_id}-${idx}`} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="py-2 px-4 border-r font-medium text-gray-900 sticky left-0 bg-white group-hover:bg-blue-50/30 z-10 border-b">
                       {row.musteri_no}
                     </td>
@@ -480,54 +412,36 @@ const AnnualVisitReport = () => {
                     </td>
 
                     {months.map((_, mIdx) => {
-                      const mData = row.months[mIdx];
+                      const monthData = row.months[mIdx];
                       
-                      // Ziyaret Onay Durumu: Hepsi onaylı mı?
-                      const isVisitFullyChecked = mData.visitCount > 0 && mData.visitCount === mData.visitCheckedCount;
-                      
-                      // Malzeme Fatura Durumu
-                      const isMatFullyInvoiced = mData.hasMaterial && mData.materialSaleIds.length > 0 && mData.materialSaleIds.length === mData.materialInvoicedCount;
-
                       return (
                         <React.Fragment key={mIdx}>
-                          {/* Ziyaret Sütunu (is_checked) */}
+                          {/* Ziyaret Sütunu */}
                           <td 
-                            className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${mData.hasVisit ? (isVisitFullyChecked ? 'bg-green-100' : 'bg-green-50') : ''}`}
+                            className={`py-2 px-1 border-r border-b text-center cursor-help transition-colors ${monthData.hasVisit ? 'bg-green-50 hover:bg-green-100' : ''}`}
+                            title={monthData.visitDetails.length > 0 ? `Ziyaretler:\n${monthData.visitDetails.join('\n')}` : ''}
                           >
-                            {mData.hasVisit ? (
-                              <div className="flex flex-col items-center justify-center gap-1">
-                                <span className="text-xs font-bold text-green-700 cursor-help" title={mData.visitDetails.join('\n')}>{mData.visitCount}</span>
-                                <button 
-                                    onClick={() => toggleStatus(rowIdx, mIdx, 'visit', mData.visitIds, !isVisitFullyChecked)}
-                                    disabled={updating}
-                                    className="text-gray-400 hover:text-green-600 focus:outline-none disabled:opacity-50"
-                                    title={isVisitFullyChecked ? "Onayı Kaldır" : "Tümünü Onayla (Takvimle Eşleşir)"}
-                                >
-                                    {isVisitFullyChecked ? <CheckSquare size={14} className="text-green-600"/> : <Square size={14} />}
-                                </button>
+                            {monthData.hasVisit ? (
+                              <div className="flex flex-col items-center justify-center">
+                                <span className="text-xs font-bold text-green-700">{monthData.visitCount}</span>
+                                <div className="w-3 h-3 bg-green-500 rounded-sm mt-0.5"></div>
                               </div>
                             ) : (
                               <span className="text-gray-200 text-xs">-</span>
                             )}
                           </td>
                           
-                          {/* Malzeme Sütunu (is_invoiced) */}
+                          {/* Malzeme Sütunu */}
                           <td 
-                            className={`py-2 px-1 border-r border-b text-center align-middle transition-colors ${mData.hasMaterial ? (isMatFullyInvoiced ? 'bg-orange-100' : 'bg-orange-50') : ''}`}
+                            className={`py-2 px-1 border-r border-b text-center cursor-help transition-colors ${monthData.hasMaterial ? 'bg-orange-50 hover:bg-orange-100' : ''}`}
+                            title={generateMaterialSummary(monthData)}
                           >
-                             {mData.hasMaterial ? (
-                               <div className="flex flex-col items-center justify-center gap-1">
-                                 <span className="text-[10px] font-bold text-orange-700 cursor-help" title={generateMaterialSummary(mData)}>
-                                   {mData.totalMaterialCount}
+                             {monthData.hasMaterial ? (
+                               <div className="flex flex-col items-center justify-center">
+                                 <Package className="w-4 h-4 text-orange-500" />
+                                 <span className="text-[10px] font-bold text-orange-700 mt-0.5">
+                                   {monthData.totalMaterialCount}
                                  </span>
-                                 <button 
-                                    onClick={() => toggleStatus(rowIdx, mIdx, 'material', mData.materialSaleIds, !isMatFullyInvoiced)}
-                                    disabled={updating}
-                                    className="text-gray-400 hover:text-orange-600 focus:outline-none disabled:opacity-50"
-                                    title={isMatFullyInvoiced ? "Faturayı İptal Et" : "Fatura Kesildi Olarak İşaretle"}
-                                >
-                                    {isMatFullyInvoiced ? <CheckSquare size={14} className="text-orange-600"/> : <Square size={14} />}
-                                </button>
                                </div>
                              ) : (
                                <span className="text-gray-200 text-xs">-</span>
@@ -544,14 +458,10 @@ const AnnualVisitReport = () => {
         </div>
         
         <div className="p-3 bg-gray-50 border-t text-xs text-gray-500 flex justify-between items-center">
+          <span>Toplam <strong>{filteredData.length}</strong> şube listeleniyor.</span>
           <div className="flex gap-4">
-             <div className="flex items-center gap-1"><Info size={14}/> <span>Sol kutucuk (Ziyaret) takvimdeki onay kutusunu kontrol eder. Sağ kutucuk (Malzeme) fatura durumunu kontrol eder.</span></div>
-          </div>
-          <div className="flex gap-4">
-            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-50 border border-green-200 rounded-sm"></div> Ziyaret Bekliyor</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border border-green-300 rounded-sm"></div> Ziyaret Onaylı</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-50 border border-orange-200 rounded-sm"></div> Malzeme Bekliyor</span>
-            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-100 border border-orange-300 rounded-sm"></div> Malzeme Faturalandı</span>
+            <span className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded-sm"></div> Ziyaret Var</span>
+            <span className="flex items-center gap-1"><Package className="w-3 h-3 text-orange-500" /> Malzeme Satışı Var</span>
           </div>
         </div>
       </div>
