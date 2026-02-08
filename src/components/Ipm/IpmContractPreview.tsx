@@ -333,7 +333,7 @@ const IpmContractPreview: React.FC<IpmContractPreviewProps> = ({ contract, compa
               <p><strong>6.3 - Ic Alan Aparatlari:</strong> {getSection('ic_alan_aparatlari')}</p>
               <p><strong>6.4 - Dis Alan Aparatlari:</strong> {getSection('dis_alan_aparatlari')}</p>
               <p><strong>6.10 - Rutin Periyotlar:</strong> {getSection('rutin_periyotlar')}</p>
-              <p><strong>6.11 - Acil Carilar:</strong> {getSection('acil_carilar')}</p>
+              <p><strong>6.11 - Acil Cağrrlar:</strong> {getSection('acil_carilar')}</p>
               <p><strong>6.13 - Egitim:</strong> {getSection('egitim')}</p>
             </div>
           </div>
