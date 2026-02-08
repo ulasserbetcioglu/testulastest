@@ -102,6 +102,10 @@ const HizmetPazarlama: React.FC = () => {
   const [selectedScopes, setSelectedScopes] = useState<string[]>(['İşletme Geneli']);
   const [selectedPests, setSelectedPests] = useState<string[]>(['Hamam Böceği', 'Kemirgen']);
 
+  // YENİ: Periyodik Ziyaret Sıklığı
+  const [summerVisitFrequency, setSummerVisitFrequency] = useState<number>(1); // Yaz ayları (Nisan-Eylül)
+  const [winterVisitFrequency, setWinterVisitFrequency] = useState<number>(1); // Kış ayları (Ekim-Mart)
+
   const [manualType, setManualType] = useState<'service' | 'product'>('service');
   const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
 
@@ -370,9 +374,11 @@ const HizmetPazarlama: React.FC = () => {
                 created_by: createdBy,
                 access_password: accessPassword,
                 status: 'pending',
-                included_pests: selectedPests, // Array olarak gönderiliyor
+                included_pests: selectedPests,
                 cc_email: ccEmail || null,
-                contract_available: allowContract
+                contract_available: allowContract,
+                summer_visit_frequency: summerVisitFrequency,
+                winter_visit_frequency: winterVisitFrequency
             })
             .select('id')
             .single();
@@ -458,6 +464,8 @@ const HizmetPazarlama: React.FC = () => {
       setCcEmail('');
       setSelectedPests(['Hamam Böceği', 'Kemirgen']);
       setSelectedScopes(['İşletme Geneli']);
+      setSummerVisitFrequency(1);
+      setWinterVisitFrequency(1);
   };
 
   // Öğe Ekleme/Çıkarma
@@ -674,6 +682,53 @@ const HizmetPazarlama: React.FC = () => {
                     <span className="absolute right-3 top-2.5 text-gray-500 text-sm">₺</span>
                 </div>
             </div>
+          </div>
+
+          {/* YENİ: PERİYODİK ZİYARET SIKLIĞI */}
+          <div className="bg-gradient-to-br from-purple-50 to-white p-4 rounded-lg border border-purple-200">
+            <label className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-3">
+              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Periyodik Ziyaret Sıklığı
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-600 font-medium mb-1 block flex items-center gap-1">
+                  <span className="text-yellow-600">☀️</span> Yaz Ayları (Nisan-Eylül)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="number" 
+                    value={summerVisitFrequency} 
+                    onChange={e => setSummerVisitFrequency(parseInt(e.target.value) || 1)} 
+                    className="w-full p-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center font-semibold" 
+                    min="1"
+                    max="12"
+                  />
+                  <span className="text-xs text-gray-500 whitespace-nowrap">ziyaret/ay</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 font-medium mb-1 block flex items-center gap-1">
+                  <span className="text-blue-600">❄️</span> Kış Ayları (Ekim-Mart)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="number" 
+                    value={winterVisitFrequency} 
+                    onChange={e => setWinterVisitFrequency(parseInt(e.target.value) || 1)} 
+                    className="w-full p-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center font-semibold" 
+                    min="1"
+                    max="12"
+                  />
+                  <span className="text-xs text-gray-500 whitespace-nowrap">ziyaret/ay</span>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2 italic">
+              💡 Bu değerler sözleşmede mevsimsel ziyaret planlaması için kullanılacaktır
+            </p>
           </div>
 
           {/* 3. KAPSAM & ZARARLILAR */}
