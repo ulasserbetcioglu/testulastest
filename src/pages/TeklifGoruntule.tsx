@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Bug, Package, FileSignature, FileText } from 'lucide-react';
+import { Loader2 as Loader, FileDown, Check, X, KeyRound, Printer, Shield, Bug, Package, FileSignature, FileText, Eye } from 'lucide-react';
 import { format, addYears } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -48,6 +48,13 @@ interface CompanySettings {
     website?: string;
 }
 
+interface ServiceContract {
+    id: string;
+    contract_number: string;
+    content: string;
+    created_at: string;
+}
+
 const PEST_TYPES = [
   'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep', 'Mikroorganizma', 'Dezenfeksiyon'
 ];
@@ -60,6 +67,7 @@ const TeklifGoruntule: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const [proposal, setProposal] = useState<Proposal | null>(null);
     const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
+    const [existingContract, setExistingContract] = useState<ServiceContract | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const proposalRef = useRef<HTMLDivElement>(null);
@@ -122,6 +130,23 @@ const TeklifGoruntule: React.FC = () => {
             setProposal(data as Proposal);
             setNotes(data.customer_notes || '');
             setIsAuthenticated(true);
+
+            // YENİ: Eğer teklif onaylandıysa, ilişkili sözleşmeyi kontrol et
+            if (data.status === 'approved') {
+                const { data: contractData } = await supabase
+                    .from('service_contracts')
+                    .select('id, contract_number, content, created_at')
+                    .eq('proposal_id', id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (contractData) {
+                    setExistingContract(contractData);
+                    setSavedContractNumber(contractData.contract_number);
+                    setContractHtml(contractData.content);
+                }
+            }
         } catch (err: any) {
             toast.error("Geçersiz şifre veya teklif bulunamadı.");
         } finally {
@@ -129,7 +154,6 @@ const TeklifGoruntule: React.FC = () => {
         }
     };
 
-    // --- PDF AYARLARI GÜNCELLENDİ (PIXEL PERFECT) ---
     const handleDownloadProposalPdf = () => {
         if (!proposalRef.current || !(window as any).html2pdf) {
             toast.error("PDF oluşturucu hazır değil.");
@@ -138,9 +162,8 @@ const TeklifGoruntule: React.FC = () => {
         
         const element = proposalRef.current;
 
-        // A4 Boyutları (96 DPI)
         const opt = {
-            margin: 0, // Margin SIFIR (İçerik padding ile yönetiliyor)
+            margin: 0,
             filename: `Teklif_${proposal?.proposal_number}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { 
@@ -148,13 +171,13 @@ const TeklifGoruntule: React.FC = () => {
                 useCORS: true, 
                 scrollY: 0, 
                 scrollX: 0,
-                windowWidth: 794, // HTML render genişliğini A4 pixel genişliğine kilitliyoruz
+                windowWidth: 794,
                 width: 794,
                 x: 0,
                 y: 0
             },
             jsPDF: { 
-                unit: 'pt', // Point (pt) birimi daha hassastır
+                unit: 'pt',
                 format: 'a4', 
                 orientation: 'portrait' 
             },
@@ -266,6 +289,16 @@ ${contractRef.current.innerHTML}
         return 'Genel Haşere ve Kemirgen';
     };
 
+    const getPestsArray = (pests: string[] | string | null): string[] => {
+        if (Array.isArray(pests)) {
+            return pests;
+        }
+        if (typeof pests === 'string') {
+            return pests.split(',').map(p => p.trim()).filter(Boolean);
+        }
+        return [];
+    };
+
     const buildContractContent = (prop: Proposal, settings: CompanySettings | null, contractNo: string) => {
         return generateContractHtml({
             proposal: {
@@ -339,7 +372,7 @@ ${contractRef.current.innerHTML}
 
             const content = buildContractContent(proposal, companySettings, contractNumber);
 
-            const { error: contractError } = await supabase
+            const { data: contractData, error: contractError } = await supabase
                 .from('service_contracts')
                 .insert({
                     proposal_id: proposal.id,
@@ -353,11 +386,14 @@ ${contractRef.current.innerHTML}
                     status: 'active',
                     pest_types: pestsString, 
                     application_area: proposal.application_area || ''
-                });
+                })
+                .select('id, contract_number, content, created_at')
+                .single();
 
             if (contractError) throw contractError;
 
             setProposal(prev => prev ? { ...prev, status: 'approved', customer_notes: notes } : null);
+            setExistingContract(contractData);
             setContractHtml(content);
             setSavedContractNumber(contractNumber);
             setShowContractModal(true);
@@ -382,6 +418,13 @@ ${contractRef.current.innerHTML}
             toast.error("İşlem başarısız.");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // YENİ: Mevcut sözleşmeyi görüntüleme
+    const handleViewExistingContract = () => {
+        if (existingContract && contractHtml) {
+            setShowContractModal(true);
         }
     };
     
@@ -412,7 +455,10 @@ ${contractRef.current.innerHTML}
     
     const totalAmount = proposal.total_amount || 0;
     const discountAmount = proposal.discount_amount || 0;
-    const grandTotal = totalAmount + (totalAmount * 0.20); 
+    const grandTotal = totalAmount + (totalAmount * 0.20);
+
+    // YENİ: Zararlıları array'e dönüştür
+    const activePests = getPestsArray(proposal.included_pests);
 
     return (
         <div className="bg-gray-100 min-h-screen font-sans pb-10">
@@ -427,6 +473,15 @@ ${contractRef.current.innerHTML}
                         </div>
                     </div>
                     <div className="flex gap-2">
+                        {/* YENİ: Eğer sözleşme varsa göster butonu */}
+                        {existingContract && (
+                            <button 
+                                onClick={handleViewExistingContract}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-300 rounded-lg hover:bg-green-100 text-xs font-medium text-green-700"
+                            >
+                                <Eye size={16} /> Sözleşmeyi Gör
+                            </button>
+                        )}
                         <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-xs font-medium text-gray-700">
                             <Printer size={16} /> Yazdır
                         </button>
@@ -439,13 +494,6 @@ ${contractRef.current.innerHTML}
             
             {/* KAĞIT (TEKLİF DETAYI) */}
             <div className="py-8 px-4 print:p-0 flex justify-center overflow-x-auto">
-                {/* GÜNCELLEME: PIXEL PERFECT YAKLAŞIMI
-                   - Width: 794px (A4'ün web standardındaki piksel karşılığı)
-                   - Height: auto (İçerik uzayabilir, PDF bunu bölecektir)
-                   - minHeight: 1123px (En az 1 sayfa dolu görünsün)
-                   - Margin: 0 auto (Ortala)
-                   - mm birimi tamamen kaldırıldı, px kullanıldı.
-                */}
                 <div 
                     ref={proposalRef} 
                     className="bg-white shadow-xl print:shadow-none relative flex flex-col flex-shrink-0" 
@@ -505,7 +553,7 @@ ${contractRef.current.innerHTML}
                             </h4>
                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 {PEST_TYPES.map((pest, i) => {
-                                    const isActive = Array.isArray(proposal.included_pests) && proposal.included_pests.includes(pest);
+                                    const isActive = activePests.includes(pest);
                                     return (
                                         <div key={i} style={{
                                             fontSize: '10px', padding: '4px 10px', borderRadius: '4px',
@@ -672,6 +720,24 @@ ${contractRef.current.innerHTML}
                         </div>
                     </div>
                 )}
+
+                {/* YENİ: Onaylanmış tekliflerde sözleşme görüntüleme bilgisi */}
+                {proposal.status === 'approved' && existingContract && (
+                    <div className="fixed bottom-0 left-0 right-0 p-4 bg-green-50 border-t border-green-200 flex justify-center print:hidden z-50">
+                        <div className="flex items-center gap-4 max-w-2xl">
+                            <div className="flex items-center gap-2 text-green-700">
+                                <Check className="w-5 h-5" />
+                                <span className="text-sm font-semibold">Teklif onaylandı ve sözleşme oluşturuldu</span>
+                            </div>
+                            <button 
+                                onClick={handleViewExistingContract}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium shadow flex items-center gap-2 text-sm"
+                            >
+                                <FileText size={16} /> Sözleşmeyi Görüntüle
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* SÖZLEŞME MODALI */}
@@ -680,7 +746,12 @@ ${contractRef.current.innerHTML}
                     <div className="bg-white rounded-2xl w-full max-w-5xl p-6 shadow-2xl flex flex-col max-h-[95vh]">
                         <div className="flex justify-between items-center mb-4 border-b pb-4">
                             <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
-                                <FileText className="text-green-700" /> Hizmet Sozlesmesi Olusturuldu
+                                <FileText className="text-green-700" /> Hizmet Sözleşmesi
+                                {existingContract && (
+                                    <span className="text-sm text-gray-500 font-normal">
+                                        ({format(new Date(existingContract.created_at), 'dd MMMM yyyy', { locale: tr })} tarihinde oluşturuldu)
+                                    </span>
+                                )}
                             </h2>
                             <button onClick={() => setShowContractModal(false)}><X className="text-gray-400 hover:text-gray-600" /></button>
                         </div>
@@ -690,10 +761,10 @@ ${contractRef.current.innerHTML}
                         <div className="flex justify-end gap-3 pt-2 border-t">
                             <button onClick={() => setShowContractModal(false)} className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium">Kapat</button>
                             <button onClick={handlePrintContract} className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 flex items-center gap-2 text-sm">
-                                <Printer size={16} /> Yazdir
+                                <Printer size={16} /> Yazdır
                             </button>
                             <button onClick={handleDownloadContractPdf} className="px-5 py-2.5 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 flex items-center gap-2 text-sm shadow-lg shadow-green-200">
-                                <FileDown size={16} /> PDF Indir
+                                <FileDown size={16} /> PDF İndir
                             </button>
                         </div>
                     </div>
