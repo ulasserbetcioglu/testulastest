@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { localAuth } from '../lib/localAuth';
 import { toast } from 'sonner';
 import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield, FileText, Percent } from 'lucide-react';
+import { localAuth } from '../lib/localAuth';
 
 // --- ARAYÜZLER ---
 interface Customer {
   id: string;
   kisa_isim: string;
+  cari_isim?: string;
   email: string;
 }
 
@@ -19,7 +20,7 @@ interface Service {
   price: number | null;
   visit_count: number | null;
   type: 'service';
-  target_pests?: string[]; // YENİ: Hedef Zararlılar
+  target_pests?: string[];
 }
 
 interface Equipment {
@@ -118,7 +119,7 @@ const HizmetPazarlama: React.FC = () => {
       setLoading(true);
       try {
         const [customerRes, serviceRes, equipmentRes, settingsRes] = await Promise.all([
-            supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
+            supabase.from('customers').select('id, kisa_isim, cari_isim, email').not('email', 'is', null).order('cari_isim'),
             supabase.from('services').select('*').order('name'),
             supabase.from('equipment').select('*').eq('is_active', true).order('name'),
             supabase.from('company_settings').select('*').limit(1).single()
@@ -151,7 +152,7 @@ const HizmetPazarlama: React.FC = () => {
       if (selectedCustomer) {
           const customer = customers.find(c => c.id === selectedCustomer);
           if (customer) {
-              setCompanyName(customer.kisa_isim);
+              setCompanyName(customer.cari_isim || customer.kisa_isim);
               setRecipientEmail(customer.email);
           }
       }
@@ -214,6 +215,7 @@ const HizmetPazarlama: React.FC = () => {
         return `<span style="display:inline-block; padding: 4px 8px; margin: 2px; font-size: 11px; border-radius: 4px; background-color: ${bg}; color: ${color}; border: 1px solid ${isSelected ? '#a7f3d0' : '#e5e7eb'}; text-decoration: ${decoration}; opacity: ${opacity};">${pest}</span>`;
     }).join(' ');
 
+    // SCOPE HTML OLUŞTURULUYOR
     const scopeListHtml = SCOPE_AREAS.map(scope => {
         const isSelected = selectedScopes.includes(scope);
         const color = isSelected ? '#2563eb' : '#9ca3af';
@@ -310,6 +312,7 @@ const HizmetPazarlama: React.FC = () => {
     });
     
     const signature = generateSignatureHtml(footerInfo);
+    // HATA DÜZELTME: applicationArea değişkeni kaldırıldı, onun yerine component içinde tanımlanan scopeListHtml kullanılıyor
     const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails, signature);
     setEmailPreview(html);
   }, [selectedItems, serviceList, equipmentList, companyName, contactPerson, footerInfo, selectedPests, discountAmount, selectedScopes]);
@@ -423,7 +426,6 @@ const HizmetPazarlama: React.FC = () => {
     }
   };
 
-  // Öğe Ekleme/Çıkarma (GÜNCELLENMİŞ)
   const toggleItemSelection = (item: Service | Equipment, type: 'service' | 'product', isSelected: boolean) => {
       if (isSelected) {
           const newItem: SelectedItem = {
@@ -439,17 +441,15 @@ const HizmetPazarlama: React.FC = () => {
           };
           setSelectedItems(prev => [...prev, newItem]);
 
-          // --- ZARARLI ENTEGRASYONU ---
           if (type === 'service') {
               const service = item as Service;
-              const targetPests = service.target_pests; // Interface'de tanımlı
+              const targetPests = service.target_pests;
               
               if (targetPests && Array.isArray(targetPests) && targetPests.length > 0) {
                   setSelectedPests(prev => Array.from(new Set([...prev, ...targetPests])));
                   toast.info(`${targetPests.length} adet zararlı kapsama eklendi: ${targetPests.join(', ')}`);
               }
           }
-          // --------------------------------
 
       } else {
           setSelectedItems(prev => prev.filter(selected => !(selected.id === item.id && selected.type === type)));
@@ -514,7 +514,7 @@ const HizmetPazarlama: React.FC = () => {
                         disabled={loading}
                     >
                         <option value="">Manuel Giriş</option>
-                        {customers.map(c => <option key={c.id} value={c.id}>{c.kisa_isim}</option>)}
+                        {customers.map(c => <option key={c.id} value={c.id}>{c.cari_isim || c.kisa_isim}</option>)}
                     </select>
                 </div>
                 <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Firma Adı *" className="w-full p-2 border rounded-lg" />
@@ -539,21 +539,23 @@ const HizmetPazarlama: React.FC = () => {
               </label>
           </div>
 
-          {/* İSKONTO */}
-          <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">İskonto Tutarı (TL)</label>
-              <div className="relative max-w-xs">
-                  <Percent size={16} className="absolute left-2 top-2.5 text-gray-400" />
-                  <input type="number" value={discountAmount} onChange={e => setDiscountAmount(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 border rounded-lg" />
+          {/* EK AYARLAR: İSKONTO & ALAN */}
+          <div className="grid grid-cols-2 gap-4">
+              <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">İskonto Tutarı (TL)</label>
+                  <div className="relative">
+                      <Percent size={16} className="absolute left-2 top-2.5 text-gray-400" />
+                      <input type="number" value={discountAmount} onChange={e => setDiscountAmount(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 border rounded-lg" />
+                  </div>
               </div>
           </div>
 
           {/* UYGULAMA KAPSAMI */}
           <div>
-             <label className="block text-lg font-semibold text-gray-700 mb-2">Uygulama Kapsamı</label>
-             <div className="flex flex-wrap gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
-                 {SCOPE_AREAS.map(scope => (
-                     <button
+              <label className="block text-lg font-semibold text-gray-700 mb-2">Uygulama Kapsamı</label>
+              <div className="flex flex-wrap gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                  {SCOPE_AREAS.map(scope => (
+                      <button
                         key={scope}
                         onClick={() => toggleScope(scope)}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
@@ -561,12 +563,12 @@ const HizmetPazarlama: React.FC = () => {
                             ? 'bg-blue-100 text-blue-700 border-blue-200'
                             : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
                         }`}
-                     >
+                      >
                         {selectedScopes.includes(scope) && <Check size={12}/>}
                         {scope}
-                     </button>
-                 ))}
-             </div>
+                      </button>
+                  ))}
+              </div>
           </div>
 
           {/* HEDEF ZARARLILAR */}
