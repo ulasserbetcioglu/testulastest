@@ -370,7 +370,7 @@ const HizmetPazarlama: React.FC = () => {
                 created_by: createdBy,
                 access_password: accessPassword,
                 status: 'pending',
-                included_pests: selectedPests,
+                included_pests: selectedPests, // Array olarak gönderiliyor
                 cc_email: ccEmail || null,
                 contract_available: allowContract
             })
