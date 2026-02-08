@@ -49,7 +49,7 @@ interface CompanySettings {
 }
 
 const PEST_TYPES = [
-  'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep'
+  'Hamam Böceği', 'Kemirgen', 'Karınca', 'Sinek', 'Güve', 'Örümcek', 'Gümüşçün', 'Pire', 'Kene', 'Tahtakurusu', 'Akrep', 'Mikroorganizma', 'Dezenfeksiyon'
 ];
 
 const SCOPE_AREAS = [
