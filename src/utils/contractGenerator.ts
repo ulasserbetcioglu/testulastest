@@ -122,7 +122,6 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     return `<tr>
       <td style="${S.td} font-weight:600;">${category}</td>
       <td style="${S.td}">${pestType}</td>
-      <td style="${S.td} text-align:center; font-size:12pt;">&#9745;</td>
       <td style="${S.td}">${baseFreq}${suffix}</td>
       <td style="${S.td}">${baseFreq}${suffix}</td>
       <td style="${S.td}">${appArea}</td>
