@@ -35,6 +35,8 @@ interface Proposal {
     included_pests: string[] | string | null;
     contract_available: boolean;
     revision_number: number;
+    summer_visit_frequency?: number;
+    winter_visit_frequency?: number;
 }
 
 interface CompanySettings {
@@ -310,6 +312,8 @@ ${contractRef.current.innerHTML}
                 application_area: prop.application_area,
                 customer_notes: prop.customer_notes,
                 included_pests: prop.included_pests,
+                summer_visit_frequency: prop.summer_visit_frequency || 1,
+                winter_visit_frequency: prop.winter_visit_frequency || 1,
                 proposal_items: prop.proposal_items.map(item => ({
                     service_name: item.service_name,
                     service_description: item.service_description,
