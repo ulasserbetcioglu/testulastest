@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { localAuth } from '../lib/localAuth';
 import { toast } from 'sonner';
 import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield, FileText, Percent } from 'lucide-react';
-import { localAuth } from '../lib/localAuth'; // localAuth importu eklendi
 
 // --- ARAYÜZLER ---
 interface Customer {
   id: string;
   kisa_isim: string;
-  cari_isim?: string; // EKLENDİ: Cari İsim
   email: string;
 }
 
@@ -20,7 +19,7 @@ interface Service {
   price: number | null;
   visit_count: number | null;
   type: 'service';
-  target_pests?: string[];
+  target_pests?: string[]; // YENİ: Hedef Zararlılar
 }
 
 interface Equipment {
@@ -119,8 +118,7 @@ const HizmetPazarlama: React.FC = () => {
       setLoading(true);
       try {
         const [customerRes, serviceRes, equipmentRes, settingsRes] = await Promise.all([
-            // GÜNCELLEME: cari_isim eklendi
-            supabase.from('customers').select('id, kisa_isim, cari_isim, email').not('email', 'is', null).order('cari_isim'),
+            supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
             supabase.from('services').select('*').order('name'),
             supabase.from('equipment').select('*').eq('is_active', true).order('name'),
             supabase.from('company_settings').select('*').limit(1).single()
@@ -153,8 +151,7 @@ const HizmetPazarlama: React.FC = () => {
       if (selectedCustomer) {
           const customer = customers.find(c => c.id === selectedCustomer);
           if (customer) {
-              // GÜNCELLEME: cari_isim varsa onu kullan, yoksa kisa_isim
-              setCompanyName(customer.cari_isim || customer.kisa_isim);
+              setCompanyName(customer.kisa_isim);
               setRecipientEmail(customer.email);
           }
       }
@@ -426,6 +423,7 @@ const HizmetPazarlama: React.FC = () => {
     }
   };
 
+  // Öğe Ekleme/Çıkarma (GÜNCELLENMİŞ)
   const toggleItemSelection = (item: Service | Equipment, type: 'service' | 'product', isSelected: boolean) => {
       if (isSelected) {
           const newItem: SelectedItem = {
@@ -516,7 +514,7 @@ const HizmetPazarlama: React.FC = () => {
                         disabled={loading}
                     >
                         <option value="">Manuel Giriş</option>
-                        {customers.map(c => <option key={c.id} value={c.id}>{c.cari_isim || c.kisa_isim}</option>)}
+                        {customers.map(c => <option key={c.id} value={c.id}>{c.kisa_isim}</option>)}
                     </select>
                 </div>
                 <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Firma Adı *" className="w-full p-2 border rounded-lg" />
@@ -541,19 +539,34 @@ const HizmetPazarlama: React.FC = () => {
               </label>
           </div>
 
-          {/* EK AYARLAR: İSKONTO & ALAN */}
-          <div className="grid grid-cols-2 gap-4">
-              <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">İskonto Tutarı (TL)</label>
-                  <div className="relative">
-                      <Percent size={16} className="absolute left-2 top-2.5 text-gray-400" />
-                      <input type="number" value={discountAmount} onChange={e => setDiscountAmount(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 border rounded-lg" />
-                  </div>
+          {/* İSKONTO */}
+          <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">İskonto Tutarı (TL)</label>
+              <div className="relative max-w-xs">
+                  <Percent size={16} className="absolute left-2 top-2.5 text-gray-400" />
+                  <input type="number" value={discountAmount} onChange={e => setDiscountAmount(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 border rounded-lg" />
               </div>
-              <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Uygulama Alanı</label>
-                  <input type="text" value={applicationArea} onChange={e => setApplicationArea(e.target.value)} className="w-full p-2 border rounded-lg" placeholder="Örn: İŞLETME GENELİ" />
-              </div>
+          </div>
+
+          {/* UYGULAMA KAPSAMI */}
+          <div>
+             <label className="block text-lg font-semibold text-gray-700 mb-2">Uygulama Kapsamı</label>
+             <div className="flex flex-wrap gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                 {SCOPE_AREAS.map(scope => (
+                     <button
+                        key={scope}
+                        onClick={() => toggleScope(scope)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
+                            selectedScopes.includes(scope)
+                            ? 'bg-blue-100 text-blue-700 border-blue-200'
+                            : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+                        }`}
+                     >
+                        {selectedScopes.includes(scope) && <Check size={12}/>}
+                        {scope}
+                     </button>
+                 ))}
+             </div>
           </div>
 
           {/* HEDEF ZARARLILAR */}
