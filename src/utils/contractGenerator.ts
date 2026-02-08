@@ -233,7 +233,6 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
       <thead><tr>
         <th style="${S.th}">HİZMET KATEGORİSİ</th>
         <th style="${S.th}">ZARARLI TÜRÜ</th>
-        <th style="${S.th} text-align:center; width:65px;">HİZMET MODELİ<br/>PERİYODİK<br/>PLANA DAHİL</th>
         <th style="${S.th}">PERİYODİK ZİYARET SIKLIĞI<br/>(YAZ AYLARI NİSAN-EYLÜL<br/>AYLARI ARASI)</th>
         <th style="${S.th}">PERİYODİK ZİYARET SIKLIĞI<br/>(KIŞ AYLARI EKİM-MART<br/>AYLARI ARASI)</th>
         <th style="${S.th}">UYGULAMA<br/>ALAN(LAR)I</th>
