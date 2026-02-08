@@ -257,7 +257,7 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     <table style="width:100%; font-size:9.5pt; margin-bottom:6px; border:none; table-layout: auto;">
       <tr><td style="width:155px; font-weight:700; padding:2px 0; border:none;">HİZMET ALAN FİRMA</td><td style="padding:2px 0; border:none;">: <strong>${proposal.company_name.toUpperCase()}</strong></td></tr>
       <tr><td style="font-weight:700; padding:2px 0; border:none;">ADRES</td><td style="padding:2px 0; border:none;">: ${proposal.customer_notes || ''}</td></tr>
-      <tr><td style="font-weight:700; padding:2px 0; border:none;">TELEFON</td><td style="padding:2px 0; border:none;">: ${proposal.contact_person || ''}</td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">YETKİLİ KİŞİ</td><td style="padding:2px 0; border:none;">: ${proposal.contact_person || ''}</td></tr>
       <tr><td style="font-weight:700; padding:2px 0; border:none;">E-POSTA</td><td style="padding:2px 0; border:none;">: ${proposal.recipient_email || ''}</td></tr>
     </table>
     <p style="font-size:9pt; font-weight:700; margin:4px 0 12px 0;">SÖZLEŞME METNİNDE BUNDAN SONRA SADECE '' İŞVEREN '' OLARAK ANILACAKTIR.</p>
