@@ -1,3 +1,5 @@
+// src/utils/contractGenerator.ts
+
 interface ContractCompanySettings {
   company_name: string;
   logo_url: string;
@@ -26,6 +28,9 @@ interface ContractProposal {
   customer_notes: string | null;
   included_pests: string[] | string | null;
   proposal_items: ContractProposalItem[];
+  // YENİ: Mevsimsel Sıklıklar
+  summer_visit_frequency?: number;
+  winter_visit_frequency?: number;
 }
 
 interface ContractParams {
@@ -71,6 +76,7 @@ function derivePestType(serviceName: string, fallback: string): string {
   if (name.includes('sürüngen') || name.includes('yılan')) return 'Yılan';
   if (name.includes('ambar') || name.includes('güve')) return 'Güve';
   if (name.includes('pire') || name.includes('kene')) return 'Pire, Kene';
+  if (name.includes('dezenfeksiyon') || name.includes('bakteri')) return 'Mikroorganizma';
   return fallback;
 }
 
@@ -89,13 +95,22 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
   const endDate = customEnd || oneYearLater.toLocaleDateString('tr-TR');
 
   const pestsString = getPestsString(proposal.included_pests);
+  // Hizmet Pazarlamadan gelen application_area string'ini kullan, yoksa varsayılan
   const appArea = proposal.application_area || 'İŞLETME İÇ VE DIŞ ALANI';
+  
   const serviceItems = proposal.proposal_items.filter(i => i.item_type !== 'product');
   const productItems = proposal.proposal_items.filter(i => i.item_type === 'product');
+  
+  // Toplam Hizmet Bedeli (Sefer Başına)
   const perVisitTotal = serviceItems.reduce((sum, item) => sum + item.unit_price, 0);
+  
   const logoUrl = settings?.logo_url || '';
   const companyName = settings?.company_name || 'SİSTEM İLAÇLAMA SAN. VE TİC. LTD. ŞTİ.';
   const amountWords = numberToTurkishWords(Math.floor(perVisitTotal));
+
+  // Mevsimsel Sıklıklar (Varsayılan 1)
+  const summerFreq = proposal.summer_visit_frequency || 1;
+  const winterFreq = proposal.winter_visit_frequency || 1;
 
   const S = {
     header: `display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 2px solid #1a7d37; margin-bottom: 20px;`,
@@ -113,17 +128,31 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
       <div style="text-align: right; font-size: 9px; color: #555;">${companyName}</div>
     </div>`;
 
+  // 3. Madde Tablosu Oluşturma
   const serviceRows = serviceItems.map(item => {
     const category = item.service_name.toUpperCase();
     const pestType = derivePestType(item.service_name, pestsString);
     const isObs = isObservationCategory(item.service_name);
-    const baseFreq = item.unit_type === 'seferlik' ? 'Tek Seferlik' : `Aylık ${item.visit_count} Ziyaret`;
     const suffix = isObs ? '<br/>(Gözlem &amp; Danışmanlık)' : '';
+
+    // Ziyaret Sıklığı Belirleme
+    let summerText = '';
+    let winterText = '';
+
+    if (item.unit_type === 'seferlik') {
+        summerText = 'Tek Seferlik';
+        winterText = 'Tek Seferlik';
+    } else {
+        // Periyodik ise tekliften gelen genel sıklıkları kullan
+        summerText = `Ayda ${summerFreq} Ziyaret`;
+        winterText = `Ayda ${winterFreq} Ziyaret`;
+    }
+
     return `<tr>
       <td style="${S.td} font-weight:600;">${category}</td>
       <td style="${S.td}">${pestType}</td>
-      <td style="${S.td}">${baseFreq}${suffix}</td>
-      <td style="${S.td}">${baseFreq}${suffix}</td>
+      <td style="${S.td} text-align:center;">${summerText}${suffix}</td>
+      <td style="${S.td} text-align:center;">${winterText}${suffix}</td>
       <td style="${S.td}">${appArea}</td>
     </tr>`;
   }).join('');
@@ -133,14 +162,14 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     return `<tr>
       <td style="${S.td} text-align:center;">${idx + 1}</td>
       <td style="${S.td}">${item.service_name.toUpperCase()}</td>
-      <td style="${S.td} text-align:center;">1 ${unitLabel}</td>
+      <td style="${S.td} text-align:center;">${item.visit_count} ${unitLabel}</td>
       <td style="${S.td} text-align:center;">TL/${unitLabel}</td>
       <td style="${S.td} text-align:right; white-space:nowrap;">${formatTL(item.unit_price)}.-TL+KDV/${unitLabel}</td>
     </tr>`;
   }).join('');
 
   const materialSection = productItems.length > 0 ? `
-    <p style="${S.subTitle}"><strong>9.1.1.3.</strong></p>
+    <p style="${S.subTitle}"><strong>9.1.1.3.</strong> Ekipman ve Ürün Satışı:</p>
     <table style="width:100%; border-collapse:collapse; margin:6px 0;">
       <thead><tr>
         <th style="${S.th} width:30px;">NO</th>
@@ -160,7 +189,6 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     .contract-no-break { page-break-inside: avoid; break-inside: avoid; }
   </style>
 
-  <!-- ==================== KAPAK SAYFASI ==================== -->
   <div style="height: 247mm; display: flex; flex-direction: column; justify-content: space-between; padding: 30px 40px; page-break-after: always; overflow: hidden;">
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
       <div style="font-size: 10px; color: #888;"></div>
@@ -191,7 +219,6 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     </div>
   </div>
 
-  <!-- ==================== TÜM İÇERİK: MADDE 1-10 (TEK AKIŞ) ==================== -->
   <div class="contract-body" style="padding: 10px 40px 30px 40px;">
 
     <h2 style="font-size: 14pt; font-weight: 800; margin: 0 0 12px 0; display: flex; justify-content: space-between; align-items: baseline;">
@@ -232,8 +259,8 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
       <thead><tr>
         <th style="${S.th}">HİZMET KATEGORİSİ</th>
         <th style="${S.th}">ZARARLI TÜRÜ</th>
-        <th style="${S.th}">PERİYODİK ZİYARET SIKLIĞI<br/>(YAZ AYLARI NİSAN-EYLÜL<br/>AYLARI ARASI)</th>
-        <th style="${S.th}">PERİYODİK ZİYARET SIKLIĞI<br/>(KIŞ AYLARI EKİM-MART<br/>AYLARI ARASI)</th>
+        <th style="${S.th} width:15%;">PERİYODİK ZİYARET SIKLIĞI<br/>(YAZ AYLARI NİSAN-EYLÜL)</th>
+        <th style="${S.th} width:15%;">PERİYODİK ZİYARET SIKLIĞI<br/>(KIŞ AYLARI EKİM-MART)</th>
         <th style="${S.th}">UYGULAMA<br/>ALAN(LAR)I</th>
       </tr></thead>
       <tbody>${serviceRows}</tbody>
