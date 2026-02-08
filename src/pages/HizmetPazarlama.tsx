@@ -470,9 +470,9 @@ const HizmetPazarlama: React.FC = () => {
               description: item.description,
               image_url: item.image_url,
               visitCount: type === 'service' ? ((item as Service).visit_count || 1) : 1,
-              price: type === 'product' ? (item as Equipment).sale_price : (item as Service).price || 0,
+              price: type === 'product' ? ((item as Equipment).sale_price || 0) : ((item as Service).price || 0),
               explanation: '',
-              unitType: type === 'product' ? (item as Equipment).unit || 'Adet' : 'aylik'
+              unitType: type === 'product' ? ((item as Equipment).unit || 'Adet') : 'aylik'
           };
           setSelectedItems(prev => [...prev, newItem]);
 
@@ -788,9 +788,9 @@ const HizmetPazarlama: React.FC = () => {
                                                 <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
                                                 <p className="text-xs text-gray-500 line-clamp-1">{item.description}</p>
                                             </div>
-                                            {item.price && (
+                                            {item.price != null && (
                                                 <span className="text-sm font-bold text-green-600 whitespace-nowrap">
-                                                    {item.price.toLocaleString()} ₺
+                                                    {Number(item.price).toLocaleString()} ₺
                                                 </span>
                                             )}
                                         </div>
@@ -883,7 +883,9 @@ const HizmetPazarlama: React.FC = () => {
                                             )}
                                             <div className="flex-grow min-w-0">
                                                 <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
-                                                <p className="text-xs text-gray-500">{item.sale_price.toLocaleString()} ₺ / {item.unit}</p>
+                                                <p className="text-xs text-gray-500">
+                                                    {item.sale_price != null ? `${Number(item.sale_price).toLocaleString()} ₺` : 'Fiyat belirtilmemiş'} / {item.unit}
+                                                </p>
                                             </div>
                                         </div>
                                         {selectedItem && (
