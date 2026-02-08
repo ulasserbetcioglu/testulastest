@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { toast } from 'sonner';
-import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield, FileText, Percent } from 'lucide-react';
 import { localAuth } from '../lib/localAuth';
+import { toast } from 'sonner';
+import { Mail, Send, Loader2 as Loader, MessageSquare, Plus, Save, Bug, Check, FileDown, Package, Shield, FileText, Percent, X, Eye, EyeOff, Search, ChevronDown, ChevronUp } from 'lucide-react';
 
 // --- ARAYÜZLER ---
 interface Customer {
   id: string;
   kisa_isim: string;
-  cari_isim?: string;
   email: string;
 }
 
@@ -106,6 +105,13 @@ const HizmetPazarlama: React.FC = () => {
   const [manualType, setManualType] = useState<'service' | 'product'>('service');
   const [manualItem, setManualItem] = useState({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
 
+  // YENİ: Kullanıcı Deneyimi İyileştirmeleri
+  const [showPreview, setShowPreview] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [serviceCollapsed, setServiceCollapsed] = useState(false);
+  const [productCollapsed, setProductCollapsed] = useState(false);
+  const [quickSelectMode, setQuickSelectMode] = useState(false);
+
   const [footerInfo, setFooterInfo] = useState<FooterInfo>({
     name: 'Sistem İlaçlama Sanayi ve Ticaret Limited Şirketi - PestMentor',
     title: 'Leave Pest to us...',
@@ -119,7 +125,7 @@ const HizmetPazarlama: React.FC = () => {
       setLoading(true);
       try {
         const [customerRes, serviceRes, equipmentRes, settingsRes] = await Promise.all([
-            supabase.from('customers').select('id, kisa_isim, cari_isim, email').not('email', 'is', null).order('cari_isim'),
+            supabase.from('customers').select('id, kisa_isim, email').not('email', 'is', null).order('kisa_isim'),
             supabase.from('services').select('*').order('name'),
             supabase.from('equipment').select('*').eq('is_active', true).order('name'),
             supabase.from('company_settings').select('*').limit(1).single()
@@ -152,7 +158,7 @@ const HizmetPazarlama: React.FC = () => {
       if (selectedCustomer) {
           const customer = customers.find(c => c.id === selectedCustomer);
           if (customer) {
-              setCompanyName(customer.cari_isim || customer.kisa_isim);
+              setCompanyName(customer.kisa_isim);
               setRecipientEmail(customer.email);
           }
       }
@@ -171,6 +177,23 @@ const HizmetPazarlama: React.FC = () => {
 
       return { subTotal: sub, vatAmount: vat, grandTotal: total };
   }, [selectedItems, discountAmount]);
+
+  // YENİ: Filtrelenmiş Listeler
+  const filteredServices = useMemo(() => {
+      if (!searchTerm) return serviceList;
+      return serviceList.filter(s => 
+          s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          s.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+  }, [serviceList, searchTerm]);
+
+  const filteredEquipment = useMemo(() => {
+      if (!searchTerm) return equipmentList;
+      return equipmentList.filter(e => 
+          e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          e.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+  }, [equipmentList, searchTerm]);
 
   // HTML GENERATOR
   const generateEmailHtml = (customer: string, contact: string, items: SelectedItem[], signature: string, proposalLink?: string, password?: string): string => {
@@ -215,7 +238,6 @@ const HizmetPazarlama: React.FC = () => {
         return `<span style="display:inline-block; padding: 4px 8px; margin: 2px; font-size: 11px; border-radius: 4px; background-color: ${bg}; color: ${color}; border: 1px solid ${isSelected ? '#a7f3d0' : '#e5e7eb'}; text-decoration: ${decoration}; opacity: ${opacity};">${pest}</span>`;
     }).join(' ');
 
-    // SCOPE HTML OLUŞTURULUYOR
     const scopeListHtml = SCOPE_AREAS.map(scope => {
         const isSelected = selectedScopes.includes(scope);
         const color = isSelected ? '#2563eb' : '#9ca3af';
@@ -312,7 +334,6 @@ const HizmetPazarlama: React.FC = () => {
     });
     
     const signature = generateSignatureHtml(footerInfo);
-    // HATA DÜZELTME: applicationArea değişkeni kaldırıldı, onun yerine component içinde tanımlanan scopeListHtml kullanılıyor
     const html = generateEmailHtml(companyName || 'Değerli Müşterimiz', contactPerson, selectedItemsWithDetails, signature);
     setEmailPreview(html);
   }, [selectedItems, serviceList, equipmentList, companyName, contactPerson, footerInfo, selectedPests, discountAmount, selectedScopes]);
@@ -399,8 +420,8 @@ const HizmetPazarlama: React.FC = () => {
         if (emailError) throw emailError;
         toast.success(`Teklif başarıyla oluşturuldu ve gönderildi!`);
         
-        setSelectedItems([]);
-        setDiscountAmount(0);
+        // YENİ: Formu sıfırla
+        handleResetForm();
         
     } catch (error: any) {
       toast.error('İşlem hatası: ' + error.message);
@@ -426,6 +447,20 @@ const HizmetPazarlama: React.FC = () => {
     }
   };
 
+  // YENİ: Form Sıfırlama
+  const handleResetForm = () => {
+      setSelectedItems([]);
+      setDiscountAmount(0);
+      setSelectedCustomer('');
+      setCompanyName('');
+      setContactPerson('');
+      setRecipientEmail('');
+      setCcEmail('');
+      setSelectedPests(['Hamam Böceği', 'Kemirgen']);
+      setSelectedScopes(['İşletme Geneli']);
+  };
+
+  // Öğe Ekleme/Çıkarma
   const toggleItemSelection = (item: Service | Equipment, type: 'service' | 'product', isSelected: boolean) => {
       if (isSelected) {
           const newItem: SelectedItem = {
@@ -447,7 +482,7 @@ const HizmetPazarlama: React.FC = () => {
               
               if (targetPests && Array.isArray(targetPests) && targetPests.length > 0) {
                   setSelectedPests(prev => Array.from(new Set([...prev, ...targetPests])));
-                  toast.info(`${targetPests.length} adet zararlı kapsama eklendi: ${targetPests.join(', ')}`);
+                  toast.info(`${targetPests.length} zararlı eklendi: ${targetPests.join(', ')}`);
               }
           }
 
@@ -474,7 +509,10 @@ const HizmetPazarlama: React.FC = () => {
   };
 
   const handleAddManualItem = () => {
-    if(!manualItem.name) return;
+    if(!manualItem.name) {
+        toast.error('Lütfen kalem adı girin');
+        return;
+    }
     const newItem: SelectedItem = {
         id: `manual-${Date.now()}`,
         type: manualType,
@@ -487,258 +525,656 @@ const HizmetPazarlama: React.FC = () => {
     };
     setSelectedItems(prev => [...prev, newItem]);
     setManualItem({ name: '', description: '', count: 1, price: 0, unit: 'Adet' });
+    toast.success('Manuel kalem eklendi');
   };
 
+  // YENİ: Hızlı İşlemler
+  const handleSelectAllPests = () => setSelectedPests([...PEST_TYPES]);
+  const handleClearAllPests = () => setSelectedPests([]);
+  const handleSelectAllScopes = () => setSelectedScopes([...SCOPE_AREAS]);
+  const handleClearAllScopes = () => setSelectedScopes([]);
+
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 lg:p-6 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-4">
           <MessageSquare className="w-8 h-8 text-green-600" />
-          <h1 className="text-3xl font-bold text-gray-800">Hizmet & Ürün Teklif Modülü</h1>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Hizmet & Ürün Teklifi</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {selectedItems.length > 0 && `${selectedItems.length} kalem seçildi • `}
+              {grandTotal > 0 && `Toplam: ${grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}`}
+            </p>
+          </div>
+        </div>
+        
+        {/* YENİ: Hızlı Aksiyonlar */}
+        <div className="flex gap-2">
+          {selectedItems.length > 0 && (
+            <button
+              onClick={handleResetForm}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+            >
+              <X size={16} />
+              <span className="hidden sm:inline">Formu Temizle</span>
+            </button>
+          )}
+          <button
+            onClick={() => setShowPreview(!showPreview)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm lg:hidden"
+          >
+            {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
+            Önizleme
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-md space-y-6 max-h-[90vh] overflow-y-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+        {/* Sol Panel - Form */}
+        <div className="bg-white p-4 lg:p-6 rounded-xl shadow-md space-y-4 lg:space-y-6 max-h-[90vh] overflow-y-auto">
           
-          {/* ALICI BİLGİLERİ */}
-          <div>
-            <label className="block text-lg font-semibold text-gray-700 mb-2">1. Alıcı & Firma Bilgileri</label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 1. ALICI BİLGİLERİ */}
+          <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-lg border border-blue-100">
+            <label className="flex items-center gap-2 text-lg font-semibold text-gray-700 mb-3">
+              <Mail size={20} className="text-blue-600" />
+              1. Alıcı Bilgileri
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
-                    <label className="text-xs text-gray-500">Kayıtlı Müşteri</label>
+                    <label className="text-xs text-gray-500 font-medium mb-1 block">Kayıtlı Müşteri Seç</label>
                     <select
                         value={selectedCustomer}
                         onChange={e => setSelectedCustomer(e.target.value)}
-                        className="w-full p-2 border rounded-lg bg-gray-50"
+                        className="w-full p-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                         disabled={loading}
                     >
-                        <option value="">Manuel Giriş</option>
-                        {customers.map(c => <option key={c.id} value={c.id}>{c.cari_isim || c.kisa_isim}</option>)}
+                        <option value="">🖊️ Manuel Giriş Yap</option>
+                        {customers.map(c => <option key={c.id} value={c.id}>👤 {c.kisa_isim}</option>)}
                     </select>
                 </div>
-                <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Firma Adı *" className="w-full p-2 border rounded-lg" />
-                <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} placeholder="Yetkili Kişi" className="w-full p-2 border rounded-lg" />
-                <input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} placeholder="Alıcı E-posta *" className="w-full p-2 border rounded-lg" />
-                <input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} placeholder="CC (Bilgi) E-posta" className="w-full p-2 border rounded-lg" />
-            </div>
-          </div>
-
-          {/* SÖZLEŞME OPSİYONU */}
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                  <FileText className="text-blue-600" size={20} />
-                  <div>
-                      <p className="text-sm font-bold text-gray-800">Sözleşme Oluşturulsun Mu?</p>
-                      <p className="text-xs text-gray-500">Onaylandığında otomatik sözleşme hazırlanabilsin.</p>
-                  </div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={allowContract} onChange={(e) => setAllowContract(e.target.checked)} />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
-          </div>
-
-          {/* EK AYARLAR: İSKONTO & ALAN */}
-          <div className="grid grid-cols-2 gap-4">
-              <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">İskonto Tutarı (TL)</label>
-                  <div className="relative">
-                      <Percent size={16} className="absolute left-2 top-2.5 text-gray-400" />
-                      <input type="number" value={discountAmount} onChange={e => setDiscountAmount(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 border rounded-lg" />
-                  </div>
-              </div>
-          </div>
-
-          {/* UYGULAMA KAPSAMI */}
-          <div>
-              <label className="block text-lg font-semibold text-gray-700 mb-2">Uygulama Kapsamı</label>
-              <div className="flex flex-wrap gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
-                  {SCOPE_AREAS.map(scope => (
-                      <button
-                        key={scope}
-                        onClick={() => toggleScope(scope)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
-                            selectedScopes.includes(scope)
-                            ? 'bg-blue-100 text-blue-700 border-blue-200'
-                            : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        {selectedScopes.includes(scope) && <Check size={12}/>}
-                        {scope}
-                      </button>
-                  ))}
-              </div>
-          </div>
-
-          {/* HEDEF ZARARLILAR */}
-          <div>
-             <label className="block text-lg font-semibold text-gray-700 mb-2">Hedef Zararlılar</label>
-             <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border">
-                 {PEST_TYPES.map(pest => (
-                     <button
-                        key={pest}
-                        onClick={() => togglePest(pest)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
-                            selectedPests.includes(pest) 
-                            ? 'bg-green-100 text-green-700 border-green-200' 
-                            : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
-                        }`}
-                     >
-                        {selectedPests.includes(pest) && <Check size={12}/>}
-                        <Bug size={12} className={selectedPests.includes(pest) ? 'text-green-600' : 'text-gray-300'} />
-                        {pest}
-                     </button>
-                 ))}
-             </div>
-          </div>
-
-          {/* HİZMET LİSTESİ */}
-          <div className="border rounded-lg max-h-80 overflow-y-auto p-2">
-                <h4 className="font-bold text-gray-700 px-2 mb-2 text-sm sticky top-0 bg-white z-10 py-1">HİZMETLER</h4>
-                {serviceList.map(item => {
-                    const selectedItem = selectedItems.find(s => s.id === item.id && s.type === 'service');
-                    return (
-                        <div key={`srv-${item.id}`} className={`border rounded-lg mb-2 p-3 ${selectedItem ? 'bg-green-50' : 'bg-white'}`}>
-                            <div className="flex items-center space-x-3">
-                                <input type="checkbox" className="h-5 w-5 rounded border-gray-300 text-green-600 focus:ring-green-500" checked={!!selectedItem} onChange={(e) => toggleItemSelection(item, 'service', e.target.checked)} />
-                                <div className="flex-grow">
-                                    <p className="text-sm font-bold text-gray-900">{item.name}</p>
-                                    <p className="text-xs text-gray-500 line-clamp-1">{item.description}</p>
-                                </div>
-                            </div>
-                            {selectedItem && (
-                                <div className="mt-3 pl-8 grid grid-cols-12 gap-3 animate-in slide-in-from-top-2">
-                                    <div className="col-span-6">
-                                        <select value={selectedItem.unitType} onChange={(e) => handleItemUpdate(item.id, 'service', 'unitType', e.target.value)} className="w-full p-1 border rounded text-xs">
-                                            <option value="aylik">Aylık Periyodik</option>
-                                            <option value="seferlik">Tek Seferlik</option>
-                                        </select>
-                                    </div>
-                                    <div className="col-span-3">
-                                        <input type="number" value={selectedItem.visitCount} onChange={(e) => handleItemUpdate(item.id, 'service', 'visitCount', parseInt(e.target.value))} className="w-full p-1 border rounded text-xs text-center" min="1" />
-                                    </div>
-                                    <div className="col-span-3">
-                                        <input type="number" value={selectedItem.price} onChange={(e) => handleItemUpdate(item.id, 'service', 'price', parseFloat(e.target.value))} className="w-full p-1 border rounded text-xs text-right font-bold" />
-                                    </div>
-                                    <div className="col-span-12">
-                                        <input type="text" value={selectedItem.explanation} onChange={(e) => handleItemUpdate(item.id, 'service', 'explanation', e.target.value)} className="w-full p-1 border rounded text-xs" placeholder="Özel Açıklama..." />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-          </div>
-          
-           {/* EKİPMAN LİSTESİ */}
-          <div className="border rounded-lg max-h-80 overflow-y-auto p-2 mt-4">
-                <h4 className="font-bold text-gray-700 px-2 mb-2 text-sm sticky top-0 bg-white z-10 py-1">EKİPMAN & ÜRÜNLER (Stok)</h4>
-                {equipmentList.map(item => {
-                    const selectedItem = selectedItems.find(s => s.id === item.id && s.type === 'product');
-                    return (
-                        <div key={`prd-${item.id}`} className={`border rounded-lg mb-2 p-3 ${selectedItem ? 'bg-blue-50' : 'bg-white'}`}>
-                            <div className="flex items-center space-x-3">
-                                <input type="checkbox" className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={!!selectedItem} onChange={(e) => toggleItemSelection(item, 'product', e.target.checked)} />
-                                {item.image_url ? <img src={item.image_url} className="w-8 h-8 object-cover rounded" /> : <Package className="w-8 h-8 text-gray-400" />}
-                                <div className="flex-grow">
-                                    <p className="text-sm font-bold text-gray-900">{item.name}</p>
-                                    <p className="text-xs text-gray-500">{item.sale_price} ₺ / {item.unit}</p>
-                                </div>
-                            </div>
-                            {selectedItem && (
-                                <div className="mt-3 pl-8 grid grid-cols-12 gap-3 animate-in slide-in-from-top-2">
-                                    <div className="col-span-4 flex items-center gap-1">
-                                        <input type="number" value={selectedItem.visitCount} onChange={(e) => handleItemUpdate(item.id, 'product', 'visitCount', parseInt(e.target.value))} className="w-full p-1 border rounded text-xs text-center" min="1" />
-                                        <span className="text-xs text-gray-500">{item.unitType}</span>
-                                    </div>
-                                    <div className="col-span-4">
-                                        <input type="number" value={selectedItem.price} onChange={(e) => handleItemUpdate(item.id, 'product', 'price', parseFloat(e.target.value))} className="w-full p-1 border rounded text-xs text-right font-bold" />
-                                    </div>
-                                    <div className="col-span-4 flex items-end justify-end">
-                                        <span className="text-xs font-bold text-blue-600">{(selectedItem.visitCount * selectedItem.price).toLocaleString()} ₺</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-          </div>
-
-          <div className="border-t pt-4">
-            <details className="group">
-                <summary className="flex cursor-pointer items-center text-sm font-medium text-gray-600 hover:text-green-600">
-                    <Plus className="mr-2 h-4 w-4" /> Manuel Kalem Ekle
-                </summary>
-                <div className="mt-3 space-y-3 p-4 bg-gray-50 rounded-lg">
-                    <div className="flex gap-4 mb-2">
-                        <label className="flex items-center text-xs"><input type="radio" checked={manualType==='service'} onChange={()=>setManualType('service')} className="mr-1"/> Hizmet</label>
-                        <label className="flex items-center text-xs"><input type="radio" checked={manualType==='product'} onChange={()=>setManualType('product')} className="mr-1"/> Ürün</label>
-                    </div>
-                    <input type="text" placeholder="İsim" value={manualItem.name} onChange={e => setManualItem(prev => ({...prev, name: e.target.value}))} className="w-full p-2 border rounded text-sm" />
-                    <textarea placeholder="Açıklama" value={manualItem.description} onChange={e => setManualItem(prev => ({...prev, description: e.target.value}))} rows={2} className="w-full p-2 border rounded text-sm" />
-                    <div className="grid grid-cols-3 gap-3">
-                        <input type="number" placeholder="Miktar" value={manualItem.count} onChange={e => setManualItem(prev => ({...prev, count: parseInt(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
-                        <input type="text" placeholder="Birim (Adet/Kg)" value={manualItem.unit} onChange={e => setManualItem(prev => ({...prev, unit: e.target.value}))} className="w-full p-2 border rounded text-sm" disabled={manualType === 'service'} />
-                        <input type="number" placeholder="Fiyat" value={manualItem.price} onChange={e => setManualItem(prev => ({...prev, price: parseFloat(e.target.value)}))} className="w-full p-2 border rounded text-sm" />
-                    </div>
-                    <button onClick={handleAddManualItem} className="w-full bg-gray-800 text-white rounded text-sm font-medium p-2 hover:bg-gray-700">Listeye Ekle</button>
+                <div>
+                    <label className="text-xs text-gray-500 font-medium mb-1 block">Firma Adı *</label>
+                    <input 
+                        type="text" 
+                        value={companyName} 
+                        onChange={e => setCompanyName(e.target.value)} 
+                        placeholder="Örn: ABC Gıda Ltd." 
+                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                        required
+                    />
                 </div>
-            </details>
+                <div>
+                    <label className="text-xs text-gray-500 font-medium mb-1 block">Yetkili Kişi</label>
+                    <input 
+                        type="text" 
+                        value={contactPerson} 
+                        onChange={e => setContactPerson(e.target.value)} 
+                        placeholder="Örn: Ahmet Yılmaz" 
+                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                    />
+                </div>
+                <div>
+                    <label className="text-xs text-gray-500 font-medium mb-1 block">Alıcı E-posta *</label>
+                    <input 
+                        type="email" 
+                        value={recipientEmail} 
+                        onChange={e => setRecipientEmail(e.target.value)} 
+                        placeholder="ornek@firma.com" 
+                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                        required
+                    />
+                </div>
+                <div>
+                    <label className="text-xs text-gray-500 font-medium mb-1 block">CC (Bilgi) E-posta</label>
+                    <input 
+                        type="email" 
+                        value={ccEmail} 
+                        onChange={e => setCcEmail(e.target.value)} 
+                        placeholder="bilgi@firma.com" 
+                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                    />
+                </div>
+            </div>
           </div>
 
-          <div className="border-t pt-4 bg-green-50 p-4 rounded-xl">
-            <div className="flex justify-between items-center text-lg font-bold text-gray-800 mb-1">
-                <span>TOPLAM:</span>
-                <span className="text-xl text-gray-600">{subTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+          {/* 2. SÖZLEŞME & İSKONTO */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Sözleşme */}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2">
+                        <FileText className="text-blue-600 mt-0.5 flex-shrink-0" size={18} />
+                        <div>
+                            <p className="text-sm font-bold text-gray-800">Otomatik Sözleşme</p>
+                            <p className="text-xs text-gray-500">Onayda sözleşme oluştur</p>
+                        </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input type="checkbox" className="sr-only peer" checked={allowContract} onChange={(e) => setAllowContract(e.target.checked)} />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
             </div>
-             {discountAmount > 0 && (
-                <div className="flex justify-between items-center text-sm font-medium text-red-600 mb-1">
-                    <span>İskonto:</span>
-                    <span>-{discountAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+
+            {/* İskonto */}
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <label className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-2">
+                    <Percent size={16} className="text-orange-600" />
+                    İskonto Tutarı
+                </label>
+                <div className="relative">
+                    <input 
+                        type="number" 
+                        value={discountAmount} 
+                        onChange={e => setDiscountAmount(parseFloat(e.target.value) || 0)} 
+                        className="w-full p-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent pr-8" 
+                        placeholder="0.00"
+                    />
+                    <span className="absolute right-3 top-2.5 text-gray-500 text-sm">₺</span>
+                </div>
+            </div>
+          </div>
+
+          {/* 3. KAPSAM & ZARARLILAR */}
+          <div className="space-y-4">
+            {/* Uygulama Kapsamı */}
+            <div>
+                <div className="flex items-center justify-between mb-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                        <Shield size={16} className="text-blue-600" />
+                        Uygulama Kapsamı
+                    </label>
+                    <div className="flex gap-2">
+                        <button onClick={handleSelectAllScopes} className="text-xs text-blue-600 hover:underline">Tümünü Seç</button>
+                        <button onClick={handleClearAllScopes} className="text-xs text-gray-500 hover:underline">Temizle</button>
+                    </div>
+                </div>
+                <div className="flex flex-wrap gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                    {SCOPE_AREAS.map(scope => (
+                        <button
+                            key={scope}
+                            onClick={() => toggleScope(scope)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
+                                selectedScopes.includes(scope)
+                                ? 'bg-blue-500 text-white border-blue-600 shadow-sm'
+                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                            {selectedScopes.includes(scope) && <Check size={12}/>}
+                            {scope}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Hedef Zararlılar */}
+            <div>
+                <div className="flex items-center justify-between mb-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                        <Bug size={16} className="text-green-600" />
+                        Hedef Zararlılar
+                    </label>
+                    <div className="flex gap-2">
+                        <button onClick={handleSelectAllPests} className="text-xs text-green-600 hover:underline">Tümünü Seç</button>
+                        <button onClick={handleClearAllPests} className="text-xs text-gray-500 hover:underline">Temizle</button>
+                    </div>
+                </div>
+                <div className="flex flex-wrap gap-2 p-3 bg-green-50/50 rounded-lg border border-green-100">
+                    {PEST_TYPES.map(pest => (
+                        <button
+                            key={pest}
+                            onClick={() => togglePest(pest)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1 ${
+                                selectedPests.includes(pest) 
+                                ? 'bg-green-500 text-white border-green-600 shadow-sm' 
+                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                            {selectedPests.includes(pest) && <Check size={12}/>}
+                            {pest}
+                        </button>
+                    ))}
+                </div>
+            </div>
+          </div>
+
+          {/* 4. HİZMET & ÜRÜN SEÇİMİ */}
+          <div className="space-y-4">
+            {/* Arama */}
+            <div className="relative">
+                <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+                <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Hizmet veya ürün ara..."
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+            </div>
+
+            {/* Hizmetler */}
+            <div className="border rounded-lg overflow-hidden bg-white">
+                <button
+                    onClick={() => setServiceCollapsed(!serviceCollapsed)}
+                    className="w-full flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 transition-colors"
+                >
+                    <span className="font-bold text-gray-700 text-sm flex items-center gap-2">
+                        🔧 HİZMETLER
+                        <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">
+                            {filteredServices.length}
+                        </span>
+                    </span>
+                    {serviceCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                </button>
+                
+                {!serviceCollapsed && (
+                    <div className="max-h-80 overflow-y-auto p-2">
+                        {filteredServices.length === 0 ? (
+                            <p className="text-center text-gray-400 py-8 text-sm">Hizmet bulunamadı</p>
+                        ) : (
+                            filteredServices.map(item => {
+                                const selectedItem = selectedItems.find(s => s.id === item.id && s.type === 'service');
+                                return (
+                                    <div key={`srv-${item.id}`} className={`border rounded-lg mb-2 p-3 transition-all ${selectedItem ? 'bg-green-50 border-green-300' : 'bg-white hover:bg-gray-50'}`}>
+                                        <div className="flex items-center space-x-3">
+                                            <input 
+                                                type="checkbox" 
+                                                className="h-5 w-5 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer" 
+                                                checked={!!selectedItem} 
+                                                onChange={(e) => toggleItemSelection(item, 'service', e.target.checked)} 
+                                            />
+                                            <div className="flex-grow min-w-0">
+                                                <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
+                                                <p className="text-xs text-gray-500 line-clamp-1">{item.description}</p>
+                                            </div>
+                                            {item.price && (
+                                                <span className="text-sm font-bold text-green-600 whitespace-nowrap">
+                                                    {item.price.toLocaleString()} ₺
+                                                </span>
+                                            )}
+                                        </div>
+                                        {selectedItem && (
+                                            <div className="mt-3 pl-8 space-y-2 animate-in slide-in-from-top-2">
+                                                <div className="grid grid-cols-12 gap-2">
+                                                    <div className="col-span-6">
+                                                        <label className="text-xs text-gray-500 block mb-1">Tür</label>
+                                                        <select 
+                                                            value={selectedItem.unitType} 
+                                                            onChange={(e) => handleItemUpdate(item.id, 'service', 'unitType', e.target.value)} 
+                                                            className="w-full p-1.5 border rounded text-xs bg-white"
+                                                        >
+                                                            <option value="aylik">📅 Aylık Periyodik</option>
+                                                            <option value="seferlik">🎯 Tek Seferlik</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="col-span-3">
+                                                        <label className="text-xs text-gray-500 block mb-1">Ziyaret</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={selectedItem.visitCount} 
+                                                            onChange={(e) => handleItemUpdate(item.id, 'service', 'visitCount', parseInt(e.target.value))} 
+                                                            className="w-full p-1.5 border rounded text-xs text-center" 
+                                                            min="1" 
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-3">
+                                                        <label className="text-xs text-gray-500 block mb-1">Fiyat</label>
+                                                        <input 
+                                                            type="number" 
+                                                            value={selectedItem.price} 
+                                                            onChange={(e) => handleItemUpdate(item.id, 'service', 'price', parseFloat(e.target.value))} 
+                                                            className="w-full p-1.5 border rounded text-xs text-right font-bold" 
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <input 
+                                                    type="text" 
+                                                    value={selectedItem.explanation} 
+                                                    onChange={(e) => handleItemUpdate(item.id, 'service', 'explanation', e.target.value)} 
+                                                    className="w-full p-1.5 border rounded text-xs" 
+                                                    placeholder="💬 Özel açıklama ekle..." 
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Ürünler */}
+            <div className="border rounded-lg overflow-hidden bg-white">
+                <button
+                    onClick={() => setProductCollapsed(!productCollapsed)}
+                    className="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 transition-colors"
+                >
+                    <span className="font-bold text-gray-700 text-sm flex items-center gap-2">
+                        📦 ÜRÜNLER
+                        <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">
+                            {filteredEquipment.length}
+                        </span>
+                    </span>
+                    {productCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                </button>
+                
+                {!productCollapsed && (
+                    <div className="max-h-80 overflow-y-auto p-2">
+                        {filteredEquipment.length === 0 ? (
+                            <p className="text-center text-gray-400 py-8 text-sm">Ürün bulunamadı</p>
+                        ) : (
+                            filteredEquipment.map(item => {
+                                const selectedItem = selectedItems.find(s => s.id === item.id && s.type === 'product');
+                                return (
+                                    <div key={`prd-${item.id}`} className={`border rounded-lg mb-2 p-3 transition-all ${selectedItem ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-gray-50'}`}>
+                                        <div className="flex items-center space-x-3">
+                                            <input 
+                                                type="checkbox" 
+                                                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                                                checked={!!selectedItem} 
+                                                onChange={(e) => toggleItemSelection(item, 'product', e.target.checked)} 
+                                            />
+                                            {item.image_url ? (
+                                                <img src={item.image_url} className="w-10 h-10 object-cover rounded border border-gray-200" alt={item.name} />
+                                            ) : (
+                                                <Package className="w-10 h-10 text-gray-300 flex-shrink-0" />
+                                            )}
+                                            <div className="flex-grow min-w-0">
+                                                <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
+                                                <p className="text-xs text-gray-500">{item.sale_price.toLocaleString()} ₺ / {item.unit}</p>
+                                            </div>
+                                        </div>
+                                        {selectedItem && (
+                                            <div className="mt-3 pl-14 grid grid-cols-12 gap-2 animate-in slide-in-from-top-2">
+                                                <div className="col-span-4">
+                                                    <label className="text-xs text-gray-500 block mb-1">Miktar</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={selectedItem.visitCount} 
+                                                        onChange={(e) => handleItemUpdate(item.id, 'product', 'visitCount', parseInt(e.target.value))} 
+                                                        className="w-full p-1.5 border rounded text-xs text-center" 
+                                                        min="1" 
+                                                    />
+                                                </div>
+                                                <div className="col-span-4">
+                                                    <label className="text-xs text-gray-500 block mb-1">Birim Fiyat</label>
+                                                    <input 
+                                                        type="number" 
+                                                        value={selectedItem.price} 
+                                                        onChange={(e) => handleItemUpdate(item.id, 'product', 'price', parseFloat(e.target.value))} 
+                                                        className="w-full p-1.5 border rounded text-xs text-right font-bold" 
+                                                    />
+                                                </div>
+                                                <div className="col-span-4">
+                                                    <label className="text-xs text-gray-500 block mb-1">Toplam</label>
+                                                    <div className="p-1.5 bg-blue-100 rounded text-xs font-bold text-blue-700 text-right">
+                                                        {(selectedItem.visitCount * selectedItem.price).toLocaleString()} ₺
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Manuel Kalem Ekleme */}
+            <div className="border-t pt-4">
+                <details className="group bg-gray-50 rounded-lg border border-gray-200">
+                    <summary className="flex cursor-pointer items-center justify-between p-3 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors select-none">
+                        <div className="flex items-center gap-2">
+                            <Plus className="h-4 w-4" />
+                            Manuel Kalem Ekle
+                        </div>
+                        <ChevronDown className="group-open:rotate-180 transition-transform" size={16} />
+                    </summary>
+                    <div className="p-4 space-y-3 border-t border-gray-200">
+                        <div className="flex gap-4 mb-2">
+                            <label className="flex items-center text-sm cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    checked={manualType==='service'} 
+                                    onChange={()=>setManualType('service')} 
+                                    className="mr-2 text-green-600 focus:ring-green-500" 
+                                />
+                                🔧 Hizmet
+                            </label>
+                            <label className="flex items-center text-sm cursor-pointer">
+                                <input 
+                                    type="radio" 
+                                    checked={manualType==='product'} 
+                                    onChange={()=>setManualType('product')} 
+                                    className="mr-2 text-blue-600 focus:ring-blue-500" 
+                                />
+                                📦 Ürün
+                            </label>
+                        </div>
+                        <input 
+                            type="text" 
+                            placeholder="Kalem Adı *" 
+                            value={manualItem.name} 
+                            onChange={e => setManualItem(prev => ({...prev, name: e.target.value}))} 
+                            className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" 
+                        />
+                        <textarea 
+                            placeholder="Açıklama (Opsiyonel)" 
+                            value={manualItem.description} 
+                            onChange={e => setManualItem(prev => ({...prev, description: e.target.value}))} 
+                            rows={2} 
+                            className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" 
+                        />
+                        <div className="grid grid-cols-3 gap-3">
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">Miktar</label>
+                                <input 
+                                    type="number" 
+                                    placeholder="1" 
+                                    value={manualItem.count} 
+                                    onChange={e => setManualItem(prev => ({...prev, count: parseInt(e.target.value) || 1}))} 
+                                    className="w-full p-2 border border-gray-300 rounded text-sm" 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">Birim</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Adet/Kg" 
+                                    value={manualItem.unit} 
+                                    onChange={e => setManualItem(prev => ({...prev, unit: e.target.value}))} 
+                                    className="w-full p-2 border border-gray-300 rounded text-sm" 
+                                    disabled={manualType === 'service'} 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">Fiyat (₺)</label>
+                                <input 
+                                    type="number" 
+                                    placeholder="0.00" 
+                                    value={manualItem.price} 
+                                    onChange={e => setManualItem(prev => ({...prev, price: parseFloat(e.target.value) || 0}))} 
+                                    className="w-full p-2 border border-gray-300 rounded text-sm" 
+                                />
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleAddManualItem} 
+                            className="w-full bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded text-sm font-medium p-2.5 hover:from-gray-800 hover:to-gray-900 transition-all flex items-center justify-center gap-2"
+                        >
+                            <Plus size={16} />
+                            Listeye Ekle
+                        </button>
+                    </div>
+                </details>
+            </div>
+          </div>
+
+          {/* 5. ÖZET & GÖNDER */}
+          <div className="border-t pt-4 bg-gradient-to-br from-green-50 to-white p-5 rounded-xl border border-green-200 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+              <FileText size={16} className="text-green-600" />
+              Teklif Özeti
+            </h3>
+            
+            {selectedItems.length > 0 ? (
+                <div className="space-y-2 mb-4 max-h-32 overflow-y-auto">
+                    {selectedItems.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded border border-gray-100">
+                            <span className="flex-1 truncate">{item.name}</span>
+                            <span className="text-gray-500 mx-2">x{item.visitCount}</span>
+                            <span className="font-bold text-green-700">
+                                {(item.visitCount * item.price).toLocaleString()} ₺
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-6 text-gray-400 text-sm">
+                    <Package className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                    Henüz kalem eklenmedi
                 </div>
             )}
-             <div className="flex justify-between items-center text-sm font-medium text-gray-600 mb-1">
-                <span>KDV (%20):</span>
-                <span>{vatAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
-            </div>
-            <div className="flex justify-between items-center text-lg font-bold text-gray-800 border-t border-green-200 pt-2 mt-1">
-                <span>GENEL TOPLAM:</span>
-                <span className="text-2xl text-green-700">{grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+
+            <div className="space-y-2 border-t border-green-200 pt-3">
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>Ara Toplam:</span>
+                    <span className="font-semibold">{subTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                </div>
+                {discountAmount > 0 && (
+                    <div className="flex justify-between items-center text-sm text-red-600">
+                        <span>İskonto:</span>
+                        <span className="font-semibold">-{discountAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                    </div>
+                )}
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>KDV (%20):</span>
+                    <span className="font-semibold">{vatAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                </div>
+                <div className="flex justify-between items-center text-lg font-bold text-gray-800 border-t border-green-300 pt-2 mt-2">
+                    <span>GENEL TOPLAM:</span>
+                    <span className="text-2xl text-green-700">{grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                </div>
             </div>
             
-            <button onClick={handleSendEmail} disabled={isSending || selectedItems.length === 0} className="w-full flex items-center justify-center gap-2 p-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-all shadow-lg hover:shadow-xl mt-4">
-                {isSending ? <Loader className="animate-spin" /> : <Send />}
-                {isSending ? 'Teklif Hazırlanıyor...' : 'TEKLİFİ OLUŞTUR VE GÖNDER'}
+            <button 
+                onClick={handleSendEmail} 
+                disabled={isSending || selectedItems.length === 0 || !recipientEmail || !companyName} 
+                className="w-full flex items-center justify-center gap-2 p-3.5 bg-gradient-to-r from-green-600 to-green-700 text-white font-bold rounded-lg hover:from-green-700 hover:to-green-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl mt-4"
+            >
+                {isSending ? (
+                    <>
+                        <Loader className="animate-spin" />
+                        Teklif Hazırlanıyor...
+                    </>
+                ) : (
+                    <>
+                        <Send />
+                        TEKLİFİ OLUŞTUR VE GÖNDER
+                    </>
+                )}
             </button>
+
+            {(!recipientEmail || !companyName || selectedItems.length === 0) && (
+                <p className="text-xs text-center text-red-500 mt-2">
+                    ⚠️ Lütfen firma adı, e-posta ve en az bir kalem ekleyin
+                </p>
+            )}
           </div>
         </div>
 
-        {/* SAĞ PANEL: ÖNİZLEME */}
-        <div className="bg-white p-6 rounded-xl shadow-md flex flex-col h-[90vh]">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><FileDown size={20}/> Canlı Önizleme</h3>
+        {/* Sağ Panel - Önizleme (Desktop veya Toggle) */}
+        <div className={`bg-white p-4 lg:p-6 rounded-xl shadow-md flex flex-col h-[90vh] ${!showPreview ? 'hidden lg:flex' : ''}`}>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Eye size={20} className="text-blue-600"/>
+                    Canlı Önizleme
+                </h3>
+                <button 
+                    onClick={() => setShowPreview(false)}
+                    className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
+                >
+                    <X size={18} />
+                </button>
+            </div>
+
             <div className="border rounded-lg flex-grow overflow-hidden bg-gray-100">
                 {emailPreview ? (
-                    <iframe srcDoc={emailPreview} title="Önizleme" className="w-full h-full border-0 bg-white" />
+                    <iframe 
+                        srcDoc={emailPreview} 
+                        title="Önizleme" 
+                        className="w-full h-full border-0 bg-white" 
+                    />
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-4">
-                        <Mail size={48} />
-                        <p>Hizmet veya ürün seçimi yapıldığında önizleme burada görünecektir.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-4 p-6 text-center">
+                        <Mail size={48} className="opacity-30" />
+                        <p className="text-sm">Hizmet veya ürün seçimi yapıldığında<br/>önizleme burada görünecektir.</p>
                     </div>
                 )}
             </div>
             
-            <div className="mt-4 border-t pt-2">
+            {/* İmza Ayarları */}
+            <div className="mt-4 border-t pt-3">
                 <details className="group">
-                    <summary className="flex cursor-pointer items-center text-xs font-medium text-gray-500 hover:text-gray-800 select-none">
-                        <Save className="mr-1 h-3 w-3" /> E-posta İmza Ayarları
+                    <summary className="flex cursor-pointer items-center text-xs font-medium text-gray-500 hover:text-gray-800 select-none transition-colors">
+                        <Save className="mr-2 h-4 w-4" />
+                        E-posta İmza Ayarları
+                        <ChevronDown className="ml-auto group-open:rotate-180 transition-transform" size={14} />
                     </summary>
-                    <div className="mt-2 grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded text-xs">
-                        <input type="text" placeholder="İsim" value={footerInfo.name} onChange={e => setFooterInfo(prev => ({...prev, name: e.target.value}))} className="p-1 border rounded" />
-                        <input type="text" placeholder="Unvan" value={footerInfo.title} onChange={e => setFooterInfo(prev => ({...prev, title: e.target.value}))} className="p-1 border rounded" />
-                        <input type="text" placeholder="Web" value={footerInfo.website} onChange={e => setFooterInfo(prev => ({...prev, website: e.target.value}))} className="p-1 border rounded" />
-                        <input type="text" placeholder="Tel" value={footerInfo.phone} onChange={e => setFooterInfo(prev => ({...prev, phone: e.target.value}))} className="p-1 border rounded" />
-                        <button onClick={handleSaveFooterSettings} disabled={isSavingSettings} className="col-span-2 bg-blue-500 text-white p-1 rounded hover:bg-blue-600">Ayarları Kaydet</button>
+                    <div className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">İsim</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="İsim Soyisim" 
+                                    value={footerInfo.name} 
+                                    onChange={e => setFooterInfo(prev => ({...prev, name: e.target.value}))} 
+                                    className="w-full p-1.5 border rounded text-xs" 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">Ünvan</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ünvan/Pozisyon" 
+                                    value={footerInfo.title} 
+                                    onChange={e => setFooterInfo(prev => ({...prev, title: e.target.value}))} 
+                                    className="w-full p-1.5 border rounded text-xs" 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">Web Sitesi</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="www.ornek.com" 
+                                    value={footerInfo.website} 
+                                    onChange={e => setFooterInfo(prev => ({...prev, website: e.target.value}))} 
+                                    className="w-full p-1.5 border rounded text-xs" 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">Telefon</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="0xxx xxx xx xx" 
+                                    value={footerInfo.phone} 
+                                    onChange={e => setFooterInfo(prev => ({...prev, phone: e.target.value}))} 
+                                    className="w-full p-1.5 border rounded text-xs" 
+                                />
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleSaveFooterSettings} 
+                            disabled={isSavingSettings} 
+                            className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400 text-xs font-medium flex items-center justify-center gap-1 transition-colors"
+                        >
+                            {isSavingSettings ? <Loader className="animate-spin" size={14} /> : <Save size={14} />}
+                            {isSavingSettings ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
+                        </button>
                     </div>
                 </details>
             </div>
