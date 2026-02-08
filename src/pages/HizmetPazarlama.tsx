@@ -238,7 +238,7 @@ const HizmetPazarlama: React.FC = () => {
       <!DOCTYPE html><html><head><style>body{font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333; line-height: 1.6;}.container{max-width:700px;margin:auto;border:1px solid #e5e7eb; border-radius: 8px; overflow: hidden;}.header{background-color:#1e293b;color:white;padding:20px;text-align:center}.content{padding:30px}table{width:100%;border-collapse:collapse}th{background-color:#f8fafc;text-align:left;padding:12px;font-size:12px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;}</style></head><body>
       <div class="container">
         <div class="header">
-            <h2 style="margin:0; font-size: 24px;">FİYAT TEKLİFİ SUNULUR</h2>
+            <h2 style="margin:0; font-size: 24px;">HİZMET TEKLİFİ</h2>
             <p style="margin:5px 0 0 0; opacity: 0.8; font-size: 14px;">Hizmet & Ürün Detayları</p>
         </div>
         <div class="content">
