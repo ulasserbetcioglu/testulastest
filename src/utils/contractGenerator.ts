@@ -341,16 +341,10 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
       </tr></thead>
       <tbody>
         <tr>
-          <td style="${S.td}">BBVA GARANTİ BANKASI</td>
+          <td style="${S.td}">GARANTİ BBVA</td>
           <td style="${S.td}">Gazcılar Şubesi</td>
           <td style="${S.td}">37- 6202789</td>
           <td style="${S.td}">TR660006200003700006202789</td>
-        </tr>
-        <tr>
-          <td style="${S.td}">ZİRAAT BANKASI</td>
-          <td style="${S.td}">İzmir Yolu Şubesi</td>
-          <td style="${S.td}">2054799952935001</td>
-          <td style="${S.td}">TR690001002054799952935001</td>
         </tr>
       </tbody>
     </table>
