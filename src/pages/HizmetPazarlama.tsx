@@ -279,7 +279,7 @@ const HizmetPazarlama: React.FC = () => {
                 </tfoot>
             </table>
             ${pdfSection}
-            <p style="margin-top: 30px; font-size: 13px; color: #666;">Not: Bu teklif 15 gün süreyle geçerlidir.</p>
+            <p style="margin-top: 30px; font-size: 13px; color: #666;">Not: Bu teklif 30 gün süreyle geçerlidir.</p>
             ${signature}
         </div>
       </div>
