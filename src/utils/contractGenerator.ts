@@ -28,7 +28,6 @@ interface ContractProposal {
   customer_notes: string | null;
   included_pests: string[] | string | null;
   proposal_items: ContractProposalItem[];
-  // YENİ: Mevsimsel Sıklıklar
   summer_visit_frequency?: number;
   winter_visit_frequency?: number;
 }
@@ -41,10 +40,31 @@ interface ContractParams {
   endDate?: string;
 }
 
+// DÜZELTME: Zararlı listesini temiz ve sığacak şekilde formatlar
 function getPestsString(pests: string[] | string | null): string {
-  if (Array.isArray(pests)) return pests.join(', ');
-  if (typeof pests === 'string') return pests;
-  return 'Genel Haşere ve Kemirgen';
+  if (!pests) return 'Genel Haşere ve Kemirgen';
+  
+  let pestList: string[] = [];
+
+  if (Array.isArray(pests)) {
+    pestList = pests;
+  } else if (typeof pests === 'string') {
+    // Eğer veri '["Böcek", "Fare"]' gibi JSON string formatındaysa temizle
+    if (pests.startsWith('[') && pests.endsWith(']')) {
+        try {
+            const parsed = JSON.parse(pests);
+            if (Array.isArray(parsed)) pestList = parsed;
+        } catch (e) {
+            // JSON parse edilemezse manuel temizle
+            pestList = pests.replace(/[\[\]"]/g, '').split(',');
+        }
+    } else {
+        pestList = pests.split(',');
+    }
+  }
+
+  // Boşlukları temizle ve birleştir
+  return pestList.map(p => p.trim()).filter(Boolean).join(', ');
 }
 
 function numberToTurkishWords(n: number): string {
@@ -69,6 +89,12 @@ function formatTL(amount: number): string {
 
 function derivePestType(serviceName: string, fallback: string): string {
   const name = serviceName.toLowerCase();
+  // Eğer "Genel" veya "Zararlı" kelimesi geçiyorsa ve fallback (seçili zararlılar) doluysa, fallback'i kullan.
+  // Aksi takdirde servis isminden tahmin etmeye çalış.
+  if ((name.includes('genel') || name.includes('zararlı') || name.includes('ilaçlama')) && fallback.length > 5) {
+      return fallback;
+  }
+
   if (name.includes('kemirgen') || name.includes('fare')) return 'Fare ve Sıçanlar';
   if (name.includes('uçkun') || name.includes('sinek') || name.includes('sivrisinek')) return 'Karasinek, Sivrisinek, Arı';
   if (name.includes('yürüyen') || name.includes('haşere') || name.includes('böcek')) return 'Hamam böceği ve Karınca';
@@ -77,6 +103,7 @@ function derivePestType(serviceName: string, fallback: string): string {
   if (name.includes('ambar') || name.includes('güve')) return 'Güve';
   if (name.includes('pire') || name.includes('kene')) return 'Pire, Kene';
   if (name.includes('dezenfeksiyon') || name.includes('bakteri')) return 'Mikroorganizma';
+  
   return fallback;
 }
 
@@ -95,20 +122,17 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
   const endDate = customEnd || oneYearLater.toLocaleDateString('tr-TR');
 
   const pestsString = getPestsString(proposal.included_pests);
-  // Hizmet Pazarlamadan gelen application_area string'ini kullan, yoksa varsayılan
   const appArea = proposal.application_area || 'İŞLETME İÇ VE DIŞ ALANI';
   
   const serviceItems = proposal.proposal_items.filter(i => i.item_type !== 'product');
   const productItems = proposal.proposal_items.filter(i => i.item_type === 'product');
   
-  // Toplam Hizmet Bedeli (Sefer Başına)
   const perVisitTotal = serviceItems.reduce((sum, item) => sum + item.unit_price, 0);
   
   const logoUrl = settings?.logo_url || '';
   const companyName = settings?.company_name || 'SİSTEM İLAÇLAMA SAN. VE TİC. LTD. ŞTİ.';
   const amountWords = numberToTurkishWords(Math.floor(perVisitTotal));
 
-  // Mevsimsel Sıklıklar (Varsayılan 1)
   const summerFreq = proposal.summer_visit_frequency || 1;
   const winterFreq = proposal.winter_visit_frequency || 1;
 
@@ -118,24 +142,18 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     p: 'font-size: 10pt; text-align: justify; margin: 3px 0;',
     sub: 'font-size: 10pt; margin: 2px 0 2px 20px;',
     subTitle: 'font-size: 10pt; margin: 6px 0 2px 0;',
-    th: 'border: 1px solid #333; padding: 5px 6px; font-size: 8pt; background-color: #f5f5f5; font-weight: 700;',
-    td: 'border: 1px solid #333; padding: 5px 6px; font-size: 8.5pt;',
+    // DÜZELTME: td stilini güncelledik (word-wrap)
+    th: 'border: 1px solid #333; padding: 4px 6px; font-size: 8pt; background-color: #f5f5f5; font-weight: 700; vertical-align: middle;',
+    td: 'border: 1px solid #333; padding: 4px 6px; font-size: 8.5pt; vertical-align: top; word-wrap: break-word; white-space: normal;',
   };
 
-  const pageHeader = `
-    <div style="${S.header}">
-      <div>${logoUrl ? `<img src="${logoUrl}" style="height: 42px; object-fit: contain;" crossorigin="anonymous" />` : `<span style="font-size: 14px; font-weight: 800; color: #1a7d37;">PestMENTOR</span>`}</div>
-      <div style="text-align: right; font-size: 9px; color: #555;">${companyName}</div>
-    </div>`;
-
-  // 3. Madde Tablosu Oluşturma
+  // 3. Tablo Satırları - DÜZELTME: Genişlikler ve kelime kaydırma
   const serviceRows = serviceItems.map(item => {
     const category = item.service_name.toUpperCase();
     const pestType = derivePestType(item.service_name, pestsString);
     const isObs = isObservationCategory(item.service_name);
     const suffix = isObs ? '<br/>(Gözlem &amp; Danışmanlık)' : '';
 
-    // Ziyaret Sıklığı Belirleme
     let summerText = '';
     let winterText = '';
 
@@ -143,17 +161,16 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
         summerText = 'Tek Seferlik';
         winterText = 'Tek Seferlik';
     } else {
-        // Periyodik ise tekliften gelen genel sıklıkları kullan
         summerText = `Ayda ${summerFreq} Ziyaret`;
         winterText = `Ayda ${winterFreq} Ziyaret`;
     }
 
     return `<tr>
-      <td style="${S.td} font-weight:600;">${category}</td>
-      <td style="${S.td}">${pestType}</td>
-      <td style="${S.td} text-align:center;">${summerText}${suffix}</td>
-      <td style="${S.td} text-align:center;">${winterText}${suffix}</td>
-      <td style="${S.td}">${appArea}</td>
+      <td style="${S.td} width: 20%; font-weight:600;">${category}</td>
+      <td style="${S.td} width: 30%;">${pestType}</td>
+      <td style="${S.td} width: 15%; text-align:center;">${summerText}${suffix}</td>
+      <td style="${S.td} width: 15%; text-align:center;">${winterText}${suffix}</td>
+      <td style="${S.td} width: 20%;">${appArea}</td>
     </tr>`;
   }).join('');
 
@@ -170,13 +187,13 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
 
   const materialSection = productItems.length > 0 ? `
     <p style="${S.subTitle}"><strong>9.1.1.3.</strong> Ekipman ve Ürün Satışı:</p>
-    <table style="width:100%; border-collapse:collapse; margin:6px 0;">
+    <table style="width:100%; border-collapse:collapse; margin:6px 0; table-layout: fixed;">
       <thead><tr>
-        <th style="${S.th} width:30px;">NO</th>
-        <th style="${S.th}">MALZEME</th>
-        <th style="${S.th} width:80px; text-align:center;">MİKTAR</th>
-        <th style="${S.th} width:70px; text-align:center;">BİRİM</th>
-        <th style="${S.th} width:130px; text-align:right;">BİRİM FİYAT</th>
+        <th style="${S.th} width:5%;">NO</th>
+        <th style="${S.th} width:45%;">MALZEME</th>
+        <th style="${S.th} width:15%; text-align:center;">MİKTAR</th>
+        <th style="${S.th} width:15%; text-align:center;">BİRİM</th>
+        <th style="${S.th} width:20%; text-align:right;">BİRİM FİYAT</th>
       </tr></thead>
       <tbody>${materialRows}</tbody>
     </table>` : '';
@@ -187,6 +204,8 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     .contract-body h3 { page-break-after: avoid; break-after: avoid; page-break-inside: avoid; break-inside: avoid; }
     .contract-body tr { page-break-inside: avoid; break-inside: avoid; }
     .contract-no-break { page-break-inside: avoid; break-inside: avoid; }
+    /* Tablo taşmasını engelle */
+    table { width: 100%; table-layout: fixed; word-wrap: break-word; }
   </style>
 
   <div style="height: 247mm; display: flex; flex-direction: column; justify-content: space-between; padding: 30px 40px; page-break-after: always; overflow: hidden;">
@@ -235,33 +254,34 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     <p style="${S.p}">amacıyla, PestMENTOR tarafından "Onaylanmış Alanlarda" sunulacak Entegre Zararlı Mücadelesi (IPM) hizmetlerinin; teknik, idari, mali ve hukuki şartlarını ve tarafların karşılıklı yükümlülüklerini tanımlar.</p>
 
     <h3 style="${S.h2}">2.&nbsp;&nbsp;&nbsp;&nbsp;TARAFLAR</h3>
-    <table style="width:100%; font-size:9.5pt; margin-bottom:6px; border:none;">
-      <tr><td style="width:155px; font-weight:700; padding:2px 0;">HİZMET ALAN FİRMA</td><td style="padding:2px 0;">: <strong>${proposal.company_name.toUpperCase()}</strong></td></tr>
-      <tr><td style="font-weight:700; padding:2px 0;">ADRES</td><td style="padding:2px 0;">: ${proposal.customer_notes || ''}</td></tr>
-      <tr><td style="font-weight:700; padding:2px 0;">TELEFON</td><td style="padding:2px 0;">: ${proposal.contact_person || ''}</td></tr>
-      <tr><td style="font-weight:700; padding:2px 0;">E-POSTA</td><td style="padding:2px 0;">: ${proposal.recipient_email || ''}</td></tr>
+    <table style="width:100%; font-size:9.5pt; margin-bottom:6px; border:none; table-layout: auto;">
+      <tr><td style="width:155px; font-weight:700; padding:2px 0; border:none;">HİZMET ALAN FİRMA</td><td style="padding:2px 0; border:none;">: <strong>${proposal.company_name.toUpperCase()}</strong></td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">ADRES</td><td style="padding:2px 0; border:none;">: ${proposal.customer_notes || ''}</td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">TELEFON</td><td style="padding:2px 0; border:none;">: ${proposal.contact_person || ''}</td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">E-POSTA</td><td style="padding:2px 0; border:none;">: ${proposal.recipient_email || ''}</td></tr>
     </table>
     <p style="font-size:9pt; font-weight:700; margin:4px 0 12px 0;">SÖZLEŞME METNİNDE BUNDAN SONRA SADECE '' İŞVEREN '' OLARAK ANILACAKTIR.</p>
 
-    <table style="width:100%; font-size:9.5pt; margin-bottom:6px; border:none;">
-      <tr><td style="width:155px; font-weight:700; padding:2px 0;">HİZMET VEREN FİRMA</td><td style="padding:2px 0;">: <strong>${companyName} – PestMentor</strong></td></tr>
-      <tr><td style="font-weight:700; padding:2px 0;">ADRES</td><td style="padding:2px 0;">: ${settings?.address || ''}</td></tr>
-      <tr><td style="font-weight:700; padding:2px 0;">TELEFON</td><td style="padding:2px 0;">: ${settings?.phone || ''}</td></tr>
-      <tr><td style="font-weight:700; padding:2px 0;">E-POSTA</td><td style="padding:2px 0;">: ${settings?.email || ''}</td></tr>
-      <tr><td style="font-weight:700; padding:2px 0;">VERGİ NUMARASI</td><td style="padding:2px 0;">: 771 003 5611</td></tr>
-      <tr><td style="font-weight:700; padding:2px 0;">VERGİ DAİRESİ</td><td style="padding:2px 0;">: SETBAŞI</td></tr>
+    <table style="width:100%; font-size:9.5pt; margin-bottom:6px; border:none; table-layout: auto;">
+      <tr><td style="width:155px; font-weight:700; padding:2px 0; border:none;">HİZMET VEREN FİRMA</td><td style="padding:2px 0; border:none;">: <strong>${companyName} – PestMentor</strong></td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">ADRES</td><td style="padding:2px 0; border:none;">: ${settings?.address || ''}</td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">TELEFON</td><td style="padding:2px 0; border:none;">: ${settings?.phone || ''}</td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">E-POSTA</td><td style="padding:2px 0; border:none;">: ${settings?.email || ''}</td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">VERGİ NUMARASI</td><td style="padding:2px 0; border:none;">: 771 003 5611</td></tr>
+      <tr><td style="font-weight:700; padding:2px 0; border:none;">VERGİ DAİRESİ</td><td style="padding:2px 0; border:none;">: SETBAŞI</td></tr>
     </table>
     <p style="font-size:9pt; font-weight:700; margin:4px 0 12px 0;">SÖZLEŞME METNİNDE BUNDAN SONRA SADECE '' PestMENTOR '' OLARAK ANILACAKTIR.</p>
 
     <h3 style="${S.h2}">3.&nbsp;&nbsp;&nbsp;&nbsp;YAPILACAK İŞİN TANIMI</h3>
     <p style="${S.p}; margin-bottom:8px;">Yukarıda adresi belirtilen İŞVEREN işletmesinde aşağıda belirtilen zararlılara karşı yapılacak mücadelenin denetimi, engellenmesi ve yok edilmesi hizmetleridir.</p>
-    <table style="width:100%; border-collapse:collapse;">
+    
+    <table style="width:100%; border-collapse:collapse; table-layout: fixed;">
       <thead><tr>
-        <th style="${S.th}">HİZMET KATEGORİSİ</th>
-        <th style="${S.th}">ZARARLI TÜRÜ</th>
-        <th style="${S.th} width:15%;">PERİYODİK ZİYARET SIKLIĞI<br/>(YAZ AYLARI NİSAN-EYLÜL)</th>
-        <th style="${S.th} width:15%;">PERİYODİK ZİYARET SIKLIĞI<br/>(KIŞ AYLARI EKİM-MART)</th>
-        <th style="${S.th}">UYGULAMA<br/>ALAN(LAR)I</th>
+        <th style="${S.th} width: 20%;">HİZMET KATEGORİSİ</th>
+        <th style="${S.th} width: 30%;">ZARARLI TÜRÜ</th>
+        <th style="${S.th} width: 15%;">PERİYODİK ZİYARET SIKLIĞI<br/>(YAZ AYLARI NİSAN-EYLÜL)</th>
+        <th style="${S.th} width: 15%;">PERİYODİK ZİYARET SIKLIĞI<br/>(KIŞ AYLARI EKİM-MART)</th>
+        <th style="${S.th} width: 20%;">UYGULAMA<br/>ALAN(LAR)I</th>
       </tr></thead>
       <tbody>${serviceRows}</tbody>
     </table>
@@ -357,7 +377,7 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     <p style="${S.sub}"><strong>9.2.3.</strong> BU MADDE BOŞ BIRAKILMIŞTIR.</p>
     <p style="${S.sub}"><strong>9.2.4.</strong> Tüm ödemeler, PestMENTOR (${companyName}) adına açılmış aşağıdaki banka hesaplarına EFT/Havale yoluyla yapılır.</p>
 
-    <table style="width:100%; border-collapse:collapse; margin:8px 0;">
+    <table style="width:100%; border-collapse:collapse; margin:8px 0; table-layout: auto;">
       <thead><tr>
         <th style="${S.th}">BANKA ADI</th>
         <th style="${S.th}">ŞUBE ADI</th>
@@ -380,7 +400,7 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     <p style="${S.p}"><strong>10.2.</strong> Tarafların kanuni tebligat adresleri, sözleşmenin giriş bölümünde belirtilen adreslerdir.</p>
     <p style="${S.p}"><strong>10.3.</strong> Taraflar, adres değişikliklerini diğer tarafa yedi (7) gün içinde iadeli taahhütlü mektup, noter veya KEP (Kayıtlı Elektronik Posta) yoluyla bildirmekle yükümlüdür. Bu bildirimin yapılmaması halinde, sözleşmede belirtilen mevcut adreslere yapılan her türlü tebligat, yasal olarak geçerli bir tebligatın tüm hüküm ve sonuçlarını doğurur.</p>
 
-    <table style="width:100%; margin-top:30px; border-collapse:collapse;">
+    <table style="width:100%; margin-top:30px; border-collapse:collapse; table-layout: auto;">
       <tr>
         <td style="width:50%; text-align:center; vertical-align:top; padding:12px 15px; border:1px solid #333;">
           <strong style="font-size:10pt;">HİZMETİ VEREN (Hizmet Sağlayıcı)</strong><br/><br/>
