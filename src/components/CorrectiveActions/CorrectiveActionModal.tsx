@@ -153,24 +153,15 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
     responsible: '',
     dueDate: new Date().toISOString().split('T')[0],
     relatedStandard: '',
-    status: 'open'
+    status: 'open' as const
   });
 
   // --- EFFECTLER ---
   useEffect(() => {
-    if (isOpen) checkUserRole();
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (isOpen && operatorId) {
-      fetchCustomers();
-      fetchVisits();
-      if (visitId) {
-        setFormData(prev => ({ ...prev, visitId }));
-        setUseVisit(true);
-      }
+    if (isOpen) {
+        checkUserRoleAndFetchData();
     }
-  }, [isOpen, visitId, operatorId, assignedCustomers]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (formData.customerId) {
@@ -178,85 +169,105 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
     } else {
       setFilteredBranches([]);
     }
-  }, [formData.customerId, assignedBranches]);
+  }, [formData.customerId, branches]);
 
-  // --- YARDIMCI FONKSİYONLAR ---
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Fotoğraf boyutu 5MB\'dan küçük olmalıdır.');
-        return;
-      }
-      setSelectedImage(file);
-      const url = URL.createObjectURL(file);
-      setImagePreview(url);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setSelectedImage(null);
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-      setImagePreview(null);
-    }
-  };
-
-  const checkUserRole = async () => {
+  // --- VERİ ÇEKME FONKSİYONLARI ---
+  const checkUserRoleAndFetchData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Kullanıcı bulunamadı');
 
-      setIsAdmin(user.email === 'admin@ilaclamatik.com');
+      // Admin Kontrolü (Basit E-posta Kontrolü - Geliştirilebilir)
+      const isUserAdmin = user.email === 'admin@ilaclamatik.com'; // Veya user.role kontrolü
+      setIsAdmin(isUserAdmin);
 
+      // Operatör Bilgisi Çek
       const { data: operatorData } = await supabase
         .from('operators')
         .select('id, assigned_customers, assigned_branches')
         .eq('auth_id', user.id)
         .maybeSingle();
 
-      if (operatorData) {
-        setOperatorId(operatorData.id);
-        setAssignedCustomers(operatorData.assigned_customers);
-        setAssignedBranches(operatorData.assigned_branches);
+      const currentOperatorId = operatorData?.id || null;
+      setOperatorId(currentOperatorId);
+      
+      const assignedCust = operatorData?.assigned_customers || [];
+      setAssignedCustomers(assignedCust);
+      const assignedBr = operatorData?.assigned_branches || [];
+      setAssignedBranches(assignedBr);
+
+      // Verileri Çek (Paralel)
+      await Promise.all([
+          fetchCustomers(isUserAdmin, assignedCust),
+          fetchBranchesAll(), // Tüm şubeleri çek, sonra filtrele
+          fetchVisits(isUserAdmin, currentOperatorId, assignedCust)
+      ]);
+
+      if (visitId) {
+        setFormData(prev => ({ ...prev, visitId }));
+        setUseVisit(true);
       }
+
     } catch (err: any) {
-      console.error(err);
+      console.error("Veri yükleme hatası:", err);
+      setError("Veriler yüklenirken hata oluştu.");
     }
   };
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (isAdminUser: boolean, assignedCusts: string[]) => {
     try {
       let query = supabase.from('customers').select('id, kisa_isim').eq('is_active', true).order('kisa_isim');
-      if (!isAdmin && assignedCustomers?.length) query = query.in('id', assignedCustomers);
       
-      const { data } = await query;
+      // Eğer admin değilse ve atanmış müşteriler varsa filtrele
+      if (!isAdminUser && assignedCusts && assignedCusts.length > 0) {
+          query = query.in('id', assignedCusts);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
       setCustomers(data || []);
-
-      const { data: bData } = await supabase.from('branches').select('id, sube_adi, customer_id').order('sube_adi');
-      setBranches(bData || []);
     } catch (err) { console.error(err); }
   };
 
+  const fetchBranchesAll = async () => {
+      try {
+          const { data, error } = await supabase.from('branches').select('id, sube_adi, customer_id').order('sube_adi');
+          if (error) throw error;
+          setBranches(data || []);
+      } catch (err) { console.error(err); }
+  };
+
   const fetchBranches = (customerId: string) => {
+    // State'deki tüm şubelerden ilgili müşterininkileri filtrele
     const cBranches = branches.filter(b => b.customer_id === customerId);
-    if (!isAdmin && assignedBranches?.length) {
+    
+    if (!isAdmin && assignedBranches && assignedBranches.length > 0) {
       setFilteredBranches(cBranches.filter(b => assignedBranches.includes(b.id)));
     } else {
       setFilteredBranches(cBranches);
     }
   };
 
-  const fetchVisits = async () => {
-    if (!operatorId) return;
+  const fetchVisits = async (isAdminUser: boolean, opId: string | null, assignedCusts: string[]) => {
     try {
       let query = supabase.from('visits')
         .select(`id, visit_date, customer:customer_id (kisa_isim), branch:branch_id (sube_adi)`)
-        .eq('operator_id', operatorId)
-        .order('visit_date', { ascending: false });
+        .order('visit_date', { ascending: false })
+        .limit(100); // Son 100 ziyaret (Performans için)
 
-      if (!isAdmin && assignedCustomers?.length) query = query.in('customer_id', assignedCustomers);
-      const { data } = await query;
+      // Eğer admin değilse sadece kendi veya atandığı müşterilerin ziyaretlerini görsün
+      if (!isAdminUser) {
+          if (opId) {
+             // Operatör ise kendi ziyaretleri VEYA atandığı müşterilerin ziyaretleri
+             // Basitlik için operatör ID'ye göre filtreleyelim
+             query = query.eq('operator_id', opId);
+          } else if (assignedCusts.length > 0) {
+              query = query.in('customer_id', assignedCusts);
+          }
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
       setVisits(data || []);
     } catch (err) { console.error(err); }
   };
@@ -355,6 +366,28 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
     setSuccess(false); setError(null); setUseVisit(!!visitId);
     setCustomEmail('');
     handleRemoveImage();
+  };
+
+  // --- YARDIMCI FONKSİYONLAR ---
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Fotoğraf boyutu 5MB\'dan küçük olmalıdır.');
+        return;
+      }
+      setSelectedImage(file);
+      const url = URL.createObjectURL(file);
+      setImagePreview(url);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+      setImagePreview(null);
+    }
   };
 
   // --- ŞABLON BUTONU RENDER ---
@@ -483,7 +516,7 @@ const CorrectiveActionModal: React.FC<CorrectiveActionModalProps> = ({
               </div>
             )}
 
-            {/* Uygunsuzluk Tipi - GÜNCELLENDİ */}
+            {/* Uygunsuzluk Tipi */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Uygunsuzluk Tipi / Kategori</label>
               <select
