@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { localAuth } from '../lib/localAuth';
-import { AlertCircle, Search, Filter, Download, CheckCircle, Clock, X, Image as ImageIcon, ExternalLink } from 'lucide-react';
+import { AlertCircle, Search, Filter, Download, CheckCircle, Clock, X, Image as ImageIcon, ExternalLink, Trash2 } from 'lucide-react';
 import CorrectiveActionModal from '../components/CorrectiveActions/CorrectiveActionModal';
 import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 
 interface CorrectiveAction {
   id: string;
@@ -25,7 +26,7 @@ interface CorrectiveAction {
   related_standard: string;
   status: 'open' | 'in_progress' | 'completed' | 'verified';
   created_at: string;
-  photo_url: string | null; // Yeni eklenen alan
+  photo_url: string | null;
 }
 
 const CorrectiveActions: React.FC = () => {
@@ -40,6 +41,10 @@ const CorrectiveActions: React.FC = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [showActionModal, setShowActionModal] = useState(false);
   const [selectedAction, setSelectedAction] = useState<CorrectiveAction | null>(null);
+  
+  // YENİ: Silme işlemi için state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [actionToDelete, setActionToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetchActions();
@@ -129,9 +134,38 @@ const CorrectiveActions: React.FC = () => {
       if (error) throw error;
       
       fetchActions();
+      toast.success("Durum güncellendi.");
     } catch (err: any) {
       setError(err.message);
+      toast.error("Hata: " + err.message);
     }
+  };
+
+  // YENİ: DÖF Silme Fonksiyonu
+  const handleDeleteAction = async () => {
+    if (!actionToDelete) return;
+    
+    try {
+        const { error } = await supabase
+            .from('corrective_actions')
+            .delete()
+            .eq('id', actionToDelete);
+
+        if (error) throw error;
+
+        setActions(prev => prev.filter(a => a.id !== actionToDelete));
+        toast.success("Düzeltici faaliyet başarıyla silindi.");
+        setShowDeleteConfirm(false);
+        setActionToDelete(null);
+        setSelectedAction(null); // Detay modalı açıksa kapat
+    } catch (err: any) {
+        toast.error("Silme hatası: " + err.message);
+    }
+  };
+
+  const confirmDelete = (id: string) => {
+      setActionToDelete(id);
+      setShowDeleteConfirm(true);
   };
 
   const getStatusBadge = (status: string) => {
@@ -157,7 +191,7 @@ const CorrectiveActions: React.FC = () => {
       'kemirgen': { label: 'Kemirgen', color: 'bg-gray-100 text-gray-800' },
       'yuruyen': { label: 'Yürüyen Haşere', color: 'bg-amber-100 text-amber-800' },
       'uckun': { label: 'Uçkun Haşere', color: 'bg-sky-100 text-sky-800' },
-      'ambar': { label: 'Ambar Zararlısı', color: 'bg-brown-100 text-brown-800' }, // Custom color class might need Tailwind config
+      'ambar': { label: 'Ambar Zararlısı', color: 'bg-stone-100 text-stone-800' },
       'surungen': { label: 'Sürüngen', color: 'bg-emerald-100 text-emerald-800' },
       'yapisal': { label: 'Yapısal', color: 'bg-slate-100 text-slate-800' },
       'hijyen': { label: 'Hijyen', color: 'bg-teal-100 text-teal-800' },
@@ -389,6 +423,14 @@ const CorrectiveActions: React.FC = () => {
                         {action.status === 'in_progress' && (
                           <button onClick={() => handleUpdateStatus(action.id, 'completed')} className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-xs">Tamamla</button>
                         )}
+                        {/* YENİ: SİLME BUTONU */}
+                        <button
+                          onClick={() => confirmDelete(action.id)}
+                          className="px-2 py-1 text-red-600 hover:bg-red-50 rounded"
+                          title="Sil"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -439,6 +481,12 @@ const CorrectiveActions: React.FC = () => {
                   {action.status === 'in_progress' && (
                     <button onClick={() => handleUpdateStatus(action.id, 'completed')} className="flex-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm text-center">Tamamla</button>
                   )}
+                  <button
+                     onClick={() => confirmDelete(action.id)}
+                     className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
+                  >
+                     <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))
@@ -483,7 +531,7 @@ const CorrectiveActions: React.FC = () => {
                 </div>
               </div>
 
-              {/* FOTOĞRAF ALANI (YENİ) */}
+              {/* FOTOĞRAF ALANI */}
               {selectedAction.photo_url && (
                 <div>
                   <h3 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
@@ -555,28 +603,52 @@ const CorrectiveActions: React.FC = () => {
 
             </div>
 
-            <div className="p-5 border-t bg-gray-50 flex justify-end gap-3 sticky bottom-0">
-              <button
-                onClick={() => setSelectedAction(null)}
-                className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm shadow-sm"
-              >
-                Kapat
-              </button>
-              {selectedAction.status !== 'verified' && (
-                <button
-                  onClick={() => {
-                    const nextStatus = selectedAction.status === 'open' ? 'in_progress' : 
-                                     selectedAction.status === 'in_progress' ? 'completed' : 'verified';
-                    handleUpdateStatus(selectedAction.id, nextStatus);
-                    setSelectedAction(null);
-                  }}
-                  className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm shadow-md"
-                >
-                  Sonraki Aşamaya Geç
-                </button>
-              )}
+            <div className="p-5 border-t bg-gray-50 flex justify-between items-center sticky bottom-0">
+               {/* YENİ: Modal içinden silme butonu */}
+               <button 
+                onClick={() => confirmDelete(selectedAction.id)}
+                className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-1"
+               >
+                 <Trash2 size={16} /> Sil
+               </button>
+
+               <div className="flex gap-3">
+                  <button
+                    onClick={() => setSelectedAction(null)}
+                    className="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm shadow-sm"
+                  >
+                    Kapat
+                  </button>
+                  {selectedAction.status !== 'verified' && (
+                    <button
+                      onClick={() => {
+                        const nextStatus = selectedAction.status === 'open' ? 'in_progress' : 
+                                         selectedAction.status === 'in_progress' ? 'completed' : 'verified';
+                        handleUpdateStatus(selectedAction.id, nextStatus);
+                        setSelectedAction(null);
+                      }}
+                      className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm shadow-md"
+                    >
+                      Sonraki Aşamaya Geç
+                    </button>
+                  )}
+               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* SİLME ONAY MODALI */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                <h3 className="font-bold text-lg mb-2 text-red-600">DÖF Kaydını Sil</h3>
+                <p className="text-gray-600 mb-6">Bu düzeltici faaliyeti silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+                <div className="flex justify-end gap-3">
+                    <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 border rounded hover:bg-gray-50 text-sm">İptal</button>
+                    <button onClick={handleDeleteAction} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Evet, Sil</button>
+                </div>
+            </div>
         </div>
       )}
     </div>
