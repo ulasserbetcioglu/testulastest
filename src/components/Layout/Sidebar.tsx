@@ -45,6 +45,8 @@ const menuCategories = [
       { name: 'Veri Girişi', path: '/admin/visit-data-entry', icon: <CheckSquare size={18} /> },
       { name: 'Lokasyonlar', path: '/sube-lokasyon', icon: <MapPin size={18} /> },
       { name: 'Raporlar', path: '/admin/ziyaret-raporlari', icon: <ImageIcon size={18} /> },
+      { name: 'DÖF', path: '/dof', icon: <ImageIcon size={18} /> },
+
     ]
   },
   {
