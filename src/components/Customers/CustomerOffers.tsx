@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, FileText, Eye, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { localAuth } from '../../lib/localAuth'; // Rol kontrolü için ekledik
 
 interface CustomerOffersProps {
   customerId: string;
@@ -20,9 +21,26 @@ const CustomerOffers: React.FC<CustomerOffersProps> = ({ customerId }) => {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // YENİ: Kullanıcı yetki kontrolü
+  const [canCreate, setCanCreate] = useState(false);
+  
   const navigate = useNavigate();
 
   useEffect(() => {
+    // 1. Rol Kontrolü (Buton görünürlüğü için)
+    const checkPermission = () => {
+        const session = localAuth.getSession();
+        // Sadece admin ve operatörler yeni teklif oluşturabilir
+        if (session && (session.type === 'admin' || session.type === 'operator')) {
+            setCanCreate(true);
+        } else {
+            setCanCreate(false);
+        }
+    };
+
+    checkPermission();
+
     if (customerId) {
       fetchProposals();
     }
@@ -31,15 +49,38 @@ const CustomerOffers: React.FC<CustomerOffersProps> = ({ customerId }) => {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      // proposals tablosundan bu müşteriye ait kayıtları çekiyoruz
-      const { data, error } = await supabase
+
+      // A. Önce Müşterinin E-postasını bulalım
+      const { data: customerData, error: custError } = await supabase
+        .from('customers')
+        .select('email')
+        .eq('id', customerId)
+        .single();
+
+      if (custError) throw custError;
+      
+      const customerEmail = customerData?.email;
+
+      // B. Teklifleri Çek (Hem ID'ye hem E-postaya göre)
+      // Müşteri ID'si eşleşen VEYA Alıcı E-postası eşleşen teklifleri getir
+      let query = supabase
         .from('proposals')
         .select('*')
-        .eq('customer_id', customerId) // Müşteri ID'sine göre filtrele
         .order('created_at', { ascending: false });
+
+      if (customerEmail) {
+          // Eğer müşterinin e-postası varsa, ID veya Email eşleşmesine bak
+          query = query.or(`customer_id.eq.${customerId},recipient_email.eq.${customerEmail}`);
+      } else {
+          // E-posta yoksa sadece ID'ye bak
+          query = query.eq('customer_id', customerId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setProposals(data || []);
+
     } catch (err: any) {
       console.error('Teklifler çekilirken hata:', err);
       setError(err.message);
@@ -72,12 +113,10 @@ const CustomerOffers: React.FC<CustomerOffersProps> = ({ customerId }) => {
   };
 
   const handleNavigateToProposal = (id: string) => {
-    // Erişim kodu ile korunan detay sayfasına yönlendir
     navigate(`/teklif-goruntule/${id}`);
   };
 
   const handleCreateNewProposal = () => {
-     // Admin paneline yönlendirir veya modal açar
      navigate('/hizmet-pazarlama'); 
   };
 
@@ -88,14 +127,17 @@ const CustomerOffers: React.FC<CustomerOffersProps> = ({ customerId }) => {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold text-gray-800">Teklif Geçmişi</h2>
-        {/* Sadece yetkili personel yeni teklif oluşturabilir, burayı role göre gizleyebilirsiniz */}
-        <button 
-          onClick={handleCreateNewProposal}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium"
-        >
-          <Plus size={16} />
-          Yeni Teklif Oluştur
-        </button>
+        
+        {/* YENİ: Sadece yetkili personel (Admin/Operatör) bu butonu görür */}
+        {canCreate && (
+            <button 
+            onClick={handleCreateNewProposal}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium"
+            >
+            <Plus size={16} />
+            Yeni Teklif Oluştur
+            </button>
+        )}
       </div>
 
       {proposals.length === 0 ? (
