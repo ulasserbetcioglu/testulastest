@@ -262,6 +262,23 @@ const HizmetPazarlama: React.FC = () => {
         </div>
     ` : '';
 
+    // YENİ: Ziyaret Sıklığı Bilgisi
+    const visitFrequencySection = `
+        <div style="margin: 20px 0; padding: 15px; background-color: #f0f9ff; border: 1px solid #93c5fd; border-radius: 6px;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; color: #1e40af;">PERİYODİK ZİYARET SIKLIĞI:</p>
+            <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+                <div style="text-align: center;">
+                    <span style="font-size: 11px; color: #64748b;">☀️ Yaz Ayları (Nisan-Eylül)</span><br/>
+                    <span style="font-size: 16px; font-weight: bold; color: #2563eb;">${summerVisitFrequency} ziyaret/ay</span>
+                </div>
+                <div style="text-align: center;">
+                    <span style="font-size: 11px; color: #64748b;">❄️ Kış Ayları (Ekim-Mart)</span><br/>
+                    <span style="font-size: 16px; font-weight: bold; color: #2563eb;">${winterVisitFrequency} ziyaret/ay</span>
+                </div>
+            </div>
+        </div>
+    `;
+
     return `
       <!DOCTYPE html><html><head><style>body{font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333; line-height: 1.6;}.container{max-width:700px;margin:auto;border:1px solid #e5e7eb; border-radius: 8px; overflow: hidden;}.header{background-color:#1e293b;color:white;padding:20px;text-align:center}.content{padding:30px}table{width:100%;border-collapse:collapse}th{background-color:#f8fafc;text-align:left;padding:12px;font-size:12px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;}</style></head><body>
       <div class="container">
@@ -281,6 +298,7 @@ const HizmetPazarlama: React.FC = () => {
                 <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: bold; color: #1e40af;">UYGULAMA KAPSAMI:</p>
                 <div>${scopeListHtml}</div>
             </div>
+            ${visitFrequencySection}
 
             <table style="margin-top:20px;margin-bottom:20px">
                 <thead><tr><th style="width:60px"></th><th>Açıklama</th><th style="text-align:center">Miktar/Kapsam</th><th style="text-align:right">Birim Fiyat</th></tr></thead>
