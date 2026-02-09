@@ -69,6 +69,7 @@ const menuCategories = [
     title: 'RAPORLAMA',
     items: [
       { name: 'Cari Satış', path: '/cari-satis-raporu', icon: <BarChart2 size={18} /> },
+      { name: 'Yıllık Cari Satış', path: '/admin/yillik-rapor', icon: <BarChart2 size={18} /> },
       { name: 'Kar/Zarar', path: '/yillik-kar-zarar', icon: <TrendingUp size={18} /> },
       { name: 'Karlılık', path: '/karlilik-analizi', icon: <DollarSign size={18} /> },
       { name: 'Trendler', path: '/trend-analizi', icon: <TrendingUp size={18} /> },
