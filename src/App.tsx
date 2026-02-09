@@ -394,6 +394,7 @@ function App() {
             <Route path="yeni-trend-analizi" element={<TrendAnalysis branchId={undefined} />} />
             <Route path="admin/simulator" element={<AdminDataSimulator />} />
             <Route path="admin/yillik-rapor" element={<AnnualVisitReport />} />
+            <Route path="dof" element={<CorrectiveActions />} />
             <Route path="egitim-sunumlari" element={<TrainingPresentationPage />} />
 
             <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
