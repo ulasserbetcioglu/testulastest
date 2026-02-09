@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MoreVertical, Plus, Search, Filter, CheckCircle, Clock, XCircle, Edit, Trash2, AlertTriangle, FileText, FileImage, Loader2, Eye, Key, Copy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { localAuth } from '../lib/localAuth'; // Yetki kontrolü
+import { localAuth } from '../lib/localAuth';
 import { toast } from 'sonner';
 
 // --- ARAYÜZLER (INTERFACES) ---
 interface Proposal {
   id: string;
   proposal_number: string;
-  access_password: string; // EKLENDİ: Erişim Kodu
+  access_password: string;
   customer_id: string;
+  recipient_email: string; // E-posta kontrolü için gerekli
   customer: {
     kisa_isim: string;
     cari_isim?: string;
@@ -62,10 +63,9 @@ const OffersPage: React.FC = () => {
     const checkUser = async () => {
         const session = localAuth.getSession();
         if (session) {
-            setUserRole(session.type); // 'admin', 'operator', 'customer'
+            setUserRole(session.type); 
             setCurrentUserId(session.id);
         } else {
-            // Supabase auth fallback (Admin paneli girişi için)
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 if (user.email === 'admin@ilaclamatik.com') setUserRole('admin');
@@ -75,7 +75,6 @@ const OffersPage: React.FC = () => {
     };
     checkUser();
 
-    // Dışarı tıklandığında menüyü kapat
     const handleClickOutside = () => setOpenMenuId(null);
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
@@ -86,40 +85,63 @@ const OffersPage: React.FC = () => {
     const fetchProposals = async () => {
         setLoading(true);
 
-        // access_password alanını da çekiyoruz
-        let query = supabase
-            .from('proposals')
-            .select(`*, customer:customer_id(kisa_isim, cari_isim, email), proposal_items(*)`)
-            .order('created_at', { ascending: false });
+        try {
+            let query = supabase
+                .from('proposals')
+                .select(`*, customer:customer_id(kisa_isim, cari_isim, email), proposal_items(*)`)
+                .order('created_at', { ascending: false });
 
-        // --- GÜVENLİK FİLTRESİ ---
-        // Eğer giren kişi MÜŞTERİ ise, sadece KENDİ tekliflerini görsün
-        if (userRole === 'customer' && currentUserId) {
-            query = query.eq('customer_id', currentUserId);
+            // --- GÜVENLİK FİLTRESİ (DÜZELTİLDİ) ---
+            if (userRole === 'customer' && currentUserId) {
+                // 1. Adım: Önce bu müşterinin e-posta adresini bulalım
+                const { data: customerData } = await supabase
+                    .from('customers')
+                    .select('email')
+                    .eq('id', currentUserId)
+                    .single();
+                
+                const customerEmail = customerData?.email;
+
+                if (customerEmail) {
+                    // ID'si eşleşen VEYA E-postası eşleşen teklifleri getir
+                    // Not: Supabase 'or' filtresi string içinde virgülle ayrılır
+                    query = query.or(`customer_id.eq.${currentUserId},recipient_email.eq.${customerEmail}`);
+                } else {
+                    // E-posta bulunamadıysa sadece ID'ye bak
+                    query = query.eq('customer_id', currentUserId);
+                }
+            }
+            // ---------------------------------------
+
+            // Durum filtresi
+            if (statusFilter) {
+                query = query.eq('status', statusFilter);
+            }
+
+            // Arama filtresi
+            if (searchTerm.trim()) {
+                query = query.or(`proposal_number.ilike.%${searchTerm.trim()}%,company_name.ilike.%${searchTerm.trim()}%`);
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                console.error('Veri çekme hatası:', error);
+                // Hata olsa bile boş dizi ile devam et, UI çökmesin
+                setProposals([]);
+                toast.error("Teklifler alınırken bir sorun oluştu.");
+            } else {
+                setProposals(data as any || []);
+            }
+        } catch (err: any) {
+            console.error('Beklenmeyen hata:', err);
+            setProposals([]);
+        } finally {
+            setLoading(false);
         }
-        // --------------------------
-
-        // Durum filtresi
-        if (statusFilter) {
-            query = query.eq('status', statusFilter);
-        }
-
-        // Arama filtresi
-        if (searchTerm.trim()) {
-            query = query.or(`proposal_number.ilike.%${searchTerm.trim()}%,company_name.ilike.%${searchTerm.trim()}%`);
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-            toast.error(`Teklifler yüklenirken hata: ${error.message}`);
-        } else {
-            setProposals(data as any || []);
-        }
-        setLoading(false);
     };
 
-    // Role belli olduktan sonra çek (Veya session yoksa direkt çekmeyi dene)
+    // Role belli olduktan veya session yoksa çalıştır
     if (userRole !== null || !localAuth.getSession()) {
          fetchProposals();
     }
@@ -152,7 +174,6 @@ const OffersPage: React.FC = () => {
   };
 
   // --- YETKİ KONTROLÜ ---
-  // Personel: Admin veya Operatör (Düzenleme/Silme/Oluşturma yapabilir)
   const isStaff = userRole === 'admin' || userRole === 'operator';
 
   return (
@@ -214,7 +235,7 @@ const OffersPage: React.FC = () => {
                 <div className="md:col-span-4">
                   <div className="flex items-center gap-2 mb-1">
                       <span className="font-semibold text-green-700 text-sm">#{proposal.proposal_number}</span>
-                      {/* ERİŞİM KODU GÖSTERİMİ */}
+                      {/* ERİŞİM KODU: Şifre */}
                       <span className="inline-flex items-center gap-1 bg-gray-100 px-2 py-0.5 rounded text-[10px] text-gray-600 font-mono border border-gray-200" title="Erişim Kodu">
                           <Key size={10} /> {proposal.access_password}
                           <button onClick={() => copyToClipboard(proposal.access_password)} className="hover:text-blue-600 ml-1"><Copy size={10}/></button>
