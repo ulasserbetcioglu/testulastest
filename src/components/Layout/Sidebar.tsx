@@ -18,8 +18,6 @@ const menuCategories = [
     title: 'ANA MENÜ',
     items: [
       { name: 'Panel', path: '/admin', icon: <Home size={18} /> },
-      { name: 'Modüller', path: '/modules', icon: <Grid size={18} /> },
-      { name: 'Hızlı Notlar', path: '/hizli-notlar', icon: <NotebookPen size={18} /> },
     ]
   },
   {
