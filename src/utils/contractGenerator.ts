@@ -48,35 +48,68 @@ function getPestsString(pests: string[] | string | null): string {
   if (Array.isArray(pests)) {
     pestList = pests;
   } else if (typeof pests === 'string') {
-    if (pests.startsWith('[') && pests.endsWith(']')) {
-        try {
-            const parsed = JSON.parse(pests);
-            if (Array.isArray(parsed)) pestList = parsed;
-        } catch (e) {
-            pestList = pests.replace(/[\[\]"]/g, '').split(',');
-        }
-    } else {
-        pestList = pests.split(',');
+    // PostgreSQL array formatı: {item1,item2}
+    if (pests.startsWith('{') && pests.endsWith('}')) {
+      const cleaned = pests.slice(1, -1);
+      pestList = cleaned.split(',').map(p => p.trim());
+    }
+    // JSON array formatı: ["item1","item2"]
+    else if (pests.startsWith('[') && pests.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(pests);
+        if (Array.isArray(parsed)) pestList = parsed;
+      } catch (e) {
+        pestList = pests.replace(/[\[\]"]/g, '').split(',');
+      }
+    }
+    // Virgülle ayrılmış
+    else {
+      pestList = pests.split(',');
     }
   }
 
-  return pestList.map(p => p.trim()).filter(Boolean).join(', ');
+  return pestList.map(p => p.trim()).filter(Boolean).join(', ') || 'Genel Haşere ve Kemirgen';
 }
 
 function numberToTurkishWords(n: number): string {
   if (n === 0) return 'SIFIR';
+  if (isNaN(n) || !isFinite(n)) return 'GEÇERSIZ';
+  
+  const num = Math.floor(n);
   const units = ['', 'BİR', 'İKİ', 'ÜÇ', 'DÖRT', 'BEŞ', 'ALTI', 'YEDİ', 'SEKİZ', 'DOKUZ'];
   const tens = ['', 'ON', 'YİRMİ', 'OTUZ', 'KIRK', 'ELLİ', 'ALTMIŞ', 'YETMİŞ', 'SEKSEN', 'DOKSAN'];
+  const hundreds = ['', 'YÜZ', 'İKİYÜZ', 'ÜÇYÜZ', 'DÖRTYÜZ', 'BEŞYÜZ', 'ALTYÜZ', 'YEDİYÜZ', 'SEKİZYÜZ', 'DOKUZYÜZ'];
+  
   let result = '';
-  const thousands = Math.floor(n / 1000);
-  const hundreds = Math.floor((n % 1000) / 100);
-  const tensD = Math.floor((n % 100) / 10);
-  const unitsD = n % 10;
-  if (thousands > 0) result += (thousands === 1 ? '' : units[thousands] + ' ') + 'BİN ';
-  if (hundreds > 0) result += (hundreds === 1 ? '' : units[hundreds] + ' ') + 'YÜZ ';
-  if (tensD > 0) result += tens[tensD] + ' ';
-  if (unitsD > 0) result += units[unitsD] + ' ';
-  return result.trim();
+  
+  // Binler
+  const thousands = Math.floor(num / 1000);
+  if (thousands > 0) {
+    if (thousands > 1) {
+      result += units[thousands] + ' ';
+    }
+    result += 'BİN ';
+  }
+  
+  // Yüzler
+  const hundredsDigit = Math.floor((num % 1000) / 100);
+  if (hundredsDigit > 0) {
+    result += hundreds[hundredsDigit] + ' ';
+  }
+  
+  // Onlar
+  const tensDigit = Math.floor((num % 100) / 10);
+  if (tensDigit > 0) {
+    result += tens[tensDigit] + ' ';
+  }
+  
+  // Birler
+  const unitsDigit = num % 10;
+  if (unitsDigit > 0) {
+    result += units[unitsDigit] + ' ';
+  }
+  
+  return result.trim() || 'SIFIR';
 }
 
 function formatTL(amount: number): string {
@@ -255,19 +288,37 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
     <h3 style="${S.h2}">4. SÖZLEŞME SÜRESİ</h3>
     <p style="${S.p}">Sözleşme <strong>${startDate}</strong> tarihinde başlar ve <strong>${endDate}</strong> tarihinde sona erer. Taraflardan herhangi birinin 30 gün önceden yazılı fesih bildirimi yapmaması halinde otomatik olarak 1 yıl uzar.</p>
 
-    <h3 style="${S.h2}">5. MALİ HÜKÜMLER</h3>
-    <p style="${S.sub}"><strong>5.1. Hizmet Bedeli: <u>${formatTL(perVisitTotal)}.-TL+KDV/SEFER (${amountWords} + KDV/SEFER)</u></strong></p>
+    <h3 style="${S.h2}">5. YETKILER VE SORUMLULUKLAR</h3>
+    <p style="${S.p}"><strong>5.1. PestMENTOR:</strong> Ruhsatlı ürün kullanma, uygulama stratejisi belirleme ve raporlama yetkisine sahiptir.</p>
+    <p style="${S.p}"><strong>5.2. İŞVEREN:</strong> Çalışma alanlarını hazırlama, yeni aktiviteleri bildirme ve düzeltici faaliyetleri yerine getirme yükümlülüğü vardır.</p>
+
+    <h3 style="${S.h2}">6. MÜCBİR SEBEPLER</h3>
+    <p style="${S.p}">Tarafların kontrolü dışındaki olaylar (doğal afet, salgın, savaş vb.) mücbir sebep sayılır ve yükümlülükler askıya alınır.</p>
+
+    <h3 style="${S.h2}">7. UYUŞMAZLIKLARIN ÇÖZÜMÜ</h3>
+    <p style="${S.p}">Sözleşmeden doğan uyuşmazlıklarda Bursa Mahkemeleri ve İcra Daireleri yetkilidir.</p>
+
+    <h3 style="${S.h2}">8. MALİ YÜKÜMLÜLÜKLER</h3>
+    <p style="${S.p}">Damga Vergisi PestMENTOR tarafından beyan edilip ödenecektir.</p>
+
+    <h3 style="${S.h2}">9. MALİ HÜKÜMLER (FİYATLANDIRMA VE ÖDEME)</h3>
+    <p style="${S.subTitle}"><strong>9.1. Hizmet Bedeli</strong></p>
+    <p style="${S.p}">İşbu sözleşmenin 3. Bölümünde tanımlanan hizmetler için uygulanacak fiyatlandırma aşağıdaki gibidir.</p>
+
+    <p style="${S.sub}"><strong>9.1.1. Periyodik (Plana Dahil) Hizmet Bedeli: <u>${formatTL(perVisitTotal)}.-TL+KDV/SEFER (${amountWords} + KDV/SEFER)</u></strong></p>
     
     ${serviceItemsTable}
     ${materialSection}
 
-    <p style="${S.subTitle}"><strong>5.2. Ödeme Koşulları</strong></p>
-    <p style="${S.sub}">Faturalar hizmet ayının ilk 25 iş günü içinde düzenlenir ve 30 gün içinde ödenir.</p>
+    <p style="${S.subTitle}"><strong>9.2. Faturalandırma ve Ödeme Koşulları</strong></p>
+    <p style="${S.sub}"><strong>9.2.1.</strong> Periyodik hizmet bedeli, ilgili hizmet ayının ilk yirmi beş (25) iş günü içinde faturalandırılır.</p>
+    <p style="${S.sub}"><strong>9.2.2.</strong> İŞVEREN, faturanın kendisine tebliğ edildiği tarihi takip eden otuz (30) gün içerisinde ödemeyi yapmakla yükümlüdür.</p>
+    <p style="${S.sub}"><strong>9.2.3.</strong> Tüm ödemeler, PestMENTOR (${companyName}) adına açılmış aşağıdaki banka hesaplarına EFT/Havale yoluyla yapılır.</p>
 
-    <table style="width:100%; border-collapse:collapse; margin:8px 0;">
+    <table style="width:100%; border-collapse:collapse; margin:8px 0; table-layout: auto;">
       <thead><tr>
-        <th style="${S.th}">BANKA</th>
-        <th style="${S.th}">ŞUBE</th>
+        <th style="${S.th}">BANKA ADI</th>
+        <th style="${S.th}">ŞUBE ADI</th>
         <th style="${S.th}">HESAP NO</th>
         <th style="${S.th}">IBAN</th>
       </tr></thead>
@@ -281,13 +332,16 @@ export function generateContractHtml({ proposal, settings, contractNumber, start
       </tbody>
     </table>
 
-    <h3 style="${S.h2}">6. YETKILER VE SORUMLULUKLAR</h3>
+    <div style="page-break-inside: avoid; margin-top:30px;">
+    <h3 style="${S.h2}">10. HÜKÜMLER VE TEBLİGAT</h3>
     <p style="${S.p}"><strong>6.1. PestMENTOR:</strong> Ruhsatlı ürün kullanma, uygulama stratejisi belirleme ve raporlama yetkisine sahiptir.</p>
     <p style="${S.p}"><strong>6.2. İŞVEREN:</strong> Çalışma alanlarını hazırlama, yeni aktiviteleri bildirme ve düzeltici faaliyetleri yerine getirme yükümlülüğü vardır.</p>
 
     <div style="page-break-inside: avoid; margin-top:30px;">
-    <h3 style="${S.h2}">7. HÜKÜMLER</h3>
-    <p style="${S.p}">İşbu sözleşme ${startDate} tarihinde imzalanmış ve 2 nüsha olarak düzenlenmiştir.</p>
+    <h3 style="${S.h2}">10. HÜKÜMLER VE TEBLİGAT</h3>
+    <p style="${S.p}"><strong>10.1.</strong> İşbu sözleşme 10 (ON) madde olarak ${startDate} tarihinde imzalanmış ve 2 (iki) nüsha olarak düzenlenmiştir.</p>
+    <p style="${S.p}"><strong>10.2.</strong> Tarafların kanuni tebligat adresleri, sözleşmenin 2. maddesinde belirtilen adreslerdir.</p>
+    <p style="${S.p}"><strong>10.3.</strong> Adres değişiklikleri 7 gün içinde diğer tarafa bildirilmelidir.</p>
 
     <table style="width:100%; margin-top:30px; border-collapse:collapse;">
       <tr>
