@@ -59,6 +59,10 @@ const Sozlesmeler: React.FC = () => {
   const [editMode, setEditMode] = useState<'form' | 'fulltext'>('form');
   const [fullTextHtml, setFullTextHtml] = useState('');
 
+  // YENİ: Ziyaret sıklıkları
+  const [summerFreq, setSummerFreq] = useState(1);
+  const [winterFreq, setWinterFreq] = useState(1);
+
   const printRef = useRef<HTMLDivElement>(null);
   const fullTextRef = useRef<HTMLDivElement>(null);
 
@@ -164,6 +168,8 @@ const Sozlesmeler: React.FC = () => {
     });
     setEditMode('form');
     setFullTextHtml(contract.content || '');
+    setSummerFreq(1);
+    setWinterFreq(1);
     setShowEditModal(true);
     setEditLoadingItems(true);
 
@@ -278,6 +284,8 @@ const Sozlesmeler: React.FC = () => {
           application_area: editFormData.application_area || '',
           customer_notes: null,
           included_pests: pestsFromItems ? pestsFromItems.split(', ') : [],
+          summer_visit_frequency: summerFreq,
+          winter_visit_frequency: winterFreq,
           proposal_items: editServiceItems.map(item => ({
             service_name: item.service_name,
             service_description: item.service_description,
@@ -435,6 +443,7 @@ const Sozlesmeler: React.FC = () => {
         </div>
       </div>
 
+      {/* VIEW MODAL */}
       {showViewModal && selectedContract && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl">
@@ -461,6 +470,7 @@ const Sozlesmeler: React.FC = () => {
         </div>
       )}
 
+      {/* EDIT MODAL */}
       {showEditModal && editFormData && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[95vh]">
@@ -526,6 +536,18 @@ const Sozlesmeler: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Bitiş Tarihi</label>
                     <input type="date" value={editFormData.end_date ? format(new Date(editFormData.end_date), 'yyyy-MM-dd') : ''} onChange={e => setEditFormData({ ...editFormData, end_date: e.target.value })} className="w-full p-2 border rounded-lg" />
+                  </div>
+                </div>
+
+                {/* YENİ: Ziyaret Sıklığı */}
+                <div className="grid grid-cols-2 gap-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">☀️ Yaz Ayları Ziyaret/Ay</label>
+                    <input type="number" value={summerFreq} onChange={e => setSummerFreq(parseInt(e.target.value) || 1)} className="w-full p-2 border rounded-lg text-center" min="1" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">❄️ Kış Ayları Ziyaret/Ay</label>
+                    <input type="number" value={winterFreq} onChange={e => setWinterFreq(parseInt(e.target.value) || 1)} className="w-full p-2 border rounded-lg text-center" min="1" />
                   </div>
                 </div>
 
