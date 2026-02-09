@@ -129,6 +129,10 @@ const TeklifGoruntule: React.FC = () => {
 
             if (error) throw error;
             
+            console.log('Proposal Data:', data);
+            console.log('Included Pests:', data.included_pests);
+            console.log('Type:', typeof data.included_pests);
+            
             setProposal(data as Proposal);
             setNotes(data.customer_notes || '');
             setIsAuthenticated(true);
@@ -292,12 +296,41 @@ ${contractRef.current.innerHTML}
     };
 
     const getPestsArray = (pests: string[] | string | null): string[] => {
+        console.log('getPestsArray input:', pests, 'type:', typeof pests);
+        
+        if (!pests) return [];
+        
         if (Array.isArray(pests)) {
+            console.log('Already array:', pests);
             return pests;
         }
+        
         if (typeof pests === 'string') {
-            return pests.split(',').map(p => p.trim()).filter(Boolean);
+            // PostgreSQL array formatı: {item1,item2}
+            if (pests.startsWith('{') && pests.endsWith('}')) {
+                const cleaned = pests.slice(1, -1);
+                const result = cleaned.split(',').map(p => p.trim()).filter(Boolean);
+                console.log('Parsed from PostgreSQL format:', result);
+                return result;
+            }
+            
+            // JSON array formatı: ["item1","item2"]
+            if (pests.startsWith('[') && pests.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(pests);
+                    console.log('Parsed from JSON:', parsed);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    console.warn('JSON parse failed:', e);
+                }
+            }
+            
+            // Virgülle ayrılmış: item1, item2
+            const result = pests.split(',').map(p => p.trim()).filter(Boolean);
+            console.log('Parsed from comma-separated:', result);
+            return result;
         }
+        
         return [];
     };
 
