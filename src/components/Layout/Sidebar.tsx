@@ -63,8 +63,6 @@ const menuCategories = [
     items: [
       { name: 'Gelirler', path: '/gelir-yonetimi', icon: <DollarSign size={18} /> },
       { name: 'Ücretli Malz.', path: '/ucretli-malzemeler', icon: <DollarSign size={18} /> },
-      { name: 'Faturasızlar', path: '/faturasiz-musteriler', icon: <Wallet size={18} /> },
-      { name: 'Tahsilatlar', path: '/admin/tahsilat-makbuzlari', icon: <ReceiptText size={18} /> }, // YENİ
     ]
   },
   {
