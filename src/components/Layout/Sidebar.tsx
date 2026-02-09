@@ -29,6 +29,7 @@ const menuCategories = [
       { name: 'Şubeler', path: '/subeler', icon: <Building size={18} /> },
       { name: 'Şube Fiyat', path: '/sube-fiyatlandirma', icon: <DollarSign size={18} /> },
       { name: 'Teklifler', path: '/teklifler', icon: <FileText size={18} /> },
+      { name: 'Sözleşmeler', path: '/sozlesmeler', icon: <FileText size={18} /> },
       { name: 'IPM Sözleşme', path: '/ipm-sozlesmeleri', icon: <Shield size={18} /> },
       { name: 'Kritik Limitler', path: '/zararli-kritik-limitler', icon: <AlertTriangle size={18} /> },
       { name: 'Risk Değerlendirme', path: '/zararli-risk-degerlendirme', icon: <Bug size={18} /> },
