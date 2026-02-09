@@ -84,7 +84,7 @@ const menuCategories = [
       { name: 'Ekipman Paz.', path: '/ekipman-pazarlama', icon: <Package size={18} /> },
       { name: 'Ekipman Yönetimi', path: '/ekipman-yonetimi', icon: <Package size={18} /> },
       { name: 'Hizmet Paz.', path: '/hizmet-pazarlama', icon: <MessageSquare size={18} /> }, // YENİ
-       { name: 'Hizmet Yönetimi', path: '/hizmet-yonetimi', icon: <MessageSquare size={18} /> }, // YENİ
+      { name: 'Hizmet Yönetimi', path: '/hizmet-yonetimi', icon: <MessageSquare size={18} /> }, // YENİ
       { name: 'Eğitim Sunum.', path: '/egitim-sunumlari', icon: <Presentation size={18} /> }, // YENİ
       { name: 'E-postalar', path: '/gonderilen-epostalar', icon: <MailCheck size={18} /> },
     ]
