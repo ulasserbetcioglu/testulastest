@@ -395,6 +395,7 @@ function App() {
             <Route path="admin/simulator" element={<AdminDataSimulator />} />
             <Route path="admin/yillik-rapor" element={<AnnualVisitReport />} />
             <Route path="dof" element={<CorrectiveActions />} />
+            <Route path="sozlesmeler" element={<Sozlesmeler />} />
             <Route path="egitim-sunumlari" element={<TrainingPresentationPage />} />
 
             <Route path="admin/modul-raporlari" element={<AdminRoute><AdminModuleReports /></AdminRoute>} />
