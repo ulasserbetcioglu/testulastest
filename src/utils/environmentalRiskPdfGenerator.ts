@@ -75,7 +75,7 @@ function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(11);
-  pdf.text('PestMentor', W - M, 8, { align: 'right' });
+  pdf.text('', W - M, 8, { align: 'right' });
   pdf.setFontSize(7);
   pdf.setFont('helvetica', 'normal');
   pdf.text('Pest Control System', W - M, 13, { align: 'right' });
