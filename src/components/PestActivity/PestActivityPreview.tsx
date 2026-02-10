@@ -408,4 +408,4 @@ function formatActionText(text: string) {
   );
 }
 
-export default PestActivityPreview;,
+export default PestActivityPreview;
