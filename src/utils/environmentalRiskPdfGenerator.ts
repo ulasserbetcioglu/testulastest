@@ -78,7 +78,7 @@ function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
   pdf.text('', W - M, 8, { align: 'right' });
   pdf.setFontSize(7);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('İLAÇLAMATİK - SİSTEM İLAÇLAMA', W - M, 13, { align: 'right' });
+  pdf.text('', W - M, 13, { align: 'right' });
 }
 
 // --- INFO BOX (Sarı Arkaplanlı) ---
