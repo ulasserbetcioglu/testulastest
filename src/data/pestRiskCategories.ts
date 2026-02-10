@@ -13,8 +13,8 @@ export interface PestCategory {
 
 export const PEST_CATEGORIES: PestCategory[] = [
   {
-    key: 'kemiriciler',
-    label: 'Kemiriciler',
+    key: 'Kemirgenler',
+    label: 'Kemirgenler',
     labelEn: 'Rodents',
     pests: [
       { key: 'fare', label: 'Fare', labelEn: 'Mouse' },
