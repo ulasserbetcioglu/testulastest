@@ -276,7 +276,7 @@ function drawDefinitionsAndMatrix(pdf: jsPDF, startY: number, W: number): number
   const interpretY = matY + 35;
   const interpretations = [
     { r: toAscii('1-8 DUSUK AYDA 1 ZİYARET'), bg: [220, 252, 231], t: toAscii('Urune kirlilik riski yok. Rutin kontroller yeterli.') },
-    { r: '9-15 ORTA AYDA 2 ZİYARET', bg: [254, 249, 195], t: toAscii('Capraz bulasma kontrol edilmeli. Onlemler alinmali.') }, 
+    { r: toAscii('9-15 ORTA AYDA 2 ZİYARET'), bg: [254, 249, 195], t: toAscii('Capraz bulasma kontrol edilmeli. Onlemler alinmali.') }, 
     { r: toAscii('16-25 YUKSEK AYDA 4 ZİYARET'), bg: [254, 202, 202], t: toAscii('Acil onlem gerekli. Hijyen/yalitim revizyonu sart.') }
   ];
 
