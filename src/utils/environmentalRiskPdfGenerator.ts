@@ -1,103 +1,115 @@
-// Dosya: src/utils/environmentalRiskPdfGenerator.ts
+// src/utils/environmentalRiskPdfGenerator.ts
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
-import {
-  PEST_ENV_ROWS,
-  type EnvDataMap,
-  calculateEnvScore,
-  getEnvRiskColor,
-  getEnvAverages
-} from '../data/environmentalRiskCategories';
+import { PEST_ENV_ROWS, type EnvDataMap, calculateEnvScore, getEnvAverages } from '../data/environmentalRiskCategories';
 
 export interface EnvRiskPdfInput {
-  customerName: string;
-  customerAddress: string;
+  customer_name: string;
+  customer_address: string;
   division: string;
-  assessmentDate: string;
-  responsiblePerson: string;
-  customerResponsible: string;
-  documentNumber: string;
-  revisionNumber: string;
-  revisionDate: string;
+  assessment_date: string;
+  responsible_person: string;
+  customer_responsible?: string;
+  document_number?: string;
+  revision_number?: string;
+  revision_date?: string;
   riskData: EnvDataMap;
-  companyLogo: string | null;
+  companyLogo?: string | null;
 }
 
-const M = 10; // Margin
+const M = 10;
 
-// Renkler
 const COLORS = {
-  primary: [22, 163, 74] as [number, number, number],    // Green-600
-  secondary: [21, 128, 61] as [number, number, number],  // Green-700
-  headerBg: [254, 252, 232] as [number, number, number], // Krem/Sarı (İstek üzerine)
-  lines: [202, 138, 4] as [number, number, number],      // Yellow-600 (Çizgiler)
-  textMain: [20, 83, 45] as [number, number, number],
-  textGray: [60, 60, 60] as [number, number, number],
+  primary: [26, 125, 55],
+  secondary: [21, 128, 61],
+  headerBg: [254, 252, 232],
+  lines: [202, 138, 4],
+  textMain: [20, 83, 45],
+  textGray: [60, 60, 60],
 };
 
-const tr = (text: string | null | undefined): string => {
-  if (!text) return '';
-  const map: { [key: string]: string } = {
-    'ğ': 'g', 'Ğ': 'G', 'ü': 'u', 'Ü': 'U', 'ş': 's', 'Ş': 'S',
-    'ı': 'i', 'İ': 'I', 'ö': 'o', 'Ö': 'O', 'ç': 'c', 'Ç': 'C'
-  };
-  return text.replace(/[ğĞüÜşŞıİöÖçÇ]/g, (match) => map[match]);
-};
+// Logo yükleme helper
+async function loadImageAsDataUrl(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } else {
+        reject(new Error('Canvas context failed'));
+      }
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = url;
+  });
+}
 
-// --- HEADER ---
-function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
-  // Arkaplan
+// Header
+async function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
+  // Yeşil header arka planı
   pdf.setFillColor(COLORS.primary[0], COLORS.primary[1], COLORS.primary[2]);
-  pdf.rect(0, 0, W, 18, 'F');
+  pdf.rect(0, 0, W, 20, 'F');
 
-  // Logo
+  // Logo (PNG desteği)
   if (logoUrl) {
     try {
-      const imgProps = pdf.getImageProperties(logoUrl);
-      const ratio = imgProps.width / imgProps.height;
-      let imgW = 30, imgH = 30 / ratio;
-      if (imgH > 14) { imgH = 14; imgW = 14 * ratio; }
-      pdf.addImage(logoUrl, 'PNG', M, 2, imgW, imgH);
-    } catch (e) {}
+      const logoData = await loadImageAsDataUrl(logoUrl);
+      const imgW = 35;
+      const imgH = 14;
+      pdf.addImage(logoData, 'PNG', M, 3, imgW, imgH);
+    } catch (e) {
+      console.warn('Logo yüklenemedi:', e);
+    }
   }
 
   const textX = logoUrl ? M + 40 : M;
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(12);
+  pdf.setFontSize(13);
   pdf.setTextColor(255, 255, 255);
-  pdf.text(tr('ZARARLI KONTROLU RİSK DEĞERLENDİRME FORMU - ÇEVRE'), textX, 8);
+  pdf.text('ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE', textX, 9);
   
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'italic');
-  pdf.text('Pest Control Risk Assessment Form - Environment', textX, 13);
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
-  pdf.text('', W - M, 8, { align: 'right' });
-  pdf.setFontSize(7);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text('', W - M, 13, { align: 'right' });
+  pdf.text('Pest Control Risk Assessment Form - Environment', textX, 14);
 }
 
-// --- INFO BOX (Sarı Arkaplanlı) ---
+// Müşteri Bilgileri Tablosu
 function drawCustomerInfo(pdf: jsPDF, data: EnvRiskPdfInput, y: number): number {
+  const c = data.customer_name || '';
+  const addr = data.customer_address || '';
+  const div = data.division || '';
+  const date = data.assessment_date || '';
+  const resp = data.responsible_person || '';
+  const custResp = data.customer_responsible || '';
+
   autoTable(pdf, {
     startY: y,
     body: [
-      ['7.3.1. ' + tr('Musteri Adi'), tr(data.customerName), '7.3.3. ' + tr('Bolum'), tr(data.division), '7.3.5. ' + tr('PestMentor Sor.'), tr(data.responsiblePerson)],
-      ['7.3.2. ' + tr('Adres'), tr(data.customerAddress), '7.3.4. ' + tr('Tarih'), data.assessmentDate, '7.3.6. ' + tr('Mus. Sor.'), tr(data.customerResponsible)],
+      ['7.3.1. Musteri Adi', c, '7.3.3. Bolum', div, '7.3.5. PestMentor Sor.', resp],
+      ['7.3.2. Adres', addr, '7.3.4. Tarih', date, '7.3.6. Mus. Sor.', custResp],
     ],
-    styles: { fontSize: 6, cellPadding: 1.5, lineColor: COLORS.lines, lineWidth: 0.1, textColor: COLORS.textGray },
-    // Krem/Sarı arka plan isteği:
-    bodyStyles: { fillColor: COLORS.headerBg }, 
+    styles: { 
+      fontSize: 7, 
+      cellPadding: 2, 
+      lineColor: COLORS.lines, 
+      lineWidth: 0.15, 
+      textColor: COLORS.textGray 
+    },
+    bodyStyles: { fillColor: COLORS.headerBg },
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 22, textColor: COLORS.textMain },
-      1: { cellWidth: 50 },
+      1: { cellWidth: 48 },
       2: { fontStyle: 'bold', cellWidth: 18, textColor: COLORS.textMain },
-      3: { cellWidth: 25 },
-      4: { fontStyle: 'bold', cellWidth: 22, textColor: COLORS.textMain },
+      3: { cellWidth: 24 },
+      4: { fontStyle: 'bold', cellWidth: 24, textColor: COLORS.textMain },
       5: { cellWidth: 'auto' },
     },
     margin: { left: M, right: M },
@@ -106,150 +118,168 @@ function drawCustomerInfo(pdf: jsPDF, data: EnvRiskPdfInput, y: number): number 
   return (pdf as any).lastAutoTable.finalY;
 }
 
-// --- LEGENDS (Tanımlar) ---
+// Legends
 function drawLegends(pdf: jsPDF, startY: number, W: number): number {
   const contentW = W - (2 * M);
-  const colW = (contentW - 4) / 2; // İki kolon
+  const colW = (contentW - 4) / 2;
   const xLeft = M;
   const xRight = M + colW + 4;
 
-  const tableStyles = { fontSize: 5, cellPadding: 0.8, lineColor: COLORS.lines, lineWidth: 0.1, textColor: COLORS.textGray };
-  const headStyles = { fillColor: COLORS.secondary, textColor: [255,255,255] as [number,number,number], fontStyle: 'bold' as const, fontSize: 5 };
-  const colStyles = { 0: { cellWidth: 4, halign:'center' as const, fontStyle:'bold' as const}, 1: { cellWidth: 15, fontStyle:'bold' as const } };
+  const tableStyles = { 
+    fontSize: 6, 
+    cellPadding: 1, 
+    lineColor: COLORS.lines, 
+    lineWidth: 0.1, 
+    textColor: COLORS.textGray 
+  };
+  const headStyles = { 
+    fillColor: COLORS.secondary, 
+    textColor: [255,255,255] as [number, number, number], 
+    fontStyle: 'bold' as const, 
+    fontSize: 6 
+  };
+  const colStyles = { 
+    0: { cellWidth: 5, halign:'center' as const, fontStyle:'bold' as const}, 
+    1: { cellWidth: 18, fontStyle:'bold' as const } 
+  };
 
   let yLeft = startY;
   let yRight = startY;
 
-  // --- SOL SÜTUN TABLOLARI ---
-
-  // 1. Zararlı Popülasyonu
-  pdf.setFontSize(6); pdf.setTextColor(0); pdf.setFont('helvetica', 'bold');
-  pdf.text(tr('Zararli Populasyonu Durumu'), xLeft, yLeft);
+  // Sol kolon
+  pdf.setFontSize(7);
+  pdf.setTextColor(0);
+  pdf.setFont('helvetica', 'bold');
+  
+  pdf.text('Zararli Populasyonu Durumu', xLeft, yLeft);
   autoTable(pdf, {
     startY: yLeft + 2,
-    head: [['#', tr('Seviye'), tr('Aciklama')]],
+    head: [['#', 'Seviye', 'Aciklama']],
     body: [
-      ['1', 'YOK', tr('Kayit yok. / No pests records.')],
-      ['2', 'ORTA', tr('Potansiyel veya gelen zararli. / Potential incoming.')],
-      ['3', 'YUKSEK', tr('Mevcut veya olasilik cok yuksek. / Present or high probability.')],
+      ['1', 'YOK', 'Kayit yok / No records'],
+      ['2', 'ORTA', 'Potansiyel / Potential'],
+      ['3', 'YUKSEK', 'Mevcut / Present'],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xLeft }, theme: 'grid'
   });
   yLeft = (pdf as any).lastAutoTable.finalY + 3;
 
-  // 2. Hijyen Durumu
-  pdf.text(tr('Hijyen Durumu'), xLeft, yLeft);
+  pdf.text('Hijyen Durumu', xLeft, yLeft);
   autoTable(pdf, {
     startY: yLeft + 2,
-    head: [['#', tr('Seviye'), tr('Aciklama')]],
+    head: [['#', 'Seviye', 'Aciklama']],
     body: [
-      ['1', 'YOK', tr('Beslenme kaynagi yok. / No feeding source.')],
-      ['2', 'ORTA', tr('Beslenebilir ama ureyemez. / Can feed but not breed.')],
-      ['3', 'YUKSEK', tr('Beslenir ve urer. / Feed and breed.')],
+      ['1', 'YOK', 'Beslenme kaynagi yok / No source'],
+      ['2', 'ORTA', 'Beslenebilir / Can feed'],
+      ['3', 'YUKSEK', 'Beslenir ve urer / Feed+breed'],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xLeft }, theme: 'grid'
   });
   yLeft = (pdf as any).lastAutoTable.finalY + 3;
 
-  // 3. Depolama Durumu
-  pdf.text(tr('Depolama Durumu'), xLeft, yLeft);
+  pdf.text('Depolama Durumu', xLeft, yLeft);
   autoTable(pdf, {
     startY: yLeft + 2,
-    head: [['#', tr('Seviye'), tr('Aciklama')]],
+    head: [['#', 'Seviye', 'Aciklama']],
     body: [
-      ['1', 'YOK', tr('Mesafe yeterli (min 45cm). / Sufficient distance.')],
-      ['2', 'ORTA', tr('Mesafe var ama yetersiz (<45cm). / Insufficient distance.')],
-      ['3', 'YUKSEK', tr('Mesafe yok. / No distance.')],
+      ['1', 'YOK', 'Mesafe yeterli (>45cm)'],
+      ['2', 'ORTA', 'Mesafe yetersiz (<45cm)'],
+      ['3', 'YUKSEK', 'Mesafe yok / No distance'],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xLeft }, theme: 'grid'
   });
   yLeft = (pdf as any).lastAutoTable.finalY;
 
-  // --- SAĞ SÜTUN TABLOLARI ---
-
-  // 4. Yalıtım Durumu
-  pdf.text(tr('Yalitim Durumu'), xRight, yRight);
+  // Sağ kolon
+  pdf.text('Yalitim Durumu', xRight, yRight);
   autoTable(pdf, {
     startY: yRight + 2,
-    head: [['#', tr('Seviye'), tr('Aciklama')]],
+    head: [['#', 'Seviye', 'Aciklama']],
     body: [
-      ['1', 'YOK', tr('Giris bolgeleri yok. / No entry gaps.')],
-      ['2', 'ORTA', tr('Giris bolgeleri mevcut. / Entry gaps exist.')],
-      ['3', 'YUKSEK', tr('Barinma alanlari mevcut. / Shelter areas exist.')],
+      ['1', 'YOK', 'Giris yok / No entry'],
+      ['2', 'ORTA', 'Giris var / Entry exists'],
+      ['3', 'YUKSEK', 'Barinma alani / Shelter'],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xRight }, theme: 'grid'
   });
   yRight = (pdf as any).lastAutoTable.finalY + 3;
 
-  // 5. Gözlem Noktaları
-  pdf.text(tr('Gozlem Noktalari Durumu'), xRight, yRight);
+  pdf.text('Gozlem Noktalari Durumu', xRight, yRight);
   autoTable(pdf, {
     startY: yRight + 2,
-    head: [['#', tr('Seviye'), tr('Aciklama')]],
+    head: [['#', 'Seviye', 'Aciklama']],
     body: [
-      ['1', 'YOK', tr('Hepsi yerinde ve uygun. / All in place.')],
-      ['2', 'ORTA', tr('Kismen eksik veya hatali. / Some missing/error.')],
-      ['3', 'YUKSEK', tr('Sistem bulunmuyor. / No system.')],
+      ['1', 'YOK', 'Hepsi yerinde / All in place'],
+      ['2', 'ORTA', 'Kismen eksik / Partially missing'],
+      ['3', 'YUKSEK', 'Sistem yok / No system'],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xRight }, theme: 'grid'
   });
   yRight = (pdf as any).lastAutoTable.finalY + 3;
 
-  // 6. Skor Tablosu
+  // Skor kutuları
   pdf.text('SKOR / SCORE', xRight, yRight);
   const scoreData = [
-    { range: '1-16 YOK / NO', desc: tr('Dusuk olasilik. / Low probability.'), bg: [220, 252, 231] },
-    { range: '17-27 ORTA / MED', desc: tr('Orta derecede olasilik. / Medium prob.'), bg: [254, 249, 195] },
-    { range: '28-36 YUKSEK / HIGH', desc: tr('Yuksek derecede olasilik. / High prob.'), bg: [254, 202, 202] },
+    { range: '1-6 DUSUK / LOW', desc: 'Dusuk olasilik', bg: [220, 252, 231] },
+    { range: '7-12 ORTA / MED', desc: 'Orta olasilik', bg: [254, 249, 195] },
+    { range: '13-24 YUKSEK / HIGH', desc: 'Yuksek olasilik', bg: [254, 215, 170] },
+    { range: '25+ COK YUKSEK / VHIGH', desc: 'Cok yuksek olasilik', bg: [254, 202, 202] },
   ];
 
   let boxY = yRight + 2;
   scoreData.forEach(item => {
-    pdf.setFillColor(item.bg[0], item.bg[1], item.bg[2] as number);
+    pdf.setFillColor(item.bg[0], item.bg[1], item.bg[2]);
     pdf.setDrawColor(COLORS.lines[0], COLORS.lines[1], COLORS.lines[2]);
-    pdf.rect(xRight, boxY, colW, 8, 'FD');
+    pdf.rect(xRight, boxY, colW, 6, 'FD');
     
-    pdf.setFontSize(5);
+    pdf.setFontSize(6);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(0);
-    pdf.text(item.range, xRight + 2, boxY + 3);
+    pdf.text(item.range, xRight + 2, boxY + 2.5);
     
     pdf.setFont('helvetica', 'normal');
-    pdf.text(item.desc, xRight + 2, boxY + 6);
-    boxY += 9;
+    pdf.setFontSize(5);
+    pdf.text(item.desc, xRight + 2, boxY + 5);
+    boxY += 6.5;
   });
 
   return Math.max(yLeft, boxY);
 }
 
-// --- MAIN MATRIX TABLE ---
+// Ana Matris Tablosu
 function drawMainMatrix(pdf: jsPDF, data: EnvDataMap, startY: number): number {
   const body = [];
   const avgs = getEnvAverages(data);
 
-  // Satırları oluştur
   PEST_ENV_ROWS.forEach(row => {
-    const d = data[row.key];
+    const d = data[row.key] || { hygiene: 0, insulation: 0, storage: 0, monitoring: 0, population: 0 };
     const envTotal = d.hygiene + d.insulation + d.storage + d.monitoring;
     const score = calculateEnvScore(d);
     
     body.push([
-      tr(row.label) + '\n' + row.labelEn, // Zararlı Türü
-      d.hygiene || '-', // Hijyen
-      d.insulation || '-', // Yalıtım
-      d.storage || '-', // Depolama
-      d.monitoring || '-', // Gözlem
-      envTotal || '-', // Çevre Toplamı
-      d.population || '-', // Popülasyon
-      score || '-', // Skor
+      `${row.label}\n${row.labelEn}`,
+      d.hygiene || '-',
+      d.insulation || '-',
+      d.storage || '-',
+      d.monitoring || '-',
+      envTotal || '-',
+      d.population || '-',
+      score || '-',
     ]);
   });
 
-  // Ortalama Satırı
+  // Ortalama satırı
+  const avgEnvTotal = (
+    parseFloat(avgs.avgH) + 
+    parseFloat(avgs.avgI) + 
+    parseFloat(avgs.avgS) + 
+    parseFloat(avgs.avgM)
+  ).toFixed(1);
+
   body.push([
-    tr('ORTALAMA / AVERAGE'),
+    'ORTALAMA / AVERAGE',
     avgs.avgH, avgs.avgI, avgs.avgS, avgs.avgM,
-    (avgs.avgH + avgs.avgI + avgs.avgS + avgs.avgM).toFixed(1), // Çevre Toplam Ort.
+    avgEnvTotal,
     avgs.avgP,
     avgs.avgScore
   ]);
@@ -257,41 +287,55 @@ function drawMainMatrix(pdf: jsPDF, data: EnvDataMap, startY: number): number {
   autoTable(pdf, {
     startY: startY,
     head: [[
-      tr('Zararli Turu / Pest Type'),
-      tr('Hijyen\nHygien'),
-      tr('Yalitim\nProfiling'),
-      tr('Depolama\nStorage'),
-      tr('Gozlem Nok.\nMonitoring'),
-      tr('Cevre Sartlari Top.\nEnv. Total'),
-      tr('Zararli Pop.\nPopulation'),
-      tr('Skor\nScore')
+      'Zararli Turu / Pest Type',
+      'Hijyen\nHygiene',
+      'Yalitim\nInsulation',
+      'Depolama\nStorage',
+      'Gozlem\nMonitor',
+      'Cevre Top.\nEnv. Total',
+      'Pop.\nPop.',
+      'Skor\nScore'
     ]],
     body: body,
     theme: 'grid',
-    styles: { fontSize: 6, cellPadding: 2, lineColor: COLORS.lines, lineWidth: 0.1, textColor: COLORS.textGray, halign: 'center', valign: 'middle' },
-    headStyles: { fillColor: COLORS.secondary, textColor: [255,255,255], fontStyle: 'bold', fontSize: 6 },
+    styles: { 
+      fontSize: 6.5, 
+      cellPadding: 1.5, 
+      lineColor: COLORS.lines, 
+      lineWidth: 0.1, 
+      textColor: COLORS.textGray, 
+      halign: 'center', 
+      valign: 'middle' 
+    },
+    headStyles: { 
+      fillColor: COLORS.secondary, 
+      textColor: [255,255,255] as [number, number, number], 
+      fontStyle: 'bold', 
+      fontSize: 6.5 
+    },
     columnStyles: { 
-      0: { cellWidth: 35, halign: 'left', fontStyle: 'bold' }, // İsim
-      5: { fontStyle: 'bold', fillColor: COLORS.headerBg }, // Env Total
-      6: { fontStyle: 'bold' }, // Pop
-      7: { fontStyle: 'bold' } // Skor
+      0: { cellWidth: 36, halign: 'left', fontStyle: 'bold' },
+      5: { fontStyle: 'bold', fillColor: COLORS.headerBg },
+      6: { fontStyle: 'bold' },
+      7: { fontStyle: 'bold' }
     },
     margin: { left: M, right: M },
     didParseCell: (hook) => {
-      // Renklendirme (Skor Sütunu - Index 7)
+      // Skor renklendirme
       if (hook.section === 'body' && hook.column.index === 7) {
         const val = Number(hook.cell.raw);
         if (val > 0) {
-          let bg;
-          if (val <= 16) bg = [220, 252, 231]; // Yeşil
-          else if (val <= 27) bg = [254, 249, 195]; // Sarı
-          else bg = [254, 202, 202]; // Kırmızı
+          let bg: [number, number, number];
+          if (val <= 6) bg = [220, 252, 231];
+          else if (val <= 12) bg = [254, 249, 195];
+          else if (val <= 24) bg = [254, 215, 170];
+          else bg = [254, 202, 202];
           
-          hook.cell.styles.fillColor = bg as [number, number, number];
+          hook.cell.styles.fillColor = bg;
           hook.cell.styles.textColor = [0, 0, 0];
         }
       }
-      // Ortalama Satırı Stil
+      // Ortalama satırı
       if (hook.section === 'body' && hook.row.index === body.length - 1) {
         hook.cell.styles.fillColor = COLORS.headerBg;
         hook.cell.styles.fontStyle = 'bold';
@@ -302,19 +346,19 @@ function drawMainMatrix(pdf: jsPDF, data: EnvDataMap, startY: number): number {
   return (pdf as any).lastAutoTable.finalY;
 }
 
-// --- FOOTER NOTES ---
+// Footer notları
 function drawFooterNotes(pdf: jsPDF, startY: number, W: number) {
   const contentW = W - (2 * M);
   
-  pdf.setFontSize(5);
+  pdf.setFontSize(5.5);
   pdf.setTextColor(COLORS.textGray[0], COLORS.textGray[1], COLORS.textGray[2]);
   pdf.setFont('helvetica', 'normal');
 
-  const note1 = tr("Risk analizleri inceleme, denetleme ve ucuncu goz denetimi asamalarinda uygulanabilirliginin kurali tek basina yararli bir analiz metodu degildir. Diger Metodolojilere basvurma yapisi olarak bu analizde bu sistem toplamlari (formul) kullanilmistir. Sonuc olarak risk analizi teke analizin kurulun teskil ederek onayini almaktadir.");
-  const note2 = "Formula: Total of subjects related to environmental conditions X Population Conditions = Score. It is used as a preliminary data for other types of analyses.";
-  const note3 = tr("NOTLAR: Risk Analizi Aciklamasi dokumaninda yer almaktadir.");
+  const note1 = "Risk analizleri inceleme, denetleme ve ucuncu goz denetimi asamalarinda uygulanabilirliginin kurali tek basina yararli bir analiz metodu degildir.";
+  const note2 = "Formula: Total of environmental conditions X Population = Score. Used as preliminary data for comprehensive analyses.";
+  const note3 = "NOTLAR: Detayli Risk Analizi Aciklamasi dokumaninda yer almaktadir.";
 
-  let y = startY + 5;
+  let y = startY + 4;
   const lines1 = pdf.splitTextToSize(note1, contentW);
   pdf.text(lines1, M, y);
   y += (lines1.length * 2) + 2;
@@ -327,29 +371,29 @@ function drawFooterNotes(pdf: jsPDF, startY: number, W: number) {
   pdf.text(note3, M, y);
 }
 
-// --- ANA EXPORT FONKSİYONU ---
-export function generateEnvironmentalRiskAssessmentPdf(data: EnvRiskPdfInput) {
+// Ana export fonksiyonu
+export async function generateEnvironmentalRiskAssessmentPdf(data: EnvRiskPdfInput) {
   const pdf = new jsPDF('p', 'mm', 'a4');
   const W = pdf.internal.pageSize.getWidth();
   
-  // 1. Header
-  drawHeader(pdf, W, data.companyLogo);
+  // 1. Header (await logo yükleme)
+  await drawHeader(pdf, W, data.companyLogo);
   
-  // 2. Info
-  let y = 20;
+  // 2. Customer Info
+  let y = 22;
   y = drawCustomerInfo(pdf, data, y);
   
   // 3. Legends
-  y += 4;
+  y += 3;
   y = drawLegends(pdf, y, W);
   
   // 4. Main Matrix
-  y += 4;
+  y += 3;
   y = drawMainMatrix(pdf, data.riskData, y);
   
-  // 5. Notes
+  // 5. Footer notes
   drawFooterNotes(pdf, y, W);
 
-  const safeName = (data.customerName || 'Rapor').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
+  const safeName = (data.customer_name || 'Rapor').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 25);
   pdf.save(`Cevre_Risk_${safeName}.pdf`);
 }
