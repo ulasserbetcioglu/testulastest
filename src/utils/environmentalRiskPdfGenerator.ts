@@ -24,7 +24,7 @@ const M = 10;
 const COLORS = {
   primary: [26, 125, 55],
   secondary: [21, 128, 61],
-  headerBg: [254, 252, 232],
+  headerBg: [255, 255, 255],
   lines: [202, 138, 4],
   textMain: [20, 83, 45],
   textGray: [60, 60, 60],
