@@ -147,7 +147,7 @@ const AdminEnvironmentalRiskAssessment: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold flex gap-2"><Leaf className="text-green-600" /> Çevre Risk Analizi (7.3)</h1>
+        <h1 className="text-2xl font-bold flex gap-2"><Leaf className="text-green-600" /> Çevre Risk Analizi </h1>
         <div className="flex gap-2">
           <input className="border rounded px-3 py-2 text-sm" placeholder="Ara..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           <button onClick={handleAutoGenerate} className="bg-green-50 text-green-700 px-4 py-2 rounded flex gap-2 items-center"><RefreshCw size={16}/> Otomatik</button>
