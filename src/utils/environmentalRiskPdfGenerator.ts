@@ -30,6 +30,20 @@ const COLORS = {
   textGray: [60, 60, 60],
 };
 
+// Türkçe karakterleri ASCII'ye dönüştür
+function toAscii(text: string): string {
+  if (!text) return '';
+  const map: { [key: string]: string } = {
+    'ğ': 'g', 'Ğ': 'G',
+    'ü': 'u', 'Ü': 'U',
+    'ş': 's', 'Ş': 'S',
+    'ı': 'i', 'İ': 'I',
+    'ö': 'o', 'Ö': 'O',
+    'ç': 'c', 'Ç': 'C'
+  };
+  return text.replace(/[ğĞüÜşŞıİöÖçÇ]/g, (match) => map[match] || match);
+}
+
 // Logo yükleme helper
 async function loadImageAsDataUrl(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -66,7 +80,7 @@ async function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
       const imgH = 14;
       pdf.addImage(logoData, 'PNG', M, 3, imgW, imgH);
     } catch (e) {
-      console.warn('Logo yüklenemedi:', e);
+      console.warn('Logo yuklenemedi:', e);
     }
   }
 
@@ -74,7 +88,7 @@ async function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(13);
   pdf.setTextColor(255, 255, 255);
-  pdf.text('ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE', textX, 9);
+  pdf.text(toAscii('ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE'), textX, 9);
   
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'italic');
@@ -83,18 +97,18 @@ async function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
 
 // Müşteri Bilgileri Tablosu
 function drawCustomerInfo(pdf: jsPDF, data: EnvRiskPdfInput, y: number): number {
-  const c = data.customer_name || '';
-  const addr = data.customer_address || '';
-  const div = data.division || '';
+  const c = toAscii(data.customer_name || '');
+  const addr = toAscii(data.customer_address || '');
+  const div = toAscii(data.division || '');
   const date = data.assessment_date || '';
-  const resp = data.responsible_person || '';
-  const custResp = data.customer_responsible || '';
+  const resp = toAscii(data.responsible_person || '');
+  const custResp = toAscii(data.customer_responsible || '');
 
   autoTable(pdf, {
     startY: y,
     body: [
-      ['7.3.1. Musteri Adi', c, '7.3.3. Bolum', div, '7.3.5. PestMentor Sor.', resp],
-      ['7.3.2. Adres', addr, '7.3.4. Tarih', date, '7.3.6. Mus. Sor.', custResp],
+      [toAscii('7.3.1. Musteri Adi'), c, toAscii('7.3.3. Bolum'), div, toAscii('7.3.5. PestMentor Sor.'), resp],
+      [toAscii('7.3.2. Adres'), addr, toAscii('7.3.4. Tarih'), date, toAscii('7.3.6. Mus. Sor.'), custResp],
     ],
     styles: { 
       fontSize: 7, 
@@ -154,14 +168,14 @@ function drawLegends(pdf: jsPDF, startY: number, W: number): number {
   pdf.setTextColor(0);
   pdf.setFont('helvetica', 'bold');
   
-  pdf.text('Zararli Populasyonu Durumu', xLeft, yLeft);
+  pdf.text(toAscii('Zararli Populasyonu Durumu'), xLeft, yLeft);
   autoTable(pdf, {
     startY: yLeft + 2,
-    head: [['#', 'Seviye', 'Aciklama']],
+    head: [['#', 'Seviye', toAscii('Aciklama')]],
     body: [
-      ['1', 'YOK', 'Kayit yok / No records'],
+      ['1', 'YOK', toAscii('Kayit yok / No records')],
       ['2', 'ORTA', 'Potansiyel / Potential'],
-      ['3', 'YUKSEK', 'Mevcut / Present'],
+      ['3', toAscii('YUKSEK'), 'Mevcut / Present'],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xLeft }, theme: 'grid'
   });
@@ -170,11 +184,11 @@ function drawLegends(pdf: jsPDF, startY: number, W: number): number {
   pdf.text('Hijyen Durumu', xLeft, yLeft);
   autoTable(pdf, {
     startY: yLeft + 2,
-    head: [['#', 'Seviye', 'Aciklama']],
+    head: [['#', 'Seviye', toAscii('Aciklama')]],
     body: [
-      ['1', 'YOK', 'Beslenme kaynagi yok / No source'],
+      ['1', 'YOK', toAscii('Beslenme kaynagi yok / No source')],
       ['2', 'ORTA', 'Beslenebilir / Can feed'],
-      ['3', 'YUKSEK', 'Beslenir ve urer / Feed+breed'],
+      ['3', toAscii('YUKSEK'), toAscii('Beslenir ve urer / Feed+breed')],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xLeft }, theme: 'grid'
   });
@@ -183,38 +197,38 @@ function drawLegends(pdf: jsPDF, startY: number, W: number): number {
   pdf.text('Depolama Durumu', xLeft, yLeft);
   autoTable(pdf, {
     startY: yLeft + 2,
-    head: [['#', 'Seviye', 'Aciklama']],
+    head: [['#', 'Seviye', toAscii('Aciklama')]],
     body: [
-      ['1', 'YOK', 'Mesafe yeterli (>45cm)'],
-      ['2', 'ORTA', 'Mesafe yetersiz (<45cm)'],
-      ['3', 'YUKSEK', 'Mesafe yok / No distance'],
+      ['1', 'YOK', toAscii('Mesafe yeterli (>45cm)')],
+      ['2', 'ORTA', toAscii('Mesafe yetersiz (<45cm)')],
+      ['3', toAscii('YUKSEK'), 'Mesafe yok / No distance'],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xLeft }, theme: 'grid'
   });
   yLeft = (pdf as any).lastAutoTable.finalY;
 
   // Sağ kolon
-  pdf.text('Yalitim Durumu', xRight, yRight);
+  pdf.text(toAscii('Yalitim Durumu'), xRight, yRight);
   autoTable(pdf, {
     startY: yRight + 2,
-    head: [['#', 'Seviye', 'Aciklama']],
+    head: [['#', 'Seviye', toAscii('Aciklama')]],
     body: [
-      ['1', 'YOK', 'Giris yok / No entry'],
-      ['2', 'ORTA', 'Giris var / Entry exists'],
-      ['3', 'YUKSEK', 'Barinma alani / Shelter'],
+      ['1', 'YOK', toAscii('Giris yok / No entry')],
+      ['2', 'ORTA', toAscii('Giris var / Entry exists')],
+      ['3', toAscii('YUKSEK'), toAscii('Barinma alani / Shelter')],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xRight }, theme: 'grid'
   });
   yRight = (pdf as any).lastAutoTable.finalY + 3;
 
-  pdf.text('Gozlem Noktalari Durumu', xRight, yRight);
+  pdf.text(toAscii('Gozlem Noktalari Durumu'), xRight, yRight);
   autoTable(pdf, {
     startY: yRight + 2,
-    head: [['#', 'Seviye', 'Aciklama']],
+    head: [['#', 'Seviye', toAscii('Aciklama')]],
     body: [
       ['1', 'YOK', 'Hepsi yerinde / All in place'],
-      ['2', 'ORTA', 'Kismen eksik / Partially missing'],
-      ['3', 'YUKSEK', 'Sistem yok / No system'],
+      ['2', 'ORTA', toAscii('Kismen eksik / Partially missing')],
+      ['3', toAscii('YUKSEK'), 'Sistem yok / No system'],
     ],
     styles: tableStyles, headStyles, columnStyles: colStyles, tableWidth: colW, margin: { left: xRight }, theme: 'grid'
   });
@@ -223,10 +237,10 @@ function drawLegends(pdf: jsPDF, startY: number, W: number): number {
   // Skor kutuları
   pdf.text('SKOR / SCORE', xRight, yRight);
   const scoreData = [
-    { range: '1-6 DUSUK / LOW', desc: 'Dusuk olasilik', bg: [220, 252, 231] },
-    { range: '7-12 ORTA / MED', desc: 'Orta olasilik', bg: [254, 249, 195] },
-    { range: '13-24 YUKSEK / HIGH', desc: 'Yuksek olasilik', bg: [254, 215, 170] },
-    { range: '25+ COK YUKSEK / VHIGH', desc: 'Cok yuksek olasilik', bg: [254, 202, 202] },
+    { range: toAscii('1-6 DUSUK / LOW'), desc: toAscii('Dusuk olasilik'), bg: [220, 252, 231] },
+    { range: '7-12 ORTA / MED', desc: toAscii('Orta olasilik'), bg: [254, 249, 195] },
+    { range: toAscii('13-24 YUKSEK / HIGH'), desc: toAscii('Yuksek olasilik'), bg: [254, 215, 170] },
+    { range: toAscii('25+ COK YUKSEK / VHIGH'), desc: toAscii('Cok yuksek olasilik'), bg: [254, 202, 202] },
   ];
 
   let boxY = yRight + 2;
@@ -260,7 +274,7 @@ function drawMainMatrix(pdf: jsPDF, data: EnvDataMap, startY: number): number {
     const score = calculateEnvScore(d);
     
     body.push([
-      `${row.label}\n${row.labelEn}`,
+      `${toAscii(row.label)}\n${row.labelEn}`,
       d.hygiene || '-',
       d.insulation || '-',
       d.storage || '-',
@@ -290,12 +304,12 @@ function drawMainMatrix(pdf: jsPDF, data: EnvDataMap, startY: number): number {
   autoTable(pdf, {
     startY: startY,
     head: [[
-      'Zararli Turu / Pest Type',
+      toAscii('Zararli Turu / Pest Type'),
       'Hijyen\nHygiene',
-      'Yalitim\nInsulation',
+      toAscii('Yalitim\nInsulation'),
       'Depolama\nStorage',
-      'Gozlem\nMonitor',
-      'Cevre Top.\nEnv. Total',
+      toAscii('Gozlem\nMonitor'),
+      toAscii('Cevre Top.\nEnv. Total'),
       'Pop.\nPop.',
       'Skor\nScore'
     ]],
@@ -359,9 +373,9 @@ function drawFooterNotes(pdf: jsPDF, startY: number, W: number) {
   pdf.setTextColor(COLORS.textGray[0], COLORS.textGray[1], COLORS.textGray[2]);
   pdf.setFont('helvetica', 'normal');
 
-  const note1 = "Risk analizleri inceleme, denetleme ve ucuncu goz denetimi asamalarinda uygulanabilirliginin kurali tek basina yararli bir analiz metodu degildir.";
+  const note1 = toAscii("Risk analizleri inceleme, denetleme ve ucuncu goz denetimi asamalarinda uygulanabilirliginin kurali tek basina yararli bir analiz metodu degildir.");
   const note2 = "Formula: Total of environmental conditions X Population = Score. Used as preliminary data for comprehensive analyses.";
-  const note3 = "NOTLAR: Detayli Risk Analizi Aciklamasi dokumaninda yer almaktadir.";
+  const note3 = toAscii("NOTLAR: Detayli Risk Analizi Aciklamasi dokumaninda yer almaktadir.");
 
   let y = startY + 4;
   const lines1 = pdf.splitTextToSize(note1, contentW);
@@ -399,6 +413,6 @@ export async function generateEnvironmentalRiskAssessmentPdf(data: EnvRiskPdfInp
   // 5. Footer notes
   drawFooterNotes(pdf, y, W);
 
-  const safeName = (data.customer_name || 'Rapor').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 25);
+  const safeName = toAscii((data.customer_name || 'Rapor').replace(/[^a-zA-Z0-9ğĞüÜşŞıİöÖçÇ\s]/g, '_').substring(0, 25));
   pdf.save(`Cevre_Risk_${safeName}.pdf`);
 }
