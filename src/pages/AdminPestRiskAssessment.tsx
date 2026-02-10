@@ -6,7 +6,6 @@ import {
   ChevronDown, ChevronUp, FileDown, RefreshCw, Eye
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
 import {
   PEST_CATEGORIES,
   getEmptyPestData,
@@ -70,7 +69,7 @@ const INITIAL_FORM = {
   branch_id: '',
   customer_name: '',
   customer_address: '',
-  division: '',
+  division: 'Fabrika Geneli',
   assessment_date: format(new Date(), 'yyyy-MM-dd'),
   responsible_person: '',
   customer_responsible: '',
@@ -81,7 +80,7 @@ const INITIAL_FORM = {
   status: 'active',
 };
 
-// --- Preview Component (Aynı kalabilir veya renkler güncellenebilir) ---
+// --- Preview Component ---
 const PestRiskPreview: React.FC<{ 
   data: Assessment; 
   onClose: () => void;
@@ -121,7 +120,31 @@ const PestRiskPreview: React.FC<{
             </div>
           </div>
         </div>
-        {/* ... (Geri kalan Preview kodu aynı, sadece üstteki border rengini güncelledim) ... */}
+        
+        {/* Info Grid */}
+        <div className="grid grid-cols-2 gap-x-12 gap-y-4 mb-8 text-sm">
+          <div>
+            <p className="text-gray-500 text-xs font-semibold uppercase">Müşteri</p>
+            <p className="font-medium text-gray-900 border-b border-gray-200 pb-1">{data.customer_name}</p>
+          </div>
+          <div>
+            <p className="text-gray-500 text-xs font-semibold uppercase">Bölüm / Alan</p>
+            <p className="font-medium text-gray-900 border-b border-gray-200 pb-1">{data.division}</p>
+          </div>
+          <div className="col-span-2">
+            <p className="text-gray-500 text-xs font-semibold uppercase">Adres</p>
+            <p className="font-medium text-gray-900 border-b border-gray-200 pb-1">{data.customer_address}</p>
+          </div>
+          <div>
+            <p className="text-gray-500 text-xs font-semibold uppercase">PestMentor Sorumlusu</p>
+            <p className="font-medium text-gray-900 border-b border-gray-200 pb-1">{data.responsible_person || '-'}</p>
+          </div>
+          <div>
+             <p className="text-gray-500 text-xs font-semibold uppercase">Müşteri Sorumlusu</p>
+             <p className="font-medium text-gray-900 border-b border-gray-200 pb-1">{data.customer_responsible || '-'}</p>
+          </div>
+        </div>
+
         {/* Data Grid with Green accents */}
         <div className="space-y-6">
           {PEST_CATEGORIES.map(cat => {
@@ -136,7 +159,7 @@ const PestRiskPreview: React.FC<{
                     Ortalama Risk: {avg.avgScore.toFixed(1)}
                   </span>
                 </div>
-                {/* Tablo içeriği aynı... */}
+                
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-gray-300 text-gray-500">
@@ -183,7 +206,7 @@ const AdminPestRiskAssessment: React.FC = () => {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
-  const [companySettings, setCompanySettings] = useState<any>(null); // Firma ayarları için state
+  const [companySettings, setCompanySettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -205,12 +228,12 @@ const AdminPestRiskAssessment: React.FC = () => {
         supabase.from('branch_pest_risk_assessments').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('id, kisa_isim, adres, sehir').eq('is_active', true).order('kisa_isim'),
         supabase.from('branches').select('id, sube_adi, adres, sehir, customer_id').order('sube_adi'),
-        supabase.from('company_settings').select('*').maybeSingle(), // Firma ayarlarını çek
+        supabase.from('company_settings').select('*').maybeSingle(),
       ]);
       setAssessments(assessRes.data || []);
       setCustomers(custRes.data || []);
       setBranches(branchRes.data || []);
-      setCompanySettings(settingsRes.data); // State'e kaydet
+      setCompanySettings(settingsRes.data);
     } catch {
       toast.error('Veri yuklenemedi');
     } finally {
@@ -218,10 +241,34 @@ const AdminPestRiskAssessment: React.FC = () => {
     }
   };
 
-  // ... (Geri kalan form işleme fonksiyonları aynı) ...
-  const resetForm = () => { /* ... */ setForm({ ...INITIAL_FORM, pest_data: getEmptyPestData() }); setEditingId(null); setExpandedCat(null); };
-  const handleCustomerChange = (customerId: string) => { /* ... */ const customer = customers.find(c => c.id === customerId); setForm(prev => ({ ...prev, customer_id: customerId, customer_name: customer?.kisa_isim || '', customer_address: customer ? `${customer.adres || ''}, ${customer.sehir || ''}` : '', branch_id: '', })); };
-  const handlePestValueChange = (catKey: string, pestKey: string, field: 'pop' | 'risk', value: number) => { /* ... */ setForm(prev => ({ ...prev, pest_data: { ...prev.pest_data, [catKey]: { ...prev.pest_data[catKey], [pestKey]: { ...prev.pest_data[catKey]?.[pestKey], [field]: value, }, }, }, })); };
+  const resetForm = () => { setForm({ ...INITIAL_FORM, pest_data: getEmptyPestData() }); setEditingId(null); setExpandedCat(null); };
+  
+  const handleCustomerChange = (customerId: string) => { 
+    const customer = customers.find(c => c.id === customerId); 
+    setForm(prev => ({ 
+      ...prev, 
+      customer_id: customerId, 
+      customer_name: customer?.kisa_isim || '', 
+      customer_address: customer ? `${customer.adres || ''}, ${customer.sehir || ''}` : '', 
+      branch_id: '', 
+    })); 
+  };
+  
+  const handlePestValueChange = (catKey: string, pestKey: string, field: 'pop' | 'risk', value: number) => { 
+    setForm(prev => ({ 
+      ...prev, 
+      pest_data: { 
+        ...prev.pest_data, 
+        [catKey]: { 
+          ...prev.pest_data[catKey], 
+          [pestKey]: { 
+            ...prev.pest_data[catKey]?.[pestKey], 
+            [field]: value, 
+          }, 
+        }, 
+      }, 
+    })); 
+  };
   
   const handleAutoGenerate = async () => {
     setGenerating(true);
@@ -261,7 +308,6 @@ const AdminPestRiskAssessment: React.FC = () => {
     setSaving(true);
     try {
         const payload = { ...form, updated_at: new Date().toISOString() };
-        // delete payload.updated_at if insert... logic same as before
         if (editingId) {
              const { error } = await supabase.from('branch_pest_risk_assessments').update(payload).eq('id', editingId);
              if(error) throw error; toast.success('Guncellendi');
@@ -276,7 +322,6 @@ const AdminPestRiskAssessment: React.FC = () => {
   const handleEdit = (item: Assessment) => { setForm({ ...item, pest_data: item.pest_data || getEmptyPestData() }); setEditingId(item.id); setShowForm(true); };
   const handleDelete = async (id: string) => { if (!window.confirm('Silinsin mi?')) return; await supabase.from('branch_pest_risk_assessments').delete().eq('id', id); toast.success('Silindi'); loadData(); };
 
-  // --- PDF EXPORT FONKSİYONU GÜNCELLEMESİ ---
   const handleExportPdf = (item: Assessment) => {
     const input: PestRiskPdfInput = {
       customerName: item.customer_name,
@@ -289,15 +334,11 @@ const AdminPestRiskAssessment: React.FC = () => {
       revisionNumber: item.revision_number,
       revisionDate: item.revision_date,
       pestData: item.pest_data || {},
-      companyLogo: companySettings?.logo_url, // Logoyu buradan gönderiyoruz
+      companyLogo: companySettings?.logo_url,
       companyName: companySettings?.company_name
     };
     generatePestRiskAssessmentPdf(input);
   };
-
-  // ... (Geri kalan JSX yapısı - Table, Form vb. önceki koddakiyle aynı) ...
-  // Burayı önceki kodunuzdaki return bloğu ile aynı tutabilirsiniz, 
-  // sadece `handleExportPdf` ve `useEffect` içindeki veri çekme kısımları değişti.
   
   const filtered = assessments.filter(a => a.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredBranches = branches.filter(b => b.customer_id === form.customer_id);
@@ -310,7 +351,6 @@ const AdminPestRiskAssessment: React.FC = () => {
 
   return (
     <div className="space-y-6">
-       {/* Header, Search, Buttons... (Önceki kodla aynı) */}
        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -333,27 +373,214 @@ const AdminPestRiskAssessment: React.FC = () => {
         </div>
        </div>
 
-       {/* Form Modal (Öncekiyle aynı, sadece renkler green) */}
        {showForm && (
-         <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-             <div className="bg-green-50 px-6 py-4 border-b border-green-100 flex justify-between items-center">
-                 <h2 className="font-bold text-green-900 flex gap-2 items-center"><Edit3 size={18}/> {editingId ? 'Düzenle' : 'Yeni'}</h2>
-                 <button onClick={()=>{setShowForm(false); resetForm();}}><X size={18} className="text-green-600"/></button>
-             </div>
-             <div className="p-6 space-y-6">
-                 {/* ... Form inputları (Önceki koddan kopyalayabilirsiniz, mantık değişmedi) ... */}
-                 {/* Kısaca form yapısı: */}
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                     <div><label className="text-xs font-medium text-gray-600">Müşteri</label><select value={form.customer_id} onChange={e=>handleCustomerChange(e.target.value)} className="w-full p-2 border rounded text-sm"><option value="">Seçiniz</option>{customers.map(c=><option key={c.id} value={c.id}>{c.kisa_isim}</option>)}</select></div>
-                     <div><label className="text-xs font-medium text-gray-600">Şube</label><select value={form.branch_id} onChange={e=>setForm(p=>({...p, branch_id:e.target.value}))} className="w-full p-2 border rounded text-sm"><option value="">Seçiniz</option>{filteredBranches.map(b=><option key={b.id} value={b.id}>{b.sube_adi}</option>)}</select></div>
-                     {/* ... Diğer inputlar ... */}
-                 </div>
-                 {/* ... Pest Grid ... */}
-                  <div className="flex justify-end gap-3 pt-4 border-t">
-                      <button onClick={()=>{setShowForm(false); resetForm();}} className="px-4 py-2 border rounded text-sm hover:bg-gray-50">İptal</button>
-                      <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50">{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>
+         <div className="bg-white border rounded-xl shadow-sm overflow-hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+              <div className="bg-green-50 px-6 py-4 border-b border-green-100 flex justify-between items-center shrink-0">
+                  <h2 className="font-bold text-green-900 flex gap-2 items-center"><Edit3 size={18}/> {editingId ? 'Düzenle' : 'Yeni'}</h2>
+                  <button onClick={()=>{setShowForm(false); resetForm();}}><X size={18} className="text-green-600"/></button>
+              </div>
+              <div className="p-6 space-y-6 overflow-y-auto">
+                  {/* Üst Bilgiler Formu */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Müşteri</label>
+                          <select 
+                              value={form.customer_id} 
+                              onChange={e => handleCustomerChange(e.target.value)} 
+                              className="w-full p-2 border rounded text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none"
+                          >
+                              <option value="">Seçiniz</option>
+                              {customers.map(c => <option key={c.id} value={c.id}>{c.kisa_isim}</option>)}
+                          </select>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Şube</label>
+                          <select 
+                              value={form.branch_id} 
+                              onChange={e => setForm(p => ({ ...p, branch_id: e.target.value }))} 
+                              className="w-full p-2 border rounded text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none"
+                          >
+                              <option value="">Seçiniz</option>
+                              {filteredBranches.map(b => <option key={b.id} value={b.id}>{b.sube_adi}</option>)}
+                          </select>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Bölüm / Alan</label>
+                          <input 
+                              type="text" 
+                              value={form.division} 
+                              onChange={e => setForm(p => ({ ...p, division: e.target.value }))} 
+                              className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Değerlendirme Tarihi</label>
+                          <input 
+                              type="date" 
+                              value={form.assessment_date} 
+                              onChange={e => setForm(p => ({ ...p, assessment_date: e.target.value }))} 
+                              className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Sorumlu (PestMentor)</label>
+                          <input 
+                              type="text" 
+                              value={form.responsible_person} 
+                              onChange={e => setForm(p => ({ ...p, responsible_person: e.target.value }))} 
+                              className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Müşteri Sorumlusu</label>
+                          <input 
+                              type="text" 
+                              value={form.customer_responsible} 
+                              onChange={e => setForm(p => ({ ...p, customer_responsible: e.target.value }))} 
+                              className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Doküman No</label>
+                          <input 
+                              type="text" 
+                              value={form.document_number} 
+                              onChange={e => setForm(p => ({ ...p, document_number: e.target.value }))} 
+                              className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                          />
+                      </div>
+                      <div className="flex gap-2">
+                          <div className="flex-1">
+                              <label className="block text-xs font-semibold text-gray-600 mb-1">Rev. No</label>
+                              <input 
+                                  type="text" 
+                                  value={form.revision_number} 
+                                  onChange={e => setForm(p => ({ ...p, revision_number: e.target.value }))} 
+                                  className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                              />
+                          </div>
+                          <div className="flex-1">
+                              <label className="block text-xs font-semibold text-gray-600 mb-1">Rev. Tarihi</label>
+                              <input 
+                                  type="date" 
+                                  value={form.revision_date} 
+                                  onChange={e => setForm(p => ({ ...p, revision_date: e.target.value }))} 
+                                  className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-green-500 outline-none" 
+                              />
+                          </div>
+                      </div>
                   </div>
-             </div>
+
+                  {/* Risk Değerlendirme Tablosu */}
+                  <div className="space-y-4">
+                      <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2 border-b pb-2">
+                          <Bug className="text-green-600" size={20}/>
+                          Risk Değerlendirme Detayları
+                      </h3>
+                      
+                      {PEST_CATEGORIES.map((cat) => {
+                          const isExpanded = expandedCat === cat.key;
+                          const avg = getCategoryAverage(form.pest_data?.[cat.key]);
+                          const avgStyle = getRiskScoreColor(Math.round(avg.avgScore));
+
+                          return (
+                              <div key={cat.key} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                  {/* Kategori Başlığı */}
+                                  <button 
+                                      onClick={() => setExpandedCat(isExpanded ? null : cat.key)}
+                                      className="w-full flex justify-between items-center bg-gray-50 px-4 py-3 hover:bg-gray-100 transition-colors"
+                                  >
+                                      <div className="flex items-center gap-3">
+                                          <span className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                                              <ChevronDown size={18} className="text-gray-500"/>
+                                          </span>
+                                          <span className="font-bold text-gray-800">{cat.label}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                          <span className="text-xs text-gray-500">Ort. Skor: <strong style={{ color: avgStyle.text }}>{avg.avgScore.toFixed(1)}</strong></span>
+                                          <span className="text-xs px-2 py-1 rounded font-bold" style={{ backgroundColor: avgStyle.bg, color: avgStyle.text }}>
+                                              {avg.avgScore <= 8 ? 'DÜŞÜK' : avg.avgScore <= 15 ? 'ORTA' : 'YÜKSEK'}
+                                          </span>
+                                      </div>
+                                  </button>
+
+                                  {/* Kategori İçeriği (Tablo) */}
+                                  {isExpanded && (
+                                      <div className="p-4 bg-white animate-in slide-in-from-top-2">
+                                          <table className="w-full text-sm">
+                                              <thead>
+                                                  <tr className="bg-gray-50 border-b">
+                                                      <th className="text-left py-2 px-3 font-semibold text-gray-600">Zararlı Türü</th>
+                                                      <th className="text-center py-2 px-3 font-semibold text-gray-600 w-32">Popülasyon (1-3)</th>
+                                                      <th className="text-center py-2 px-3 font-semibold text-gray-600 w-32">Risk (1-3)</th>
+                                                      <th className="text-center py-2 px-3 font-semibold text-gray-600 w-24">Skor</th>
+                                                      <th className="text-center py-2 px-3 font-semibold text-gray-600 w-24">Sonuç</th>
+                                                  </tr>
+                                              </thead>
+                                              <tbody className="divide-y">
+                                                  {cat.pests.map((pest) => {
+                                                      const d = form.pest_data?.[cat.key]?.[pest.key] || { pop: 0, risk: 0 };
+                                                      const score = getRiskScore(d.pop, d.risk);
+                                                      const scoreColor = getRiskScoreColor(score);
+
+                                                      return (
+                                                          <tr key={pest.key} className="hover:bg-gray-50">
+                                                              <td className="py-2 px-3 text-gray-700">{pest.label}</td>
+                                                              <td className="py-2 px-3 text-center">
+                                                                  <select 
+                                                                      value={d.pop}
+                                                                      onChange={(e) => handlePestValueChange(cat.key, pest.key, 'pop', Number(e.target.value))}
+                                                                      className="w-full p-1 border rounded text-center focus:ring-2 focus:ring-green-500 outline-none"
+                                                                  >
+                                                                      <option value="0">0 - Yok</option>
+                                                                      <option value="1">1 - Düşük</option>
+                                                                      <option value="2">2 - Orta</option>
+                                                                      <option value="3">3 - Yüksek</option>
+                                                                  </select>
+                                                              </td>
+                                                              <td className="py-2 px-3 text-center">
+                                                                  <select 
+                                                                      value={d.risk}
+                                                                      onChange={(e) => handlePestValueChange(cat.key, pest.key, 'risk', Number(e.target.value))}
+                                                                      className="w-full p-1 border rounded text-center focus:ring-2 focus:ring-green-500 outline-none"
+                                                                  >
+                                                                      <option value="0">0 - Yok</option>
+                                                                      <option value="1">1 - Düşük</option>
+                                                                      <option value="2">2 - Orta</option>
+                                                                      <option value="3">3 - Yüksek</option>
+                                                                  </select>
+                                                              </td>
+                                                              <td className="py-2 px-3 text-center font-bold text-gray-800">
+                                                                  {score}
+                                                              </td>
+                                                              <td className="py-2 px-3 text-center">
+                                                                  {score > 0 ? (
+                                                                      <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ backgroundColor: scoreColor.bg, color: scoreColor.text }}>
+                                                                          {score <= 8 ? 'DÜŞÜK' : score <= 15 ? 'ORTA' : 'YÜKSEK'}
+                                                                      </span>
+                                                                  ) : (
+                                                                      <span className="text-xs text-gray-400">-</span>
+                                                                  )}
+                                                              </td>
+                                                          </tr>
+                                                      );
+                                                  })}
+                                              </tbody>
+                                          </table>
+                                      </div>
+                                  )}
+                              </div>
+                          );
+                      })}
+                  </div>
+              </div>
+              
+              <div className="bg-gray-50 px-6 py-4 border-t border-green-100 flex justify-end gap-3 shrink-0">
+                  <button onClick={()=>{setShowForm(false); resetForm();}} className="px-4 py-2 border rounded text-sm hover:bg-gray-100">İptal</button>
+                  <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700 disabled:opacity-50">{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>
+              </div>
+            </div>
          </div>
        )}
 
