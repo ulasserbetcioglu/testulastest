@@ -87,7 +87,7 @@ async function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
   const textX = logoUrl ? M + 40 : M;
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(13);
-  pdf.setTextColor(255, 255, 255);
+  pdf.setTextColor(21, 128, 61);
   pdf.text(toAscii('ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE'), textX, 9);
   
   pdf.setFontSize(8);
