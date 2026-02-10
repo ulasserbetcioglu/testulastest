@@ -56,7 +56,7 @@ const generateLowRiskData = (): PestDataMap => {
   PEST_CATEGORIES.forEach(cat => {
     data[cat.key] = {};
     cat.pests.forEach(pest => {
-      const pop = Math.floor(Math.random() * 3); // 0-2
+      const pop = Math.floor(Math.random() * 2); // 0-1 (Daha düşük başlatıyoruz)
       const risk = pop === 0 ? 0 : Math.floor(Math.random() * 2) + 1; 
       data[cat.key][pest.key] = { pop, risk };
     });
@@ -472,7 +472,7 @@ const AdminPestRiskAssessment: React.FC = () => {
                       </div>
                   </div>
 
-                  {/* Risk Değerlendirme Tablosu */}
+                  {/* Risk Değerlendirme Tablosu - GÜNCELLENMİŞ SELECT OPTIONS */}
                   <div className="space-y-4">
                       <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2 border-b pb-2">
                           <Bug className="text-green-600" size={20}/>
@@ -512,8 +512,8 @@ const AdminPestRiskAssessment: React.FC = () => {
                                               <thead>
                                                   <tr className="bg-gray-50 border-b">
                                                       <th className="text-left py-2 px-3 font-semibold text-gray-600">Zararlı Türü</th>
-                                                      <th className="text-center py-2 px-3 font-semibold text-gray-600 w-32">Popülasyon (1-3)</th>
-                                                      <th className="text-center py-2 px-3 font-semibold text-gray-600 w-32">Risk (1-3)</th>
+                                                      <th className="text-center py-2 px-3 font-semibold text-gray-600 w-32">Popülasyon (0-5)</th>
+                                                      <th className="text-center py-2 px-3 font-semibold text-gray-600 w-32">Risk (0-5)</th>
                                                       <th className="text-center py-2 px-3 font-semibold text-gray-600 w-24">Skor</th>
                                                       <th className="text-center py-2 px-3 font-semibold text-gray-600 w-24">Sonuç</th>
                                                   </tr>
@@ -534,9 +534,11 @@ const AdminPestRiskAssessment: React.FC = () => {
                                                                       className="w-full p-1 border rounded text-center focus:ring-2 focus:ring-green-500 outline-none"
                                                                   >
                                                                       <option value="0">0 - Yok</option>
-                                                                      <option value="1">1 - Düşük</option>
-                                                                      <option value="2">2 - Orta</option>
-                                                                      <option value="3">3 - Yüksek</option>
+                                                                      <option value="1">1 - Çok Düşük</option>
+                                                                      <option value="2">2 - Düşük</option>
+                                                                      <option value="3">3 - Orta</option>
+                                                                      <option value="4">4 - Yüksek</option>
+                                                                      <option value="5">5 - Kritik</option>
                                                                   </select>
                                                               </td>
                                                               <td className="py-2 px-3 text-center">
@@ -546,9 +548,11 @@ const AdminPestRiskAssessment: React.FC = () => {
                                                                       className="w-full p-1 border rounded text-center focus:ring-2 focus:ring-green-500 outline-none"
                                                                   >
                                                                       <option value="0">0 - Yok</option>
-                                                                      <option value="1">1 - Düşük</option>
-                                                                      <option value="2">2 - Orta</option>
-                                                                      <option value="3">3 - Yüksek</option>
+                                                                      <option value="1">1 - Çok Düşük</option>
+                                                                      <option value="2">2 - Düşük</option>
+                                                                      <option value="3">3 - Orta</option>
+                                                                      <option value="4">4 - Yüksek</option>
+                                                                      <option value="5">5 - Kritik</option>
                                                                   </select>
                                                               </td>
                                                               <td className="py-2 px-3 text-center font-bold text-gray-800">
