@@ -93,7 +93,7 @@ function drawCustomerInfo(pdf: jsPDF, data: EnvRiskPdfInput, y: number): number 
   autoTable(pdf, {
     startY: y,
     body: [
-      ['7.3.1. Müşteri Adı', c, '7.3.3. Bölüm', div, '7.3.5. Operatör', resp],
+      ['7.3.1. Musteri Adi', c, '7.3.3. Bolum', div, '7.3.5. PestMentor Sor.', resp],
       ['7.3.2. Adres', addr, '7.3.4. Tarih', date, '7.3.6. Mus. Sor.', custResp],
     ],
     styles: { 
@@ -101,7 +101,8 @@ function drawCustomerInfo(pdf: jsPDF, data: EnvRiskPdfInput, y: number): number 
       cellPadding: 2, 
       lineColor: COLORS.lines, 
       lineWidth: 0.15, 
-      textColor: COLORS.textGray 
+      textColor: COLORS.textGray,
+      font: 'helvetica'
     },
     bodyStyles: { fillColor: COLORS.headerBg },
     columnStyles: {
@@ -130,13 +131,15 @@ function drawLegends(pdf: jsPDF, startY: number, W: number): number {
     cellPadding: 1, 
     lineColor: COLORS.lines, 
     lineWidth: 0.1, 
-    textColor: COLORS.textGray 
+    textColor: COLORS.textGray,
+    font: 'helvetica'
   };
   const headStyles = { 
     fillColor: COLORS.secondary, 
     textColor: [255,255,255] as [number, number, number], 
     fontStyle: 'bold' as const, 
-    fontSize: 6 
+    fontSize: 6,
+    font: 'helvetica'
   };
   const colStyles = { 
     0: { cellWidth: 5, halign:'center' as const, fontStyle:'bold' as const}, 
@@ -305,13 +308,15 @@ function drawMainMatrix(pdf: jsPDF, data: EnvDataMap, startY: number): number {
       lineWidth: 0.1, 
       textColor: COLORS.textGray, 
       halign: 'center', 
-      valign: 'middle' 
+      valign: 'middle',
+      font: 'helvetica'
     },
     headStyles: { 
       fillColor: COLORS.secondary, 
       textColor: [255,255,255] as [number, number, number], 
       fontStyle: 'bold', 
-      fontSize: 6.5 
+      fontSize: 6.5,
+      font: 'helvetica'
     },
     columnStyles: { 
       0: { cellWidth: 36, halign: 'left', fontStyle: 'bold' },
