@@ -22,7 +22,8 @@ export interface EnvRiskPdfInput {
   revisionNumber: string;
   revisionDate: string;
   riskData: EnvDataMap;
-  companyLogo: string | }
+  companyLogo: string | null;
+}
 
 const M = 10; // Margin
 
