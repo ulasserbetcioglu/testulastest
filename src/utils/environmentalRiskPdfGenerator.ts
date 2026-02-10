@@ -312,7 +312,7 @@ function drawFooterNotes(pdf: jsPDF, startY: number, W: number) {
 
   const note1 = tr("Risk analizleri inceleme, denetleme ve ucuncu goz denetimi asamalarinda uygulanabilirliginin kurali tek basina yararli bir analiz metodu degildir. Diger Metodolojilere basvurma yapisi olarak bu analizde bu sistem toplamlari (formul) kullanilmistir. Sonuc olarak risk analizi teke analizin kurulun teskil ederek onayini almaktadir.");
   const note2 = "Formula: Total of subjects related to environmental conditions X Population Conditions = Score. It is used as a preliminary data for other types of analyses.";
-  const note3 = tr("NOTLAR: Konu ile ilgili aciklamalar - 8.1. PestMentor & MKP SUT - Risk Analizi Aciklamasi dokumaninda yer almaktadir.");
+  const note3 = tr("NOTLAR: Risk Analizi Aciklamasi dokumaninda yer almaktadir.");
 
   let y = startY + 5;
   const lines1 = pdf.splitTextToSize(note1, contentW);
