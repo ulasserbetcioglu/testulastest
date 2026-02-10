@@ -67,7 +67,7 @@ function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(12);
   pdf.setTextColor(255, 255, 255);
-  pdf.text(tr('ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE'), textX, 8);
+  pdf.text(tr('ZARARLI KONTROLU RİSK DEĞERLENDİRME FORMU - ÇEVRE'), textX, 8);
   
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'italic');
@@ -78,7 +78,7 @@ function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
   pdf.text('', W - M, 8, { align: 'right' });
   pdf.setFontSize(7);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('Pest Control System', W - M, 13, { align: 'right' });
+  pdf.text('İLAÇLAMATİK - SİSTEM İLAÇLAMA', W - M, 13, { align: 'right' });
 }
 
 // --- INFO BOX (Sarı Arkaplanlı) ---
