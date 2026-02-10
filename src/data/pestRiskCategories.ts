@@ -51,7 +51,7 @@ export const PEST_CATEGORIES: PestCategory[] = [
   },
   {
     key: 'dz_guveler',
-    label: 'D.Z. Guveler',
+    label: 'Depo Zararlıları Guveler',
     labelEn: 'S.P. Moths',
     pests: [
       { key: 'kuru_meyve', label: 'Kuru Meyve Guv.', labelEn: 'Dried Fruit Moth' },
@@ -69,7 +69,7 @@ export const PEST_CATEGORIES: PestCategory[] = [
   },
   {
     key: 'dz_bitler',
-    label: 'D.Z. Bitler',
+    label: 'Depo Zararlıları Bitler',
     labelEn: 'S.P. Insects',
     pests: [
       { key: 'un_kirma', label: 'Un / Kirma Biti', labelEn: 'Flour/Grain Louse' },
