@@ -300,7 +300,7 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
         <div className="px-6 py-3 bg-green-50 border-b border-green-200 text-xs text-green-800 italic leading-relaxed">
           Gozlemlenen zararli sorunlari ve cozumlerine yonelik olarak hazirlanan acil eylem planidir.
           Asagidaki acil eylem planim kapsamli kontrol ve <b>KRITIK</b> sinirlar,
-          PestMentor biyologlariniz gorevlilerini tarafindan <b>bu tablo</b> uygulamasina gecer.
+          PestMentor personelleri tarafindan <b>bu tablo</b>'nun uygulamasina geçilir.
         </div>
 
         <div className="p-4 overflow-x-auto">
