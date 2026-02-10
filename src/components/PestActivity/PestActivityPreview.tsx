@@ -10,8 +10,7 @@ import {
 } from './PestActivityData';
 
 // --- ROBOTO FONTU (TÜRKÇE KARAKTERLER İÇİN) ---
-// Base64 stringini buraya eklemelisiniz.
-const ROBOTO_BASE64 = ""; 
+const ROBOTO_BASE64 = ""; // Base64 stringini buraya ekleyebilirsiniz
 
 interface Props {
   report: PestActivityReport;
@@ -175,28 +174,19 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
                             { content: index + 1, rowSpan: limitCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold' } },
                             { content: pestName, rowSpan: limitCount, styles: { valign: 'middle', fontStyle: 'bold' } },
                             { content: responsible, rowSpan: limitCount, styles: { halign: 'center', valign: 'middle', fontSize: 7 } },
-                            { content: limitContent, styles: { fillColor: cellColor } }, // Limit her zaman tek satır
+                            // Limit hücresi her zaman tek satırdır, rowSpan YOK
+                            { content: limitContent, styles: { fillColor: cellColor, fontStyle: 'bold', textColor: 0 } }, 
                             { content: actionText, rowSpan: limitCount, styles: { valign: 'middle', fontSize: 7 } }
                         ]);
                     } else {
-                        // GRUBUN SONRAKİ SATIRLARI: Sadece Limit sütunu doludur, diğerleri ilk satırla birleşir
-                        // null vermek yerine undefined veya boş geçmek gerekebilir, ancak autotable
-                        // rowSpan kullanıldığında o sütunları atlamamızı bekler.
-                        // Yapı: [Limit] (Çünkü diğerleri span edildi)
-                        // ANCAK AutoTable'da satır yapısı bozulmamalı. Span edilen yerlere 'null' koyuyoruz.
-                        // Col 0, 1, 2 span edildi -> Col 3 (Limit) -> Col 4 span edildi.
-                        // Yani bu satırda sadece Col 3 var gibi davranmalıyız ama index korumak için diğerlerine null/boş obje atayabiliriz.
-                        // jspdf-autotable null hücreleri span edilenlerin "altında" kabul eder.
-                        
-                        // Önemli: rowSpan kullanılan sütunlar için sonraki satırlarda veri göndermemeliyiz (veya null).
-                        // Ancak AutoTable array yapısında indisler kayabilir.
-                        // Doğru yöntem: Her satırda 5 sütun tanımla, span altındakileri boş geç.
+                        // GRUBUN SONRAKİ SATIRLARI: Sadece Limit sütunu doludur, diğerleri 'undefined' geçilerek atlanır
+                        // ÖNEMLİ: null yerine undefined kullanıyoruz ki autotable span edilen alanı doğru algılasın.
                         tableBody.push([
-                            null, // Index (Spanned)
-                            null, // PestName (Spanned)
-                            null, // Responsible (Spanned)
-                            { content: limitContent, styles: { fillColor: cellColor } }, // Limit (Unique)
-                            null  // Action (Spanned)
+                            undefined, // Index (Spanned)
+                            undefined, // PestName (Spanned)
+                            undefined, // Responsible (Spanned)
+                            { content: limitContent, styles: { fillColor: cellColor, fontStyle: 'bold', textColor: 0 } }, // Limit (Unique)
+                            undefined  // Action (Spanned)
                         ]);
                     }
                 });
@@ -226,11 +216,11 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
             theme: 'grid',
             styles: {
                 fontSize: 8,
-                cellPadding: 2,
+                cellPadding: 3, // Padding artırıldı
                 lineColor: [200, 200, 200],
                 lineWidth: 0.1,
                 textColor: [50, 50, 50],
-                valign: 'top' // Varsayılan top, ama span'li hücreleri override ettik
+                valign: 'middle'
             },
             headStyles: {
                 fillColor: [22, 163, 74], // Green-600
@@ -240,11 +230,11 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
                 valign: 'middle'
             },
             columnStyles: {
-                0: { cellWidth: 10 },
-                1: { cellWidth: 35 },
-                2: { cellWidth: 30 },
-                3: { cellWidth: 'auto' }, // Esnek genişlik
-                4: { cellWidth: 80 }
+                0: { cellWidth: 10, halign: 'center' },
+                1: { cellWidth: 35, fontStyle: 'bold' },
+                2: { cellWidth: 30, halign: 'center', fontSize: 7 },
+                3: { cellWidth: 'auto' }, // Limitler geniş alan kaplasın
+                4: { cellWidth: 80, fontSize: 7 }
             }
         });
 
