@@ -31,7 +31,7 @@ const M = 10; // Margin
 const COLORS = {
   primary: [22, 163, 74] as [number, number, number],    // Green-600
   secondary: [21, 128, 61] as [number, number, number],  // Green-700
-  headerBg: [254, 252, 232] as [number, number, number], // Krem/Sarı (İstek üzerine)
+  headerBg: [21, 128, 61] as [number, number, number], // Krem/Sarı (İstek üzerine)
   lines: [202, 138, 4] as [number, number, number],      // Yellow-600 (Çizgiler)
   textMain: [20, 83, 45] as [number, number, number],
   textGray: [60, 60, 60] as [number, number, number],
