@@ -67,7 +67,7 @@ function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(12);
   pdf.setTextColor(255, 255, 255);
-  pdf.text(tr('7.3. ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE'), textX, 8);
+  pdf.text(tr('ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE'), textX, 8);
   
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'italic');
