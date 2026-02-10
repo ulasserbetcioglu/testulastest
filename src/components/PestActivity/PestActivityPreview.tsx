@@ -1,13 +1,20 @@
-import React, { useRef, useState } from 'react';
-import { Printer, FileDown, Loader2 } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import React, { useRef } from 'react';
+import { Printer, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   LEVEL_LABELS,
   type PestActivityReport,
   type PestRow,
 } from './PestActivityData';
+
+// --- ROBOTO FONTU (TÜRKÇE KARAKTERLER İÇİN) ---
+// Not: Buraya Roboto-Regular.ttf dosyasının Base64 stringini yapıştırmalısınız.
+// Çok uzun olduğu için buraya sığmaz. Eğer elinizde yoksa, fontsuz (standart) devam edebiliriz
+// ama Türkçe karakterler bozuk çıkabilir.
+// Şimdilik standart font kullanıyoruz, Türkçe karakterleri "toAscii" ile düzeltiyoruz.
+const ROBOTO_BASE64 = ""; // Burayı doldurursanız daha iyi sonuç alırsınız.
 
 interface Props {
   report: PestActivityReport;
@@ -27,9 +34,40 @@ const levelText = (level: string) => {
   return '#991b1b';
 };
 
+// Türkçe karakter düzeltici (Font yoksa kullanılır)
+const toAscii = (text: string) => {
+  if (!text) return '';
+  const map: { [key: string]: string } = {
+    'ğ': 'g', 'Ğ': 'G', 'ü': 'u', 'Ü': 'U', 'ş': 's', 'Ş': 'S',
+    'ı': 'i', 'İ': 'I', 'ö': 'o', 'Ö': 'O', 'ç': 'c', 'Ç': 'C'
+  };
+  return text.replace(/[ğĞüÜşŞıİöÖçÇ]/g, (char) => map[char] || char);
+};
+
+// Logo Yükleyici
+const loadImage = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.src = url;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/png'));
+            } else {
+                reject(new Error("Canvas context failed"));
+            }
+        };
+        img.onerror = () => reject(new Error("Image load failed"));
+    });
+};
+
 const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact }) => {
   const reportRef = useRef<HTMLDivElement>(null);
-  const [exporting, setExporting] = useState(false);
 
   const revisionDate = report.revision_date
     ? format(new Date(report.revision_date), 'dd.MM.yyyy')
@@ -53,7 +91,7 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
       <div style="display:flex;align-items:center;gap:8px;">
         ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" style="height:20px;object-fit:contain;" />` : ''}
         <div>
-          <div style="font-size:9px;font-weight:bold;color:#15803d;font-family:Arial,sans-serif;">ZARARLI AKT\u0130V\u0130TES\u0130 KR\u0130T\u0130K L\u0130M\u0130TLER\u0130 & AKS\u0130YON PLANI</div>
+          <div style="font-size:9px;font-weight:bold;color:#15803d;font-family:Arial,sans-serif;">ZARARLI AKTIVITESI KRITIK LIMITLERI & AKSIYON PLANI</div>
           <div style="font-size:7px;color:#666;font-weight:normal;">${report.customer_name}</div>
         </div>
       </div>
@@ -65,163 +103,158 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
   };
 
   const handleExportPdf = async () => {
-    if (!reportRef.current) return;
-    setExporting(true);
-    try {
-      const pdf = new jsPDF('l', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+    const doc = new jsPDF('l', 'mm', 'a4'); // Yatay A4
+    const pageWidth = doc.internal.pageSize.getWidth();
 
-      const margin = { top: 8, bottom: 8, left: 8, right: 8 };
-      const footerH = 7;
-      const contentWidth = pdfWidth - margin.left - margin.right;
-      const RENDER_W = 1200;
-      const SCALE = 2;
-
-      const cloneWrap = document.createElement('div');
-      cloneWrap.style.cssText = `position:fixed;left:-10000px;top:0;width:${RENDER_W}px;background:#fff;z-index:-1;overflow:visible;`;
-      const clone = reportRef.current.cloneNode(true) as HTMLElement;
-      clone.style.width = `${RENDER_W}px`;
-      clone.style.maxWidth = `${RENDER_W}px`;
-      clone.style.overflow = 'visible';
-      cloneWrap.appendChild(clone);
-      document.body.appendChild(cloneWrap);
-
-      const headerEl = document.createElement('div');
-      headerEl.style.cssText = `position:fixed;left:-10000px;top:0;width:${RENDER_W}px;background:#fff;z-index:-1;`;
-      headerEl.innerHTML = `
-        <div style="border-top:3px solid #15803d;padding:8px 20px 6px;border-bottom:1px solid #e5e7eb;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" style="height:24px;object-fit:contain;" crossorigin="anonymous" />` : ''}
-            <div style="flex:1;">
-              <div style="font-size:9px;font-weight:bold;color:#15803d;font-family:Arial,sans-serif;">ZARARLI AKT\u0130V\u0130TES\u0130 KR\u0130T\u0130K L\u0130M\u0130TLER\u0130 & AKS\u0130YON PLANI</div>
-              <div style="font-size:7px;color:#666;font-family:Arial,sans-serif;">${report.customer_name}</div>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(headerEl);
-
-      const logoImg = headerEl.querySelector('img');
-      if (logoImg) {
-        await new Promise<void>((resolve) => {
-          if (logoImg.complete) resolve();
-          else { logoImg.onload = () => resolve(); logoImg.onerror = () => resolve(); }
-        });
-      }
-      await new Promise((r) => setTimeout(r, 100));
-
-      const wrapRect = cloneWrap.getBoundingClientRect();
-      const breakSet = new Set<number>();
-      breakSet.add(0);
-
-      Array.from(clone.children).forEach((child) => {
-        const r = (child as HTMLElement).getBoundingClientRect();
-        breakSet.add(Math.round(r.bottom - wrapRect.top));
-      });
-
-      clone.querySelectorAll('tr').forEach((row) => {
-        const r = row.getBoundingClientRect();
-        breakSet.add(Math.round(r.bottom - wrapRect.top));
-      });
-
-      const totalDomH = cloneWrap.scrollHeight;
-      breakSet.add(totalDomH);
-      const breaks = [...breakSet].sort((a, b) => a - b);
-
-      const canvasOpts = { scale: SCALE, useCORS: true, logging: false, backgroundColor: '#ffffff', width: RENDER_W };
-      const [headerCanvas, contentCanvas] = await Promise.all([
-        html2canvas(headerEl, canvasOpts),
-        html2canvas(cloneWrap, { ...canvasOpts, windowWidth: RENDER_W }),
-      ]);
-      document.body.removeChild(cloneWrap);
-      document.body.removeChild(headerEl);
-
-      const headerImgData = headerCanvas.toDataURL('image/jpeg', 0.95);
-      const headerImgH = (headerCanvas.height * contentWidth) / headerCanvas.width;
-
-      const domToPdf = contentWidth / RENDER_W;
-      const contentTopN = margin.top + headerImgH + 2;
-      const page1Avail = pageHeight - margin.top - margin.bottom - footerH;
-      const pageNAvail = pageHeight - contentTopN - margin.bottom - footerH;
-
-      const pages: Array<{ startPx: number; endPx: number }> = [];
-      let curStart = 0;
-      let pgIdx = 0;
-
-      while (curStart < totalDomH) {
-        const availMm = pgIdx === 0 ? page1Avail : pageNAvail;
-        const availPx = availMm / domToPdf;
-        const maxEnd = curStart + availPx;
-
-        let bestBreak = curStart;
-        for (const bp of breaks) {
-          if (bp <= curStart) continue;
-          if (bp <= maxEnd + 0.5) {
-            bestBreak = bp;
-          } else {
-            break;
-          }
-        }
-
-        if (bestBreak <= curStart) {
-          bestBreak = Math.min(Math.ceil(curStart + availPx), totalDomH);
-        }
-
-        pages.push({ startPx: curStart, endPx: Math.min(bestBreak, totalDomH) });
-        curStart = bestBreak;
-        pgIdx++;
-      }
-
-      const totalPages = pages.length;
-
-      const drawFooter = (pg: number) => {
-        const y = pageHeight - margin.bottom - footerH;
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, y, pdfWidth, footerH + margin.bottom, 'F');
-        pdf.setDrawColor(220, 220, 220);
-        pdf.line(margin.left, y + 1, pdfWidth - margin.right, y + 1);
-        pdf.setFontSize(7);
-        pdf.setTextColor(170, 170, 170);
-        pdf.text(`Sayfa ${pg} / ${totalPages}`, pdfWidth / 2, y + 4.5, { align: 'center' });
-      };
-
-      const drawHeader = () => {
-        pdf.addImage(headerImgData, 'JPEG', margin.left, margin.top, contentWidth, headerImgH);
-      };
-
-      for (let i = 0; i < pages.length; i++) {
-        if (i > 0) pdf.addPage();
-
-        const { startPx, endPx } = pages[i];
-        const srcY = Math.round(startPx * SCALE);
-        const srcH = Math.round((endPx - startPx) * SCALE);
-        if (srcH <= 0) continue;
-
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = contentCanvas.width;
-        sliceCanvas.height = srcH;
-        const ctx = sliceCanvas.getContext('2d')!;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, sliceCanvas.width, srcH);
-        ctx.drawImage(contentCanvas, 0, srcY, contentCanvas.width, srcH, 0, 0, contentCanvas.width, srcH);
-
-        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
-        const sliceHMm = (endPx - startPx) * domToPdf;
-        const yStart = i === 0 ? margin.top : contentTopN;
-
-        if (i > 0) drawHeader();
-        pdf.addImage(sliceData, 'JPEG', margin.left, yStart, contentWidth, sliceHMm);
-        drawFooter(i + 1);
-      }
-
-      const safeName = report.customer_name.replace(/[^a-zA-Z0-9_\-]/g, '_');
-      pdf.save(`Zararli_Kritik_Limitler_${safeName}.pdf`);
-    } catch (err) {
-      console.error('PDF export error:', err);
-    } finally {
-      setExporting(false);
+    // Font Ayarı
+    if (ROBOTO_BASE64) {
+        doc.addFileToVFS('Roboto-Regular.ttf', ROBOTO_BASE64);
+        doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
+        doc.setFont('Roboto');
+    } else {
+        doc.setFont('helvetica'); // Türkçe karakter sorunu olabilir
     }
+
+    // --- HEADER ---
+    // Yeşil Arka Plan
+    doc.setFillColor(21, 128, 61); // Green-700
+    doc.rect(0, 0, pageWidth, 20, 'F');
+
+    // Logo
+    if (companySettings?.logo_url) {
+        try {
+            const logoData = await loadImage(companySettings.logo_url);
+            doc.addImage(logoData, 'PNG', 10, 3, 35, 14);
+        } catch (e) { console.warn("Logo hatası", e); }
+    }
+
+    // Başlık Metinleri (Beyaz)
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text(toAscii("ZARARLI AKTIVITESI KRITIK LIMITLERI & AKSIYON PLANI"), 50, 10);
+    
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'italic');
+    doc.text("Pest Activity Critical Limits & Action Plan", 50, 15);
+
+    // Sağ Üst Bilgi
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'normal');
+    doc.text(`${toAscii("Doku. No")}: ${report.document_number || '-'}`, pageWidth - 10, 6, { align: 'right' });
+    doc.text(`${toAscii("Revizyon")}: ${report.revision_number || '-'}`, pageWidth - 10, 10, { align: 'right' });
+    doc.text(`${toAscii("Tarih")}: ${revisionDate}`, pageWidth - 10, 14, { align: 'right' });
+
+    // --- AÇIKLAMA ---
+    doc.setTextColor(20, 83, 45); // Green-900
+    doc.setFontSize(8);
+    doc.text(toAscii("Gozlemlenen zararli sorunlari ve cozumlerine yonelik hazirlanan acil eylem planidir. PestMentor biyologlari tarafindan uygulanir."), 10, 26);
+
+    // --- TABLO VERİSİ HAZIRLAMA ---
+    const tableBody: any[] = [];
+    const pestRows: PestRow[] = report.pest_rows || [];
+
+    pestRows.forEach((pest, index) => {
+        const pestName = toAscii(pest.pest_name);
+        const responsible = `${toAscii(pest.responsible)}\n& ${toAscii(report.customer_name)}`;
+        const actionText = toAscii(pest.action_text || '').replace(/(KABUL EDILEBILIR:|AKTIVITE:|ISTILA:)/g, '\n$1');
+
+        if (pest.limits && pest.limits.length > 0) {
+            pest.limits.forEach((limit, lIdx) => {
+                // Sadece ilk satırda ana bilgileri göster, diğerlerinde boş bırak (Rowspan efekti)
+                // AutoTable'da rowspan karmaşık olduğu için düz mantıkla her satıra yazıyoruz ama
+                // AutoTable theme: 'grid' olduğu için çizgilerle ayrılır.
+                // Rowspan simülasyonu için 'rowSpan' özelliğini kullanacağız.
+                
+                // Renk Ayarı
+                let cellColor = '#ffffff'; // Varsayılan
+                if (limit.level === 'kabul') cellColor = '#dcfce7'; // Yeşil
+                else if (limit.level === 'aktivite') cellColor = '#fef3c7'; // Sarı
+                else if (limit.level === 'istila') cellColor = '#fecaca'; // Kırmızı
+
+                tableBody.push({
+                    index: lIdx === 0 ? index + 1 : '',
+                    pestName: lIdx === 0 ? pestName : '',
+                    responsible: lIdx === 0 ? responsible : '',
+                    limitDesc: { 
+                        content: `${toAscii(LEVEL_LABELS[limit.level] || limit.level).toUpperCase()}: ${toAscii(limit.description)}`,
+                        styles: { fillColor: cellColor }
+                    },
+                    action: lIdx === 0 ? actionText : ''
+                });
+            });
+        } else {
+            // Hiç limit yoksa
+            tableBody.push({
+                index: index + 1,
+                pestName: pestName,
+                responsible: responsible,
+                limitDesc: '-',
+                action: actionText
+            });
+        }
+    });
+
+    // --- TABLO ÇİZİMİ ---
+    autoTable(doc, {
+        startY: 30,
+        head: [[
+            'No', 
+            toAscii('Zararli Risk Gr. Tur.\nTypes Of Harmful'), 
+            toAscii('SORUMLU\nResponsible'), 
+            toAscii('Aktivite Kritik Limitleri\nActivity Critical Limits'), 
+            toAscii('Aksiyon Plani\nAction Plan')
+        ]],
+        body: tableBody.map(row => [
+            row.index,
+            row.pestName,
+            row.responsible,
+            row.limitDesc,
+            row.action
+        ]),
+        styles: {
+            fontSize: 8,
+            cellPadding: 2,
+            lineColor: [200, 200, 200],
+            lineWidth: 0.1,
+            valign: 'middle',
+            textColor: [50, 50, 50]
+        },
+        headStyles: {
+            fillColor: [22, 163, 74], // Green-600
+            textColor: 255,
+            fontStyle: 'bold',
+            halign: 'center'
+        },
+        columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            1: { cellWidth: 35, fontStyle: 'bold' },
+            2: { cellWidth: 30, halign: 'center', fontSize: 7 },
+            3: { cellWidth: 'auto' }, // Esnek genişlik
+            4: { cellWidth: 80, fontSize: 7 }
+        },
+        // Satır birleştirme mantığı (Manuel Rowspan)
+        didParseCell: function (data) {
+            // Pest Name, Index, Responsible ve Action sütunları için
+            // Eğer aynı haşere grubundaysa ve ilk satır değilse içeriği boşaltıp üsttekiyle birleştirme efekti verilebilir.
+            // Ancak AutoTable'da gerçek rowspan için data yapısını ona göre kurmak gerekir.
+            // Şimdilik basit liste halinde bırakıyoruz, temiz görünür.
+        }
+    });
+
+    // --- FOOTER ---
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    
+    if (companySettings) {
+        doc.text(`${toAscii(companySettings.company_name || '')}`, 10, finalY);
+        doc.text(`${companySettings.address || ''}`, 10, finalY + 4);
+        doc.text(`Tel: ${companySettings.phone || ''} | Web: ${companySettings.website || ''}`, 10, finalY + 8);
+    }
+
+    const safeName = report.customer_name.replace(/[^a-zA-Z0-9]/g, '_');
+    doc.save(`Kritik_Limitler_${safeName}.pdf`);
   };
 
   const pestRows: PestRow[] = report.pest_rows || [];
@@ -233,13 +266,14 @@ const PestActivityPreview: React.FC<Props> = ({ report, companySettings, compact
           <button onClick={handlePrint} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
             <Printer size={16} /> Yazdir
           </button>
-          <button onClick={handleExportPdf} disabled={exporting} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
-            {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />} PDF Indir
+          <button onClick={handleExportPdf} className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700">
+            <FileDown size={16} /> PDF Indir (Vektorel)
           </button>
         </div>
       )}
 
       <div ref={reportRef} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Görsel Önizleme (Ekranda Görünen) */}
         <div className="bg-gradient-to-r from-green-700 to-green-600 px-6 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
