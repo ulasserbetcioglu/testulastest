@@ -25,7 +25,7 @@ const COLORS = {
   primary: [255, 255, 255],
   secondary: [21, 128, 61],
   headerBg: [255, 255, 255],
-  lines: [202, 138, 4],
+  lines: [21, 128, 61],
   textMain: [20, 83, 45],
   textGray: [60, 60, 60],
 };
