@@ -67,7 +67,7 @@ function drawHeader(pdf: jsPDF, W: number, logoUrl?: string | null) {
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(12);
   pdf.setTextColor(255, 255, 255);
-  pdf.text(tr(ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE'), textX, 8);
+  pdf.text(tr('7.3. ZARARLI KONTROLU RISK DEGERLENDIRME FORMU - CEVRE'), textX, 8);
   
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'italic');
@@ -86,7 +86,7 @@ function drawCustomerInfo(pdf: jsPDF, data: EnvRiskPdfInput, y: number): number 
   autoTable(pdf, {
     startY: y,
     body: [
-      ['. ' + tr('Musteri Adi'), tr(data.customerName), '7.3.3. ' + tr('Bolum'), tr(data.division), '7.3.5. ' + tr('PestMentor Sor.'), tr(data.responsiblePerson)],
+      ['7.3.1. ' + tr('Musteri Adi'), tr(data.customerName), '7.3.3. ' + tr('Bolum'), tr(data.division), '7.3.5. ' + tr('PestMentor Sor.'), tr(data.responsiblePerson)],
       ['7.3.2. ' + tr('Adres'), tr(data.customerAddress), '7.3.4. ' + tr('Tarih'), data.assessmentDate, '7.3.6. ' + tr('Mus. Sor.'), tr(data.customerResponsible)],
     ],
     styles: { fontSize: 6, cellPadding: 1.5, lineColor: COLORS.lines, lineWidth: 0.1, textColor: COLORS.textGray },
