@@ -93,7 +93,7 @@ function drawCustomerInfo(pdf: jsPDF, data: EnvRiskPdfInput, y: number): number 
   autoTable(pdf, {
     startY: y,
     body: [
-      ['7.3.1. Musteri Adi', c, '7.3.3. Bolum', div, '7.3.5. PestMentor Sor.', resp],
+      ['7.3.1. Müşteri Adı', c, '7.3.3. Bölüm', div, '7.3.5. Operatör', resp],
       ['7.3.2. Adres', addr, '7.3.4. Tarih', date, '7.3.6. Mus. Sor.', custResp],
     ],
     styles: { 
