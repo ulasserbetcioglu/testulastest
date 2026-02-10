@@ -237,10 +237,10 @@ function drawLegends(pdf: jsPDF, startY: number, W: number): number {
   // Skor kutuları
   pdf.text('SKOR / SCORE', xRight, yRight);
   const scoreData = [
-    { range: toAscii('1-6 DUSUK / LOW' AYDA 1 ZİYARET), desc: toAscii('Dusuk olasilik'), bg: [220, 252, 231] },
-    { range: '7-12 ORTA / MED', desc: toAscii('Orta olasilik'), bg: [254, 249, 195] },
-    { range: toAscii('13-24 YUKSEK / HIGH'), desc: toAscii('Yuksek olasilik'), bg: [254, 215, 170] },
-    { range: toAscii('25+ COK YUKSEK / VHIGH'), desc: toAscii('Cok yuksek olasilik'), bg: [254, 202, 202] },
+    { range: toAscii('1-6 DUSUK AYDA 1 ZİYARET / LOW'), desc: toAscii('Dusuk olasilik'), bg: [220, 252, 231] },
+    { range: '7-12 ORTA AYDA 2 ZİYARET / MED', desc: toAscii('Orta olasilik'), bg: [254, 249, 195] },
+    { range: toAscii('13-24 YUKSEK AYDA 4 ZİYARET / HIGH'), desc: toAscii('Yuksek olasilik'), bg: [254, 215, 170] },
+    { range: toAscii('25+ COK YUKSEK HAFTADA 2 ZİYARET / VHIGH'), desc: toAscii('Cok yuksek olasilik'), bg: [254, 202, 202] },
   ];
 
   let boxY = yRight + 2;
