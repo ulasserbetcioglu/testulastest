@@ -107,8 +107,8 @@ function drawCustomerInfo(pdf: jsPDF, data: EnvRiskPdfInput, y: number): number 
   autoTable(pdf, {
     startY: y,
     body: [
-      [toAscii('7.3.1. Musteri Adi'), c, toAscii('7.3.3. Bolum'), div, toAscii('7.3.5. PestMentor Sor.'), resp],
-      [toAscii('7.3.2. Adres'), addr, toAscii('7.3.4. Tarih'), date, toAscii('7.3.6. Mus. Sor.'), custResp],
+      [toAscii('Musteri Adi'), c, toAscii('Bolum'), div, toAscii('PestMentor Sorumlusu'), resp],
+      [toAscii('Adres'), addr, toAscii('Tarih'), date, toAscii('Musteri Sorumlusu'), custResp],
     ],
     styles: { 
       fontSize: 7, 
