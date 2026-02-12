@@ -107,6 +107,8 @@ import TrainingPresentationPage from './pages/TrainingPresentationPage';
 import AdminIpmContracts from './pages/AdminIpmContracts';
 import AdminPestActivityLimits from './pages/AdminPestActivityLimits';
 import AdminPestRiskAssessment from './pages/AdminPestRiskAssessment';
+import AdminActionPlan from './pages/AdminActionPlan';
+import AdminApprovedPesticides from './pages/AdminApprovedPesticides';
 
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
@@ -133,7 +135,7 @@ import CustomerBranchesPage from './pages/CustomerBranchesPage';
 import BranchCalendar from './pages/BranchCalendar';
 import BranchPaidMaterials from './pages/BranchPaidMaterials';
 import BranchDocuments from './pages/BranchDocuments';
-import BranchTrendAnalysisPage from './pages/BranchTrendAnalysisPage';
+import BranchTrendAnalysisPage from './pages/BranchTrendAnalysis';
 import ProtectedReportViewer from './components/ProtectedReportViewer';
 import ActivityFileViewer from './pages/ActivityFileViewer';
 import AdminActivityFileManagement from './pages/AdminActivityFileManagement';
@@ -218,23 +220,23 @@ const RoleBasedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         if (profileData?.role) {
           setUserRole(profileData.role);
         } else {
-          setUserRole('user'); 
+          setUserRole('user');
         }
-      } catch (err) { 
-        setUserRole('user'); 
-      } finally { 
-        setLoading(false); 
+      } catch (err) {
+        setUserRole('user');
+      } finally {
+        setLoading(false);
       }
     };
     checkUserRole();
   }, [navigate]);
 
   if (loading) return <div className="flex items-center justify-center h-screen">Yükleniyor...</div>;
-  
+
   if (userRole === 'operator') return <Navigate to="/operator" />;
   if (userRole === 'customer') return <Navigate to="/customer" />;
   if (userRole === 'branch') return <Navigate to="/branch" />;
-  
+
   return children;
 };
 
@@ -247,7 +249,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
-          
+
           {/* Operator Routes */}
           <Route path="/operator/*" element={<ProtectedRoute><OperatorLayout /></ProtectedRoute>}>
             <Route index element={<OperatorDashboard />} />
@@ -318,8 +320,8 @@ function App() {
           {/* Admin Routes */}
           <Route path="/*" element={<ProtectedRoute><RoleBasedRoute><Layout /></RoleBasedRoute></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
-            <Route path="admin" element={<Dashboard />} /> 
-            
+            <Route path="admin" element={<Dashboard />} />
+
             <Route path="modules" element={<Modules />} />
             <Route path="musteriler" element={<Customers />} />
             <Route path="sozlesmeler" element={<Sozlesmeler />} />
@@ -344,9 +346,9 @@ function App() {
             <Route path="takvim" element={<AdminCalendar />} />
             <Route path="takvim-planlama" element={<AdminCalendarPlanning />} />
             <Route path="operatorler" element={<AdminOperators />} />
-            <Route path="kullanicilar" element={<AdminUsers />} />      
+            <Route path="kullanicilar" element={<AdminUsers />} />
             <Route path="operator-mesafeleri" element={<AdminOperatorDistances />} />
-            <Route path="subeler" element={<AdminBranches />} /> 
+            <Route path="subeler" element={<AdminBranches />} />
             <Route path="sube-fiyatlandirma" element={<AdminBranchPricing />} />
             <Route path="environmental-risk-assessment" element={<AdminEnvironmentalRiskAssessment />} />
             <Route path="fatura-export" element={<AdminRoute><InvoiceExport /></AdminRoute>} />
@@ -408,7 +410,9 @@ function App() {
             <Route path="admin/faaliyet-dosyasi-goruntule" element={<AdminRoute><ActivityFileViewer /></AdminRoute>} />
             <Route path="ipm-sozlesmeleri" element={<AdminRoute><AdminIpmContracts /></AdminRoute>} />
             <Route path="zararli-kritik-limitler" element={<AdminRoute><AdminPestActivityLimits /></AdminRoute>} />
+            <Route path="acil-eylem-plani" element={<AdminRoute><AdminActionPlan /></AdminRoute>} />
             <Route path="zararli-risk-degerlendirme" element={<AdminRoute><AdminPestRiskAssessment /></AdminRoute>} />
+            <Route path="onayli-pestisit-listesi" element={<AdminRoute><AdminApprovedPesticides /></AdminRoute>} />
           </Route>
         </Routes>
       </AuthProvider>
