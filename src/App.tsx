@@ -81,9 +81,11 @@ import TeklifGoruntule from './pages/TeklifGoruntule';
 import ModulRaporGoruntuleme from './pages/ModulRaporGoruntuleme';
 import RaporSecVeGoruntule from './pages/RaporSecVeGoruntule';
 import GenelRaporGoruntuleme from './pages/GenelRaporGoruntuleme';
-import BilgilendirimePazarlama from './pages/BilgilendirimePazarlama';
+import BilgilendirmePazarlama from './pages/BilgilendirmePazarlama';
+import SurveyResults from './pages/SurveyResults';
 import EpostaPazarlama from './pages/EpostaPazarlama';
 import IsletmeKesif from './components/IsletmeKesif';
+import SurveyPage from './pages/SurveyPage';
 import BulkVisitImport from './pages/BulkVisitImport';
 import AdminQuickNotes from './pages/AdminQuickNotes';
 import UnbilledCustomers from './pages/UnbilledCustomers';
@@ -109,6 +111,7 @@ import AdminPestActivityLimits from './pages/AdminPestActivityLimits';
 import AdminPestRiskAssessment from './pages/AdminPestRiskAssessment';
 import AdminActionPlan from './pages/AdminActionPlan';
 import AdminApprovedPesticides from './pages/AdminApprovedPesticides';
+import PriceIncrease from './pages/PriceIncrease';
 
 // --- OPERATOR & CUSTOMER & BRANCH PAGES ---
 import OperatorCalendar from './pages/OperatorCalendar';
@@ -160,13 +163,19 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           setLoading(false);
           return;
         }
+        if (user.email === 'admin@ilaclamatik.com') {
+          setIsAdmin(true);
+          setLoading(false);
+          return;
+        }
+
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', user.id)
           .single();
         if (profileError) {
-          setIsAdmin(user.email === 'admin@ilaclamatik.com');
+          setIsAdmin(false);
         } else {
           setIsAdmin(profileData.role === 'admin');
         }
@@ -246,9 +255,11 @@ function App() {
       <AuthProvider>
         <Toaster position="top-right" richColors />
         <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/teklif-goruntule/:id" element={<TeklifGoruntule />} />
           <Route path="/view-report-protected/:documentId" element={<ProtectedReportViewer />} />
+          <Route path="/anket" element={<SurveyPage />} />
 
           {/* Operator Routes */}
           <Route path="/operator/*" element={<ProtectedRoute><OperatorLayout /></ProtectedRoute>}>
@@ -382,7 +393,8 @@ function App() {
             <Route path="rapor/goruntule/:reportId" element={<ModulRaporGoruntuleme />} />
             <Route path="rapor-goruntule" element={<RaporSecVeGoruntule />} />
             <Route path="raporlar" element={<GenelRaporGoruntuleme />} />
-            <Route path="bilgilendirme-pazarlama" element={<BilgilendirimePazarlama />} />
+            <Route path="bilgilendirme-pazarlama" element={<BilgilendirmePazarlama />} />
+            <Route path="anket-sonuclari" element={<AdminRoute><SurveyResults /></AdminRoute>} />
             <Route path="eposta-pazarlama" element={<EpostaPazarlama />} />
             <Route path="isletme-kesif" element={<IsletmeKesif />} />
             <Route path="bulk-visit-import" element={<AdminRoute><BulkVisitImport /></AdminRoute>} />
@@ -413,6 +425,7 @@ function App() {
             <Route path="acil-eylem-plani" element={<AdminRoute><AdminActionPlan /></AdminRoute>} />
             <Route path="zararli-risk-degerlendirme" element={<AdminRoute><AdminPestRiskAssessment /></AdminRoute>} />
             <Route path="onayli-pestisit-listesi" element={<AdminRoute><AdminApprovedPesticides /></AdminRoute>} />
+            <Route path="fiyat-artisi" element={<AdminRoute><PriceIncrease /></AdminRoute>} />
           </Route>
         </Routes>
       </AuthProvider>
