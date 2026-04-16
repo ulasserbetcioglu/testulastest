@@ -1,0 +1,46 @@
+// supabase/functions/generate-operator-qr-link/index.ts
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// CORS headers for frontend access
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight request
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const { operator_id } = await req.json();
+
+    if (!operator_id) {
+      throw new Error('Operator ID is required.');
+    }
+
+    // Get Supabase project URL from environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    if (!supabaseUrl) {
+      throw new Error('SUPABASE_URL environment variable is not set.');
+    }
+
+    // Construct the trackable URL pointing to the log-qr-scan-and-redirect Edge Function
+    // This URL will be encoded in the QR code.
+    const trackableQrUrl = `${supabaseUrl}/functions/v1/log-qr-scan-and-redirect?operator_id=${operator_id}`;
+
+    return new Response(JSON.stringify({ qr_link: trackableQrUrl }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    });
+
+  } catch (error) {
+    console.error('Error generating operator QR link:', error.message);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
+  }
+});
